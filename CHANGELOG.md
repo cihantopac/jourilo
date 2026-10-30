@@ -22,7 +22,8 @@ First working version.
 - `optimize`, `verify`, `checkpoint`, `rollback`: root-cause location, five deterministic fixers with diff previews,
   git checkpoints, before/after verification.
 - `experiment`: sample size, plans from hypotheses, analysis with confidence intervals and SRM check.
-- Reports: self-contained HTML Experience Observatory, Markdown, SARIF 2.1.0; `compare`.
+- Reports: self-contained HTML Experience Observatory (root-cause-grouped "fix first", improvement roadmap lanes,
+  run history for the target, journeys storyboard, before/after), Markdown, SARIF 2.1.0; `compare`.
 - `jourilo.context/v1` integration contract with Markilo and Searvex adapters.
 - Claude Code plugin (10 skills, `ux-reviewer` agent) and adapters for a bare `/jourilo` skill, `AGENTS.md` and Cursor.
 - `bench` with fixture sites and recorded history.

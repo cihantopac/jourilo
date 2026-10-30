@@ -114,7 +114,10 @@ export async function auditCommand(
       ctx.log(`Mapped ${located} finding(s) to likely source locations in ${repo}`);
     }
     ctx.ws.saveRun(run);
-    const reports = writeReports(runDir, run, undefined, { sarif: flag(ctx, 'sarif') });
+    const reports = writeReports(runDir, run, undefined, {
+      sarif: flag(ctx, 'sarif'),
+      history: ctx.ws.listRuns(),
+    });
     const gate = failOn
       ? run.findings.some((f) => f.kind === 'defect' && severityRank(f.severity) <= severityRank(failOn))
       : false;

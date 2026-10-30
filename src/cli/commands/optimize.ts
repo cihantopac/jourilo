@@ -160,7 +160,7 @@ export const verify: Command = {
       run.settings.baseline = base.id;
       ctx.ws.saveRun(run);
       const cmp = compareRuns(base, run);
-      const reports = writeReports(runDir, run, cmp);
+      const reports = writeReports(runDir, run, cmp, { history: ctx.ws.listRuns() });
       const failed = flag(ctx, 'fail-on-regression') && !cmp.regressionFree;
       return {
         data: {

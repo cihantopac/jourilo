@@ -233,7 +233,7 @@ async function runCmd(ctx: Context) {
     const repo = str(ctx, 'repo') ?? (isDir ? resolve(baseArg) : undefined);
     if (repo) locateFindings(run, repo);
     ctx.ws.saveRun(run);
-    const reports = writeReports(runDir, run);
+    const reports = writeReports(runDir, run, undefined, { history: ctx.ws.listRuns() });
     const failed = journeys.filter((j) => j.status === 'failed').length;
     return {
       data: { runId: id, runDir, reports, journeys, findings },

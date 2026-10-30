@@ -5,6 +5,17 @@ import { JouriloError } from './errors.js';
 import { resolveInside } from './fs-safety.js';
 import { RUN_SCHEMA_VERSION, type Run } from './types.js';
 
+export interface RunListing {
+  id: string;
+  target: string;
+  startedAt: string;
+  findings: number;
+  defects: Run['summary']['findings'];
+  kinds: Run['summary']['byKind'];
+  pages: number;
+  journeys: number;
+}
+
 export class Workspace {
   readonly root: string;
 
@@ -41,15 +52,24 @@ export class Workspace {
     return file;
   }
 
-  listRuns(): { id: string; target: string; startedAt: string; findings: number }[] {
+  listRuns(): RunListing[] {
     if (!existsSync(this.runsDir)) return [];
-    const out: { id: string; target: string; startedAt: string; findings: number }[] = [];
+    const out: RunListing[] = [];
     for (const id of readdirSync(this.runsDir).sort()) {
       const file = join(this.runsDir, id, 'run.json');
       if (!existsSync(file)) continue;
       try {
         const run = JSON.parse(readFileSync(file, 'utf8')) as Run;
-        out.push({ id, target: run.target, startedAt: run.startedAt, findings: run.findings.length });
+        out.push({
+          id,
+          target: run.target,
+          startedAt: run.startedAt,
+          findings: run.findings.length,
+          defects: run.summary.findings,
+          kinds: run.summary.byKind,
+          pages: run.summary.pages,
+          journeys: run.summary.journeys,
+        });
       } catch {
         // A half-written run is skipped, not fatal.
       }

@@ -11,7 +11,7 @@ Priorities follow the rule: correctness and evidence before breadth.
    published methodology.
 4. Repeated-run medians for lab metrics; flake detection for journeys.
 5. Keyboard interaction for composite widgets (menus, tabs, dialogs: Escape closes, focus returns).
-6. Historical trends across runs (regression timeline in the Observatory).
+6. Normalized trends across runs (per page and viewport), building on the current run history table.
 
 ## Later
 

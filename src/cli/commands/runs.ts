@@ -42,7 +42,7 @@ export const report: Command = {
     }
     if (!['html', 'md'].includes(format))
       throw new JouriloError('USAGE', '--format must be html, md, sarif or json.');
-    const written = writeReports(dir, run, cmp);
+    const written = writeReports(dir, run, cmp, { history: ctx.ws.listRuns() });
     return { data: written, text: `Report: ${format === 'md' ? written.markdown : written.html}` };
   },
 };
@@ -59,7 +59,7 @@ export const compare: Command = {
     const { run: head, dir } = ctx.ws.loadRun(headRef);
     if (base.id === head.id) throw new JouriloError('USAGE', 'Baseline and head are the same run.');
     const cmp = compareRuns(base, head);
-    const written = writeReports(dir, head, cmp);
+    const written = writeReports(dir, head, cmp, { history: ctx.ws.listRuns() });
     const failed = flag(ctx, 'fail-on-regression') && !cmp.regressionFree;
     const lines = [
       `Baseline ${base.id} → ${head.id}`,

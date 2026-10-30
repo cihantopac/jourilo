@@ -116,7 +116,7 @@ export const finding: Command = {
     run.findings.push(f);
     run.summary = summarize(run.findings, run.summary.pages, run.summary.journeys);
     ctx.ws.saveRun(run);
-    writeReports(dir, run);
+    writeReports(dir, run, undefined, { history: ctx.ws.listRuns() });
     return {
       data: f,
       text: `Added ${f.provenance} finding ${f.fingerprint} to run ${run.id} (${join(dir, 'report.html')}).`,

@@ -26,7 +26,9 @@ Stated so nobody mistakes silence for a pass.
 ## Performance
 
 - Lab numbers from one visit; no repeated-run medians yet; local servers make LCP unrealistically fast. `--throttle`
-  approximates Lighthouse's mobile profile in Chromium only.
+  approximates Lighthouse's mobile profile in Chromium only. Measured on a local fixture it slowed rendering and
+  subresources (LCP 16 → 200 ms, load 13 → 342 ms) but did **not** delay the main document from 127.0.0.1 (TTFB
+  unchanged), so TTFB under `--throttle` is not meaningful for local targets.
 - INP is approximated from scripted journey interactions; it is not field INP.
 
 ## Journeys and forms
@@ -53,7 +55,8 @@ Stated so nobody mistakes silence for a pass.
 
 ## Reports
 
-- No historical trend view across many runs yet (only pairwise comparison).
+- History in the report lists earlier runs of the same target with defect counts; it does not normalize for different
+  page sets or viewports (use `verify` for like-for-like comparisons).
 - Screenshots are capped at 12 000 px height.
 
 ## Other

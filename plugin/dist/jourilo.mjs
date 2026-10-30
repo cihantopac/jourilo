@@ -174,7 +174,16 @@ var init_workspace = __esm({
           if (!existsSync2(file)) continue;
           try {
             const run = JSON.parse(readFileSync(file, "utf8"));
-            out.push({ id, target: run.target, startedAt: run.startedAt, findings: run.findings.length });
+            out.push({
+              id,
+              target: run.target,
+              startedAt: run.startedAt,
+              findings: run.findings.length,
+              defects: run.summary.findings,
+              kinds: run.summary.byKind,
+              pages: run.summary.pages,
+              journeys: run.summary.journeys
+            });
           } catch {
           }
         }
@@ -42892,7 +42901,44 @@ function contextHtml(run) {
   }
   return parts.join("");
 }
-function renderHtml(run, cmp) {
+function roadmapHtml(findings) {
+  const key = /* @__PURE__ */ new Set(["reliability", "usability"]);
+  const now = findings.filter(
+    (f) => f.kind === "defect" && (f.severity === "critical" || f.severity === "serious" && (key.has(f.category) || f.journey))
+  );
+  const next = findings.filter((f) => f.kind === "defect" && !now.includes(f) && f.severity !== "info");
+  const test = findings.filter((f) => f.kind === "hypothesis");
+  const review = findings.filter((f) => f.kind === "needs-review");
+  const lane = (title, hint, list2) => `<div class="lane"><h3>${title} <span class="muted">(${list2.length})</span></h3><p class="muted">${hint}</p><ul>${[
+    ...new Map(list2.map((f) => [f.ruleId, f])).values()
+  ].slice(0, 6).map((f) => `<li>${esc(f.title)}</li>`).join("")}</ul></div>`;
+  return `<h2>Improvement roadmap</h2><div class="lanes">${lane("Now", "Blocked journeys, broken pages, critical defects", now)}${lane("Next", "Remaining defects by severity", next)}${lane("Test", "Hypotheses: run an experiment before claiming an effect", test)}${lane("Review", "Needs a person to judge", review)}</div>`;
+}
+function historyHtml(run, history) {
+  const same = history.filter((h) => h.target === run.target && h.id !== run.id && h.pages > 0).slice(-9);
+  if (!same.length) return "";
+  const rows = [
+    ...same,
+    {
+      id: run.id,
+      startedAt: run.startedAt,
+      defects: run.summary.findings,
+      kinds: run.summary.byKind,
+      current: true
+    }
+  ];
+  const total = (d) => d.critical + d.serious + d.moderate + d.minor;
+  const max = Math.max(1, ...rows.map((r) => total(r.defects)));
+  return `<h2>History for this target</h2><table class="history"><thead><tr><th>Run</th><th>Date</th><th>Critical</th><th>Serious</th><th>Moderate</th><th>Minor</th><th>Defects</th></tr></thead><tbody>${rows.map((r, i) => {
+    const t = total(r.defects);
+    const prev = i ? total(rows[i - 1].defects) : t;
+    const trend = t < prev ? "good" : t > prev ? "poor" : "";
+    return `<tr${"current" in r ? ' class="current"' : ""}><td><code>${esc(r.id)}</code>${"current" in r ? " (this run)" : ""}</td><td>${esc(new Date(r.startedAt).toISOString().slice(0, 16).replace("T", " "))}</td><td>${r.defects.critical}</td><td>${r.defects.serious}</td><td>${r.defects.moderate}</td><td>${r.defects.minor}</td><td class="${trend}"><span class="bar" style="width:${Math.round(t / max * 120)}px"></span> ${t}</td></tr>`;
+  }).join(
+    ""
+  )}</tbody></table><p class="muted">Runs with the same target in this workspace. Different page sets or viewports make counts not directly comparable; use <code>jourilo verify</code> for like-for-like comparisons.</p>`;
+}
+function renderHtml(run, cmp, history = []) {
   const status = /* @__PURE__ */ new Map();
   if (cmp) {
     for (const f of cmp.introduced) status.set(f.fingerprint, "new");
@@ -42939,6 +42985,8 @@ ${cmp ? '<button role="tab" aria-selected="false" data-tab="compare">Before / af
 <h2>Fix first</h2>
 ${top.length ? top.map((t) => findingHtml(run, t.lead, status.get(t.lead.fingerprint), t.pages)).join("") : "<p>No defects detected by automated checks. Manual review is still required (see limitations).</p>"}
 <h2>By category</h2><ul class="bycat">${Object.entries(s.byCategory).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0)).map(([k, v]) => `<li><b>${v}</b> ${esc(k)}</li>`).join("")}</ul>
+${roadmapHtml(findings)}
+${historyHtml(run, history)}
 ${contextHtml(run)}
 <h2>Limitations of this run</h2><ul class="limits">${run.limitations.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
 </section>
@@ -43001,6 +43049,9 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;vertical-a
 .stepshot{width:100%;aspect-ratio:16/10;object-fit:cover;object-position:top;border:1px solid var(--line);border-radius:6px;display:block}
 .steps li.failed b,.steps li.blocked b{color:var(--poor)}ul.bycat{columns:2}ul.limits li{margin:4px 0}
 footer{padding:16px 24px;text-align:center;font-size:12.5px}
+.lanes{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}.lane{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.lane h3{margin:4px 0}.lane p{margin:2px 0 6px;font-size:12.5px}.lane ul{margin:0;padding-left:18px;font-size:13.5px}
+.history .bar{display:inline-block;height:8px;background:var(--accent);border-radius:4px;vertical-align:middle;margin-right:6px}.history tr.current td{font-weight:600}
 `;
 var JS = `
 document.querySelectorAll('.tabs button').forEach(function(b){b.addEventListener('click',function(){
@@ -43137,7 +43188,7 @@ function renderSarif(run) {
 function writeReports(dir, run, cmp, opts = {}) {
   const html = join8(dir, "report.html");
   const markdown = join8(dir, "report.md");
-  writeFileSync4(html, renderHtml(run, cmp));
+  writeFileSync4(html, renderHtml(run, cmp, opts.history));
   writeFileSync4(markdown, renderMarkdown(run, cmp));
   const out = { html, markdown };
   if (opts.sarif) {
@@ -43228,7 +43279,10 @@ async function auditCommand(ctx, usage2, categories) {
       ctx.log(`Mapped ${located} finding(s) to likely source locations in ${repo}`);
     }
     ctx.ws.saveRun(run);
-    const reports = writeReports(runDir, run, void 0, { sarif: flag(ctx, "sarif") });
+    const reports = writeReports(runDir, run, void 0, {
+      sarif: flag(ctx, "sarif"),
+      history: ctx.ws.listRuns()
+    });
     const gate = failOn ? run.findings.some((f) => f.kind === "defect" && severityRank(f.severity) <= severityRank(failOn)) : false;
     return {
       data: {
@@ -44682,7 +44736,7 @@ var finding = {
     run.findings.push(f);
     run.summary = summarize(run.findings, run.summary.pages, run.summary.journeys);
     ctx.ws.saveRun(run);
-    writeReports(dir, run);
+    writeReports(dir, run, void 0, { history: ctx.ws.listRuns() });
     return {
       data: f,
       text: `Added ${f.provenance} finding ${f.fingerprint} to run ${run.id} (${join13(dir, "report.html")}).`
@@ -45527,7 +45581,7 @@ async function runCmd(ctx) {
     const repo = str(ctx, "repo") ?? (isDir ? resolve8(baseArg) : void 0);
     if (repo) locateFindings(run, repo);
     ctx.ws.saveRun(run);
-    const reports = writeReports(runDir, run);
+    const reports = writeReports(runDir, run, void 0, { history: ctx.ws.listRuns() });
     const failed = journeys2.filter((j) => j.status === "failed").length;
     return {
       data: { runId: id, runDir, reports, journeys: journeys2, findings },
@@ -46144,7 +46198,7 @@ var verify = {
       run.settings.baseline = base2.id;
       ctx.ws.saveRun(run);
       const cmp = compareRuns(base2, run);
-      const reports = writeReports(runDir, run, cmp);
+      const reports = writeReports(runDir, run, cmp, { history: ctx.ws.listRuns() });
       const failed = flag(ctx, "fail-on-regression") && !cmp.regressionFree;
       return {
         data: {
@@ -46258,7 +46312,7 @@ var report = {
     }
     if (!["html", "md"].includes(format))
       throw new JouriloError("USAGE", "--format must be html, md, sarif or json.");
-    const written = writeReports(dir, run, cmp);
+    const written = writeReports(dir, run, cmp, { history: ctx.ws.listRuns() });
     return { data: written, text: `Report: ${format === "md" ? written.markdown : written.html}` };
   }
 };
@@ -46274,7 +46328,7 @@ var compare = {
     const { run: head, dir } = ctx.ws.loadRun(headRef);
     if (base2.id === head.id) throw new JouriloError("USAGE", "Baseline and head are the same run.");
     const cmp = compareRuns(base2, head);
-    const written = writeReports(dir, head, cmp);
+    const written = writeReports(dir, head, cmp, { history: ctx.ws.listRuns() });
     const failed = flag(ctx, "fail-on-regression") && !cmp.regressionFree;
     const lines = [
       `Baseline ${base2.id} \u2192 ${head.id}`,

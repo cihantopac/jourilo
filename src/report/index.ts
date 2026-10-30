@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Run } from '../core/types.js';
+import type { RunListing } from '../core/workspace.js';
 import type { RunComparison } from './compare.js';
 import { renderHtml } from './html.js';
 import { renderMarkdown, renderSarif } from './text.js';
@@ -15,11 +16,11 @@ export function writeReports(
   dir: string,
   run: Run,
   cmp?: RunComparison,
-  opts: { sarif?: boolean } = {},
+  opts: { sarif?: boolean; history?: RunListing[] } = {},
 ): WrittenReports {
   const html = join(dir, 'report.html');
   const markdown = join(dir, 'report.md');
-  writeFileSync(html, renderHtml(run, cmp));
+  writeFileSync(html, renderHtml(run, cmp, opts.history));
   writeFileSync(markdown, renderMarkdown(run, cmp));
   const out: WrittenReports = { html, markdown };
   if (opts.sarif) {

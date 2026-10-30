@@ -2,6 +2,7 @@
 // Every string that came from a page is escaped: page content is untrusted and must never execute in the report.
 import { severityRank } from '../audit/finding.js';
 import type { Evidence, Finding, JourneyResult, PageCapture, Run, Viewport } from '../core/types.js';
+import type { RunListing } from '../core/workspace.js';
 import type { RunComparison } from './compare.js';
 
 export function esc(s: unknown): string {
@@ -212,7 +213,54 @@ function contextHtml(run: Run): string {
   return parts.join('');
 }
 
-export function renderHtml(run: Run, cmp?: RunComparison): string {
+function roadmapHtml(findings: Finding[]): string {
+  const key = new Set(['reliability', 'usability']);
+  const now = findings.filter(
+    (f) =>
+      f.kind === 'defect' &&
+      (f.severity === 'critical' || (f.severity === 'serious' && (key.has(f.category) || f.journey))),
+  );
+  const next = findings.filter((f) => f.kind === 'defect' && !now.includes(f) && f.severity !== 'info');
+  const test = findings.filter((f) => f.kind === 'hypothesis');
+  const review = findings.filter((f) => f.kind === 'needs-review');
+  const lane = (title: string, hint: string, list: Finding[]) =>
+    `<div class="lane"><h3>${title} <span class="muted">(${list.length})</span></h3><p class="muted">${hint}</p><ul>${[
+      ...new Map(list.map((f) => [f.ruleId, f])).values(),
+    ]
+      .slice(0, 6)
+      .map((f) => `<li>${esc(f.title)}</li>`)
+      .join('')}</ul></div>`;
+  return `<h2>Improvement roadmap</h2><div class="lanes">${lane('Now', 'Blocked journeys, broken pages, critical defects', now)}${lane('Next', 'Remaining defects by severity', next)}${lane('Test', 'Hypotheses: run an experiment before claiming an effect', test)}${lane('Review', 'Needs a person to judge', review)}</div>`;
+}
+
+function historyHtml(run: Run, history: RunListing[]): string {
+  const same = history.filter((h) => h.target === run.target && h.id !== run.id && h.pages > 0).slice(-9);
+  if (!same.length) return '';
+  const rows = [
+    ...same,
+    {
+      id: run.id,
+      startedAt: run.startedAt,
+      defects: run.summary.findings,
+      kinds: run.summary.byKind,
+      current: true,
+    },
+  ];
+  const total = (d: Run['summary']['findings']) => d.critical + d.serious + d.moderate + d.minor;
+  const max = Math.max(1, ...rows.map((r) => total(r.defects)));
+  return `<h2>History for this target</h2><table class="history"><thead><tr><th>Run</th><th>Date</th><th>Critical</th><th>Serious</th><th>Moderate</th><th>Minor</th><th>Defects</th></tr></thead><tbody>${rows
+    .map((r, i) => {
+      const t = total(r.defects);
+      const prev = i ? total(rows[i - 1]!.defects) : t;
+      const trend = t < prev ? 'good' : t > prev ? 'poor' : '';
+      return `<tr${'current' in r ? ' class="current"' : ''}><td><code>${esc(r.id)}</code>${'current' in r ? ' (this run)' : ''}</td><td>${esc(new Date(r.startedAt).toISOString().slice(0, 16).replace('T', ' '))}</td><td>${r.defects.critical}</td><td>${r.defects.serious}</td><td>${r.defects.moderate}</td><td>${r.defects.minor}</td><td class="${trend}"><span class="bar" style="width:${Math.round((t / max) * 120)}px"></span> ${t}</td></tr>`;
+    })
+    .join(
+      '',
+    )}</tbody></table><p class="muted">Runs with the same target in this workspace. Different page sets or viewports make counts not directly comparable; use <code>jourilo verify</code> for like-for-like comparisons.</p>`;
+}
+
+export function renderHtml(run: Run, cmp?: RunComparison, history: RunListing[] = []): string {
   const status = new Map<string, string>();
   if (cmp) {
     for (const f of cmp.introduced) status.set(f.fingerprint, 'new');
@@ -275,6 +323,8 @@ ${top.length ? top.map((t) => findingHtml(run, t.lead, status.get(t.lead.fingerp
     .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
     .map(([k, v]) => `<li><b>${v}</b> ${esc(k)}</li>`)
     .join('')}</ul>
+${roadmapHtml(findings)}
+${historyHtml(run, history)}
 ${contextHtml(run)}
 <h2>Limitations of this run</h2><ul class="limits">${run.limitations.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
 </section>
@@ -338,6 +388,9 @@ th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;vertical-a
 .stepshot{width:100%;aspect-ratio:16/10;object-fit:cover;object-position:top;border:1px solid var(--line);border-radius:6px;display:block}
 .steps li.failed b,.steps li.blocked b{color:var(--poor)}ul.bycat{columns:2}ul.limits li{margin:4px 0}
 footer{padding:16px 24px;text-align:center;font-size:12.5px}
+.lanes{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}.lane{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.lane h3{margin:4px 0}.lane p{margin:2px 0 6px;font-size:12.5px}.lane ul{margin:0;padding-left:18px;font-size:13.5px}
+.history .bar{display:inline-block;height:8px;background:var(--accent);border-radius:4px;vertical-align:middle;margin-right:6px}.history tr.current td{font-weight:600}
 `;
 
 const JS = `
