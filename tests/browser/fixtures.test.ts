@@ -19,6 +19,12 @@ describe('fixture benchmark', () => {
     expect(r.missed).toEqual([]);
     expect(r.falsePositives).toEqual([]);
   });
+  it('operates dialogs and disclosures with the keyboard without flagging correct ones', async () => {
+    const r = await benchFixture(join(import.meta.dirname, '../../fixtures/sites/widgets-lab'), ws);
+    expect(r.missed).toEqual([]);
+    expect(r.falsePositives).toEqual([]);
+    expect(r.excessDefects).toEqual([]);
+  });
   it('reports no moderate-or-worse defects on the clean control site', async () => {
     const r = await benchFixture(join(import.meta.dirname, '../../fixtures/sites/clean-shop'), ws);
     expect(r.excessDefects).toEqual([]);

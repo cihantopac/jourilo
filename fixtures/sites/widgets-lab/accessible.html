@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Accessible widgets – Widgets lab</title><link rel="stylesheet" href="/style.css">
+<style>dialog::backdrop { background: rgba(0, 0, 0, 0.5); } dialog { border: 0; border-radius: 8px; padding: 24px; }</style></head>
+<body>
+<main>
+  <h1>Account preferences</h1>
+  <p><a href="/">Back to the lab</a></p>
+  <p><button type="button" id="faq-btn" aria-expanded="false" aria-controls="faq">Shipping questions</button></p>
+  <div id="faq" hidden><p>We ship within two working days.</p></div>
+  <p><button type="button" id="open-dialog" aria-haspopup="dialog">Change email</button></p>
+  <dialog id="dialog" aria-labelledby="dlg-title">
+    <h2 id="dlg-title">Change email</h2>
+    <label for="new-email">New email</label> <input id="new-email" type="email" autocomplete="email">
+    <p><button type="button" id="close-dialog">Close</button></p>
+  </dialog>
+</main>
+<script>
+  var btn = document.getElementById('faq-btn');
+  btn.addEventListener('click', function () {
+    var p = document.getElementById('faq'); p.hidden = !p.hidden; btn.setAttribute('aria-expanded', String(!p.hidden));
+  });
+  var dlg = document.getElementById('dialog'), opener = document.getElementById('open-dialog');
+  opener.addEventListener('click', function () { dlg.showModal(); });
+  document.getElementById('close-dialog').addEventListener('click', function () { dlg.close(); });
+  dlg.addEventListener('close', function () { opener.focus(); });
+</script>
+</body>
+</html>

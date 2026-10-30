@@ -3006,25 +3006,25 @@ var require_axe = __commonJS({
               return store.has(it);
             };
           } else {
-            STATE = sharedKey("state");
-            hiddenKeys[STATE] = true;
+            STATE2 = sharedKey("state");
+            hiddenKeys[STATE2] = true;
             set2 = function set22(it, metadata) {
-              if (hasOwn2(it, STATE)) {
+              if (hasOwn2(it, STATE2)) {
                 throw new TypeError2(OBJECT_ALREADY_INITIALIZED);
               }
               metadata.facade = it;
-              createNonEnumerableProperty(it, STATE, metadata);
+              createNonEnumerableProperty(it, STATE2, metadata);
               return metadata;
             };
             get2 = function get22(it) {
-              return hasOwn2(it, STATE) ? it[STATE] : {};
+              return hasOwn2(it, STATE2) ? it[STATE2] : {};
             };
             has = function has2(it) {
-              return hasOwn2(it, STATE);
+              return hasOwn2(it, STATE2);
             };
           }
           var store;
-          var STATE;
+          var STATE2;
           module2.exports = {
             set: set2,
             get: get2,
@@ -39884,6 +39884,169 @@ function toMetrics(v) {
   return out;
 }
 
+// src/journeys/safety.ts
+var DESTRUCTIVE = /\b(delete|remove|destroy|erase|deactivate|close (my )?account|cancel (my )?(subscription|plan|membership|order|account)|unsubscribe|terminate|revoke|wipe|reset (all|data)|transfer|withdraw|send (money|payment))\b/i;
+var FINANCIAL = /\b(pay( now)?|purchase|buy( now)?|place (the )?order|complete (the )?(order|purchase|checkout|payment)|confirm (the )?(order|payment|purchase)|checkout now|submit (order|payment)|donate|upgrade now|start (paid|subscription))\b/i;
+function checkAction(ctx, policy) {
+  const safeHost = policy.hostClass === "local";
+  const risky = DESTRUCTIVE.test(ctx.name) ? "destructive" : FINANCIAL.test(ctx.name) || ctx.paymentForm ? "financial" : null;
+  if (risky) {
+    if (!safeHost)
+      return {
+        allowed: false,
+        reason: `"${ctx.name}" looks ${risky === "financial" ? "like a payment/purchase" : "irreversible"}; Jourilo never performs it on a non-local host.`
+      };
+    if (!policy.allowDestructive)
+      return {
+        allowed: false,
+        reason: `"${ctx.name}" looks ${risky === "financial" ? "like a payment/purchase" : "irreversible"}; rerun with --allow-destructive on a local/test environment with sandbox data to include it.`
+      };
+  }
+  if (ctx.submitsForm && !safeHost && !policy.allowSubmit) {
+    return {
+      allowed: false,
+      reason: "Submitting a form on a non-local host is blocked; use --allow-submit only on an environment you are authorized to test, with test accounts."
+    };
+  }
+  return { allowed: true };
+}
+function testData(runId, vars = {}) {
+  const tag = runId.replace(/[^a-z0-9]/gi, "").slice(-10).toLowerCase();
+  const base2 = {
+    email: `jourilo+${tag}@example.test`,
+    password: `Jr-${tag}-Q7!x`,
+    name: "Jordan Test",
+    firstName: "Jordan",
+    lastName: "Test",
+    phone: "+1 555 0100",
+    company: "Example Test Co",
+    search: "test",
+    zip: "10001",
+    // Published test card from Stripe's docs; only useful in a provider's test mode.
+    testCard: "4242 4242 4242 4242"
+  };
+  return { ...base2, ...vars };
+}
+function interpolate(value, data) {
+  return value.replace(/\{\{\s*([A-Za-z][\w]*)\s*\}\}/g, (m, k) => data[k] ?? m);
+}
+function isSecretValue(raw) {
+  return /\{\{\s*(password|testCard|secret|token)\s*\}\}/i.test(raw);
+}
+
+// src/browser/widgets.ts
+var TRIGGERS = `(() => {
+  const sel = (e) => {
+    if (e.id && document.querySelectorAll('#' + CSS.escape(e.id)).length === 1) return '#' + CSS.escape(e.id);
+    const parts = []; let c = e;
+    while (c && c.nodeType === 1 && c !== document.documentElement && parts.length < 6) {
+      let p = c.tagName.toLowerCase();
+      const par = c.parentElement;
+      if (par) { const same = Array.from(par.children).filter((x) => x.tagName === c.tagName); if (same.length > 1) p += ':nth-of-type(' + (same.indexOf(c) + 1) + ')'; }
+      parts.unshift(p); c = c.parentElement;
+    }
+    return parts.join(' > ');
+  };
+  return Array.from(document.querySelectorAll('[aria-haspopup]:not([aria-haspopup="false"]), [aria-expanded]'))
+    .filter((e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden' && !e.disabled && /^(BUTTON|A|SUMMARY)$|^button$/i.test(e.tagName === 'DIV' || e.tagName === 'SPAN' ? (e.getAttribute('role') || '') : e.tagName))
+    .slice(0, 8)
+    .map((e) => {
+      const r = e.getBoundingClientRect();
+      return {
+        selector: sel(e),
+        name: (e.getAttribute('aria-label') || e.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 80),
+        popup: e.getAttribute('aria-haspopup'),
+        expanded: e.getAttribute('aria-expanded'),
+        controls: e.getAttribute('aria-controls'),
+        rect: { x: Math.round(r.left + scrollX), y: Math.round(r.top + scrollY), width: Math.round(r.width), height: Math.round(r.height) },
+      };
+    });
+})()`;
+var STATE = `(controls) => {
+  const visible = (e) => !!e && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+  const dialogs = Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"], dialog[open], [aria-modal="true"]')).filter(visible);
+  const d = dialogs[dialogs.length - 1] || null;
+  const ae = document.activeElement;
+  const controlled = controls ? controls.split(/\\s+/).map((id) => document.getElementById(id)).filter(Boolean) : [];
+  return {
+    dialogOpen: !!d,
+    focusInDialog: !!d && !!ae && d.contains(ae),
+    controlledVisible: controlled.length ? controlled.some(visible) : null,
+    activeSelector: ae && ae !== document.body ? (ae.id ? '#' + ae.id : ae.tagName.toLowerCase()) : null,
+  };
+}`;
+async function checkWidgets(page) {
+  const triggers = await page.evaluate(TRIGGERS);
+  const out = { triggers: triggers.length, dialogs: 0, disclosures: 0, issues: [] };
+  const state = (controls) => page.evaluate(`(${STATE})(${JSON.stringify(controls)})`);
+  for (const t of triggers) {
+    if (DESTRUCTIVE.test(t.name) || FINANCIAL.test(t.name)) continue;
+    const loc = page.locator(t.selector).first();
+    const before = await state(t.controls);
+    if (before.dialogOpen) break;
+    try {
+      await loc.focus({ timeout: 3e3 });
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(350);
+    } catch {
+      continue;
+    }
+    const after = await state(t.controls);
+    const expandedAfter = await loc.getAttribute("aria-expanded").catch(() => null);
+    if (after.dialogOpen && !before.dialogOpen) {
+      out.dialogs++;
+      if (!after.focusInDialog)
+        out.issues.push({
+          kind: "dialog-focus-not-moved",
+          trigger: t.selector,
+          name: t.name,
+          rect: t.rect,
+          detail: `After opening, focus stayed on ${after.activeSelector ?? "the page"} instead of moving into the dialog.`
+        });
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(300);
+      const closed = await state(t.controls);
+      if (closed.dialogOpen) {
+        out.issues.push({
+          kind: "dialog-escape",
+          trigger: t.selector,
+          name: t.name,
+          rect: t.rect,
+          detail: "Pressing Escape did not close the dialog."
+        });
+        await page.reload({ waitUntil: "load" }).catch(() => void 0);
+        continue;
+      }
+      const backOnTrigger = await loc.evaluate((el) => el === document.activeElement).catch(() => false);
+      if (!backOnTrigger)
+        out.issues.push({
+          kind: "dialog-focus-not-returned",
+          trigger: t.selector,
+          name: t.name,
+          rect: t.rect,
+          detail: `After closing, focus went to ${closed.activeSelector ?? "the start of the page"} instead of back to the button that opened the dialog.`
+        });
+      continue;
+    }
+    if (t.expanded !== null && t.controls && after.controlledVisible !== null) {
+      out.disclosures++;
+      if (after.controlledVisible !== before.controlledVisible && String(after.controlledVisible) !== expandedAfter)
+        out.issues.push({
+          kind: "expanded-state-mismatch",
+          trigger: t.selector,
+          name: t.name,
+          rect: t.rect,
+          detail: `The controlled content is now ${after.controlledVisible ? "shown" : "hidden"} but aria-expanded is "${expandedAfter}".`
+        });
+      if (after.controlledVisible !== before.controlledVisible) {
+        await page.keyboard.press("Enter").catch(() => void 0);
+        await page.waitForTimeout(200);
+      }
+    }
+  }
+  return out;
+}
+
 // src/browser/capture.ts
 var DEFAULT_MASK = [
   'input[type="password"]',
@@ -40127,6 +40290,10 @@ async function capturePage(ctx, url, vp, opts) {
     if (opts.keyboard !== false) {
       obs.keyboard = await keyboardWalk(page).catch((e) => {
         obs.errors.push(`keyboard: ${e.message.split("\n")[0]}`);
+        return null;
+      });
+      obs.widgets = await checkWidgets(page).catch((e) => {
+        obs.errors.push(`widgets: ${e.message.split("\n")[0]}`);
         return null;
       });
     }
@@ -41132,58 +41299,6 @@ function respectLockedBrand(findings, brand) {
 
 // src/journeys/forms.ts
 init_fs_safety();
-
-// src/journeys/safety.ts
-var DESTRUCTIVE = /\b(delete|remove|destroy|erase|deactivate|close (my )?account|cancel (my )?(subscription|plan|membership|order|account)|unsubscribe|terminate|revoke|wipe|reset (all|data)|transfer|withdraw|send (money|payment))\b/i;
-var FINANCIAL = /\b(pay( now)?|purchase|buy( now)?|place (the )?order|complete (the )?(order|purchase|checkout|payment)|confirm (the )?(order|payment|purchase)|checkout now|submit (order|payment)|donate|upgrade now|start (paid|subscription))\b/i;
-function checkAction(ctx, policy) {
-  const safeHost = policy.hostClass === "local";
-  const risky = DESTRUCTIVE.test(ctx.name) ? "destructive" : FINANCIAL.test(ctx.name) || ctx.paymentForm ? "financial" : null;
-  if (risky) {
-    if (!safeHost)
-      return {
-        allowed: false,
-        reason: `"${ctx.name}" looks ${risky === "financial" ? "like a payment/purchase" : "irreversible"}; Jourilo never performs it on a non-local host.`
-      };
-    if (!policy.allowDestructive)
-      return {
-        allowed: false,
-        reason: `"${ctx.name}" looks ${risky === "financial" ? "like a payment/purchase" : "irreversible"}; rerun with --allow-destructive on a local/test environment with sandbox data to include it.`
-      };
-  }
-  if (ctx.submitsForm && !safeHost && !policy.allowSubmit) {
-    return {
-      allowed: false,
-      reason: "Submitting a form on a non-local host is blocked; use --allow-submit only on an environment you are authorized to test, with test accounts."
-    };
-  }
-  return { allowed: true };
-}
-function testData(runId, vars = {}) {
-  const tag = runId.replace(/[^a-z0-9]/gi, "").slice(-10).toLowerCase();
-  const base2 = {
-    email: `jourilo+${tag}@example.test`,
-    password: `Jr-${tag}-Q7!x`,
-    name: "Jordan Test",
-    firstName: "Jordan",
-    lastName: "Test",
-    phone: "+1 555 0100",
-    company: "Example Test Co",
-    search: "test",
-    zip: "10001",
-    // Published test card from Stripe's docs; only useful in a provider's test mode.
-    testCard: "4242 4242 4242 4242"
-  };
-  return { ...base2, ...vars };
-}
-function interpolate(value, data) {
-  return value.replace(/\{\{\s*([A-Za-z][\w]*)\s*\}\}/g, (m, k) => data[k] ?? m);
-}
-function isSecretValue(raw) {
-  return /\{\{\s*(password|testCard|secret|token)\s*\}\}/i.test(raw);
-}
-
-// src/journeys/forms.ts
 var BEFORE = `(sel) => {
   const form = document.querySelector(sel);
   if (!form) return null;
@@ -41762,6 +41877,95 @@ function suggestAutocomplete(type, name, label, purpose) {
   if (/name/.test(s)) return "name";
   return "on (choose the matching token)";
 }
+var WIDGET_RULES = {
+  "dialog-focus-not-moved": {
+    ruleId: "jourilo/dialog-focus",
+    title: "Opening a dialog does not move keyboard focus into it",
+    severity: "serious",
+    impact: "Keyboard and screen-reader users stay behind the dialog and may not know it opened.",
+    recommendation: 'When the dialog opens, move focus to its first focusable element (or the dialog itself with tabindex="-1"); use <dialog>.showModal() where possible.',
+    standards: [
+      wcag("2.4.3"),
+      {
+        standard: "WAI-ARIA APG",
+        id: "dialog-modal",
+        title: "Dialog (Modal) Pattern",
+        url: "https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/"
+      }
+    ]
+  },
+  "dialog-escape": {
+    ruleId: "jourilo/dialog-escape",
+    title: "Escape does not close the dialog",
+    severity: "moderate",
+    impact: "Keyboard users have no quick, expected way out of the dialog.",
+    recommendation: "Close the dialog on Escape (native <dialog> does this) and return focus to the trigger.",
+    standards: [
+      nielsen(3),
+      {
+        standard: "WAI-ARIA APG",
+        id: "dialog-modal",
+        title: "Dialog (Modal) Pattern",
+        url: "https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/"
+      }
+    ]
+  },
+  "dialog-focus-not-returned": {
+    ruleId: "jourilo/dialog-focus-return",
+    title: "Focus is lost when the dialog closes",
+    severity: "moderate",
+    impact: "After closing, keyboard users are sent elsewhere (often the top of the page) and must find their place again.",
+    recommendation: "Store the element that opened the dialog and focus it again when the dialog closes.",
+    standards: [wcag("2.4.3")]
+  },
+  "expanded-state-mismatch": {
+    ruleId: "jourilo/expanded-state",
+    title: "aria-expanded does not match what is shown",
+    severity: "serious",
+    impact: "Screen readers announce the menu or section as collapsed when it is open (or the reverse).",
+    recommendation: "Toggle aria-expanded on the trigger together with the visibility of the controlled element.",
+    standards: [wcag("4.1.2")]
+  }
+};
+function widgetFindings(obs) {
+  const w = obs.widgets;
+  if (!w?.issues.length) return [];
+  const byKind = /* @__PURE__ */ new Map();
+  for (const i of w.issues) byKind.set(i.kind, [...byKind.get(i.kind) ?? [], i]);
+  const shot = obs.screenshot ? { file: obs.screenshot } : {};
+  return [...byKind].map(([kind, issues]) => {
+    const r = WIDGET_RULES[kind];
+    return makeFinding({
+      ruleId: r.ruleId,
+      title: r.title,
+      category: "accessibility",
+      kind: "defect",
+      severity: r.severity,
+      confidence: "high",
+      provenance: "observed",
+      url: obs.url,
+      viewport: obs.viewport.name,
+      description: issues.map((i) => `"${i.name}": ${i.detail}`).join(" "),
+      impact: r.impact,
+      recommendation: r.recommendation,
+      standards: r.standards,
+      evidence: issues.map((i) => ({
+        type: "element",
+        selector: i.trigger,
+        rect: i.rect,
+        snippet: i.name,
+        note: i.detail,
+        ...shot
+      })),
+      occurrences: issues.length,
+      reproduction: [
+        `Open ${obs.url} at the ${obs.viewport.name} viewport.`,
+        `Focus "${issues[0].name}" with Tab and press Enter.`,
+        issues[0].detail
+      ]
+    });
+  });
+}
 
 // src/audit/rules/experience.ts
 function responsiveFindings(obs) {
@@ -42065,6 +42269,7 @@ function performanceFindings(obs) {
 var PAGE_RULES = {
   axe: axeFindings,
   keyboard: keyboardFindings,
+  widgets: widgetFindings,
   measuredA11y: measuredA11yFindings,
   responsive: responsiveFindings,
   reliability: reliabilityFindings,
@@ -43435,6 +43640,8 @@ async function benchFixture(dir, wsRoot) {
     const falsePositives = expected.mustNotFind.filter((e) => run.findings.some((f) => matches(f, e))).map((e) => ({ rule: e.rule, path: e.path, ...e.why ? { why: e.why } : {} }));
     const excessDefects = expected.maxDefects ? run.findings.filter(
       (f) => f.kind === "defect" && severityRank(f.severity) <= severityRank(expected.maxDefects.minSeverity)
+    ).filter(
+      (f) => !expected.maxDefects.paths || expected.maxDefects.paths.includes(pathOf(f.url).split("?")[0].replace(/\/$/, "") || "/")
     ).map((f) => ({ rule: f.ruleId, path: pathOf(f.url), severity: f.severity })) : [];
     const sourceMisses = [];
     for (const s of expected.sources ?? []) {

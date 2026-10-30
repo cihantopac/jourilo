@@ -1,0 +1,49 @@
+{
+  "description": "The same disclosure and dialog, broken and accessible. Keyboard-operated widget checks.",
+  "mustFind": [
+    {
+      "rule": "jourilo/expanded-state",
+      "path": "/broken",
+      "why": "aria-expanded stays false while the panel opens"
+    },
+    {
+      "rule": "jourilo/dialog-focus",
+      "path": "/broken",
+      "why": "focus stays on the trigger"
+    },
+    {
+      "rule": "jourilo/dialog-escape",
+      "path": "/broken",
+      "why": "Escape does nothing"
+    }
+  ],
+  "mustNotFind": [
+    {
+      "rule": "jourilo/expanded-state",
+      "path": "/accessible",
+      "why": "aria-expanded toggles"
+    },
+    {
+      "rule": "jourilo/dialog-focus",
+      "path": "/accessible",
+      "why": "showModal moves focus"
+    },
+    {
+      "rule": "jourilo/dialog-escape",
+      "path": "/accessible",
+      "why": "native dialog closes on Escape"
+    },
+    {
+      "rule": "jourilo/dialog-focus-return",
+      "path": "/accessible",
+      "why": "focus returns to the opener"
+    }
+  ],
+  "maxDefects": {
+    "minSeverity": "moderate",
+    "count": 0,
+    "paths": [
+      "/accessible"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Broken widgets – Widgets lab</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<main>
+  <h1>Account preferences</h1>
+  <p><a href="/">Back to the lab</a></p>
+  <!-- Seeded defect: aria-expanded never changes although the panel opens (WCAG 4.1.2). -->
+  <p><button type="button" id="faq-btn" aria-expanded="false" aria-controls="faq">Shipping questions</button></p>
+  <div id="faq" hidden><p>We ship within two working days.</p></div>
+  <!-- Seeded defects: focus does not move into the dialog, Escape does not close it. -->
+  <p><button type="button" id="open-dialog" aria-haspopup="dialog">Change email</button></p>
+  <div class="overlay" id="dialog" hidden>
+    <div class="panel" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+      <h2 id="dlg-title">Change email</h2>
+      <label for="new-email">New email</label> <input id="new-email" type="email" autocomplete="email">
+      <p><button type="button" id="close-dialog">Close</button></p>
+    </div>
+  </div>
+</main>
+<script>
+  document.getElementById('faq-btn').addEventListener('click', function () {
+    var p = document.getElementById('faq'); p.hidden = !p.hidden;
+  });
+  document.getElementById('open-dialog').addEventListener('click', function () { document.getElementById('dialog').hidden = false; });
+  document.getElementById('close-dialog').addEventListener('click', function () { document.getElementById('dialog').hidden = true; });
+</script>
+</body>
+</html>

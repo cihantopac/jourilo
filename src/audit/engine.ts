@@ -28,7 +28,12 @@ import type { ExperienceContext } from '../integrations/context.js';
 import { designFindings, respectLockedBrand } from '../integrations/design-rules.js';
 import { probeFormValidation } from '../journeys/forms.js';
 import { mergeFindings } from './finding.js';
-import { axeFindings, keyboardFindings, measuredA11yFindings } from './rules/accessibility.js';
+import {
+  axeFindings,
+  keyboardFindings,
+  measuredA11yFindings,
+  widgetFindings,
+} from './rules/accessibility.js';
 import { performanceFindings, reliabilityFindings, responsiveFindings } from './rules/experience.js';
 
 export type Rule = (obs: PageObservation) => Finding[];
@@ -36,6 +41,7 @@ export type Rule = (obs: PageObservation) => Finding[];
 export const PAGE_RULES: Record<string, Rule> = {
   axe: axeFindings,
   keyboard: keyboardFindings,
+  widgets: widgetFindings,
   measuredA11y: measuredA11yFindings,
   responsive: responsiveFindings,
   reliability: reliabilityFindings,

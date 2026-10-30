@@ -10,6 +10,7 @@ import type { PageInventory, Rect, Viewport } from '../core/types.js';
 import PROBE_SOURCE from './inpage/probe.js?raw';
 import { type KeyboardWalk, keyboardWalk } from './keyboard.js';
 import { type RawVitals, READ_VITALS_SCRIPT, VITALS_INIT_SCRIPT } from './vitals.js';
+import { checkWidgets, type WidgetCheck } from './widgets.js';
 
 export const DEFAULT_MASK = [
   'input[type="password"]',
@@ -105,6 +106,7 @@ export interface PageObservation {
   probe: ProbeResult | null;
   axe: { violations: AxeIssue[]; incomplete: AxeIssue[]; version: string } | null;
   keyboard: KeyboardWalk | null;
+  widgets?: WidgetCheck | null;
   /** Steps that could not run, with the reason; becomes run limitations. */
   errors: string[];
 }
@@ -404,6 +406,11 @@ export async function capturePage(
     if (opts.keyboard !== false) {
       obs.keyboard = await keyboardWalk(page).catch((e: Error) => {
         obs.errors.push(`keyboard: ${e.message.split('\n')[0]}`);
+        return null;
+      });
+      // Widgets change page state (open/close), so they run last.
+      obs.widgets = await checkWidgets(page).catch((e: Error) => {
+        obs.errors.push(`widgets: ${e.message.split('\n')[0]}`);
         return null;
       });
     }

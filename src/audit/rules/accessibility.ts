@@ -3,7 +3,7 @@
 import type { PageObservation } from '../../browser/capture.js';
 import type { Evidence, Finding, Severity } from '../../core/types.js';
 import { makeFinding } from '../finding.js';
-import { wcag, wcagFromAxeTags } from '../standards.js';
+import { nielsen, wcag, wcagFromAxeTags } from '../standards.js';
 
 const AXE_ADVICE: Record<string, string> = {
   'color-contrast':
@@ -458,4 +458,108 @@ export function suggestAutocomplete(
   if (/company|organi[sz]ation/.test(s)) return 'organization';
   if (/name/.test(s)) return 'name';
   return 'on (choose the matching token)';
+}
+
+const WIDGET_RULES: Record<
+  NonNullable<PageObservation['widgets']>['issues'][number]['kind'],
+  {
+    ruleId: string;
+    title: string;
+    severity: Severity;
+    impact: string;
+    recommendation: string;
+    standards: Finding['standards'];
+  }
+> = {
+  'dialog-focus-not-moved': {
+    ruleId: 'jourilo/dialog-focus',
+    title: 'Opening a dialog does not move keyboard focus into it',
+    severity: 'serious',
+    impact: 'Keyboard and screen-reader users stay behind the dialog and may not know it opened.',
+    recommendation:
+      'When the dialog opens, move focus to its first focusable element (or the dialog itself with tabindex="-1"); use <dialog>.showModal() where possible.',
+    standards: [
+      wcag('2.4.3'),
+      {
+        standard: 'WAI-ARIA APG',
+        id: 'dialog-modal',
+        title: 'Dialog (Modal) Pattern',
+        url: 'https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/',
+      },
+    ],
+  },
+  'dialog-escape': {
+    ruleId: 'jourilo/dialog-escape',
+    title: 'Escape does not close the dialog',
+    severity: 'moderate',
+    impact: 'Keyboard users have no quick, expected way out of the dialog.',
+    recommendation: 'Close the dialog on Escape (native <dialog> does this) and return focus to the trigger.',
+    standards: [
+      nielsen(3),
+      {
+        standard: 'WAI-ARIA APG',
+        id: 'dialog-modal',
+        title: 'Dialog (Modal) Pattern',
+        url: 'https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/',
+      },
+    ],
+  },
+  'dialog-focus-not-returned': {
+    ruleId: 'jourilo/dialog-focus-return',
+    title: 'Focus is lost when the dialog closes',
+    severity: 'moderate',
+    impact:
+      'After closing, keyboard users are sent elsewhere (often the top of the page) and must find their place again.',
+    recommendation: 'Store the element that opened the dialog and focus it again when the dialog closes.',
+    standards: [wcag('2.4.3')],
+  },
+  'expanded-state-mismatch': {
+    ruleId: 'jourilo/expanded-state',
+    title: 'aria-expanded does not match what is shown',
+    severity: 'serious',
+    impact: 'Screen readers announce the menu or section as collapsed when it is open (or the reverse).',
+    recommendation:
+      'Toggle aria-expanded on the trigger together with the visibility of the controlled element.',
+    standards: [wcag('4.1.2')],
+  },
+};
+
+export function widgetFindings(obs: PageObservation): Finding[] {
+  const w = obs.widgets;
+  if (!w?.issues.length) return [];
+  const byKind = new Map<string, typeof w.issues>();
+  for (const i of w.issues) byKind.set(i.kind, [...(byKind.get(i.kind) ?? []), i]);
+  const shot = obs.screenshot ? { file: obs.screenshot } : {};
+  return [...byKind].map(([kind, issues]) => {
+    const r = WIDGET_RULES[kind as keyof typeof WIDGET_RULES];
+    return makeFinding({
+      ruleId: r.ruleId,
+      title: r.title,
+      category: 'accessibility',
+      kind: 'defect',
+      severity: r.severity,
+      confidence: 'high',
+      provenance: 'observed',
+      url: obs.url,
+      viewport: obs.viewport.name,
+      description: issues.map((i) => `"${i.name}": ${i.detail}`).join(' '),
+      impact: r.impact,
+      recommendation: r.recommendation,
+      standards: r.standards,
+      evidence: issues.map((i) => ({
+        type: 'element' as const,
+        selector: i.trigger,
+        rect: i.rect,
+        snippet: i.name,
+        note: i.detail,
+        ...shot,
+      })),
+      occurrences: issues.length,
+      reproduction: [
+        `Open ${obs.url} at the ${obs.viewport.name} viewport.`,
+        `Focus "${issues[0]!.name}" with Tab and press Enter.`,
+        issues[0]!.detail,
+      ],
+    });
+  });
 }

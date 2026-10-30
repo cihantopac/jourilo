@@ -5,6 +5,7 @@ import {
   keyboardFindings,
   measuredA11yFindings,
   suggestAutocomplete,
+  widgetFindings,
 } from '../../src/audit/rules/accessibility.js';
 import {
   performanceFindings,
@@ -181,6 +182,39 @@ describe('accessibility rules', () => {
     expect(f.find((x) => x.ruleId === 'jourilo/placeholder-label')!.occurrences).toBe(1);
     expect(suggestAutocomplete('password', 'pw', null, 'signup')).toBe('new-password');
     expect(suggestAutocomplete('text', 'last_name', null, 'other')).toBe('family-name');
+  });
+});
+
+describe('widget rules', () => {
+  it('maps keyboard widget issues to WCAG findings, one per kind', () => {
+    const issue = (kind: 'dialog-focus-not-moved' | 'expanded-state-mismatch', name: string) => ({
+      kind,
+      trigger: `#${name}`,
+      name,
+      rect,
+      detail: 'd',
+    });
+    const f = widgetFindings(
+      obs({
+        widgets: {
+          triggers: 3,
+          dialogs: 1,
+          disclosures: 2,
+          issues: [
+            issue('dialog-focus-not-moved', 'a'),
+            issue('expanded-state-mismatch', 'b'),
+            issue('expanded-state-mismatch', 'c'),
+          ],
+        },
+      }),
+    );
+    expect(f.map((x) => [x.ruleId, x.occurrences, x.standards[0]!.id])).toEqual([
+      ['jourilo/dialog-focus', 1, '2.4.3'],
+      ['jourilo/expanded-state', 2, '4.1.2'],
+    ]);
+    expect(widgetFindings(obs({ widgets: { triggers: 0, dialogs: 0, disclosures: 0, issues: [] } }))).toEqual(
+      [],
+    );
   });
 });
 

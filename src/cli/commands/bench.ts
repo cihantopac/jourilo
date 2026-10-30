@@ -25,7 +25,8 @@ interface Expected {
   description: string;
   mustFind: Expectation[];
   mustNotFind: Expectation[];
-  maxDefects?: { minSeverity: Severity; count: number };
+  /** Control pages (all pages when `paths` is omitted) may have at most `count` defects at or above minSeverity. */
+  maxDefects?: { minSeverity: Severity; count: number; paths?: string[] };
   /** Text the recommendation of a finding must contain (e.g. locked-brand guidance). */
   recommendations?: { rule: string; path: string; includes: string }[];
   /** Expected source file for a rule (root-cause location accuracy). */
@@ -90,6 +91,11 @@ export async function benchFixture(dir: string, wsRoot: string): Promise<Fixture
             (f) =>
               f.kind === 'defect' &&
               severityRank(f.severity) <= severityRank(expected.maxDefects!.minSeverity),
+          )
+          .filter(
+            (f) =>
+              !expected.maxDefects!.paths ||
+              expected.maxDefects!.paths.includes(pathOf(f.url).split('?')[0]!.replace(/\/$/, '') || '/'),
           )
           .map((f) => ({ rule: f.ruleId, path: pathOf(f.url), severity: f.severity }))
       : [];
