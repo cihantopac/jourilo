@@ -96,6 +96,21 @@
       "rule": "conv/pricing-period-unclear",
       "path": "/pricing",
       "why": "$19 without /month"
+    },
+    {
+      "rule": "a11y/errors-not-associated",
+      "path": "/login",
+      "why": "visible errors without aria-invalid/describedby/live region"
+    },
+    {
+      "rule": "ux/no-validation-feedback",
+      "path": "/signup",
+      "why": "novalidate form reloads with no feedback"
+    },
+    {
+      "rule": "jourilo/paste-blocked",
+      "path": "/login",
+      "why": "onpaste=return false on password"
     }
   ],
   "mustNotFind": [
@@ -150,6 +165,11 @@
       "rule": "jourilo/placeholder-label",
       "path": "/signup",
       "file": "signup.html"
+    },
+    {
+      "rule": "jourilo/paste-blocked",
+      "path": "/login",
+      "file": "login.html"
     }
   ]
 }

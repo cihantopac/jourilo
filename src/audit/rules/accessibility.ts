@@ -331,6 +331,36 @@ export function measuredA11yFindings(obs: PageObservation): Finding[] {
     );
   }
 
+  if (p.pasteBlocked?.length) {
+    out.push(
+      makeFinding({
+        ruleId: 'jourilo/paste-blocked',
+        title: 'Pasting into password or code fields is blocked',
+        category: 'accessibility',
+        kind: 'defect',
+        severity: 'serious',
+        confidence: 'high',
+        provenance: 'measured',
+        url: obs.url,
+        viewport: vp,
+        description: `${p.pasteBlocked.length} credential field(s) cancel paste events, so passwords cannot be pasted from a password manager.`,
+        impact:
+          'People who rely on password managers or cannot memorize and transcribe passwords (cognitive and motor disabilities) are locked out.',
+        recommendation:
+          'Remove the paste blocking (onpaste handlers / preventDefault on paste) from credential fields.',
+        standards: [wcag('3.3.8')],
+        evidence: p.pasteBlocked.map((f) => ({
+          type: 'element' as const,
+          selector: f.selector,
+          rect: f.rect,
+          snippet: `<input type="${f.type}">`,
+          ...shot,
+        })),
+        occurrences: p.pasteBlocked.length,
+      }),
+    );
+  }
+
   // Input purpose (1.3.5) and placeholder-as-label checks over discovered forms.
   const PURPOSE =
     /email|e-mail|name|phone|tel|mobile|address|street|city|zip|postal|country|username|user|birthday|organization|company/i;

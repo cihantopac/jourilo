@@ -230,6 +230,24 @@
     });
   }
 
+  // ---- Paste blocked in credential fields (WCAG 3.3.8). A synthetic paste event never inserts text, so this
+  // only observes whether page script cancels it. ----
+  const pasteBlocked = [];
+  for (const f of document.querySelectorAll(
+    'input[type="password"], input[autocomplete="one-time-code"], input[autocomplete="username"]',
+  )) {
+    if (!isVisible(f)) continue;
+    try {
+      const dt = new DataTransfer();
+      dt.setData('text/plain', 'x');
+      const ev = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+      f.dispatchEvent(ev);
+      if (ev.defaultPrevented) pasteBlocked.push({ selector: selectorOf(f), rect: rectOf(f), type: f.type });
+    } catch {
+      // ClipboardEvent constructor unsupported: cannot tell
+    }
+  }
+
   // ---- Inventory ----
   const headings = Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6'))
     .filter(isVisible)
@@ -324,6 +342,7 @@
         type: f.tagName === 'INPUT' ? f.type || 'text' : f.tagName.toLowerCase(),
         name: f.getAttribute('name'),
         label: labelOf(f),
+        placeholder: f.getAttribute('placeholder'),
         required: f.required || f.getAttribute('aria-required') === 'true',
         autocomplete: f.getAttribute('autocomplete'),
       }));
@@ -405,6 +424,7 @@
     overflow,
     smallText: { checked: textEls, samples: small },
     clickable,
+    pasteBlocked,
     scroll: { height: document.documentElement.scrollHeight, width: docWidth },
   };
 };

@@ -78,6 +78,7 @@ export interface ProbeResult {
     samples: { selector: string; rect: Rect; fontSize: number; sample: string }[];
   };
   clickable: { selector: string; rect: Rect; name: string; tag: string }[];
+  pasteBlocked?: { selector: string; rect: Rect; type: string }[];
   scroll: { height: number; width: number };
 }
 

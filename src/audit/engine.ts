@@ -24,6 +24,7 @@ import { checkTarget, type HostClass, parseTargetUrl } from '../core/url-safety.
 import { VERSION } from '../core/version.js';
 import type { Workspace } from '../core/workspace.js';
 import { crawl } from '../discovery/crawl.js';
+import { probeFormValidation } from '../journeys/forms.js';
 import { mergeFindings } from './finding.js';
 import { axeFindings, keyboardFindings, measuredA11yFindings } from './rules/accessibility.js';
 import { performanceFindings, reliabilityFindings, responsiveFindings } from './rules/experience.js';
@@ -61,6 +62,9 @@ export interface AuditOptions {
   /** Restrict findings to these categories. */
   categories?: Category[];
   mode: Run['mode'];
+  /** Submit forms empty to test validation feedback (local hosts by default; public hosts need allowSubmit). */
+  forms?: boolean;
+  allowSubmit?: boolean;
   onProgress?: (msg: string) => void;
 }
 
@@ -149,8 +153,45 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       }
     }
 
-    // 3. Findings.
-    let findings: Finding[] = [];
+    // 3. Form validation probes (interactive, so gated by the safety policy).
+    const formFindings: Finding[] = [];
+    const formsAllowed = hostClass === 'local' || opts.allowSubmit === true;
+    if (opts.forms !== false && formsAllowed) {
+      const vp = opts.viewports.find((v) => !v.hasTouch) ?? opts.viewports[0]!;
+      const ctx = await newContext(browser, vp, {
+        runDir,
+        ...(opts.storageState ? { storageState: opts.storageState } : {}),
+      });
+      try {
+        for (const o of observations.filter((x) => x.viewport.name === vp.name && (x.status ?? 200) < 400)) {
+          for (const form of (o.probe?.inventory.forms ?? [])
+            .filter((f) => f.purpose !== 'search')
+            .slice(0, 3)) {
+            log(`  form     ${o.url} ${form.selector}`);
+            const r = await probeFormValidation(
+              ctx,
+              o.finalUrl,
+              form,
+              vp,
+              { hostClass, allowSubmit: opts.allowSubmit ?? false, allowDestructive: false },
+              runDir,
+            );
+            formFindings.push(...r.findings);
+            if (r.result.outcome === 'blocked')
+              limitations.push(`Form ${form.selector} on ${o.url} was not submitted: ${r.result.detail}`);
+          }
+        }
+      } finally {
+        await ctx.close().catch(() => undefined);
+      }
+    } else if (opts.forms !== false && observations.some((o) => o.probe?.inventory.forms.length)) {
+      limitations.push(
+        'Form validation was not tested: submitting forms on a public host requires --allow-submit (authorized test environments only).',
+      );
+    }
+
+    // 4. Findings.
+    let findings: Finding[] = [...formFindings];
     for (const obs of observations) {
       // An error page (4xx/5xx) is one finding — the broken link — not a list of its template's defects.
       const rules =

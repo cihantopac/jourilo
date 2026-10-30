@@ -198,6 +198,7 @@ export interface FieldInfo {
   type: string;
   name: string | null;
   label: string | null;
+  placeholder?: string | null;
   required: boolean;
   autocomplete: string | null;
 }

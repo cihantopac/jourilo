@@ -167,7 +167,7 @@ function journeysHtml(journeys: JourneyResult[]): string {
 <ol class="steps">${j.steps
         .map(
           (s) =>
-            `<li class="${s.status}"><div><b>${esc(s.action)}</b> ${esc(s.description)} <span class="pill st-${s.status}">${s.status}</span> <span class="muted">${s.durationMs} ms</span>${s.error ? `<pre>${esc(s.error)}</pre>` : ''}</div>${s.screenshot ? `<a href="${safeHref(s.screenshot)}" target="_blank" rel="noopener"><img class="stepshot" loading="lazy" alt="" src="${safeHref(s.screenshot)}"></a>` : ''}</li>`,
+            `<li class="${s.status}"><div>${esc(s.description)} <span class="pill st-${s.status}">${s.status}</span> <span class="muted">${s.durationMs} ms</span>${s.error ? `<pre>${esc(s.error)}</pre>` : ''}</div>${s.screenshot ? `<a href="${safeHref(s.screenshot)}" target="_blank" rel="noopener"><img class="stepshot" loading="lazy" alt="" src="${safeHref(s.screenshot)}"></a>` : ''}</li>`,
         )
         .join('')}</ol>
 <h4>Success criteria</h4><ul>${j.successCriteria.map((c) => `<li>${c.met ? '✅' : '❌'} ${esc(c.description)}${c.detail ? ` <span class="muted">${esc(c.detail)}</span>` : ''}</li>`).join('')}</ul>
@@ -281,7 +281,12 @@ ul.evidence{list-style:none;padding:0;display:grid;gap:10px}li.ev{border:1px sol
 table{border-collapse:collapse;width:100%;background:var(--card);border:1px solid var(--line);border-radius:8px;display:block;overflow-x:auto}
 th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;font-size:13.5px}td.good{color:var(--good)}td.poor{color:var(--poor);font-weight:600}td.needs-improvement{color:var(--ni)}
 .filters{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:8px 0 12px}.filters select{font:inherit;padding:4px;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:6px;max-width:220px}
-.journey{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin:12px 0}.steps li{margin:8px 0}.stepshot{max-width:320px;max-height:200px;border:1px solid var(--line);border-radius:6px;display:block;margin-top:4px}
+.journey{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin:12px 0}
+.steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;list-style:none;padding:0;counter-reset:step}
+.steps li{counter-increment:step;border:1px solid var(--line);border-radius:8px;padding:8px;font-size:13px;display:flex;flex-direction:column;gap:6px}
+.steps li::before{content:counter(step);font-weight:700;color:var(--muted);font-size:12px}
+.steps li.skipped{opacity:.55}.steps li.failed,.steps li.blocked{border-color:var(--poor)}
+.stepshot{width:100%;aspect-ratio:16/10;object-fit:cover;object-position:top;border:1px solid var(--line);border-radius:6px;display:block}
 .steps li.failed b,.steps li.blocked b{color:var(--poor)}ul.bycat{columns:2}ul.limits li{margin:4px 0}
 footer{padding:16px 24px;text-align:center;font-size:12.5px}
 `;

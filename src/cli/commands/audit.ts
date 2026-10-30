@@ -39,6 +39,8 @@ export const AUDIT_OPTIONS: OptionSpec = {
   timeout: { type: 'string' },
   repo: { type: 'string' },
   sarif: { type: 'boolean' },
+  'no-forms': { type: 'boolean' },
+  'allow-submit': { type: 'boolean' },
   'fail-on': { type: 'string' },
 };
 
@@ -84,6 +86,8 @@ export async function auditCommand(
       ...(str(ctx, 'locale') ? { locale: str(ctx, 'locale')! } : {}),
       ...(categories ? { categories } : {}),
       mode: repo ? 'repository' : 'website',
+      forms: !flag(ctx, 'no-forms'),
+      allowSubmit: flag(ctx, 'allow-submit'),
       onProgress: ctx.log,
     };
     if (
@@ -172,6 +176,8 @@ export const audit: Command = {
   --repo PATH          Map findings to likely source files in this repository
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
+  --no-forms           Do not submit forms (by default, forms on local hosts are submitted empty to test validation)
+  --allow-submit       Allow submitting forms on non-local hosts (authorized test environments only)
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)`,
   run: (ctx) => auditCommand(ctx, audit.usage),

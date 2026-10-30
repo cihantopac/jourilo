@@ -818,7 +818,7 @@ var require_axe = __commonJS({
                 return object;
               }
               var promise = new Constructor(noop3);
-              resolve5(promise, object);
+              resolve6(promise, object);
               return promise;
             }
             var PROMISE_ID = Math.random().toString(36).substring(2);
@@ -849,7 +849,7 @@ var require_axe = __commonJS({
                   }
                   sealed = true;
                   if (thenable !== value) {
-                    resolve5(promise2, value);
+                    resolve6(promise2, value);
                   } else {
                     fulfill(promise2, value);
                   }
@@ -873,7 +873,7 @@ var require_axe = __commonJS({
                 reject(promise, thenable._result);
               } else {
                 subscribe2(thenable, void 0, function(value) {
-                  return resolve5(promise, value);
+                  return resolve6(promise, value);
                 }, function(reason) {
                   return reject(promise, reason);
                 });
@@ -892,7 +892,7 @@ var require_axe = __commonJS({
                 }
               }
             }
-            function resolve5(promise, value) {
+            function resolve6(promise, value) {
               if (promise === value) {
                 reject(promise, selfFulfillment());
               } else if (objectOrFunction(value)) {
@@ -979,7 +979,7 @@ var require_axe = __commonJS({
               }
               if (promise._state !== PENDING) {
               } else if (hasCallback && succeeded) {
-                resolve5(promise, value);
+                resolve6(promise, value);
               } else if (succeeded === false) {
                 reject(promise, error);
               } else if (settled === FULFILLED) {
@@ -991,7 +991,7 @@ var require_axe = __commonJS({
             function initializePromise(promise, resolver) {
               try {
                 resolver(function resolvePromise(value) {
-                  resolve5(promise, value);
+                  resolve6(promise, value);
                 }, function rejectPromise(reason) {
                   reject(promise, reason);
                 });
@@ -5862,15 +5862,15 @@ var require_axe = __commonJS({
           var slice = Array.prototype.slice;
           var resolveArgs;
           resolveArgs = function resolveArgs2(args) {
-            return this.map(function(resolve5, i2) {
-              return resolve5 ? resolve5(args[i2]) : args[i2];
+            return this.map(function(resolve6, i2) {
+              return resolve6 ? resolve6(args[i2]) : args[i2];
             }).concat(slice.call(args, this.length));
           };
           module2.exports = function(resolvers) {
             resolvers = toArray2(resolvers);
-            resolvers.forEach(function(resolve5) {
-              if (isValue(resolve5)) {
-                callable(resolve5);
+            resolvers.forEach(function(resolve6) {
+              if (isValue(resolve6)) {
+                callable(resolve6);
               }
             });
             return resolveArgs.bind(resolvers);
@@ -5919,7 +5919,7 @@ var require_axe = __commonJS({
           var _on = ee.on;
           var emit = ee.emit;
           module2.exports = function(original, length, options) {
-            var cache2 = create(null), conf, memLength, get2, set2, del, _clear, extDel, extGet, extHas, normalizer, getListeners, setListeners, deleteListeners, memoized, resolve5;
+            var cache2 = create(null), conf, memLength, get2, set2, del, _clear, extDel, extGet, extHas, normalizer, getListeners, setListeners, deleteListeners, memoized, resolve6;
             if (length !== false) {
               memLength = length;
             } else if (isNaN(original.length)) {
@@ -5935,13 +5935,13 @@ var require_axe = __commonJS({
               _clear = normalizer.clear;
             }
             if (options.resolvers != null) {
-              resolve5 = resolveResolve(options.resolvers);
+              resolve6 = resolveResolve(options.resolvers);
             }
             if (get2) {
               memoized = defineLength(function(arg) {
                 var id2, result, args = arguments;
-                if (resolve5) {
-                  args = resolve5(args);
+                if (resolve6) {
+                  args = resolve6(args);
                 }
                 id2 = get2(args);
                 if (id2 !== null) {
@@ -5998,8 +5998,8 @@ var require_axe = __commonJS({
             } else {
               memoized = function memoized2(arg) {
                 var result, args = arguments, id2;
-                if (resolve5) {
-                  args = resolve5(arguments);
+                if (resolve6) {
+                  args = resolve6(arguments);
                 }
                 id2 = String(args[0]);
                 if (hasOwnProperty.call(cache2, id2)) {
@@ -6028,8 +6028,8 @@ var require_axe = __commonJS({
               memoized,
               profileName: options.profileName,
               get: function get3(args) {
-                if (resolve5) {
-                  args = resolve5(args);
+                if (resolve6) {
+                  args = resolve6(args);
                 }
                 if (get2) {
                   return get2(args);
@@ -6079,8 +6079,8 @@ var require_axe = __commonJS({
             if (get2) {
               extDel = defineLength(function(arg) {
                 var id2, args = arguments;
-                if (resolve5) {
-                  args = resolve5(args);
+                if (resolve6) {
+                  args = resolve6(args);
                 }
                 id2 = get2(args);
                 if (id2 === null) {
@@ -6094,8 +6094,8 @@ var require_axe = __commonJS({
               };
             } else {
               extDel = function extDel2(arg) {
-                if (resolve5) {
-                  arg = resolve5(arguments)[0];
+                if (resolve6) {
+                  arg = resolve6(arguments)[0];
                 }
                 return conf["delete"](arg);
               };
@@ -6105,8 +6105,8 @@ var require_axe = __commonJS({
               if (length === 0) {
                 return cache2.data;
               }
-              if (resolve5) {
-                args = resolve5(args);
+              if (resolve6) {
+                args = resolve6(args);
               }
               if (get2) {
                 id2 = get2(args);
@@ -6120,8 +6120,8 @@ var require_axe = __commonJS({
               if (length === 0) {
                 return conf.has("data");
               }
-              if (resolve5) {
-                args = resolve5(args);
+              if (resolve6) {
+                args = resolve6(args);
               }
               if (get2) {
                 id2 = get2(args);
@@ -8255,7 +8255,7 @@ var require_axe = __commonJS({
           diag: function diag() {
             return _diag;
           },
-          interpolate: function interpolate() {
+          interpolate: function interpolate2() {
             return _interpolate;
           },
           interpolateInv: function interpolateInv() {
@@ -8728,7 +8728,7 @@ var require_axe = __commonJS({
             }
           }, {
             key: "resolve",
-            value: function resolve5(number) {
+            value: function resolve6(number) {
               if (this.type === "<angle>") {
                 return number;
               }
@@ -15596,7 +15596,7 @@ var require_axe = __commonJS({
           });
         };
         var dq_element_default = DqElement;
-        function checkHelper(checkResult, options, resolve5, reject) {
+        function checkHelper(checkResult, options, resolve6, reject) {
           return {
             isAsync: false,
             async: function async() {
@@ -15604,7 +15604,7 @@ var require_axe = __commonJS({
               return function(result) {
                 if (result instanceof Error === false) {
                   checkResult.result = result;
-                  resolve5(checkResult);
+                  resolve6(checkResult);
                 } else {
                   reject(result);
                 }
@@ -15920,8 +15920,8 @@ var require_axe = __commonJS({
             defer: function defer(fn) {
               if (_typeof(fn) === "object" && fn.then && fn["catch"]) {
                 var defer2 = fn;
-                fn = function fn2(resolve5, reject) {
-                  defer2.then(resolve5)["catch"](reject);
+                fn = function fn2(resolve6, reject) {
+                  defer2.then(resolve6)["catch"](reject);
                 };
               }
               funcGuard(fn);
@@ -16367,23 +16367,23 @@ var require_axe = __commonJS({
           return !!win.frameElement;
         };
         setDefaultFrameMessenger(_respondable);
-        function _sendCommandToFrame(node, parameters, resolve5, reject) {
+        function _sendCommandToFrame(node, parameters, resolve6, reject) {
           var _parameters$options$p, _parameters$options;
           var win = node.contentWindow;
           var pingWaitTime = (_parameters$options$p = (_parameters$options = parameters.options) === null || _parameters$options === void 0 ? void 0 : _parameters$options.pingWaitTime) !== null && _parameters$options$p !== void 0 ? _parameters$options$p : 500;
           if (!win) {
             log("Frame does not have a content window", node);
-            resolve5(null);
+            resolve6(null);
             return;
           }
           if (pingWaitTime === 0) {
-            callAxeStart(node, parameters, resolve5, reject);
+            callAxeStart(node, parameters, resolve6, reject);
             return;
           }
           var timeout = setTimeout(function() {
             timeout = setTimeout(function() {
               if (!parameters.debug) {
-                resolve5(null);
+                resolve6(null);
               } else {
                 reject(err("No response from frame", node));
               }
@@ -16391,10 +16391,10 @@ var require_axe = __commonJS({
           }, pingWaitTime);
           _respondable(win, "axe.ping", null, void 0, function() {
             clearTimeout(timeout);
-            callAxeStart(node, parameters, resolve5, reject);
+            callAxeStart(node, parameters, resolve6, reject);
           });
         }
-        function callAxeStart(node, parameters, resolve5, reject) {
+        function callAxeStart(node, parameters, resolve6, reject) {
           var _parameters$options$f, _parameters$options2;
           var frameWaitTime = (_parameters$options$f = (_parameters$options2 = parameters.options) === null || _parameters$options2 === void 0 ? void 0 : _parameters$options2.frameWaitTime) !== null && _parameters$options$f !== void 0 ? _parameters$options$f : 6e4;
           var win = node.contentWindow;
@@ -16404,7 +16404,7 @@ var require_axe = __commonJS({
           _respondable(win, "axe.start", parameters, void 0, function(data) {
             clearTimeout(timeout);
             if (data instanceof Error === false) {
-              resolve5(data);
+              resolve6(data);
             } else {
               reject(data);
             }
@@ -16596,7 +16596,7 @@ var require_axe = __commonJS({
           }
           return null;
         }
-        function _collectResultsFromFrames(parentContent, options, command, parameter, resolve5, reject) {
+        function _collectResultsFromFrames(parentContent, options, command, parameter, resolve6, reject) {
           options = _extends({}, options, {
             elementRef: false
           });
@@ -16624,7 +16624,7 @@ var require_axe = __commonJS({
             });
           });
           q2.then(function(data) {
-            resolve5(merge_results_default(data, options));
+            resolve6(merge_results_default(data, options));
           })["catch"](reject);
         }
         function _contains(vNode, otherVNode) {
@@ -24240,7 +24240,7 @@ var require_axe = __commonJS({
             return Promise.resolve();
           }
           importedUrls.push(url);
-          return new Promise(function(resolve5, reject) {
+          return new Promise(function(resolve6, reject) {
             var request = new window2.XMLHttpRequest();
             request.open("GET", url);
             request.timeout = constants_default.preload.timeout;
@@ -24248,7 +24248,7 @@ var require_axe = __commonJS({
             request.addEventListener("timeout", reject);
             request.addEventListener("loadend", function(event) {
               if (event.loaded && request.responseText) {
-                return resolve5(request.responseText);
+                return resolve6(request.responseText);
               }
               reject(request.responseText);
             });
@@ -24650,13 +24650,13 @@ var require_axe = __commonJS({
         }
         var preload_media_default = preloadMedia;
         function isMediaElementReady(elm) {
-          return new Promise(function(resolve5) {
+          return new Promise(function(resolve6) {
             if (elm.readyState > 0) {
-              resolve5(elm);
+              resolve6(elm);
             }
             function onMediaReady() {
               elm.removeEventListener("loadedmetadata", onMediaReady);
-              resolve5(elm);
+              resolve6(elm);
             }
             elm.addEventListener("loadedmetadata", onMediaReady);
           });
@@ -24669,7 +24669,7 @@ var require_axe = __commonJS({
           if (!_shouldPreload(options)) {
             return Promise.resolve();
           }
-          return new Promise(function(resolve5, reject) {
+          return new Promise(function(resolve6, reject) {
             var _getPreloadConfig2 = _getPreloadConfig(options), assets = _getPreloadConfig2.assets, timeout = _getPreloadConfig2.timeout;
             var preloadTimeout = setTimeout(function() {
               return reject(new Error("Preload assets timed out."));
@@ -24683,7 +24683,7 @@ var require_axe = __commonJS({
                 return _extends({}, out, result);
               }, {});
               clearTimeout(preloadTimeout);
-              resolve5(preloadAssets);
+              resolve6(preloadAssets);
             })["catch"](function(err2) {
               clearTimeout(preloadTimeout);
               reject(err2);
@@ -25252,8 +25252,8 @@ var require_axe = __commonJS({
           }, {});
         }
         var serial_virtual_node_default = SerialVirtualNode;
-        function cleanup(resolve5, reject) {
-          resolve5 = resolve5 || function res() {
+        function cleanup(resolve6, reject) {
+          resolve6 = resolve6 || function res() {
           };
           reject = reject || axe2.log;
           if (!axe2._audit) {
@@ -25284,7 +25284,7 @@ var require_axe = __commonJS({
           });
           q2.then(function(results) {
             if (cleanupErrors.length === 0) {
-              resolve5(results);
+              resolve6(results);
             } else {
               reject(cleanupErrors);
             }
@@ -33485,13 +33485,13 @@ var require_axe = __commonJS({
           }
         }
         Check.prototype.enabled = true;
-        Check.prototype.run = function run(node, options, context, resolve5, reject) {
+        Check.prototype.run = function run(node, options, context, resolve6, reject) {
           options = options || {};
           var enabled = options.hasOwnProperty("enabled") ? options.enabled : this.enabled;
           var checkOptions = this.getOptions(options.options);
           if (enabled) {
             var checkResult = new check_result_default(this);
-            var helper = check_helper_default(checkResult, options, resolve5, reject);
+            var helper = check_helper_default(checkResult, options, resolve6, reject);
             var result;
             try {
               result = this.evaluate.call(helper, node.actualNode, checkOptions, node, context);
@@ -33504,10 +33504,10 @@ var require_axe = __commonJS({
             }
             if (!helper.isAsync) {
               checkResult.result = result;
-              resolve5(checkResult);
+              resolve6(checkResult);
             }
           } else {
-            resolve5(null);
+            resolve6(null);
           }
         };
         Check.prototype.runSync = function runSync(node, options, context) {
@@ -33624,7 +33624,7 @@ var require_axe = __commonJS({
           }
           return elements;
         };
-        Rule.prototype.runChecks = function runChecks(type2, node, options, context, resolve5, reject) {
+        Rule.prototype.runChecks = function runChecks(type2, node, options, context, resolve6, reject) {
           var self2 = this;
           var checkQueue = queue_default();
           this[type2].forEach(function(c4) {
@@ -33645,7 +33645,7 @@ var require_axe = __commonJS({
             results = results.filter(function(check) {
               return check;
             });
-            resolve5({
+            resolve6({
               type: type2,
               results
             });
@@ -33670,7 +33670,7 @@ var require_axe = __commonJS({
         Rule.prototype.run = function run2(context) {
           var _this16 = this;
           var options = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
-          var resolve5 = arguments.length > 2 ? arguments[2] : void 0;
+          var resolve6 = arguments.length > 2 ? arguments[2] : void 0;
           var reject = arguments.length > 3 ? arguments[3] : void 0;
           if (options.performanceTimer) {
             this._trackPerformance();
@@ -33726,7 +33726,7 @@ var require_axe = __commonJS({
               _this16._logRulePerformance();
             }
             setTimeout(function() {
-              resolve5(ruleResult);
+              resolve6(ruleResult);
             }, 0);
           })["catch"](function(error) {
             if (options.performanceTimer) {
@@ -34169,7 +34169,7 @@ var require_axe = __commonJS({
             }
           }, {
             key: "run",
-            value: function run(context, options, resolve5, reject) {
+            value: function run(context, options, resolve6, reject) {
               var _this20 = this;
               _normalizeRunOptions(options);
               dq_element_default.setRunOptions(options);
@@ -34209,7 +34209,7 @@ var require_axe = __commonJS({
                   var nowRulesResults = nowRulesAndPreloaderResults[0];
                   if (!runLaterRules.length) {
                     axe2._selectCache = void 0;
-                    resolve5(nowRulesResults.filter(function(result) {
+                    resolve6(nowRulesResults.filter(function(result) {
                       return !!result;
                     }));
                     return;
@@ -34221,7 +34221,7 @@ var require_axe = __commonJS({
                   });
                   laterRulesQueue.then(function(laterRuleResults) {
                     axe2._selectCache = void 0;
-                    resolve5(nowRulesResults.concat(laterRuleResults).filter(function(result) {
+                    resolve6(nowRulesResults.concat(laterRuleResults).filter(function(result) {
                       return !!result;
                     }));
                   })["catch"](reject);
@@ -34397,14 +34397,14 @@ var require_axe = __commonJS({
           if (options.performanceTimer) {
             performance_timer_default.mark("mark_rule_start_" + rule.id);
           }
-          return function(resolve5, reject) {
+          return function(resolve6, reject) {
             rule.run(context, options, function(ruleResult) {
-              return resolve5(ruleResult);
+              return resolve6(ruleResult);
             }, function(err2) {
               if (options.debug) {
                 reject(err2);
               } else {
-                resolve5(createIncompleteErrorResult(rule, err2));
+                resolve6(createIncompleteErrorResult(rule, err2));
               }
             });
           };
@@ -34473,7 +34473,7 @@ var require_axe = __commonJS({
           axe2._selectCache = void 0;
         }
         var teardown_default = teardown;
-        function runRules(context, options, resolve5, reject) {
+        function runRules(context, options, resolve6, reject) {
           try {
             context = new Context(context);
             axe2._tree = context.flatTree;
@@ -34519,7 +34519,7 @@ var require_axe = __commonJS({
                 results = results.map(_finalizeRuleResult);
               }
               try {
-                resolve5(results, teardown_default);
+                resolve6(results, teardown_default);
               } catch (e) {
                 teardown_default();
                 log(e);
@@ -34537,7 +34537,7 @@ var require_axe = __commonJS({
           axe2._audit = new audit_default(audit2);
         }
         function runCommand(data, keepalive, callback) {
-          var resolve5 = callback;
+          var resolve6 = callback;
           var reject = function reject2(err2) {
             if (err2 instanceof Error === false) {
               err2 = new Error(err2);
@@ -34553,11 +34553,11 @@ var require_axe = __commonJS({
             case "rules":
               return runRules(context, options, function(results, cleanupFn) {
                 results = node_serializer_default.mapRawResults(results);
-                resolve5(results);
+                resolve6(results);
                 cleanupFn();
               }, reject);
             case "cleanup-plugin":
-              return cleanup_default(resolve5, reject);
+              return cleanup_default(resolve6, reject);
             default:
               if (axe2._audit && axe2._audit.commands && axe2._audit.commands[data.command]) {
                 return axe2._audit.commands[data.command](data, callback);
@@ -34697,7 +34697,7 @@ var require_axe = __commonJS({
           }
           setupGlobals(args[0]);
           var _normalizeRunParams = normalizeRunParams(args), context = _normalizeRunParams.context, options = _normalizeRunParams.options, _normalizeRunParams$c = _normalizeRunParams.callback, callback = _normalizeRunParams$c === void 0 ? noop2 : _normalizeRunParams$c;
-          var _getPromiseHandlers = getPromiseHandlers(callback), thenable = _getPromiseHandlers.thenable, resolve5 = _getPromiseHandlers.resolve, reject = _getPromiseHandlers.reject;
+          var _getPromiseHandlers = getPromiseHandlers(callback), thenable = _getPromiseHandlers.thenable, resolve6 = _getPromiseHandlers.resolve, reject = _getPromiseHandlers.reject;
           try {
             assert_default(axe2._audit, "No audit configured");
             assert_default(!axe2._running, "Axe is already running. Use `await axe.run()` to wait for the previous run to finish before starting a new run.");
@@ -34719,7 +34719,7 @@ var require_axe = __commonJS({
               axe2._running = false;
               teardown2();
               try {
-                resolve5(results);
+                resolve6(results);
               } catch (e) {
                 axe2.log(e);
               }
@@ -34754,14 +34754,14 @@ var require_axe = __commonJS({
           return thenable;
         }
         function getPromiseHandlers(callback) {
-          var thenable, reject, resolve5;
+          var thenable, reject, resolve6;
           if (typeof Promise === "function" && callback === noop2) {
             thenable = new Promise(function(_resolve, _reject) {
               reject = _reject;
-              resolve5 = _resolve;
+              resolve6 = _resolve;
             });
           } else {
-            resolve5 = function resolve6(result) {
+            resolve6 = function resolve7(result) {
               return callback(null, result);
             };
             reject = function reject2(err2) {
@@ -34771,7 +34771,7 @@ var require_axe = __commonJS({
           return {
             thenable,
             reject,
-            resolve: resolve5
+            resolve: resolve6
           };
         }
         function createReport(rawResults, options, respond, reject) {
@@ -34879,9 +34879,9 @@ var require_axe = __commonJS({
           });
         }
         function createReport2(results, options) {
-          return new Promise(function(resolve5, reject) {
+          return new Promise(function(resolve6, reject) {
             var reporter = getReporter(options.reporter);
-            reporter(results, options, resolve5, reject);
+            reporter(results, options, resolve6, reject);
           });
         }
         function setup2(node) {
@@ -39099,6 +39099,24 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
     });
   }
 
+  // ---- Paste blocked in credential fields (WCAG 3.3.8). A synthetic paste event never inserts text, so this
+  // only observes whether page script cancels it. ----
+  const pasteBlocked = [];
+  for (const f of document.querySelectorAll(
+    'input[type="password"], input[autocomplete="one-time-code"], input[autocomplete="username"]',
+  )) {
+    if (!isVisible(f)) continue;
+    try {
+      const dt = new DataTransfer();
+      dt.setData('text/plain', 'x');
+      const ev = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+      f.dispatchEvent(ev);
+      if (ev.defaultPrevented) pasteBlocked.push({ selector: selectorOf(f), rect: rectOf(f), type: f.type });
+    } catch {
+      // ClipboardEvent constructor unsupported: cannot tell
+    }
+  }
+
   // ---- Inventory ----
   const headings = Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6'))
     .filter(isVisible)
@@ -39193,6 +39211,7 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
         type: f.tagName === 'INPUT' ? f.type || 'text' : f.tagName.toLowerCase(),
         name: f.getAttribute('name'),
         label: labelOf(f),
+        placeholder: f.getAttribute('placeholder'),
         required: f.required || f.getAttribute('aria-required') === 'true',
         autocomplete: f.getAttribute('autocomplete'),
       }));
@@ -39274,6 +39293,7 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
     overflow,
     smallText: { checked: textEls, samples: small },
     clickable,
+    pasteBlocked,
     scroll: { height: document.documentElement.scrollHeight, width: docWidth },
   };
 };
@@ -40495,6 +40515,239 @@ async function crawl(ctx, start, opts) {
   return { pages: picked, skipped, robots, sitemapUrls: fromSitemap.length };
 }
 
+// src/journeys/forms.ts
+init_fs_safety();
+
+// src/journeys/safety.ts
+var DESTRUCTIVE = /\b(delete|remove|destroy|erase|deactivate|close (my )?account|cancel (my )?(subscription|plan|membership|order|account)|unsubscribe|terminate|revoke|wipe|reset (all|data)|transfer|withdraw|send (money|payment))\b/i;
+var FINANCIAL = /\b(pay( now)?|purchase|buy( now)?|place (the )?order|complete (the )?(order|purchase|checkout|payment)|confirm (the )?(order|payment|purchase)|checkout now|submit (order|payment)|donate|upgrade now|start (paid|subscription))\b/i;
+function checkAction(ctx, policy) {
+  const safeHost = policy.hostClass === "local";
+  const risky = DESTRUCTIVE.test(ctx.name) ? "destructive" : FINANCIAL.test(ctx.name) || ctx.paymentForm ? "financial" : null;
+  if (risky) {
+    if (!safeHost)
+      return {
+        allowed: false,
+        reason: `"${ctx.name}" looks ${risky === "financial" ? "like a payment/purchase" : "irreversible"}; Jourilo never performs it on a non-local host.`
+      };
+    if (!policy.allowDestructive)
+      return {
+        allowed: false,
+        reason: `"${ctx.name}" looks ${risky === "financial" ? "like a payment/purchase" : "irreversible"}; rerun with --allow-destructive on a local/test environment with sandbox data to include it.`
+      };
+  }
+  if (ctx.submitsForm && !safeHost && !policy.allowSubmit) {
+    return {
+      allowed: false,
+      reason: "Submitting a form on a non-local host is blocked; use --allow-submit only on an environment you are authorized to test, with test accounts."
+    };
+  }
+  return { allowed: true };
+}
+function testData(runId, vars = {}) {
+  const tag = runId.replace(/[^a-z0-9]/gi, "").slice(-10).toLowerCase();
+  const base = {
+    email: `jourilo+${tag}@example.test`,
+    password: `Jr-${tag}-Q7!x`,
+    name: "Jordan Test",
+    firstName: "Jordan",
+    lastName: "Test",
+    phone: "+1 555 0100",
+    company: "Example Test Co",
+    search: "test",
+    zip: "10001",
+    // Published test card from Stripe's docs; only useful in a provider's test mode.
+    testCard: "4242 4242 4242 4242"
+  };
+  return { ...base, ...vars };
+}
+function interpolate(value, data) {
+  return value.replace(/\{\{\s*([A-Za-z][\w]*)\s*\}\}/g, (m, k) => data[k] ?? m);
+}
+function isSecretValue(raw) {
+  return /\{\{\s*(password|testCard|secret|token)\s*\}\}/i.test(raw);
+}
+
+// src/journeys/forms.ts
+var BEFORE = `(sel) => {
+  const form = document.querySelector(sel);
+  if (!form) return null;
+  const submit = form.querySelector('button[type="submit"], button:not([type]), input[type="submit"]');
+  return {
+    text: document.body.innerText.split('\\n').map((s) => s.trim()).filter(Boolean),
+    nativeBlocks: !form.noValidate && !form.checkValidity(),
+    submitName: submit ? (submit.getAttribute('aria-label') || submit.innerText || submit.value || '').trim() : '',
+    payment: !!form.querySelector('input[autocomplete^="cc-"], input[name*="card" i], input[name*="cvc" i]'),
+  };
+}`;
+var AFTER = `([sel, beforeText]) => {
+  const prev = new Set(beforeText);
+  const lines = document.body.innerText.split('\\n').map((s) => s.trim()).filter(Boolean);
+  const fresh = lines.filter((l) => !prev.has(l) && l.length < 200);
+  const errorish = fresh.filter((l) => /error|required|invalid|please|must|enter|missing|can.?t be blank|is empty|too short|zorunlu|gerekli|ge\xE7ersiz|erforderlich|obligatoire|requerido/i.test(l));
+  const form = document.querySelector(sel);
+  const fields = form ? Array.from(form.querySelectorAll('input:not([type=hidden]):not([type=submit]), select, textarea')) : [];
+  const ariaInvalid = fields.filter((f) => f.getAttribute('aria-invalid') === 'true').length;
+  const described = fields.filter((f) => {
+    const ids = (f.getAttribute('aria-describedby') || '') + ' ' + (f.getAttribute('aria-errormessage') || '');
+    return ids.trim().split(/\\s+/).some((id) => { const el = id && document.getElementById(id); return el && el.innerText.trim(); });
+  }).length;
+  const live = Array.from(document.querySelectorAll('[role="alert"], [role="status"], [aria-live="assertive"], [aria-live="polite"]'))
+    .some((r) => r.innerText.trim() && errorish.some((e) => r.innerText.includes(e)));
+  const ae = document.activeElement;
+  const focusOnProblem = !!ae && ae !== document.body && (fields.includes(ae) || /error|alert/i.test((ae.getAttribute('role') || '') + ' ' + (ae.className || '') + ' ' + (ae.id || '')));
+  return { errorish, freshCount: fresh.length, ariaInvalid, described, live, focusOnProblem, fieldCount: fields.length };
+}`;
+async function probeFormValidation(ctx, url, form, vp, policy, runDir) {
+  const page = await ctx.newPage();
+  const base = {
+    url: redactUrl(url),
+    form: form.selector,
+    purpose: form.purpose
+  };
+  const findings = [];
+  try {
+    await page.goto(url, { waitUntil: "load", timeout: 3e4 });
+    await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
+    const before = await page.evaluate(`(${BEFORE})(${JSON.stringify(form.selector)})`);
+    if (!before) return { result: { ...base, outcome: "error", detail: "form not found" }, findings };
+    const verdict = checkAction(
+      { action: "click", name: before.submitName, submitsForm: true, paymentForm: before.payment },
+      policy
+    );
+    if (!verdict.allowed)
+      return { result: { ...base, outcome: "blocked", detail: verdict.reason }, findings };
+    if (before.nativeBlocks) {
+      return {
+        result: {
+          ...base,
+          outcome: "native-validation",
+          detail: "Browser constraint validation blocks the empty submission."
+        },
+        findings
+      };
+    }
+    const startUrl = page.url();
+    const submit = page.locator(form.selector).locator('button[type="submit"], button:not([type]), input[type="submit"]').first();
+    if (await submit.count()) await submit.click({ timeout: 1e4 });
+    else await page.locator(form.selector).locator("input").first().press("Enter");
+    await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
+    await page.waitForTimeout(600);
+    const shotFile = toPosix(`screenshots/form-${shortHash(url, form.selector).slice(0, 8)}-${vp.name}.jpg`);
+    await page.screenshot({
+      path: `${runDir}/${shotFile}`,
+      type: "jpeg",
+      quality: 70,
+      mask: DEFAULT_MASK.map((s) => page.locator(s)),
+      maskColor: "#FF00FF"
+    }).catch(() => void 0);
+    const after = await page.evaluate(`(${AFTER})(${JSON.stringify([form.selector, before.text])})`).catch(() => null);
+    const navigated = page.url() !== startUrl;
+    const repro = [
+      `Open ${redactUrl(url)} (${vp.name}).`,
+      `Leave every field in \`${form.selector}\` empty.`,
+      `Press "${before.submitName || "Submit"}".`
+    ];
+    const evidence = [
+      { type: "screenshot", file: shotFile, note: "After submitting the empty form" }
+    ];
+    if (!after || !after.errorish.length && !after.ariaInvalid) {
+      const accepted = navigated && after !== null;
+      findings.push(
+        makeFinding({
+          ruleId: "ux/no-validation-feedback",
+          key: form.selector,
+          title: accepted ? "Empty form submission is accepted without feedback" : "Submitting an incomplete form gives no feedback",
+          category: "usability",
+          kind: "defect",
+          severity: "serious",
+          confidence: "medium",
+          provenance: "observed",
+          url: redactUrl(url),
+          viewport: vp.name,
+          description: accepted ? `Submitting the ${form.purpose} form with all fields empty navigated to ${redactUrl(page.url())} and no error text appeared.` : `After submitting the ${form.purpose} form with all fields empty, no error message, aria-invalid state or native validation appeared (the page ${navigated ? "reloaded" : "did not change"}).`,
+          impact: "People do not learn what is missing; they retry blindly or abandon the form.",
+          recommendation: "Validate required fields and show a specific message next to each field (and in an error summary for long forms); mark fields aria-invalid and link messages with aria-describedby.",
+          standards: [wcag("3.3.1"), wcag("3.3.3"), nielsen(9)],
+          evidence,
+          reproduction: repro
+        })
+      );
+      return {
+        result: {
+          ...base,
+          outcome: navigated ? "navigated" : "no-feedback",
+          detail: "no visible error feedback"
+        },
+        findings
+      };
+    }
+    const associated = after.ariaInvalid > 0 || after.described > 0 || after.live;
+    if (after.errorish.length && !associated) {
+      findings.push(
+        makeFinding({
+          ruleId: "a11y/errors-not-associated",
+          key: form.selector,
+          title: "Error messages are visible but not exposed to assistive technology",
+          category: "accessibility",
+          kind: "defect",
+          severity: "serious",
+          confidence: "medium",
+          provenance: "observed",
+          url: redactUrl(url),
+          viewport: vp.name,
+          description: `After an empty submission the page shows ${after.errorish.length} message(s) (e.g. "${excerpt(after.errorish[0], 80)}"), but no field has aria-invalid="true" or aria-describedby/aria-errormessage pointing to a message, and no live region announces them.`,
+          impact: "Screen-reader users are not told that the submission failed or which field to fix.",
+          recommendation: 'Set aria-invalid="true" on invalid fields, reference each message with aria-describedby, and announce the error summary in a role="alert" region or move focus to it.',
+          standards: [wcag("3.3.1"), wcag("4.1.3"), wcag("1.3.1")],
+          evidence: [
+            ...evidence,
+            {
+              type: "dom",
+              snippet: after.errorish.slice(0, 5).map((e) => excerpt(e, 120)).join(" | ")
+            }
+          ],
+          reproduction: repro
+        })
+      );
+    }
+    if (!after.focusOnProblem && after.fieldCount > 2) {
+      findings.push(
+        makeFinding({
+          ruleId: "ux/error-focus",
+          key: form.selector,
+          title: "Focus does not move to the first error",
+          category: "usability",
+          kind: "defect",
+          severity: "minor",
+          confidence: "medium",
+          provenance: "observed",
+          url: redactUrl(url),
+          viewport: vp.name,
+          description: "After a failed submission, keyboard focus stays where it was instead of moving to the first invalid field or an error summary.",
+          impact: "Keyboard and screen-reader users must search for the problem; on mobile the error may be off-screen.",
+          recommendation: "Move focus to the error summary or the first invalid field after a failed submission.",
+          standards: [nielsen(9)],
+          evidence,
+          reproduction: repro
+        })
+      );
+    }
+    return {
+      result: {
+        ...base,
+        outcome: "feedback",
+        detail: `${after.errorish.length} message(s), aria-invalid on ${after.ariaInvalid}`
+      },
+      findings
+    };
+  } catch (err) {
+    return { result: { ...base, outcome: "error", detail: excerpt(err.message, 200) }, findings };
+  } finally {
+    await page.close().catch(() => void 0);
+  }
+}
+
 // src/audit/rules/accessibility.ts
 var AXE_ADVICE = {
   "color-contrast": "Raise the contrast between text and its background to at least 4.5:1 (3:1 for large text: 24 px, or 18.66 px bold). Prefer adjusting the design token rather than one-off overrides.",
@@ -40783,6 +41036,33 @@ function measuredA11yFindings(obs) {
           ...shot
         })),
         occurrences: p.clickable.length
+      })
+    );
+  }
+  if (p.pasteBlocked?.length) {
+    out.push(
+      makeFinding({
+        ruleId: "jourilo/paste-blocked",
+        title: "Pasting into password or code fields is blocked",
+        category: "accessibility",
+        kind: "defect",
+        severity: "serious",
+        confidence: "high",
+        provenance: "measured",
+        url: obs.url,
+        viewport: vp,
+        description: `${p.pasteBlocked.length} credential field(s) cancel paste events, so passwords cannot be pasted from a password manager.`,
+        impact: "People who rely on password managers or cannot memorize and transcribe passwords (cognitive and motor disabilities) are locked out.",
+        recommendation: "Remove the paste blocking (onpaste handlers / preventDefault on paste) from credential fields.",
+        standards: [wcag("3.3.8")],
+        evidence: p.pasteBlocked.map((f) => ({
+          type: "element",
+          selector: f.selector,
+          rect: f.rect,
+          snippet: `<input type="${f.type}">`,
+          ...shot
+        })),
+        occurrences: p.pasteBlocked.length
       })
     );
   }
@@ -41245,7 +41525,40 @@ async function runAudit(ws, opts) {
         await ctx.close().catch(() => void 0);
       }
     }
-    let findings = [];
+    const formFindings = [];
+    const formsAllowed = hostClass === "local" || opts.allowSubmit === true;
+    if (opts.forms !== false && formsAllowed) {
+      const vp = opts.viewports.find((v) => !v.hasTouch) ?? opts.viewports[0];
+      const ctx = await newContext(browser, vp, {
+        runDir,
+        ...opts.storageState ? { storageState: opts.storageState } : {}
+      });
+      try {
+        for (const o of observations.filter((x) => x.viewport.name === vp.name && (x.status ?? 200) < 400)) {
+          for (const form of (o.probe?.inventory.forms ?? []).filter((f) => f.purpose !== "search").slice(0, 3)) {
+            log(`  form     ${o.url} ${form.selector}`);
+            const r = await probeFormValidation(
+              ctx,
+              o.finalUrl,
+              form,
+              vp,
+              { hostClass, allowSubmit: opts.allowSubmit ?? false, allowDestructive: false },
+              runDir
+            );
+            formFindings.push(...r.findings);
+            if (r.result.outcome === "blocked")
+              limitations.push(`Form ${form.selector} on ${o.url} was not submitted: ${r.result.detail}`);
+          }
+        }
+      } finally {
+        await ctx.close().catch(() => void 0);
+      }
+    } else if (opts.forms !== false && observations.some((o) => o.probe?.inventory.forms.length)) {
+      limitations.push(
+        "Form validation was not tested: submitting forms on a public host requires --allow-submit (authorized test environments only)."
+      );
+    }
+    let findings = [...formFindings];
     for (const obs of observations) {
       const rules = obs.status !== null && obs.status >= 400 ? [PAGE_RULES.reliability] : Object.values(PAGE_RULES);
       for (const rule of rules) findings.push(...rule(obs));
@@ -41307,7 +41620,7 @@ async function runAudit(ws, opts) {
     await browser?.close().catch(() => void 0);
   }
 }
-function summarize(findings, pages, journeys) {
+function summarize(findings, pages, journeys2) {
   const sev = { critical: 0, serious: 0, moderate: 0, minor: 0, info: 0 };
   const kind = { defect: 0, hypothesis: 0, "needs-review": 0 };
   const cat = {};
@@ -41316,7 +41629,7 @@ function summarize(findings, pages, journeys) {
     kind[f.kind]++;
     cat[f.category] = (cat[f.category] ?? 0) + 1;
   }
-  return { pages, journeys, findings: sev, byCategory: cat, byKind: kind };
+  return { pages, journeys: journeys2, findings: sev, byCategory: cat, byKind: kind };
 }
 function emptyInventory() {
   return {
@@ -41447,16 +41760,16 @@ async function serveStatic(root, port = 0) {
     if (delay > 0) setTimeout(send, delay);
     else send();
   });
-  await new Promise((resolve5, reject) => {
+  await new Promise((resolve6, reject) => {
     server.once("error", reject);
-    server.listen(port, "127.0.0.1", () => resolve5());
+    server.listen(port, "127.0.0.1", () => resolve6());
   });
   const { port: actual } = server.address();
   return {
     url: `http://127.0.0.1:${actual}`,
-    close: () => new Promise((resolve5) => {
+    close: () => new Promise((resolve6) => {
       server.closeAllConnections();
-      server.close(() => resolve5());
+      server.close(() => resolve6());
     })
   };
 }
@@ -41645,6 +41958,14 @@ function tokensFor(f) {
         scope: "markup",
         regex: /<head\b[^>]*>/i,
         route: true
+      });
+      break;
+    case "jourilo/paste-blocked":
+      add({
+        value: "onpaste",
+        weight: 10,
+        reason: "cancels paste events",
+        regex: /onpaste\s*=|addEventListener\(\s*['"]paste['"]|onPaste\s*=/i
       });
       break;
     case "axe/meta-viewport":
@@ -41887,13 +42208,13 @@ ${metricCell(p, "LCP")}${metricCell(p, "CLS")}${metricCell(p, "TBT")}${metricCel
   return `<table class="pages"><thead><tr><th></th><th>Page</th><th>Viewport</th><th>HTTP</th><th>LCP</th><th>CLS</th><th>TBT</th><th>Transfer</th><th>JS errors</th><th>Failed req.</th></tr></thead><tbody>${rows}</tbody></table>
 <p class="muted">Lab values from one scripted visit (${esc(String(run.settings.throttle ? "throttled" : "unthrottled"))}); not field data. Colors use web.dev thresholds.</p>`;
 }
-function journeysHtml(journeys) {
-  if (!journeys.length)
+function journeysHtml(journeys2) {
+  if (!journeys2.length)
     return '<p class="muted">No journeys were run. Use <code>jourilo journeys suggest</code> and <code>jourilo journeys run</code>.</p>';
-  return journeys.map(
+  return journeys2.map(
     (j) => `<section class="journey ${j.status}"><h3>${esc(j.name)} <span class="pill st-${j.status}">${j.status}</span> <span class="muted">${esc(j.viewport)} \xB7 ${(j.durationMs / 1e3).toFixed(1)} s</span></h3>
 <ol class="steps">${j.steps.map(
-      (s) => `<li class="${s.status}"><div><b>${esc(s.action)}</b> ${esc(s.description)} <span class="pill st-${s.status}">${s.status}</span> <span class="muted">${s.durationMs} ms</span>${s.error ? `<pre>${esc(s.error)}</pre>` : ""}</div>${s.screenshot ? `<a href="${safeHref(s.screenshot)}" target="_blank" rel="noopener"><img class="stepshot" loading="lazy" alt="" src="${safeHref(s.screenshot)}"></a>` : ""}</li>`
+      (s) => `<li class="${s.status}"><div>${esc(s.description)} <span class="pill st-${s.status}">${s.status}</span> <span class="muted">${s.durationMs} ms</span>${s.error ? `<pre>${esc(s.error)}</pre>` : ""}</div>${s.screenshot ? `<a href="${safeHref(s.screenshot)}" target="_blank" rel="noopener"><img class="stepshot" loading="lazy" alt="" src="${safeHref(s.screenshot)}"></a>` : ""}</li>`
     ).join("")}</ol>
 <h4>Success criteria</h4><ul>${j.successCriteria.map((c) => `<li>${c.met ? "\u2705" : "\u274C"} ${esc(c.description)}${c.detail ? ` <span class="muted">${esc(c.detail)}</span>` : ""}</li>`).join("")}</ul>
 ${j.trace ? `<p>Trace: <code>${esc(j.trace)}</code> (open with <code>npx playwright show-trace</code>)</p>` : ""}</section>`
@@ -41994,7 +42315,12 @@ ul.evidence{list-style:none;padding:0;display:grid;gap:10px}li.ev{border:1px sol
 table{border-collapse:collapse;width:100%;background:var(--card);border:1px solid var(--line);border-radius:8px;display:block;overflow-x:auto}
 th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;font-size:13.5px}td.good{color:var(--good)}td.poor{color:var(--poor);font-weight:600}td.needs-improvement{color:var(--ni)}
 .filters{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:8px 0 12px}.filters select{font:inherit;padding:4px;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:6px;max-width:220px}
-.journey{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin:12px 0}.steps li{margin:8px 0}.stepshot{max-width:320px;max-height:200px;border:1px solid var(--line);border-radius:6px;display:block;margin-top:4px}
+.journey{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin:12px 0}
+.steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;list-style:none;padding:0;counter-reset:step}
+.steps li{counter-increment:step;border:1px solid var(--line);border-radius:8px;padding:8px;font-size:13px;display:flex;flex-direction:column;gap:6px}
+.steps li::before{content:counter(step);font-weight:700;color:var(--muted);font-size:12px}
+.steps li.skipped{opacity:.55}.steps li.failed,.steps li.blocked{border-color:var(--poor)}
+.stepshot{width:100%;aspect-ratio:16/10;object-fit:cover;object-position:top;border:1px solid var(--line);border-radius:6px;display:block}
 .steps li.failed b,.steps li.blocked b{color:var(--poor)}ul.bycat{columns:2}ul.limits li{margin:4px 0}
 footer{padding:16px 24px;text-align:center;font-size:12.5px}
 `;
@@ -42227,6 +42553,8 @@ var AUDIT_OPTIONS = {
   timeout: { type: "string" },
   repo: { type: "string" },
   sarif: { type: "boolean" },
+  "no-forms": { type: "boolean" },
+  "allow-submit": { type: "boolean" },
   "fail-on": { type: "string" }
 };
 var SEVERITIES = ["critical", "serious", "moderate", "minor"];
@@ -42264,6 +42592,8 @@ async function auditCommand(ctx, usage2, categories) {
       ...str(ctx, "locale") ? { locale: str(ctx, "locale") } : {},
       ...categories ? { categories } : {},
       mode: repo ? "repository" : "website",
+      forms: !flag(ctx, "no-forms"),
+      allowSubmit: flag(ctx, "allow-submit"),
       onProgress: ctx.log
     };
     if (flag(ctx, "ignore-robots") && !server && !/^(localhost|127\.|\[::1\])/.test(
@@ -42342,6 +42672,8 @@ var audit = {
   --repo PATH          Map findings to likely source files in this repository
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
+  --no-forms           Do not submit forms (by default, forms on local hosts are submitted empty to test validation)
+  --allow-submit       Allow submitting forms on non-local hosts (authorized test environments only)
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)`,
   run: (ctx) => auditCommand(ctx, audit.usage)
@@ -42480,6 +42812,903 @@ var bench = {
     }
     const ok = found === expected && fp === 0 && srcHit === srcExp;
     return { data: { summary, results }, text: lines.join("\n"), exitCode: ok ? 0 : 1 };
+  }
+};
+
+// src/cli/commands/journeys.ts
+import { existsSync as existsSync6, mkdirSync as mkdirSync3, readdirSync as readdirSync4, readFileSync as readFileSync5, writeFileSync as writeFileSync5 } from "node:fs";
+import { basename, join as join9, resolve as resolve5 } from "node:path";
+init_errors();
+init_types();
+
+// src/journeys/runner.ts
+import { join as join8 } from "node:path";
+init_fs_safety();
+
+// src/journeys/schema.ts
+init_errors();
+var ACTIONS = /* @__PURE__ */ new Set([
+  "goto",
+  "click",
+  "fill",
+  "select",
+  "check",
+  "press",
+  "hover",
+  "wait",
+  "back",
+  "expect",
+  "screenshot"
+]);
+var NEEDS_TARGET = /* @__PURE__ */ new Set(["click", "fill", "select", "check", "hover"]);
+function validTarget(t) {
+  if (!t || typeof t !== "object") return false;
+  const o = t;
+  const keys = ["role", "label", "text", "placeholder", "testId", "css"].filter(
+    (k) => typeof o[k] === "string" && o[k]
+  );
+  return keys.length >= 1;
+}
+function validateJourney(raw, source = "journey") {
+  const errs = [];
+  if (!raw || typeof raw !== "object")
+    throw new JouriloError("INVALID_INPUT", `${source}: not a JSON object.`);
+  const j = raw;
+  if (j.version !== 1) errs.push("version must be 1");
+  if (!j.id || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(j.id))
+    errs.push("id must be lowercase letters, digits and dashes");
+  if (!j.name) errs.push("name is required");
+  if (!j.start || typeof j.start !== "string") errs.push("start (path or URL) is required");
+  if (!Array.isArray(j.steps) || !j.steps.length) errs.push("steps must be a non-empty array");
+  if (!Array.isArray(j.success) || !j.success.length)
+    errs.push("success must list at least one explicit criterion");
+  (j.steps ?? []).forEach((s, i) => {
+    const step = s;
+    if (!step || !ACTIONS.has(step.action))
+      errs.push(`steps[${i}]: unknown action "${step?.action}"`);
+    else if (NEEDS_TARGET.has(step.action) && !validTarget(step.target))
+      errs.push(`steps[${i}] (${step.action}): target is required`);
+    else if ((step.action === "fill" || step.action === "select") && typeof step.value !== "string")
+      errs.push(`steps[${i}] (${step.action}): value must be a string`);
+    else if (step.action === "goto" && typeof step.url !== "string")
+      errs.push(`steps[${i}] (goto): url is required`);
+    else if (step.action === "press" && typeof step.key !== "string")
+      errs.push(`steps[${i}] (press): key is required`);
+  });
+  (j.success ?? []).forEach((c, i) => {
+    if (!c?.description) errs.push(`success[${i}]: description is required`);
+    if (c && !c.url && !c.urlNot && !c.visible && !c.noPageErrors && !c.noFailedRequests)
+      errs.push(`success[${i}]: needs url, urlNot, visible, noPageErrors or noFailedRequests`);
+    if (c?.visible && !validTarget(c.visible)) errs.push(`success[${i}]: visible must be a target`);
+  });
+  if (errs.length)
+    throw new JouriloError("INVALID_INPUT", `${source} is invalid:
+  - ${errs.join("\n  - ")}`);
+  return j;
+}
+function describeTarget(t) {
+  if ("role" in t) return `${t.role}${t.name ? ` "${t.name}"` : ""}`;
+  if ("label" in t) return `field labelled "${t.label}"`;
+  if ("text" in t) return `text "${t.text}"`;
+  if ("placeholder" in t) return `field with placeholder "${t.placeholder}"`;
+  if ("testId" in t) return `test id "${t.testId}"`;
+  return `\`${t.css}\``;
+}
+function describeStep(s, secret = false) {
+  switch (s.action) {
+    case "goto":
+      return `Go to ${s.url}`;
+    case "click":
+      return `Click ${describeTarget(s.target)}`;
+    case "fill":
+      return `Type ${secret ? "\u2022\u2022\u2022\u2022\u2022\u2022" : `"${s.value}"`} into ${describeTarget(s.target)}`;
+    case "select":
+      return `Choose "${s.value}" in ${describeTarget(s.target)}`;
+    case "check":
+      return `Check ${describeTarget(s.target)}`;
+    case "press":
+      return `Press ${s.key}${s.target ? ` in ${describeTarget(s.target)}` : ""}`;
+    case "hover":
+      return `Hover ${describeTarget(s.target)}`;
+    case "wait":
+      return s.target ? `Wait for ${describeTarget(s.target)}` : `Wait ${s.ms ?? 500} ms`;
+    case "back":
+      return "Go back";
+    case "expect":
+      return `Expect ${[s.url ? `URL ~ ${s.url}` : "", s.visible ? `${describeTarget(s.visible)} visible` : "", s.hidden ? `${describeTarget(s.hidden)} hidden` : "", s.title ? `title ~ "${s.title}"` : ""].filter(Boolean).join(", ")}`;
+    case "screenshot":
+      return `Screenshot${s.name ? ` "${s.name}"` : ""}`;
+  }
+}
+
+// src/journeys/runner.ts
+function locatorFor(page, t) {
+  if ("role" in t)
+    return page.getByRole(t.role, {
+      ...t.name ? { name: t.name } : {},
+      ...t.exact ? { exact: true } : {}
+    });
+  if ("label" in t) return page.getByLabel(t.label, { exact: t.exact ?? false });
+  if ("text" in t) return page.getByText(t.text, { exact: t.exact ?? false });
+  if ("placeholder" in t) return page.getByPlaceholder(t.placeholder);
+  if ("testId" in t) return page.getByTestId(t.testId);
+  return page.locator(t.css);
+}
+var ELEMENT_FACTS = `(el) => {
+  const form = el.form || el.closest('form');
+  const tag = el.tagName;
+  const type = (el.getAttribute('type') || '').toLowerCase();
+  const submits = !!form && ((tag === 'BUTTON' && (type === '' || type === 'submit')) || (tag === 'INPUT' && (type === 'submit' || type === 'image')));
+  const inField = !!form && (tag === 'INPUT' || tag === 'SELECT');
+  const payment = !!form && !!form.querySelector('input[autocomplete^="cc-"], input[name*="card" i], input[name*="cvc" i], input[name*="cvv" i]');
+  const name = (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('title') || '').replace(/\\s+/g, ' ').trim().slice(0, 120);
+  return { submits, inField, payment, name };
+}`;
+var facts = (src) => new Function(`return (${src})(arguments[0])`);
+function matchesUrl(actual, expected) {
+  if (expected.startsWith("re:")) {
+    try {
+      return new RegExp(expected.slice(3)).test(actual);
+    } catch {
+      return false;
+    }
+  }
+  if (expected.startsWith("/")) {
+    try {
+      const norm = (p) => p.replace(/\/+$/, "").replace(/\.html?$/, "") || "/";
+      const u = new URL(actual);
+      const [path2, query] = expected.split("?");
+      return norm(u.pathname) === norm(path2) && (!query || u.search.includes(query));
+    } catch {
+      return false;
+    }
+  }
+  return actual.includes(expected);
+}
+var Blocked = class extends Error {
+};
+async function act(page, step, opts) {
+  const t = opts.stepTimeoutMs;
+  const value = (v) => interpolate(v, opts.data);
+  switch (step.action) {
+    case "goto": {
+      const url = new URL(value(step.url), opts.base);
+      if (url.origin !== opts.base.origin)
+        throw new Error(`goto ${url.origin} leaves the target origin ${opts.base.origin}`);
+      await page.goto(url.toString(), { waitUntil: "load", timeout: t * 3 });
+      await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
+      return;
+    }
+    case "click":
+    case "press": {
+      const loc = step.action === "click" ? locatorFor(page, step.target).first() : step.target ? locatorFor(page, step.target).first() : null;
+      if (loc) {
+        await loc.waitFor({ state: "visible", timeout: t });
+        const f = await loc.evaluate(facts(ELEMENT_FACTS));
+        const submitsForm = step.action === "click" ? f.submits : step.key === "Enter" && f.inField;
+        const verdict = checkAction(
+          {
+            action: step.action,
+            name: step.action === "click" ? f.name : "",
+            submitsForm,
+            paymentForm: f.payment && submitsForm
+          },
+          opts.policy
+        );
+        if (!verdict.allowed) throw new Blocked(verdict.reason);
+        if (step.action === "click") await loc.click({ timeout: t });
+        else await loc.press(step.key, { timeout: t });
+      } else if (step.action === "press") {
+        await page.keyboard.press(step.key);
+      }
+      await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
+      return;
+    }
+    case "fill":
+      await locatorFor(page, step.target).first().fill(value(step.value), { timeout: t });
+      return;
+    case "select":
+      await locatorFor(page, step.target).first().selectOption(value(step.value), { timeout: t });
+      return;
+    case "check":
+      await locatorFor(page, step.target).first().check({ timeout: t });
+      return;
+    case "hover":
+      await locatorFor(page, step.target).first().hover({ timeout: t });
+      return;
+    case "wait":
+      if (step.target)
+        await locatorFor(page, step.target).first().waitFor({ state: "visible", timeout: step.ms ?? t });
+      else await page.waitForTimeout(Math.min(step.ms ?? 500, 1e4));
+      return;
+    case "back":
+      await page.goBack({ timeout: t });
+      return;
+    case "expect": {
+      if (step.url) {
+        const deadline = Date.now() + t;
+        while (!matchesUrl(page.url(), step.url) && Date.now() < deadline) await page.waitForTimeout(100);
+        if (!matchesUrl(page.url(), step.url))
+          throw new Error(`URL is ${redactUrl(page.url())}, expected ~ ${step.url}`);
+      }
+      if (step.visible)
+        await locatorFor(page, step.visible).first().waitFor({ state: "visible", timeout: t });
+      if (step.hidden) await locatorFor(page, step.hidden).first().waitFor({ state: "hidden", timeout: t });
+      if (step.title) {
+        const title = await page.title();
+        if (!title.includes(step.title))
+          throw new Error(`Title is "${excerpt(title, 80)}", expected ~ "${step.title}"`);
+      }
+      return;
+    }
+    case "screenshot":
+      return;
+  }
+}
+var TRANSIENT = /detached|not stable|intercepts pointer events|Execution context was destroyed|navigation/i;
+async function runJourney(browser, spec, opts) {
+  const vp = parseViewports(opts.viewportOverride ?? spec.viewport ?? "desktop")[0];
+  const ctx = await newContext(browser, vp, {
+    runDir: opts.runDir,
+    ...opts.storageState ? { storageState: opts.storageState } : {}
+  });
+  const tracePath = opts.trace ? join8("traces", `${spec.id}-${vp.name}.zip`) : void 0;
+  if (tracePath) await ctx.tracing.start({ screenshots: true, snapshots: true, title: spec.name });
+  const page = await ctx.newPage();
+  const live = observe(page, opts.base.origin);
+  const steps = [];
+  const findings = [];
+  const t0 = Date.now();
+  let status = "passed";
+  const startUrl = new URL(interpolate(spec.start, opts.data), opts.base);
+  const allSteps = [{ action: "goto", url: startUrl.toString() }, ...spec.steps];
+  const shot = async (i) => {
+    const file = join8("screenshots", `journey-${spec.id}-${vp.name}-${String(i).padStart(2, "0")}.jpg`);
+    try {
+      await page.screenshot({
+        path: join8(opts.runDir, file),
+        type: "jpeg",
+        quality: 70,
+        animations: "disabled",
+        caret: "hide",
+        mask: DEFAULT_MASK.map((s) => page.locator(s)),
+        maskColor: "#FF00FF"
+      });
+      return toPosix(file);
+    } catch {
+      return void 0;
+    }
+  };
+  try {
+    for (let i = 0; i < allSteps.length; i++) {
+      const step = allSteps[i];
+      const secret = "value" in step && (isSecretValue(step.value) || /password|card|cvc/i.test(JSON.stringify(step.target ?? "")));
+      const s0 = Date.now();
+      const res = {
+        index: i,
+        action: step.action,
+        description: describeStep(step, secret),
+        status: "passed",
+        durationMs: 0,
+        url: ""
+      };
+      opts.log?.(`    ${i + 1}. ${res.description}`);
+      try {
+        try {
+          await act(page, step, opts);
+        } catch (err) {
+          if (err instanceof Blocked || !TRANSIENT.test(err.message)) throw err;
+          await page.waitForTimeout(500);
+          await act(page, step, opts);
+        }
+      } catch (err) {
+        res.status = err instanceof Blocked ? "blocked" : "failed";
+        res.error = excerpt(err.message.split("\n")[0], 300);
+      }
+      res.durationMs = Date.now() - s0;
+      res.url = redactUrl(page.url());
+      const s = await shot(i);
+      if (s) res.screenshot = s;
+      steps.push(res);
+      if (res.status !== "passed") {
+        status = res.status === "blocked" ? "blocked" : "failed";
+        for (let k = i + 1; k < allSteps.length; k++)
+          steps.push({
+            index: k,
+            action: allSteps[k].action,
+            description: describeStep(allSteps[k]),
+            status: "skipped",
+            durationMs: 0,
+            url: ""
+          });
+        break;
+      }
+    }
+    const pageErrors = live.console.filter((c) => c.type === "pageerror");
+    const failedFirstParty = live.network.filter((n) => n.firstParty);
+    const criteria = [];
+    for (const c of spec.success) {
+      let met = true;
+      const details = [];
+      if (c.url && !matchesUrl(page.url(), c.url)) {
+        met = false;
+        details.push(`ended at ${redactUrl(page.url())}`);
+      }
+      if (c.urlNot && matchesUrl(page.url(), c.urlNot)) {
+        met = false;
+        details.push(`still at ${redactUrl(page.url())}`);
+      }
+      if (c.visible) {
+        const vis = await locatorFor(page, c.visible).first().isVisible().catch(() => false);
+        if (!vis) {
+          met = false;
+          details.push(`${describeTarget(c.visible)} not visible`);
+        }
+      }
+      if (c.noPageErrors && pageErrors.length) {
+        met = false;
+        details.push(`${pageErrors.length} uncaught exception(s)`);
+      }
+      if (c.noFailedRequests && failedFirstParty.length) {
+        met = false;
+        details.push(`${failedFirstParty.length} failed request(s)`);
+      }
+      criteria.push({
+        description: c.description,
+        met,
+        ...details.length ? { detail: details.join("; ") } : {}
+      });
+    }
+    if (status === "passed" && criteria.some((c) => !c.met)) status = "failed";
+    const vitals = await page.evaluate(READ_VITALS_SCRIPT).catch(() => null);
+    const durationMs = Date.now() - t0;
+    if (tracePath) {
+      await ctx.tracing.stop({ path: join8(opts.runDir, tracePath) });
+    }
+    const result = {
+      id: spec.id,
+      name: spec.name,
+      viewport: vp.name,
+      status,
+      steps,
+      successCriteria: criteria,
+      durationMs,
+      ...tracePath ? { trace: toPosix(tracePath) } : {}
+    };
+    const reproduction = steps.filter((s) => s.status !== "skipped").map((s) => s.description);
+    const failedStep = steps.find((s) => s.status === "failed");
+    const blockedStep = steps.find((s) => s.status === "blocked");
+    const url = redactUrl(page.url());
+    if (failedStep || criteria.some((c) => !c.met)) {
+      const unmet = criteria.filter((c) => !c.met);
+      findings.push(
+        makeFinding({
+          ruleId: "journey/failed",
+          key: spec.id,
+          journey: spec.id,
+          title: `Journey "${spec.name}" does not reach its goal`,
+          category: "usability",
+          kind: "defect",
+          severity: "serious",
+          confidence: spec.source === "suggested" ? "medium" : "high",
+          provenance: "observed",
+          url,
+          viewport: vp.name,
+          description: failedStep ? `Step ${failedStep.index + 1} (${failedStep.description}) failed: ${failedStep.error}` : `All steps ran, but ${unmet.length} success criterion/criteria were not met: ${unmet.map((c) => `${c.description}${c.detail ? ` (${c.detail})` : ""}`).join("; ")}.`,
+          impact: spec.goal ? `People trying to ${spec.goal} cannot complete it.` : "People cannot complete this task.",
+          recommendation: spec.source === "suggested" ? "Check whether the journey definition matches the intended flow (it was generated); if it does, fix the step that failed." : "Fix the step that failed, then rerun the journey.",
+          standards: [nielsen(9)],
+          evidence: [
+            ...failedStep?.screenshot ? [
+              {
+                type: "screenshot",
+                file: failedStep.screenshot,
+                note: `After step ${failedStep.index + 1}`
+              }
+            ] : [],
+            { type: "step", snippet: failedStep?.error ?? unmet.map((c) => c.detail).join("; ") }
+          ],
+          reproduction
+        })
+      );
+    }
+    if (blockedStep) {
+      findings.push(
+        makeFinding({
+          ruleId: "journey/blocked-by-policy",
+          key: spec.id,
+          journey: spec.id,
+          title: `Journey "${spec.name}" stopped by the safety policy`,
+          category: "usability",
+          kind: "needs-review",
+          severity: "info",
+          confidence: "high",
+          provenance: "observed",
+          url,
+          viewport: vp.name,
+          description: blockedStep.error ?? "Blocked.",
+          impact: "The rest of this journey was not tested.",
+          recommendation: "Run it against a local or sandbox environment with test accounts if it needs to be covered.",
+          standards: [],
+          evidence: [{ type: "step", snippet: blockedStep.description }],
+          reproduction
+        })
+      );
+    }
+    if (pageErrors.length) {
+      findings.push(
+        makeFinding({
+          ruleId: "journey/page-errors",
+          key: spec.id,
+          journey: spec.id,
+          title: `Uncaught exceptions during "${spec.name}"`,
+          category: "reliability",
+          kind: "defect",
+          severity: "serious",
+          confidence: "high",
+          provenance: "observed",
+          url,
+          viewport: vp.name,
+          description: `${pageErrors.length} uncaught exception(s) while performing the journey.`,
+          impact: "Interactive features may silently fail for real users.",
+          recommendation: "Reproduce the steps and fix the exceptions listed in the evidence.",
+          standards: [],
+          evidence: pageErrors.slice(0, 8).map((e) => ({ type: "console", snippet: e.text })),
+          reproduction
+        })
+      );
+    }
+    if (vitals?.inp != null && vitals.interactions > 0) {
+      const r = rate("INP", vitals.inp);
+      if (r && r !== "good") {
+        findings.push(
+          makeFinding({
+            ruleId: "perf/inp",
+            key: spec.id,
+            journey: spec.id,
+            title: `Slow response to interaction during "${spec.name}" (${Math.round(vitals.inp)} ms, lab)`,
+            category: "performance",
+            kind: "defect",
+            severity: r === "poor" ? "serious" : "minor",
+            confidence: "medium",
+            provenance: "measured",
+            url,
+            viewport: vp.name,
+            description: `The slowest of ${vitals.interactions} scripted interaction(s) took ${Math.round(vitals.inp)} ms to paint the next frame. This is a lab approximation of INP, not field data.`,
+            impact: "The interface feels unresponsive; people click again or give up.",
+            recommendation: "Profile the interaction in DevTools Performance; break up long tasks in the event handlers and defer non-urgent work.",
+            standards: [CWV.INP],
+            evidence: [
+              { type: "metric", data: { inp: Math.round(vitals.inp), interactions: vitals.interactions } }
+            ],
+            reproduction
+          })
+        );
+      }
+    }
+    return { result, findings };
+  } finally {
+    await ctx.close().catch(() => void 0);
+  }
+}
+
+// src/journeys/suggest.ts
+function fieldTarget(f) {
+  if (f.label) return { label: f.label, exact: true };
+  if (f.placeholder) return { placeholder: f.placeholder };
+  if (f.name) return { css: `[name="${f.name.replace(/"/g, '\\"')}"]` };
+  return { css: f.selector };
+}
+function valueFor(f) {
+  const s = `${f.type} ${f.name ?? ""} ${f.label ?? ""} ${f.autocomplete ?? ""}`.toLowerCase();
+  if (f.type === "checkbox" || f.type === "radio" || f.type === "file" || f.type === "hidden") return null;
+  if (f.type === "password") return "{{password}}";
+  if (f.type === "email" || /e-?mail/.test(s)) return "{{email}}";
+  if (f.type === "tel" || /phone|tel|mobile/.test(s)) return "{{phone}}";
+  if (f.type === "search" || /search|query|\bq\b/.test(s)) return "{{search}}";
+  if (/first|given/.test(s)) return "{{firstName}}";
+  if (/last|family|surname/.test(s)) return "{{lastName}}";
+  if (/company|organi[sz]ation/.test(s)) return "{{company}}";
+  if (/zip|postal/.test(s)) return "{{zip}}";
+  if (/card|cc-number/.test(s)) return "{{testCard}}";
+  if (/name|user/.test(s)) return "{{name}}";
+  if (f.type === "textarea" || f.type === "text") return "Jourilo test message";
+  if (f.type === "number") return "1";
+  return null;
+}
+function formJourney(page, form) {
+  const path2 = pathOf(page.url).split("?")[0];
+  const steps = [];
+  for (const f of form.fields) {
+    if (f.type === "select") continue;
+    if (f.type === "checkbox") {
+      if (f.required) steps.push({ action: "check", target: fieldTarget(f) });
+      continue;
+    }
+    const v = valueFor(f);
+    if (v) steps.push({ action: "fill", target: fieldTarget(f), value: v });
+  }
+  if (!steps.length) return null;
+  const submit = form.submitText ? { action: "click", target: { role: "button", name: form.submitText, exact: true } } : { action: "press", key: "Enter", target: fieldTarget(form.fields.find((f) => valueFor(f))) };
+  steps.push(submit);
+  const names = {
+    signup: "Create an account",
+    login: "Sign in",
+    search: "Search the site",
+    checkout: "Complete checkout (sandbox)",
+    contact: "Send a contact message",
+    newsletter: "Subscribe to the newsletter",
+    recovery: "Request a password reset",
+    other: "Submit the form"
+  };
+  const id = slug(`${form.purpose}-${path2 === "/" ? "home" : path2}`, 60);
+  return {
+    version: 1,
+    id,
+    name: `${names[form.purpose]} (${path2})`,
+    goal: names[form.purpose].toLowerCase(),
+    start: path2,
+    steps,
+    success: [
+      ...form.purpose === "login" ? [] : [{ description: "Leaves the form page or shows a result", urlNot: path2 === "/" ? "/" : path2 }],
+      { description: "No uncaught exceptions", noPageErrors: true },
+      { description: "No failed first-party requests", noFailedRequests: true }
+    ].filter((c) => !(form.purpose === "search" && "urlNot" in c)),
+    safety: { submitsForms: true, destructive: form.purpose === "checkout" },
+    source: "suggested",
+    tags: ["form", form.purpose]
+  };
+}
+function suggestJourneys(run) {
+  const out = [];
+  const desktop = run.pages.filter((p) => p.viewport === run.viewports[0]?.name && (p.status ?? 200) < 400);
+  const seen = /* @__PURE__ */ new Set();
+  const push = (j) => {
+    if (!j || seen.has(j.id)) return;
+    seen.add(j.id);
+    out.push(j);
+  };
+  const home = desktop.find((p) => pathOf(p.url).split("?")[0] === "/") ?? desktop[0];
+  const cta = home?.inventory.ctas.find((c) => c.emphasis === "primary" && c.aboveFold);
+  if (home && cta) {
+    const href = cta.href && !cta.href.startsWith("#") ? cta.href : null;
+    const dest = href ? pathOf(new URL(href, home.url).toString()).split("?")[0] : null;
+    push({
+      version: 1,
+      id: "landing-primary-cta",
+      name: `Follow the main call to action ("${cta.text}")`,
+      goal: "move from the landing page to the next step of the funnel",
+      start: pathOf(home.url),
+      steps: [{ action: "click", target: { role: href ? "link" : "button", name: cta.text, exact: true } }],
+      success: [
+        dest && dest !== "/" ? { description: `Arrives at ${dest}`, url: dest } : { description: "Leaves the landing page", urlNot: "/" },
+        { description: "No uncaught exceptions", noPageErrors: true }
+      ],
+      safety: { submitsForms: false },
+      source: "suggested",
+      tags: ["conversion", "cta"]
+    });
+  }
+  const counts = /* @__PURE__ */ new Map();
+  for (const p of desktop) {
+    const uniq = new Map(
+      p.inventory.links.filter((l) => l.internal && l.text).map((l) => [`${l.text}|${pathOf(l.href)}`, l])
+    );
+    for (const [k, l] of uniq) {
+      const c = counts.get(k) ?? { text: l.text, href: l.href, n: 0 };
+      c.n++;
+      counts.set(k, c);
+    }
+  }
+  const nav = [...counts.values()].filter((c) => c.n >= Math.max(2, Math.ceil(desktop.length * 0.6)) && pathOf(c.href) !== "/").slice(0, 6);
+  if (home && nav.length) {
+    push({
+      version: 1,
+      id: "global-navigation",
+      name: "Reach each main section from the navigation",
+      goal: "find the main sections of the product",
+      start: pathOf(home.url),
+      steps: nav.flatMap((n) => [
+        { action: "click", target: { role: "link", name: n.text, exact: true } },
+        { action: "expect", url: pathOf(n.href).split("?")[0] },
+        { action: "goto", url: pathOf(home.url) }
+      ]),
+      success: [
+        { description: "No uncaught exceptions", noPageErrors: true },
+        { description: "No failed first-party requests", noFailedRequests: true }
+      ],
+      safety: { submitsForms: false },
+      source: "suggested",
+      tags: ["navigation"]
+    });
+  }
+  for (const p of desktop) for (const f of p.inventory.forms) push(formJourney(p, f));
+  const pricing = desktop.find((p) => /pric|plans/i.test(pathOf(p.url)));
+  const planCta = pricing?.inventory.ctas.find(
+    (c) => c.emphasis === "primary" && c.href && !c.href.startsWith("#")
+  );
+  if (pricing && planCta) {
+    push({
+      version: 1,
+      id: "pricing-to-signup",
+      name: `Choose a plan on ${pathOf(pricing.url)} ("${planCta.text}")`,
+      goal: "choose a plan and continue",
+      start: pathOf(pricing.url),
+      steps: [{ action: "click", target: { role: "link", name: planCta.text, exact: true } }],
+      success: [
+        { description: "Leaves the pricing page", urlNot: pathOf(pricing.url).split("?")[0] },
+        { description: "No uncaught exceptions", noPageErrors: true }
+      ],
+      safety: { submitsForms: false },
+      source: "suggested",
+      tags: ["conversion", "pricing"]
+    });
+  }
+  return out;
+}
+
+// src/cli/commands/journeys.ts
+function journeysDir(ws) {
+  return join9(ws.root, "journeys");
+}
+function loadJourneys(ws, refs) {
+  const dir = journeysDir(ws);
+  const files = [];
+  if (!refs.length) {
+    if (!existsSync6(dir)) return [];
+    files.push(
+      ...readdirSync4(dir).filter((f) => f.endsWith(".json")).sort().map((f) => join9(dir, f))
+    );
+  } else {
+    for (const r of refs) {
+      if (r.endsWith(".json") && existsSync6(r)) files.push(resolve5(r));
+      else if (existsSync6(join9(dir, `${r}.json`))) files.push(join9(dir, `${r}.json`));
+      else throw new JouriloError("NOT_FOUND", `Journey not found: ${r} (looked in ${dir})`);
+    }
+  }
+  return files.map((f) => {
+    let raw;
+    try {
+      raw = JSON.parse(readFileSync5(f, "utf8"));
+    } catch (err) {
+      throw new JouriloError("INVALID_INPUT", `${basename(f)} is not valid JSON: ${err.message}`);
+    }
+    return validateJourney(raw, basename(f));
+  });
+}
+function parseVars(ctx) {
+  const out = {};
+  for (const [k, v] of Object.entries(process.env))
+    if (k.startsWith("JOURILO_VAR_") && v) out[k.slice(12).toLowerCase()] = v;
+  for (const kv of list(ctx, "var")) {
+    const i = kv.indexOf("=");
+    if (i < 1) throw new JouriloError("USAGE", `--var must be key=value (got ${kv})`);
+    out[kv.slice(0, i)] = kv.slice(i + 1);
+  }
+  return out;
+}
+async function suggest(ctx) {
+  const target = ctx.positionals[1];
+  let run;
+  if (!target || ctx.ws.listRuns().some((r) => r.id === target) || target === "latest") {
+    run = ctx.ws.loadRun(target ?? "latest").run;
+  } else {
+    const isDir = existsSync6(target) && !target.includes("://");
+    const server = isDir ? await serveStatic(resolve5(target)) : void 0;
+    try {
+      ctx.log("Discovering pages to derive journeys (no audit rules applied) \u2026");
+      run = (await runAudit(ctx.ws, {
+        target: server?.url ?? target,
+        viewports: parseViewports("desktop"),
+        maxPages: num(ctx, "pages", 8),
+        maxDepth: 3,
+        browser: "chromium",
+        headed: false,
+        respectRobots: true,
+        allowPrivate: flag(ctx, "allow-private"),
+        keyboard: false,
+        throttle: false,
+        timeoutMs: 3e4,
+        mask: [],
+        forms: false,
+        mode: isDir ? "repository" : "website",
+        onProgress: ctx.log
+      })).run;
+    } finally {
+      await server?.close();
+    }
+  }
+  const specs = suggestJourneys(run);
+  const dir = journeysDir(ctx.ws);
+  mkdirSync3(dir, { recursive: true });
+  const written = [];
+  const kept = [];
+  for (const s of specs) {
+    const file = join9(dir, `${s.id}.json`);
+    if (existsSync6(file) && !flag(ctx, "force")) {
+      kept.push(s.id);
+      continue;
+    }
+    writeFileSync5(file, `${JSON.stringify(s, null, 2)}
+`);
+    written.push(file);
+  }
+  return {
+    data: { journeys: specs, written, kept, dir },
+    text: [
+      `Suggested ${specs.length} journey(s) from run ${run.id} \u2192 ${dir}`,
+      ...specs.map(
+        (s) => `  ${s.id.padEnd(32)} ${s.name}${s.safety?.submitsForms ? "  [submits forms]" : ""}${s.safety?.destructive ? "  [destructive]" : ""}`
+      ),
+      kept.length ? `  (kept ${kept.length} existing file(s); --force to overwrite)` : "",
+      "Review and edit them, then: jourilo journeys run --base <url>"
+    ].filter(Boolean).join("\n")
+  };
+}
+async function runCmd(ctx) {
+  const baseArg = str(ctx, "base");
+  if (!baseArg)
+    throw new JouriloError("USAGE", "--base <url|dir> is required (the site to run journeys against).");
+  const specs = loadJourneys(ctx.ws, ctx.positionals.slice(1));
+  if (!specs.length)
+    throw new JouriloError(
+      "NOT_FOUND",
+      "No journeys to run.",
+      "Create some with `jourilo journeys suggest <url>`."
+    );
+  const isDir = existsSync6(baseArg) && !baseArg.includes("://");
+  const server = isDir ? await serveStatic(resolve5(baseArg)) : void 0;
+  try {
+    const base = parseTargetUrl(server?.url ?? baseArg);
+    const hostClass = await checkTarget(base, { allowPrivate: flag(ctx, "allow-private") });
+    const id = newRunId();
+    const runDir = ctx.ws.createRunDir(id);
+    const browserName = str(ctx, "browser") ?? "chromium";
+    const browser = await launchBrowser(browserName, flag(ctx, "headed"));
+    const startedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const journeys2 = [];
+    let findings = [];
+    const limitations = [];
+    const data = testData(id, parseVars(ctx));
+    const policy = {
+      hostClass,
+      allowSubmit: flag(ctx, "allow-submit"),
+      allowDestructive: flag(ctx, "allow-destructive")
+    };
+    if (policy.allowDestructive && hostClass !== "local")
+      limitations.push(
+        "--allow-destructive is ignored on non-local hosts: irreversible and payment actions were blocked."
+      );
+    if (flag(ctx, "trace")) {
+      mkdirSync3(join9(runDir, "traces"), { recursive: true });
+      limitations.push(
+        "Playwright traces contain DOM snapshots and typed values: keep them private (they are excluded from git)."
+      );
+    }
+    try {
+      const viewports = str(ctx, "viewport") ? list(ctx, "viewport") : [void 0];
+      for (const spec of specs) {
+        for (const vp of viewports) {
+          ctx.log(`journey ${spec.id}${vp ? ` (${vp})` : ""}`);
+          const { result, findings: jf } = await runJourney(browser, spec, {
+            base,
+            runDir,
+            hostClass,
+            policy,
+            data,
+            trace: flag(ctx, "trace"),
+            stepTimeoutMs: num(ctx, "timeout", 10) * 1e3,
+            ...vp ? { viewportOverride: vp } : {},
+            ...str(ctx, "auth") ? { storageState: str(ctx, "auth") } : {},
+            log: ctx.log
+          });
+          ctx.log(`  \u2192 ${result.status} (${(result.durationMs / 1e3).toFixed(1)} s)`);
+          journeys2.push(result);
+          findings.push(...jf);
+        }
+      }
+    } finally {
+      await browser.close().catch(() => void 0);
+    }
+    findings = mergeFindings(findings);
+    const run = {
+      schemaVersion: RUN_SCHEMA_VERSION,
+      id,
+      tool: { name: "jourilo", version: VERSION },
+      mode: isDir || str(ctx, "repo") ? "repository" : "website",
+      target: server ? `${resolve5(baseArg)} (served at ${server.url})` : base.toString(),
+      startedAt,
+      finishedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      browser: { name: browserName, version: "" },
+      viewports: parseViewports([...new Set(journeys2.map((j) => j.viewport))].join(",") || "desktop"),
+      settings: {
+        journeys: specs.map((s) => s.id),
+        allowSubmit: policy.allowSubmit,
+        allowDestructive: policy.allowDestructive,
+        hostClass
+      },
+      pages: [],
+      journeys: journeys2,
+      findings,
+      summary: summarize(findings, 0, journeys2.length),
+      limitations: [
+        ...limitations,
+        "Journeys prove that a scripted path works (or not) in one browser; they do not measure how real people choose paths."
+      ]
+    };
+    const repo = str(ctx, "repo") ?? (isDir ? resolve5(baseArg) : void 0);
+    if (repo) locateFindings(run, repo);
+    ctx.ws.saveRun(run);
+    const reports = writeReports(runDir, run);
+    const failed = journeys2.filter((j) => j.status === "failed").length;
+    return {
+      data: { runId: id, runDir, reports, journeys: journeys2, findings },
+      text: [
+        "",
+        ...journeys2.map(
+          (j) => `  ${j.status === "passed" ? "\u2713" : j.status === "blocked" ? "\u26D4" : "\u2717"} ${j.name} [${j.viewport}] ${j.status}${j.status !== "passed" ? ` \u2014 ${j.steps.find((s) => s.status === "failed" || s.status === "blocked")?.error ?? j.successCriteria.filter((c) => !c.met).map((c) => `${c.description}: ${c.detail ?? ""}`).join("; ")}` : ""}`
+        ),
+        "",
+        `  Report: ${reports.html}`,
+        `  Run id: ${id}`
+      ].join("\n"),
+      exitCode: failed && flag(ctx, "fail-on-failure") ? 1 : 0
+    };
+  } finally {
+    await server?.close();
+  }
+}
+var journeys = {
+  name: "journeys",
+  summary: "Discover, list, validate and run user journeys (reusable scenarios with explicit success criteria).",
+  usage: "jourilo journeys <suggest [url|dir|run]|list|validate [files]|run [ids] --base <url|dir>>",
+  options: {
+    base: { type: "string" },
+    viewport: { type: "string" },
+    var: { type: "string", multiple: true },
+    trace: { type: "boolean" },
+    "allow-submit": { type: "boolean" },
+    "allow-destructive": { type: "boolean" },
+    "allow-private": { type: "boolean" },
+    "fail-on-failure": { type: "boolean" },
+    browser: { type: "string" },
+    headed: { type: "boolean" },
+    auth: { type: "string" },
+    repo: { type: "string" },
+    timeout: { type: "string" },
+    pages: { type: "string" },
+    force: { type: "boolean" }
+  },
+  details: `Subcommands:
+  suggest [url|dir|run]  Derive journeys from a site (or an existing run) into .jourilo/journeys/*.json
+  list                   List journey files
+  validate [files]       Check journey files against the schema
+  run [ids|files]        Run journeys against --base <url|dir>
+
+Run options:
+  --viewport LIST        desktop, mobile, \u2026 (default: the journey's own viewport or desktop)
+  --var key=value        Test data for {{key}} placeholders (also JOURILO_VAR_KEY env vars)
+  --allow-submit         Allow form submission on non-local hosts (authorized test environments only)
+  --allow-destructive    Allow irreversible/payment actions \u2014 local hosts with sandbox data only
+  --trace                Record a Playwright trace per journey (contains typed values; keep private)
+  --auth FILE            Playwright storage state for signed-in journeys
+  --fail-on-failure      Exit 1 when a journey fails
+
+Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission
+on non-local hosts needs --allow-submit. Blocked steps are reported, not skipped silently.`,
+  async run(ctx) {
+    const sub = ctx.positionals[0] ?? "list";
+    if (sub === "suggest") return suggest(ctx);
+    if (sub === "run") return runCmd(ctx);
+    if (sub === "list" || sub === "validate") {
+      const specs = loadJourneys(ctx.ws, ctx.positionals.slice(1));
+      return {
+        data: specs,
+        text: specs.length ? `${specs.length} valid journey(s):
+${specs.map((s) => `  ${s.id.padEnd(32)} ${s.steps.length} steps, ${s.success.length} criteria  ${s.name}`).join("\n")}` : `No journeys in ${journeysDir(ctx.ws)}. Create some with \`jourilo journeys suggest <url>\`.`
+      };
+    }
+    throw new JouriloError("USAGE", `Unknown subcommand "${sub}".`, `Usage: ${journeys.usage}`);
   }
 };
 
@@ -42681,7 +43910,7 @@ var serve = {
     const server = await serveStatic(dir, Number(str(ctx, "port") ?? 4173));
     process.stderr.write(`Serving ${dir} at ${server.url} (Ctrl+C to stop)
 `);
-    await new Promise((resolve5) => process.once("SIGINT", () => resolve5()));
+    await new Promise((resolve6) => process.once("SIGINT", () => resolve6()));
     await server.close();
     return { data: { url: server.url }, text: "Stopped." };
   }
@@ -42692,6 +43921,7 @@ var COMMANDS = [
   audit,
   accessibility,
   conversion,
+  journeys,
   report,
   compare,
   runs,
@@ -42702,6 +43932,7 @@ var COMMANDS = [
 ];
 var GROUPS = [
   ["Audit", ["audit", "accessibility", "conversion"]],
+  ["Journeys", ["journeys"]],
   ["Results", ["report", "compare", "runs"]],
   ["System", ["bench", "serve", "setup", "doctor"]]
 ];

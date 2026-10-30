@@ -226,6 +226,14 @@ export function tokensFor(f: Finding): Token[] {
         route: true,
       });
       break;
+    case 'jourilo/paste-blocked':
+      add({
+        value: 'onpaste',
+        weight: 10,
+        reason: 'cancels paste events',
+        regex: /onpaste\s*=|addEventListener\(\s*['"]paste['"]|onPaste\s*=/i,
+      });
+      break;
     case 'axe/meta-viewport':
       add({
         value: 'user-scalable',
