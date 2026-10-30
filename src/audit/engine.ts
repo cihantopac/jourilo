@@ -38,6 +38,7 @@ import {
   axeFindings,
   keyboardFindings,
   measuredA11yFindings,
+  structureFindings,
   widgetFindings,
 } from './rules/accessibility.js';
 import { performanceFindings, reliabilityFindings, responsiveFindings } from './rules/experience.js';
@@ -48,6 +49,7 @@ export const PAGE_RULES: Record<string, Rule> = {
   axe: axeFindings,
   keyboard: keyboardFindings,
   widgets: widgetFindings,
+  structure: structureFindings,
   measuredA11y: measuredA11yFindings,
   responsive: responsiveFindings,
   reliability: reliabilityFindings,

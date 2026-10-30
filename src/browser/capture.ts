@@ -89,6 +89,12 @@ export interface ProbeResult {
   };
   clickable: { selector: string; rect: Rect; name: string; tag: string }[];
   pasteBlocked?: { selector: string; rect: Rect; type: string }[];
+  structure?: {
+    fieldsets: { selector: string; rect: Rect; issue: string }[];
+    radioGroups: { name: string; selector: string; rect: Rect; count: number }[];
+    tables: { selector: string; rect: Rect; rows: number; cols: number }[];
+    altTitle: { selector: string; rect: Rect; title: string }[];
+  };
   scroll: { height: number; width: number };
 }
 

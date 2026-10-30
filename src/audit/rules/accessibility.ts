@@ -1,7 +1,7 @@
 // Accessibility rules: axe-core results mapped to findings, plus Jourilo's own measured checks for things axe
 // does not cover from a static DOM scan (keyboard focus behavior, real tab order, input purpose).
 import type { PageObservation } from '../../browser/capture.js';
-import type { Evidence, Finding, Severity } from '../../core/types.js';
+import type { Evidence, Finding, Rect, Severity } from '../../core/types.js';
 import { makeFinding } from '../finding.js';
 import { nielsen, wcag, wcagFromAxeTags } from '../standards.js';
 
@@ -515,6 +515,32 @@ const WIDGET_RULES: Record<
     recommendation: 'Store the element that opened the dialog and focus it again when the dialog closes.',
     standards: [wcag('2.4.3')],
   },
+  'dialog-focus-escapes': {
+    ruleId: 'jourilo/dialog-focus-containment',
+    title: 'Keyboard focus leaves an open dialog',
+    severity: 'serious',
+    impact: 'Keyboard users tab into the page hidden behind the overlay and lose track of where they are.',
+    recommendation:
+      'Keep focus inside a modal dialog while it is open (native <dialog>.showModal() or inert on the rest of the page).',
+    standards: [
+      wcag('2.4.3'),
+      {
+        standard: 'WAI-ARIA APG',
+        id: 'dialog-modal',
+        title: 'Dialog (Modal) Pattern',
+        url: 'https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/',
+      },
+    ],
+  },
+  'dialog-no-role': {
+    ruleId: 'jourilo/dialog-role',
+    title: 'Overlay opens without a dialog role',
+    severity: 'serious',
+    impact: 'Screen-reader users are not told that a dialog opened, or what it is.',
+    recommendation:
+      'Use <dialog> (showModal) or role="dialog" with aria-modal="true" and an accessible name (aria-labelledby).',
+    standards: [wcag('4.1.2')],
+  },
   'expanded-state-mismatch': {
     ruleId: 'jourilo/expanded-state',
     title: 'aria-expanded does not match what is shown',
@@ -564,4 +590,109 @@ export function widgetFindings(obs: PageObservation): Finding[] {
       ],
     });
   });
+}
+
+export function structureFindings(obs: PageObservation): Finding[] {
+  const st = obs.probe?.structure;
+  if (!st) return [];
+  const out: Finding[] = [];
+  const vp = obs.viewport.name;
+  const shot = obs.screenshot ? { file: obs.screenshot } : {};
+  const ev = (list: { selector: string; rect: Rect }[], snippet: (i: number) => string) =>
+    list
+      .slice(0, 10)
+      .map((x, i) => ({
+        type: 'element' as const,
+        selector: x.selector,
+        rect: x.rect,
+        snippet: snippet(i),
+        ...shot,
+      }));
+  if (st.fieldsets.length)
+    out.push(
+      makeFinding({
+        ruleId: 'jourilo/fieldset-legend',
+        title: 'Fieldset without a legend',
+        category: 'accessibility',
+        kind: 'defect',
+        severity: 'moderate',
+        confidence: 'high',
+        provenance: 'measured',
+        url: obs.url,
+        viewport: vp,
+        description: `${st.fieldsets.length} fieldset(s) have no legend or an empty one, so the group of fields has no name.`,
+        impact:
+          'Screen-reader users hear the fields without the question they answer (e.g. "Yes / No" without "Do you have a passport?").',
+        recommendation:
+          'Give every fieldset a first-child <legend> with the group question; remove fieldsets used only for styling.',
+        standards: [wcag('1.3.1'), wcag('3.3.2')],
+        evidence: ev(st.fieldsets, (i) => st.fieldsets[i]!.issue),
+        occurrences: st.fieldsets.length,
+      }),
+    );
+  if (st.radioGroups.length)
+    out.push(
+      makeFinding({
+        ruleId: 'jourilo/radio-group',
+        title: 'Radio buttons are not grouped with a name',
+        category: 'accessibility',
+        kind: 'defect',
+        severity: 'moderate',
+        confidence: 'medium',
+        provenance: 'measured',
+        url: obs.url,
+        viewport: vp,
+        description: `${st.radioGroups.length} set(s) of radio buttons (${st.radioGroups.map((g) => `name="${g.name}" ×${g.count}`).join(', ')}) are not inside a fieldset with a legend or a named radiogroup.`,
+        impact: 'The options are announced without the question they belong to.',
+        recommendation:
+          'Wrap each set in <fieldset> with a <legend> (or role="radiogroup" with aria-labelledby).',
+        standards: [wcag('1.3.1')],
+        evidence: ev(st.radioGroups, (i) => `name="${st.radioGroups[i]!.name}"`),
+        occurrences: st.radioGroups.length,
+      }),
+    );
+  if (st.tables.length)
+    out.push(
+      makeFinding({
+        ruleId: 'jourilo/table-headers',
+        title: 'Data table without header cells',
+        category: 'accessibility',
+        kind: 'defect',
+        severity: 'moderate',
+        confidence: 'medium',
+        provenance: 'measured',
+        url: obs.url,
+        viewport: vp,
+        description: `${st.tables.length} table(s) with at least 2×2 cells have no <th> (or header roles). If they hold data, their cells cannot be related to headers; if they are only for layout, mark them role="presentation".`,
+        impact:
+          'Screen-reader users hear a stream of values without knowing which row or column they belong to.',
+        recommendation:
+          'Use <th scope="col"> / <th scope="row"> for headers; use CSS instead of tables for layout.',
+        standards: [wcag('1.3.1')],
+        evidence: ev(st.tables, (i) => `${st.tables[i]!.rows}×${st.tables[i]!.cols} table`),
+        occurrences: st.tables.length,
+      }),
+    );
+  if (st.altTitle.length)
+    out.push(
+      makeFinding({
+        ruleId: 'jourilo/empty-alt-with-title',
+        title: 'Image marked decorative but described in its title',
+        category: 'accessibility',
+        kind: 'defect',
+        severity: 'minor',
+        confidence: 'medium',
+        provenance: 'measured',
+        url: obs.url,
+        viewport: vp,
+        description: `${st.altTitle.length} image(s) have alt="" (decorative) but a non-empty title, which suggests they carry meaning (e.g. "${st.altTitle[0]!.title}").`,
+        impact: 'Screen readers skip the image, while sighted mouse users get the information as a tooltip.',
+        recommendation:
+          'If the image is informative, move the text into alt; if it is decorative, remove the title.',
+        standards: [wcag('1.1.1')],
+        evidence: ev(st.altTitle, (i) => `title="${st.altTitle[i]!.title}"`),
+        occurrences: st.altTitle.length,
+      }),
+    );
+  return out;
 }

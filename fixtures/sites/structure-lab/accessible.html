@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font:16px/1.5 system-ui,sans-serif;color:#111827;margin:0}main{max-width:720px;margin:0 auto;padding:24px 16px}a:focus-visible,input:focus-visible,button:focus-visible{outline:3px solid #1d4ed8}button{font:inherit;padding:10px 16px}</style><title>Accessible structure – Structure lab</title></head><body><main>
+<h1>Delivery preferences</h1>
+<form action="/accessible" method="get">
+  <fieldset><legend>Delivery options</legend><label><input type="checkbox" name="fast"> Express</label> <label><input type="checkbox" name="gift"> Gift wrap</label></fieldset>
+  <fieldset><legend>Leave at the door?</legend>
+    <label><input type="radio" name="door" value="yes"> Yes</label>
+    <label><input type="radio" name="door" value="no"> No</label>
+  </fieldset>
+  <p><button type="submit">Save preferences</button></p>
+</form>
+<h2>Delivery times</h2>
+<table><caption>Delivery times by zone</caption><tr><th scope="col">Zone</th><th scope="col">Days</th></tr><tr><th scope="row">City</th><td>1</td></tr><tr><th scope="row">Rural</th><td>3</td></tr></table>
+<table role="presentation"><tr><td>Need help?</td><td><a href="/">Contact us</a></td></tr></table>
+<p><img src="/van.svg" alt="Our electric delivery van" width="160" height="80"></p>
+<p><img src="/van.svg" alt="" width="40" height="20"></p>
+</main></body></html>

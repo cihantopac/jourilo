@@ -408,6 +408,58 @@
   ];
   const pricingSignals = PRICING.filter(([, re]) => re.test(lower)).map(([n]) => n);
 
+  // ---- Structure of forms, tables and images (WCAG 1.3.1, 1.1.1) ----
+  const structure = { fieldsets: [], radioGroups: [], tables: [], altTitle: [] };
+  for (const fs of document.querySelectorAll('fieldset')) {
+    if (!isVisible(fs)) continue;
+    const legend = fs.querySelector(':scope > legend');
+    if (!legend || !text(legend))
+      structure.fieldsets.push({
+        selector: selectorOf(fs),
+        rect: rectOf(fs),
+        issue: legend ? 'empty legend' : 'no legend',
+      });
+  }
+  const radiosByName = new Map();
+  for (const r of document.querySelectorAll('input[type="radio"][name]')) {
+    if (!isVisible(r)) continue;
+    const list = radiosByName.get(r.name) || [];
+    list.push(r);
+    radiosByName.set(r.name, list);
+  }
+  for (const [name, list] of radiosByName) {
+    if (list.length < 2) continue;
+    const grouped = list.every((r) => {
+      const fs = r.closest('fieldset');
+      if (fs?.querySelector(':scope > legend') && text(fs.querySelector(':scope > legend'))) return true;
+      const g = r.closest('[role="radiogroup"], [role="group"]');
+      return !!g && !!(g.getAttribute('aria-label') || g.getAttribute('aria-labelledby'));
+    });
+    if (!grouped)
+      structure.radioGroups.push({
+        name,
+        selector: selectorOf(list[0]),
+        rect: rectOf(list[0]),
+        count: list.length,
+      });
+  }
+  for (const t of document.querySelectorAll('table')) {
+    if (!isVisible(t) || /^(presentation|none)$/.test(t.getAttribute('role') || '')) continue;
+    const rows = t.rows.length;
+    const cols = Math.max(0, ...Array.from(t.rows).map((r) => r.cells.length));
+    if (rows >= 2 && cols >= 2 && !t.querySelector('th, [role="columnheader"], [role="rowheader"]'))
+      structure.tables.push({ selector: selectorOf(t), rect: rectOf(t), rows, cols });
+  }
+  for (const img of document.images) {
+    if (!isVisible(img)) continue;
+    if (img.getAttribute('alt') === '' && (img.getAttribute('title') || '').trim())
+      structure.altTitle.push({
+        selector: selectorOf(img),
+        rect: rectOf(img),
+        title: img.getAttribute('title').trim().slice(0, 80),
+      });
+  }
+
   // ---- Style samples for design-system checks (computed values, visible elements only) ----
   const firstFont = (ff) =>
     ff
@@ -490,6 +542,7 @@
   );
 
   return {
+    structure,
     styles,
     tech,
     scriptHosts,

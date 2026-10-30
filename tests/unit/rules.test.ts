@@ -350,3 +350,24 @@ describe('repeated lab runs', () => {
     expect(lcp.note).toContain('Median of 3 runs (range 1000–3000)');
   });
 });
+
+describe('structure rules', () => {
+  it('reports fieldsets, radio groups, header-less tables and alt/title conflicts', async () => {
+    const { structureFindings } = await import('../../src/audit/rules/accessibility.js');
+    const p = probe({
+      structure: {
+        fieldsets: [{ selector: 'fieldset', rect, issue: 'no legend' }],
+        radioGroups: [{ name: 'door', selector: 'input', rect, count: 2 }],
+        tables: [{ selector: 'table', rect, rows: 3, cols: 2 }],
+        altTitle: [{ selector: 'img', rect, title: 'Van' }],
+      },
+    });
+    expect(structureFindings(obs({ probe: p })).map((f) => [f.ruleId, f.standards[0]!.id])).toEqual([
+      ['jourilo/fieldset-legend', '1.3.1'],
+      ['jourilo/radio-group', '1.3.1'],
+      ['jourilo/table-headers', '1.3.1'],
+      ['jourilo/empty-alt-with-title', '1.1.1'],
+    ]);
+    expect(structureFindings(obs())).toEqual([]);
+  });
+});

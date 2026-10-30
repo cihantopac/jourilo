@@ -39917,6 +39917,58 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
   ];
   const pricingSignals = PRICING.filter(([, re]) => re.test(lower)).map(([n]) => n);
 
+  // ---- Structure of forms, tables and images (WCAG 1.3.1, 1.1.1) ----
+  const structure = { fieldsets: [], radioGroups: [], tables: [], altTitle: [] };
+  for (const fs of document.querySelectorAll('fieldset')) {
+    if (!isVisible(fs)) continue;
+    const legend = fs.querySelector(':scope > legend');
+    if (!legend || !text(legend))
+      structure.fieldsets.push({
+        selector: selectorOf(fs),
+        rect: rectOf(fs),
+        issue: legend ? 'empty legend' : 'no legend',
+      });
+  }
+  const radiosByName = new Map();
+  for (const r of document.querySelectorAll('input[type="radio"][name]')) {
+    if (!isVisible(r)) continue;
+    const list = radiosByName.get(r.name) || [];
+    list.push(r);
+    radiosByName.set(r.name, list);
+  }
+  for (const [name, list] of radiosByName) {
+    if (list.length < 2) continue;
+    const grouped = list.every((r) => {
+      const fs = r.closest('fieldset');
+      if (fs?.querySelector(':scope > legend') && text(fs.querySelector(':scope > legend'))) return true;
+      const g = r.closest('[role="radiogroup"], [role="group"]');
+      return !!g && !!(g.getAttribute('aria-label') || g.getAttribute('aria-labelledby'));
+    });
+    if (!grouped)
+      structure.radioGroups.push({
+        name,
+        selector: selectorOf(list[0]),
+        rect: rectOf(list[0]),
+        count: list.length,
+      });
+  }
+  for (const t of document.querySelectorAll('table')) {
+    if (!isVisible(t) || /^(presentation|none)$/.test(t.getAttribute('role') || '')) continue;
+    const rows = t.rows.length;
+    const cols = Math.max(0, ...Array.from(t.rows).map((r) => r.cells.length));
+    if (rows >= 2 && cols >= 2 && !t.querySelector('th, [role="columnheader"], [role="rowheader"]'))
+      structure.tables.push({ selector: selectorOf(t), rect: rectOf(t), rows, cols });
+  }
+  for (const img of document.images) {
+    if (!isVisible(img)) continue;
+    if (img.getAttribute('alt') === '' && (img.getAttribute('title') || '').trim())
+      structure.altTitle.push({
+        selector: selectorOf(img),
+        rect: rectOf(img),
+        title: img.getAttribute('title').trim().slice(0, 80),
+      });
+  }
+
   // ---- Style samples for design-system checks (computed values, visible elements only) ----
   const firstFont = (ff) =>
     ff
@@ -39999,6 +40051,7 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
   );
 
   return {
+    structure,
     styles,
     tech,
     scriptHosts,
@@ -40372,6 +40425,7 @@ function isSecretValue(raw) {
 }
 
 // src/browser/widgets.ts
+var AVOID = /(?<![\p{L}])(add to (cart|basket|bag)|sepete ekle|in den warenkorb|añadir al carrito|ajouter au panier|like|beğen|follow|takip et|vote|oy ver|log ?out|sign ?out|çıkış yap|abmelden|cerrar sesión|déconnexion)(?![\p{L}])/iu;
 var TRIGGERS = `(() => {
   const sel = (e) => {
     if (e.id && document.querySelectorAll('#' + CSS.escape(e.id)).length === 1) return '#' + CSS.escape(e.id);
@@ -40384,7 +40438,7 @@ var TRIGGERS = `(() => {
     }
     return parts.join(' > ');
   };
-  return Array.from(document.querySelectorAll('[aria-haspopup]:not([aria-haspopup="false"]), [aria-expanded]'))
+  return Array.from(document.querySelectorAll('[aria-haspopup]:not([aria-haspopup="false"]), [aria-expanded], [aria-controls], a[href="#"], a[href^="#"]:not([href="#main"]):not([href^="#content"]), a[href^="javascript:"]'))
     .filter((e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden' && !e.disabled && /^(BUTTON|A|SUMMARY)$|^button$/i.test(e.tagName === 'DIV' || e.tagName === 'SPAN' ? (e.getAttribute('role') || '') : e.tagName))
     .slice(0, 8)
     .map((e) => {
@@ -40393,21 +40447,43 @@ var TRIGGERS = `(() => {
         selector: sel(e),
         name: (e.getAttribute('aria-label') || e.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 80),
         popup: e.getAttribute('aria-haspopup'),
+        inPageLink: e.tagName === 'A' && !e.hasAttribute('aria-haspopup') && !e.hasAttribute('aria-expanded'),
         expanded: e.getAttribute('aria-expanded'),
         controls: e.getAttribute('aria-controls'),
         rect: { x: Math.round(r.left + scrollX), y: Math.round(r.top + scrollY), width: Math.round(r.width), height: Math.round(r.height) },
       };
     });
 })()`;
+var SNAPSHOT_LAYERS = `(() => {
+  const big = (e) => { const r = e.getBoundingClientRect(); return r.width * r.height >= innerWidth * innerHeight * 0.02; };
+  const layers = Array.from(document.querySelectorAll('body *')).filter((e) => {
+    const cs = getComputedStyle(e);
+    return (cs.position === 'fixed' || cs.position === 'absolute') && e.getClientRects().length > 0 && cs.visibility !== 'hidden' && big(e);
+  });
+  window.__jouriloLayers = new Set(layers);
+})()`;
 var STATE = `(controls) => {
   const visible = (e) => !!e && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
   const dialogs = Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"], dialog[open], [aria-modal="true"]')).filter(visible);
-  const d = dialogs[dialogs.length - 1] || null;
+  let d = dialogs[dialogs.length - 1] || null;
+  let unlabelled = false;
+  if (!d && window.__jouriloLayers) {
+    const big = (e) => { const r = e.getBoundingClientRect(); return r.width * r.height >= innerWidth * innerHeight * 0.02; };
+    const fresh = Array.from(document.querySelectorAll('body *')).filter((e) => {
+      const cs = getComputedStyle(e);
+      return (cs.position === 'fixed' || cs.position === 'absolute') && visible(e) && big(e) && !window.__jouriloLayers.has(e);
+    });
+    const outer = fresh.filter((e) => !fresh.some((o) => o !== e && o.contains(e)));
+    if (outer.length) { d = outer[outer.length - 1]; unlabelled = true; }
+  }
   const ae = document.activeElement;
   const controlled = controls ? controls.split(/\\s+/).map((id) => document.getElementById(id)).filter(Boolean) : [];
+  const focusables = d ? Array.from(d.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])')).filter(visible).length : 0;
   return {
     dialogOpen: !!d,
+    unlabelled,
     focusInDialog: !!d && !!ae && d.contains(ae),
+    focusables,
     controlledVisible: controlled.length ? controlled.some(visible) : null,
     activeSelector: ae && ae !== document.body ? (ae.id ? '#' + ae.id : ae.tagName.toLowerCase()) : null,
   };
@@ -40417,8 +40493,9 @@ async function checkWidgets(page) {
   const out = { triggers: triggers.length, dialogs: 0, disclosures: 0, issues: [] };
   const state = (controls) => page.evaluate(`(${STATE})(${JSON.stringify(controls)})`);
   for (const t of triggers) {
-    if (DESTRUCTIVE.test(t.name) || FINANCIAL.test(t.name)) continue;
+    if (DESTRUCTIVE.test(t.name) || FINANCIAL.test(t.name) || AVOID.test(t.name)) continue;
     const loc = page.locator(t.selector).first();
+    await page.evaluate(SNAPSHOT_LAYERS).catch(() => void 0);
     const before = await state(t.controls);
     if (before.dialogOpen) break;
     try {
@@ -40432,37 +40509,40 @@ async function checkWidgets(page) {
     const expandedAfter = await loc.getAttribute("aria-expanded").catch(() => null);
     if (after.dialogOpen && !before.dialogOpen) {
       out.dialogs++;
-      if (!after.focusInDialog)
-        out.issues.push({
-          kind: "dialog-focus-not-moved",
-          trigger: t.selector,
-          name: t.name,
-          rect: t.rect,
-          detail: `After opening, focus stayed on ${after.activeSelector ?? "the page"} instead of moving into the dialog.`
-        });
+      const issue = (kind, detail) => out.issues.push({ kind, trigger: t.selector, name: t.name, rect: t.rect, detail });
+      if (after.unlabelled)
+        issue(
+          "dialog-no-role",
+          'An overlay opened without role="dialog" (or <dialog>), so assistive technology does not announce it as a dialog.'
+        );
+      if (!after.focusInDialog) {
+        issue(
+          "dialog-focus-not-moved",
+          `After opening, focus stayed on ${after.activeSelector ?? "the page"} instead of moving into the dialog.`
+        );
+      } else {
+        for (let k = 0; k <= after.focusables; k++) await page.keyboard.press("Tab");
+        const tabbed = await state(t.controls);
+        if (tabbed.dialogOpen && !tabbed.focusInDialog)
+          issue(
+            "dialog-focus-escapes",
+            `Pressing Tab ${after.focusables + 1} time(s) moved focus out of the open dialog to ${tabbed.activeSelector ?? "the page"}.`
+          );
+      }
       await page.keyboard.press("Escape");
       await page.waitForTimeout(300);
       const closed = await state(t.controls);
       if (closed.dialogOpen) {
-        out.issues.push({
-          kind: "dialog-escape",
-          trigger: t.selector,
-          name: t.name,
-          rect: t.rect,
-          detail: "Pressing Escape did not close the dialog."
-        });
+        issue("dialog-escape", "Pressing Escape did not close the dialog.");
         await page.reload({ waitUntil: "load" }).catch(() => void 0);
         continue;
       }
       const backOnTrigger = await loc.evaluate((el) => el === document.activeElement).catch(() => false);
       if (!backOnTrigger)
-        out.issues.push({
-          kind: "dialog-focus-not-returned",
-          trigger: t.selector,
-          name: t.name,
-          rect: t.rect,
-          detail: `After closing, focus went to ${closed.activeSelector ?? "the start of the page"} instead of back to the button that opened the dialog.`
-        });
+        issue(
+          "dialog-focus-not-returned",
+          `After closing, focus went to ${closed.activeSelector ?? "the start of the page"} instead of back to the control that opened the dialog.`
+        );
       continue;
     }
     if (t.expanded !== null && t.controls && after.controlledVisible !== null) {
@@ -42396,6 +42476,30 @@ var WIDGET_RULES = {
     recommendation: "Store the element that opened the dialog and focus it again when the dialog closes.",
     standards: [wcag("2.4.3")]
   },
+  "dialog-focus-escapes": {
+    ruleId: "jourilo/dialog-focus-containment",
+    title: "Keyboard focus leaves an open dialog",
+    severity: "serious",
+    impact: "Keyboard users tab into the page hidden behind the overlay and lose track of where they are.",
+    recommendation: "Keep focus inside a modal dialog while it is open (native <dialog>.showModal() or inert on the rest of the page).",
+    standards: [
+      wcag("2.4.3"),
+      {
+        standard: "WAI-ARIA APG",
+        id: "dialog-modal",
+        title: "Dialog (Modal) Pattern",
+        url: "https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/"
+      }
+    ]
+  },
+  "dialog-no-role": {
+    ruleId: "jourilo/dialog-role",
+    title: "Overlay opens without a dialog role",
+    severity: "serious",
+    impact: "Screen-reader users are not told that a dialog opened, or what it is.",
+    recommendation: 'Use <dialog> (showModal) or role="dialog" with aria-modal="true" and an accessible name (aria-labelledby).',
+    standards: [wcag("4.1.2")]
+  },
   "expanded-state-mismatch": {
     ruleId: "jourilo/expanded-state",
     title: "aria-expanded does not match what is shown",
@@ -42443,6 +42547,101 @@ function widgetFindings(obs) {
       ]
     });
   });
+}
+function structureFindings(obs) {
+  const st = obs.probe?.structure;
+  if (!st) return [];
+  const out = [];
+  const vp = obs.viewport.name;
+  const shot = obs.screenshot ? { file: obs.screenshot } : {};
+  const ev = (list2, snippet) => list2.slice(0, 10).map((x, i) => ({
+    type: "element",
+    selector: x.selector,
+    rect: x.rect,
+    snippet: snippet(i),
+    ...shot
+  }));
+  if (st.fieldsets.length)
+    out.push(
+      makeFinding({
+        ruleId: "jourilo/fieldset-legend",
+        title: "Fieldset without a legend",
+        category: "accessibility",
+        kind: "defect",
+        severity: "moderate",
+        confidence: "high",
+        provenance: "measured",
+        url: obs.url,
+        viewport: vp,
+        description: `${st.fieldsets.length} fieldset(s) have no legend or an empty one, so the group of fields has no name.`,
+        impact: 'Screen-reader users hear the fields without the question they answer (e.g. "Yes / No" without "Do you have a passport?").',
+        recommendation: "Give every fieldset a first-child <legend> with the group question; remove fieldsets used only for styling.",
+        standards: [wcag("1.3.1"), wcag("3.3.2")],
+        evidence: ev(st.fieldsets, (i) => st.fieldsets[i].issue),
+        occurrences: st.fieldsets.length
+      })
+    );
+  if (st.radioGroups.length)
+    out.push(
+      makeFinding({
+        ruleId: "jourilo/radio-group",
+        title: "Radio buttons are not grouped with a name",
+        category: "accessibility",
+        kind: "defect",
+        severity: "moderate",
+        confidence: "medium",
+        provenance: "measured",
+        url: obs.url,
+        viewport: vp,
+        description: `${st.radioGroups.length} set(s) of radio buttons (${st.radioGroups.map((g) => `name="${g.name}" \xD7${g.count}`).join(", ")}) are not inside a fieldset with a legend or a named radiogroup.`,
+        impact: "The options are announced without the question they belong to.",
+        recommendation: 'Wrap each set in <fieldset> with a <legend> (or role="radiogroup" with aria-labelledby).',
+        standards: [wcag("1.3.1")],
+        evidence: ev(st.radioGroups, (i) => `name="${st.radioGroups[i].name}"`),
+        occurrences: st.radioGroups.length
+      })
+    );
+  if (st.tables.length)
+    out.push(
+      makeFinding({
+        ruleId: "jourilo/table-headers",
+        title: "Data table without header cells",
+        category: "accessibility",
+        kind: "defect",
+        severity: "moderate",
+        confidence: "medium",
+        provenance: "measured",
+        url: obs.url,
+        viewport: vp,
+        description: `${st.tables.length} table(s) with at least 2\xD72 cells have no <th> (or header roles). If they hold data, their cells cannot be related to headers; if they are only for layout, mark them role="presentation".`,
+        impact: "Screen-reader users hear a stream of values without knowing which row or column they belong to.",
+        recommendation: 'Use <th scope="col"> / <th scope="row"> for headers; use CSS instead of tables for layout.',
+        standards: [wcag("1.3.1")],
+        evidence: ev(st.tables, (i) => `${st.tables[i].rows}\xD7${st.tables[i].cols} table`),
+        occurrences: st.tables.length
+      })
+    );
+  if (st.altTitle.length)
+    out.push(
+      makeFinding({
+        ruleId: "jourilo/empty-alt-with-title",
+        title: "Image marked decorative but described in its title",
+        category: "accessibility",
+        kind: "defect",
+        severity: "minor",
+        confidence: "medium",
+        provenance: "measured",
+        url: obs.url,
+        viewport: vp,
+        description: `${st.altTitle.length} image(s) have alt="" (decorative) but a non-empty title, which suggests they carry meaning (e.g. "${st.altTitle[0].title}").`,
+        impact: "Screen readers skip the image, while sighted mouse users get the information as a tooltip.",
+        recommendation: "If the image is informative, move the text into alt; if it is decorative, remove the title.",
+        standards: [wcag("1.1.1")],
+        evidence: ev(st.altTitle, (i) => `title="${st.altTitle[i].title}"`),
+        occurrences: st.altTitle.length
+      })
+    );
+  return out;
 }
 
 // src/audit/rules/experience.ts
@@ -42748,6 +42947,7 @@ var PAGE_RULES = {
   axe: axeFindings,
   keyboard: keyboardFindings,
   widgets: widgetFindings,
+  structure: structureFindings,
   measuredA11y: measuredA11yFindings,
   responsive: responsiveFindings,
   reliability: reliabilityFindings,
