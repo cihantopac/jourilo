@@ -275,6 +275,10 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         `${opts.browser} does not expose ${unsupported.map((t) => names[t] ?? t).join(', ')}: those metrics (and checks that depend on them, such as layout shift from unsized images) were not measured. Use Chromium for performance.`,
       );
     }
+    if (observations.some((o) => o.keyboard?.skipsLinks))
+      limitations.push(
+        `${opts.browser} on this platform does not move keyboard focus to links with Tab or Alt+Tab: the keyboard walk covered buttons and form controls only, so focus checks on links (visibility, obscuring, order) were not run. Use Chromium or Firefox for the full keyboard walk.`,
+      );
     if (opts.throttle)
       limitations.push(
         'Throttling simulated a mid-range mobile network and 4× CPU slowdown (Chromium only).',

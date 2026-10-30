@@ -22,6 +22,8 @@ export interface KeyboardWalk {
   completedCycle: boolean;
   trap: { selectors: string[] } | null;
   pressed: number;
+  // The browser build has no key that moves focus to links, so links were not part of the walk.
+  skipsLinks?: boolean;
 }
 
 // Plain JS evaluated in the page; returns data about the element (or null for body/document).
@@ -94,12 +96,15 @@ const IS_LAST_TABBABLE = `(el) => {
   return all.length > 0 && all[all.length - 1] === el;
 }`;
 
-// After one Tab from the top: did focus skip the document's first link or button (Safari's default behavior)?
-const TAB_SKIPS_LINKS = `(() => {
+// Where focus is after a key press from the top: on the document's first link or button, somewhere else, or nowhere
+// (some builds focus the page itself on the first press).
+const FIRST_STOP_STATE = `(() => {
   const first = Array.from(document.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])'))
     .find((e) => !e.disabled && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden' && !(e.tabIndex > 0));
-  if (!first || !/^(A|BUTTON)$/.test(first.tagName)) return false;
-  return document.activeElement !== first;
+  const active = document.activeElement;
+  if (!active || active === document.body || active === document.documentElement) return 'none';
+  if (!first || !/^(A|BUTTON)$/.test(first.tagName)) return 'n/a';
+  return active === first ? 'first' : 'other';
 })()`;
 
 // Focuses the first focusable element after the trapped ones (in document order, outside their container).
@@ -140,16 +145,29 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
   });
 
   // WebKit on macOS follows Safari's default, where Tab skips links and buttons and Option+Tab visits every
-  // focusable element (what a keyboard-only user enables). Other WebKit builds (Windows, Linux) tab through links
-  // normally, and Alt+Tab can mean something else there. Decide by observing the first Tab press.
+  // focusable element (what a keyboard-only user enables). Other WebKit builds behave differently, so observe which
+  // key reaches the document's first link or button from the top and walk with that one.
   let tabKey = 'Tab';
   if (page.context().browser()?.browserType().name() === 'webkit') {
-    await page.keyboard.press('Tab');
-    const skipsLinks = (await page.evaluate(TAB_SKIPS_LINKS).catch(() => false)) as boolean;
-    if (skipsLinks) tabKey = 'Alt+Tab';
-    await page.evaluate(
-      '(() => { document.activeElement && document.activeElement.blur && document.activeElement.blur(); window.scrollTo(0, 0); })()',
-    );
+    const reset =
+      '(() => { document.activeElement && document.activeElement.blur && document.activeElement.blur(); window.scrollTo(0, 0); })()';
+    const probes: string[] = [];
+    for (const key of ['Tab', 'Alt+Tab']) {
+      let state = 'none';
+      for (let k = 0; k < 2 && state === 'none'; k++) {
+        await page.keyboard.press(key);
+        state = (await page.evaluate(FIRST_STOP_STATE).catch(() => 'n/a')) as string;
+      }
+      await page.evaluate(reset);
+      probes.push(`${key}=${state}`);
+      if (state === 'first' || state === 'n/a') {
+        tabKey = key;
+        break;
+      }
+    }
+    if (probes.every((p) => p.endsWith('=other'))) walk.skipsLinks = true;
+    if (process.env.JOURILO_DEBUG?.includes('keyboard'))
+      process.stderr.write(`[keyboard] webkit key probe ${probes.join(' ')} -> ${tabKey}\n`);
   }
   let escaped = false;
   for (let i = 0; i < limit; i++) {

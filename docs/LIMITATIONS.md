@@ -9,7 +9,8 @@ Stated so nobody mistakes silence for a pass.
 | macOS, Node 20 and 22          | GitHub Actions: all tests pass (unit, Chromium/Firefox/WebKit browser tests, repair loop); also tested locally on Apple Silicon |
 | Linux (Ubuntu), Node 20 and 22 | GitHub Actions: all tests pass; detection benchmark passes                                                                      |
 | Windows, Node 20 and 22        | GitHub Actions: all tests pass (after making rollback byte-exact under `core.autocrlf=true`)                                    |
-| Chromium, Firefox, WebKit      | fixture audits find every seeded defect in all three; journeys and forms are tested in Chromium only                            |
+| Chromium, Firefox, WebKit      | fixture audits, journeys, signed-in audits and form checks give identical results in all three (tested on every CI platform)    |
+| WebKit on Windows              | neither Tab nor Alt+Tab focuses links, so link focus checks are not run; the report states this as a limitation                 |
 
 ## Accessibility
 

@@ -40170,11 +40170,13 @@ var IS_LAST_TABBABLE = `(el) => {
     .filter((e) => !e.disabled && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden');
   return all.length > 0 && all[all.length - 1] === el;
 }`;
-var TAB_SKIPS_LINKS = `(() => {
+var FIRST_STOP_STATE = `(() => {
   const first = Array.from(document.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])'))
     .find((e) => !e.disabled && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden' && !(e.tabIndex > 0));
-  if (!first || !/^(A|BUTTON)$/.test(first.tagName)) return false;
-  return document.activeElement !== first;
+  const active = document.activeElement;
+  if (!active || active === document.body || active === document.documentElement) return 'none';
+  if (!first || !/^(A|BUTTON)$/.test(first.tagName)) return 'n/a';
+  return active === first ? 'first' : 'other';
 })()`;
 var ESCAPE_TRAP = `(sels) => {
   const trapped = sels.map((s) => document.querySelector(s)).filter(Boolean);
@@ -40210,12 +40212,25 @@ async function keyboardWalk(page, maxTabs = 60) {
   });
   let tabKey = "Tab";
   if (page.context().browser()?.browserType().name() === "webkit") {
-    await page.keyboard.press("Tab");
-    const skipsLinks = await page.evaluate(TAB_SKIPS_LINKS).catch(() => false);
-    if (skipsLinks) tabKey = "Alt+Tab";
-    await page.evaluate(
-      "(() => { document.activeElement && document.activeElement.blur && document.activeElement.blur(); window.scrollTo(0, 0); })()"
-    );
+    const reset = "(() => { document.activeElement && document.activeElement.blur && document.activeElement.blur(); window.scrollTo(0, 0); })()";
+    const probes = [];
+    for (const key of ["Tab", "Alt+Tab"]) {
+      let state = "none";
+      for (let k = 0; k < 2 && state === "none"; k++) {
+        await page.keyboard.press(key);
+        state = await page.evaluate(FIRST_STOP_STATE).catch(() => "n/a");
+      }
+      await page.evaluate(reset);
+      probes.push(`${key}=${state}`);
+      if (state === "first" || state === "n/a") {
+        tabKey = key;
+        break;
+      }
+    }
+    if (probes.every((p) => p.endsWith("=other"))) walk2.skipsLinks = true;
+    if (process.env.JOURILO_DEBUG?.includes("keyboard"))
+      process.stderr.write(`[keyboard] webkit key probe ${probes.join(" ")} -> ${tabKey}
+`);
   }
   let escaped = false;
   for (let i = 0; i < limit; i++) {
@@ -43164,6 +43179,10 @@ async function runAudit(ws, opts) {
         `${opts.browser} does not expose ${unsupported.map((t) => names[t] ?? t).join(", ")}: those metrics (and checks that depend on them, such as layout shift from unsized images) were not measured. Use Chromium for performance.`
       );
     }
+    if (observations.some((o) => o.keyboard?.skipsLinks))
+      limitations.push(
+        `${opts.browser} on this platform does not move keyboard focus to links with Tab or Alt+Tab: the keyboard walk covered buttons and form controls only, so focus checks on links (visibility, obscuring, order) were not run. Use Chromium or Firefox for the full keyboard walk.`
+      );
     if (opts.throttle)
       limitations.push(
         "Throttling simulated a mid-range mobile network and 4\xD7 CPU slowdown (Chromium only)."

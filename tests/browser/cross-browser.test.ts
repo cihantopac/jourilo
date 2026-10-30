@@ -83,11 +83,15 @@ describe.each(['firefox', 'webkit'])('%s', (browser) => {
         'desktop',
         '--no-forms',
       ).stdout,
-    ) as { findings: { ruleId: string; url: string }[] };
-    expect(audit.findings.map((f) => `${f.ruleId} ${new URL(f.url).pathname}`).sort()).toEqual([
-      'jourilo/focus-obscured /analytics',
-      'jourilo/keyboard-trap /analytics',
-    ]);
+    ) as { findings: { ruleId: string; url: string }[]; limitations: string[] };
+    // WebKit on Windows has no key that focuses links: the link-only check is reported as not run, not as passed.
+    const linksSkipped = audit.limitations.some((l) => l.includes('does not move keyboard focus to links'));
+    expect(linksSkipped).toBe(browser === 'webkit' && process.platform === 'win32');
+    expect(audit.findings.map((f) => `${f.ruleId} ${new URL(f.url).pathname}`).sort()).toEqual(
+      linksSkipped
+        ? ['jourilo/keyboard-trap /analytics']
+        : ['jourilo/focus-obscured /analytics', 'jourilo/keyboard-trap /analytics'],
+    );
     const forms = JSON.parse(
       run(
         'audit',
