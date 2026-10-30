@@ -28,7 +28,7 @@ npm run bench         # detection benchmark
 
 ### Open items (in priority order)
 
-1. Run CI on Linux/Windows (workflow exists, never executed).
+1. Keep Windows CI green (Linux and macOS pass on GitHub Actions; Windows rollback fixed on 2026-10-30).
 2. Plugin icon (suggest designing with Markilo) — validator warns `ICON_MISSING`.
 3. Comparative benchmark vs Lighthouse/Pa11y; independent fixtures.
 4. Release: tag v0.1.0 and npm publish — **requires the maintainer's approval**.

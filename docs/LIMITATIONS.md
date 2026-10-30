@@ -4,13 +4,12 @@ Stated so nobody mistakes silence for a pass.
 
 ## Platforms
 
-| Platform                       | Status                                                                                           |
-| ------------------------------ | ------------------------------------------------------------------------------------------------ |
-| macOS (Apple Silicon), Node 22 | tested: unit, browser, plugin, repair loop                                                       |
-| Chromium                       | tested (primary)                                                                                 |
-| Firefox, WebKit                | fixture audit tested; journeys and forms not separately tested                                   |
-| Linux, Windows                 | CI matrix configured, **not yet run**; path handling uses Node APIs but is unverified on Windows |
-| Node 20                        | declared minimum, **not tested**                                                                 |
+| Platform                       | Status                                                                                                                          |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| macOS, Node 20 and 22          | GitHub Actions: all tests pass (unit, Chromium/Firefox/WebKit browser tests, repair loop); also tested locally on Apple Silicon |
+| Linux (Ubuntu), Node 20 and 22 | GitHub Actions: all tests pass; detection benchmark passes                                                                      |
+| Windows, Node 20 and 22        | GitHub Actions: all tests pass (after making rollback byte-exact under `core.autocrlf=true`)                                    |
+| Chromium, Firefox, WebKit      | fixture audits find every seeded defect in all three; journeys and forms are tested in Chromium only                            |
 
 ## Accessibility
 
