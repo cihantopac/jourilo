@@ -7,8 +7,8 @@ Priorities follow the rule: correctness and evidence before breadth.
 1. Run the CI matrix on Linux and Windows; fix platform issues.
 2. Independent real-world fixtures: reproduce known UX bugs from public issue trackers (with permission/licences) and
    measure recall that the rule authors did not design for.
-3. Comparative benchmark against Lighthouse (accessibility/performance categories) and Pa11y on the same pages, with
-   published methodology.
+3. Extend the comparison (done for GOV.UK accessibility cases, see EVALUATION.md): W3C BAD demo before/after pages,
+   Pa11y with the axe runner, performance against Lighthouse, and fixtures built independently of the rules.
 4. Repeated-run medians for lab metrics; flake detection for journeys.
 5. Keyboard interaction for composite widgets (menus, tabs, dialogs: Escape closes, focus returns).
 6. Normalized trends across runs (per page and viewport), building on the current run history table.

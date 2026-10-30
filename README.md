@@ -83,8 +83,9 @@ jourilo verify <baseline-run>                       # same scope again: fixed / 
 jourilo rollback latest --yes                       # undo if needed
 ```
 
-Measured on the seeded demo app (`fixtures/sites/acme-saas`): `verify` after `optimize --apply` reported 10 findings
-fixed and 0 new, and the change is idempotent and fully reversible (see [docs/EVALUATION.md](docs/EVALUATION.md)).
+Measured on the seeded demo app (`fixtures/sites/acme-saas`): `verify` after `optimize --apply` reported 11 findings
+fixed and 0 new; on a page with a late-loading image, adding the measured image size took mobile CLS from 0.121 to 0.
+Fixes are idempotent and fully reversible (see [docs/EVALUATION.md](docs/EVALUATION.md)).
 
 | Finding with evidence and root cause                                                                                                             | Journey storyboard                                                                                                 |
 | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
@@ -92,17 +93,24 @@ fixed and 0 new, and the change is idempotent and fully reversible (see [docs/EV
 
 ## Detection quality
 
-`jourilo bench` audits fixture sites with seeded defects and a clean control site, and fails on any miss, false
-positive or wrong root-cause file. Current result (0.1.0, Chromium 156, macOS):
+**Fixture benchmark** (`jourilo bench`): sites with seeded problems and clean control pages. It fails on any miss,
+false positive or wrong root-cause file. 0.1.0, Chromium, macOS:
 
-| Fixture                                       | Seeded problems found | False positives         | Root cause in the expected file |
-| --------------------------------------------- | --------------------- | ----------------------- | ------------------------------- |
-| `acme-saas` (SaaS marketing + signup + login) | 22 / 22               | 0                       | 9 / 9                           |
-| `brand-site` (locked Markilo brand)           | 3 / 3                 | 0                       | —                               |
-| `clean-shop` (control)                        | —                     | 0 (no moderate+ defect) | —                               |
+| Fixture                                                                                     | Seeded problems found | False positives                           |
+| ------------------------------------------------------------------------------------------- | --------------------- | ----------------------------------------- |
+| `acme-saas` (SaaS marketing, signup, login, slow and shifting pages)                        | 23 / 23               | 0 (root cause in the expected file 9 / 9) |
+| `tr-dukkan` (Turkish shop)                                                                  | 8 / 8                 | 0                                         |
+| `structure-lab` (form grouping, tables, image alternatives; broken and accessible versions) | 4 / 4                 | 0                                         |
+| `widgets-lab` (dialog and disclosure; broken and accessible versions)                       | 3 / 3                 | 0                                         |
+| `brand-site` (locked Markilo brand)                                                         | 3 / 3                 | 0                                         |
+| `clean-shop` (control)                                                                      | —                     | 0                                         |
 
-These fixtures were written by the same people who wrote the rules, so they show that the rules work as designed —
-not how Jourilo compares with other tools. Comparative benchmarks are on the [roadmap](docs/ROADMAP.md).
+These fixtures were written alongside the rules, so they show the rules work as designed. For an independent view,
+[`benchmarks/compare`](benchmarks/compare) runs Jourilo, Pa11y and Lighthouse on the 142 published test cases of the
+[GOV.UK accessibility tool audit](https://alphagov.github.io/accessibility-tool-audit/): error-level detections were
+Jourilo 54 (49 counted conservatively), Pa11y 38 and Lighthouse 34, with the same Chromium build. The metric is coarse
+and the comparison influenced Jourilo's rules; read the method and caveats in
+[docs/EVALUATION.md](docs/EVALUATION.md#comparison) before quoting it.
 
 ## Safety and privacy
 

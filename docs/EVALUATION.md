@@ -47,6 +47,55 @@ Jourilo finds the Tab trap in the range picker, three focus stops hidden under t
 past the trap) and, in the refresh journey, a 680 ms interaction (lab INP). No false form finding on the prefilled
 settings form.
 
+## Comparison
+
+<a id="comparison"></a>Jourilo, Pa11y and Lighthouse on the 142 published test pages of the
+[GOV.UK accessibility tool audit](https://alphagov.github.io/accessibility-tool-audit/) — each page contains one
+known barrier. Script: [`benchmarks/compare/govuk.mjs`](../benchmarks/compare/govuk.mjs); raw results:
+[`evaluation/compare-govuk-2026-10-30.json`](evaluation/compare-govuk-2026-10-30.json). Same machine, same Chromium
+build (Playwright chromium-1248), desktop viewport, run on 2026-10-30.
+
+| Tool                                                  | Error-level detection | of which specific¹                                       | Warning only | Not detected | Time  |
+| ----------------------------------------------------- | --------------------- | -------------------------------------------------------- | ------------ | ------------ | ----- |
+| Jourilo 0.1.0                                         | 54 / 142              | 54 (49 without the 5 that rest only on `input-purpose`²) | 5            | 83           | 186 s |
+| Pa11y 10.0.0 (HTML_CodeSniffer, WCAG2AA, warnings on) | 38 / 142              | 27                                                       | 20           | 84           | 235 s |
+| Lighthouse 13.6.0 (accessibility, desktop)            | 34 / 142              | 34                                                       | 0            | 108          | 718 s |
+
+Per category (specific / error / any):
+
+| Category            | Cases | Jourilo      | Pa11y        | Lighthouse   |
+| ------------------- | ----- | ------------ | ------------ | ------------ |
+| Forms               | 19    | 16 / 16 / 17 | 8 / 19 / 19  | 8 / 8 / 8    |
+| Keyboard access     | 16    | 7 / 7 / 7    | 0 / 0 / 5    | 1 / 1 / 1    |
+| Links               | 20    | 4 / 4 / 4    | 2 / 2 / 4    | 3 / 3 / 3    |
+| Images              | 10    | 3 / 3 / 4    | 2 / 2 / 4    | 1 / 1 / 1    |
+| Tables              | 9     | 2 / 2 / 3    | 5 / 5 / 8    | 3 / 3 / 3    |
+| Colour and contrast | 6     | 4 / 4 / 4    | 0 / 0 / 0    | 4 / 4 / 4    |
+| Other categories    | 62    | 18 / 18 / 20 | 10 / 10 / 18 | 14 / 14 / 14 |
+
+Full per-category table: [`evaluation/compare-govuk-2026-10-30.md`](evaluation/compare-govuk-2026-10-30.md).
+
+**How to read this.** "Detected" means the tool reported something on the page beyond its own template noise (rules
+it reports on ≥ 60 % of pages). It does not mean the message names the exact barrier — GOV.UK's own audit judged that
+by hand. ¹ "Specific" requires an error-level rule that fires on fewer than 10 % of pages, which removes generic
+signals such as Pa11y's "form has no submit button" (18 pages). ² Jourilo's `input-purpose` rule fires on only 6
+pages, so it counts as specific, but on 5 pages it is the only finding and is unrelated to the tested barrier; 49 is
+the conservative number.
+
+**Caveats.** Jourilo runs axe-core internally, so its axe-based detections overlap with Lighthouse (also axe-based);
+its additional detections come from interaction (keyboard walk, operating dialogs and disclosures) and structure
+checks. Pa11y's warnings include many "check this manually" notices. Jourilo's checks were improved during this
+evaluation (below), so the benchmark is no longer independent of the rules; future changes should be judged on new
+fixtures. Pa11y and Lighthouse were run with default settings; other configurations (e.g. Pa11y with the axe runner)
+would score differently. 65 of 142 cases were not detected by any of the three tools; most need human judgement
+(plain language, reading order, alt-text quality, page titles that exist but are unhelpful).
+
+**What changed because of it.** The first run (same day) found 45 error-level detections for Jourilo. Diagnosing the
+cases that Pa11y or Lighthouse caught and Jourilo missed led to: operating ARIA-less lightboxes (4 cases), fieldset
+and legend checks, ungrouped radio buttons, header-less data tables and empty alt with a title. Each new check has a
+fixture with an accessible counterpart that must stay clean (`structure-lab`, `widgets-lab`). Not adopted: duplicate
+`id` (WCAG 2.2 made 4.1.1 obsolete) and deprecated `<center>`/`<font>` (not barriers by themselves).
+
 ## 2. Repair loop (`tests/browser/repair.test.ts`)
 
 On a disposable git copy of acme-saas: `optimize` (dry run) proposed 5 deterministic fixes and wrote nothing;
@@ -84,6 +133,5 @@ validation, dependency audit).
 
 ## 6. Not evaluated yet
 
-Comparison with Lighthouse / Pa11y / axe DevTools on the same pages; real-world recall on independently built
-fixtures; long-running authenticated SaaS flows; performance under CPU/network throttling on real
+Recall on fixtures built independently of the rules (after the GOV.UK comparison influenced the rules); long-running authenticated SaaS flows; performance under CPU/network throttling on real
 devices. See [LIMITATIONS.md](LIMITATIONS.md) and [ROADMAP.md](ROADMAP.md).

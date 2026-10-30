@@ -1,0 +1,14 @@
+{
+  "name": "jourilo-compare-benchmark",
+  "private": true,
+  "description": "Comparative benchmark: Jourilo vs Pa11y vs Lighthouse on the GOV.UK accessibility tool audit test cases. Not part of the Jourilo package.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "govuk": "node govuk.mjs"
+  },
+  "dependencies": {
+    "lighthouse": "13.6.0",
+    "pa11y": "10.0.0"
+  }
+}

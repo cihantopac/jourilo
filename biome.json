@@ -4,7 +4,7 @@
     "includes": [
       "**",
       "!plugin/dist",
-      "!node_modules",
+      "!**/node_modules",
       "!.jourilo",
       "!tests/.tmp",
       "!**/*.png",
