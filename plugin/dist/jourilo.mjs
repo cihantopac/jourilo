@@ -40170,6 +40170,12 @@ var IS_LAST_TABBABLE = `(el) => {
     .filter((e) => !e.disabled && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden');
   return all.length > 0 && all[all.length - 1] === el;
 }`;
+var TAB_SKIPS_LINKS = `(() => {
+  const first = Array.from(document.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])'))
+    .find((e) => !e.disabled && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden' && !(e.tabIndex > 0));
+  if (!first || !/^(A|BUTTON)$/.test(first.tagName)) return false;
+  return document.activeElement !== first;
+})()`;
 var ESCAPE_TRAP = `(sels) => {
   const trapped = sels.map((s) => document.querySelector(s)).filter(Boolean);
   if (!trapped.length) return false;
@@ -40202,7 +40208,15 @@ async function keyboardWalk(page, maxTabs = 60) {
     indicatorChanges: [],
     indicatorChecked: false
   });
-  const tabKey = page.context().browser()?.browserType().name() === "webkit" ? "Alt+Tab" : "Tab";
+  let tabKey = "Tab";
+  if (page.context().browser()?.browserType().name() === "webkit") {
+    await page.keyboard.press("Tab");
+    const skipsLinks = await page.evaluate(TAB_SKIPS_LINKS).catch(() => false);
+    if (skipsLinks) tabKey = "Alt+Tab";
+    await page.evaluate(
+      "(() => { document.activeElement && document.activeElement.blur && document.activeElement.blur(); window.scrollTo(0, 0); })()"
+    );
+  }
   let escaped = false;
   for (let i = 0; i < limit; i++) {
     await page.keyboard.press(tabKey);

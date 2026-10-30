@@ -94,6 +94,14 @@ const IS_LAST_TABBABLE = `(el) => {
   return all.length > 0 && all[all.length - 1] === el;
 }`;
 
+// After one Tab from the top: did focus skip the document's first link or button (Safari's default behavior)?
+const TAB_SKIPS_LINKS = `(() => {
+  const first = Array.from(document.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])'))
+    .find((e) => !e.disabled && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden' && !(e.tabIndex > 0));
+  if (!first || !/^(A|BUTTON)$/.test(first.tagName)) return false;
+  return document.activeElement !== first;
+})()`;
+
 // Focuses the first focusable element after the trapped ones (in document order, outside their container).
 const ESCAPE_TRAP = `(sels) => {
   const trapped = sels.map((s) => document.querySelector(s)).filter(Boolean);
@@ -131,9 +139,18 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
     indicatorChecked: false,
   });
 
-  // WebKit follows Safari's default, where Tab skips links and buttons; Option/Alt+Tab visits every focusable
-  // element, which is what a keyboard-only user enables.
-  const tabKey = page.context().browser()?.browserType().name() === 'webkit' ? 'Alt+Tab' : 'Tab';
+  // WebKit on macOS follows Safari's default, where Tab skips links and buttons and Option+Tab visits every
+  // focusable element (what a keyboard-only user enables). Other WebKit builds (Windows, Linux) tab through links
+  // normally, and Alt+Tab can mean something else there. Decide by observing the first Tab press.
+  let tabKey = 'Tab';
+  if (page.context().browser()?.browserType().name() === 'webkit') {
+    await page.keyboard.press('Tab');
+    const skipsLinks = (await page.evaluate(TAB_SKIPS_LINKS).catch(() => false)) as boolean;
+    if (skipsLinks) tabKey = 'Alt+Tab';
+    await page.evaluate(
+      '(() => { document.activeElement && document.activeElement.blur && document.activeElement.blur(); window.scrollTo(0, 0); })()',
+    );
+  }
   let escaped = false;
   for (let i = 0; i < limit; i++) {
     await page.keyboard.press(tabKey);
