@@ -7,7 +7,7 @@
 /plugin install jourilo@jourilo
 ```
 
-Until the repository is public, load it locally: `claude --plugin-dir /path/to/jourilo/plugin`.
+To try a local checkout instead: `claude --plugin-dir /path/to/jourilo/plugin`.
 
 On install, Claude Code installs the plugin's only runtime dependency (`playwright-core`, exact version) from
 `plugin/package.json`. The first browser run asks you to approve downloading Chromium (`jourilo setup`).

@@ -3,7 +3,7 @@
 // after install. playwright-core stays external (it ships browser drivers and must be installed with npm);
 // axe-core is bundled.
 import { mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
@@ -15,12 +15,13 @@ const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 const rawPlugin = {
   name: 'raw',
   setup(b) {
+    // Paths stay relative to the repository so the bundle is identical on every machine (and leaks no home dir).
     b.onResolve({ filter: /\?raw$/ }, (args) => ({
-      path: resolve(args.resolveDir, args.path.replace(/\?raw$/, '')),
+      path: relative(root, resolve(args.resolveDir, args.path.replace(/\?raw$/, ''))).split(sep).join('/'),
       namespace: 'raw',
     }));
     b.onLoad({ filter: /.*/, namespace: 'raw' }, (args) => ({
-      contents: readFileSync(args.path, 'utf8'),
+      contents: readFileSync(join(root, args.path), 'utf8'),
       loader: 'text',
     }));
   },

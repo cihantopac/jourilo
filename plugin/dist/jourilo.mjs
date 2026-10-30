@@ -39096,7 +39096,7 @@ function excerpt(input, max = 240) {
   return clean.length > max ? `${clean.slice(0, max - 1)}\u2026` : clean;
 }
 
-// raw:/Users/cihan/Developer/jourilo/src/browser/inpage/probe.js
+// raw:src/browser/inpage/probe.js
 var probe_default = `// Runs inside the audited page. Plain JavaScript (no imports, no bundler helpers) evaluated as
 // \`(probe)(options)\`. It only reads the DOM; it never changes the page.
 (opts) => {

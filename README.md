@@ -28,8 +28,7 @@ _user input_.
 
 ## Quick start
 
-Requires Node.js ≥ 20.10. (The GitHub repository and marketplace are not public yet; until then, clone from your local
-copy or load the plugin with `claude --plugin-dir ./plugin`.)
+Requires Node.js ≥ 20.10. Jourilo is not on npm yet; install from the repository.
 
 ```bash
 git clone https://github.com/cihantopac/jourilo && cd jourilo && npm install

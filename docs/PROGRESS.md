@@ -4,7 +4,8 @@ Use this file to resume work in a new session: read it, then `docs/ROADMAP.md` a
 
 ## State on 2026-10-30 (v0.1.0, unreleased)
 
-Repository: local git, branch `main`, not pushed (no remote configured). Build: `npm run ci` green on macOS.
+Repository: https://github.com/cihantopac/jourilo (public), branch `main`. No tagged release, not on npm.
+Build: `npm run ci` green on macOS.
 
 ### Done (each with tests and a real run)
 
@@ -30,7 +31,7 @@ npm run bench         # detection benchmark
 1. Run CI on Linux/Windows (workflow exists, never executed).
 2. Plugin icon (suggest designing with Markilo) — validator warns `ICON_MISSING`.
 3. Comparative benchmark vs Lighthouse/Pa11y; independent fixtures.
-4. Publish: create GitHub repo, push, npm publish — **requires the maintainer's approval**.
+4. Release: tag v0.1.0 and npm publish — **requires the maintainer's approval**.
 
 ### Conventions to keep
 
