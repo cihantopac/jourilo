@@ -111,6 +111,11 @@
       "rule": "jourilo/paste-blocked",
       "path": "/login",
       "why": "onpaste=return false on password"
+    },
+    {
+      "rule": "jourilo/unsized-images",
+      "path": "/launch",
+      "why": "late image without width/height shifts text"
     }
   ],
   "mustNotFind": [

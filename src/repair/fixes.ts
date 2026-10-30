@@ -208,12 +208,118 @@ const pasteAllowed: Fixer = (f, _root, read) => {
   };
 };
 
+const escRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** unsized-images: add the measured natural width/height so the browser reserves space (CLS). */
+const imageDimensions: Fixer = (f, _root, read) => {
+  const edits = new Map<string, { before: string; after: string }>();
+  const done: string[] = [];
+  const notes: string[] = [];
+  for (const e of f.evidence) {
+    const src = e.snippet?.match(/^<img src="([^"]+)">$/)?.[1];
+    const w = Number(e.data?.naturalWidth);
+    const h = Number(e.data?.naturalHeight);
+    if (!src || !(w > 0 && h > 0)) continue;
+    for (const s of f.sources ?? []) {
+      const cur = edits.get(s.file)?.after ?? read(s.file);
+      if (!cur) continue;
+      const re = new RegExp(
+        `<img\\b(?=[^>]*\\bsrc=["'{]?["']?${escRe(src)}["'])(?![^>]*\\bwidth=)(?![^>]*\\bheight=)[^>]*?(\\s*/?>)`,
+      );
+      const m = cur.match(re);
+      if (!m) continue;
+      let tag = m[0];
+      // An inline width (e.g. width:100%) with a height attribute would stretch the image: keep it proportional.
+      if (/style=["'][^"']*width\s*:/i.test(tag) && !/style=["'][^"']*height\s*:/i.test(tag)) {
+        tag = tag.replace(
+          /style=(["'])([^"']*?)\s*;?\s*\1/i,
+          (_m2, q: string, css: string) => `style=${q}${css}; height: auto${q}`,
+        );
+      } else {
+        notes.push(`${src}: check that CSS keeps it proportional (img { max-width: 100%; height: auto }).`);
+      }
+      tag = tag.replace(/(\s*\/?>)$/, ` width="${w}" height="${h}"$1`);
+      edits.set(s.file, {
+        before: edits.get(s.file)?.before ?? read(s.file)!,
+        after: cur.replace(m[0], tag),
+      });
+      done.push(`${src} → ${w}×${h}`);
+      break;
+    }
+  }
+  if (!edits.size) return null;
+  return {
+    ...base(
+      f,
+      'Reserve space for images (width and height)',
+      `Adds the measured natural size so the browser can reserve space before the image loads: ${done.join(', ')}.`,
+      'Less layout shift (CLS) while images load.',
+    ),
+    edits: [...edits].map(([file, v]) => ({ file, ...v })),
+    assumptions: [
+      'Sizes are the natural sizes measured in the browser; responsive images keep their aspect ratio only if CSS sets height: auto.',
+      ...notes,
+    ],
+  };
+};
+
+/** placeholder-label: turn the placeholder into a visible label linked to the field. */
+const placeholderLabel: Fixer = (f, _root, read) => {
+  const edits = new Map<string, { before: string; after: string }>();
+  const done: string[] = [];
+  for (const e of f.evidence) {
+    const name = e.snippet?.match(/name=(\S+)/)?.[1];
+    if (!name || name === '∅') continue;
+    for (const s of f.sources ?? []) {
+      const cur = edits.get(s.file)?.after ?? read(s.file);
+      if (!cur) continue;
+      const jsx = isJsx(s.file);
+      const re = new RegExp(`<(input|textarea|select)\\b(?=[^>]*\\bname=["']${escRe(name)}["'])[^>]*>`);
+      const m = cur.match(re);
+      if (!m) continue;
+      const tag = m[0];
+      const placeholder = tag.match(/placeholder=["']([^"']+)["']/)?.[1];
+      if (!placeholder) continue;
+      let id = tag.match(/\bid=["']([^"']+)["']/)?.[1];
+      // Idempotent: a label already points at this field.
+      if (id && new RegExp(`(?:for|htmlFor)=["']${escRe(id)}["']`).test(cur)) continue;
+      let newTag = tag;
+      if (!id) {
+        id = name.replace(/[^A-Za-z0-9_-]/g, '-');
+        newTag = tag.replace(/^<(input|textarea|select)\b/, `<$1 id="${id}"`);
+      }
+      const label = `<label ${jsx ? 'htmlFor' : 'for'}="${id}">${placeholder}</label> `;
+      edits.set(s.file, {
+        before: edits.get(s.file)?.before ?? read(s.file)!,
+        after: cur.replace(tag, `${label}${newTag}`),
+      });
+      done.push(`${name} → "${placeholder}"`);
+      break;
+    }
+  }
+  if (!edits.size) return null;
+  return {
+    ...base(
+      f,
+      'Add visible labels for placeholder-only fields',
+      `Each field gets a <label> with its placeholder text: ${done.join(', ')}.`,
+      'Fields keep a visible, programmatic label while typing (WCAG 3.3.2, 1.3.1).',
+    ),
+    edits: [...edits].map(([file, v]) => ({ file, ...v })),
+    assumptions: [
+      'Label text is copied from the placeholder; reword it if the placeholder was an example rather than a label. Check the layout with the new labels.',
+    ],
+  };
+};
+
 export const FIXERS: Record<string, Fixer> = {
   'axe/html-has-lang': htmlLang,
   'jourilo/missing-viewport-meta': viewportMeta,
   'jourilo/input-purpose': autocomplete,
   'jourilo/focus-visible': focusVisible,
   'jourilo/paste-blocked': pasteAllowed,
+  'jourilo/unsized-images': imageDimensions,
+  'jourilo/placeholder-label': placeholderLabel,
 };
 
 export function planFixes(findings: Finding[], root: string): FixPlan[] {

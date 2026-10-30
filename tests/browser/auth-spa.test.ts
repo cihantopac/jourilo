@@ -68,6 +68,8 @@ describe('signed-in SPA', () => {
     expect(r).toContain('jourilo/keyboard-trap /analytics');
     expect(r).toContain('jourilo/focus-obscured /analytics');
     expect(r.filter((x) => x.startsWith('ux/no-validation-feedback'))).toEqual([]);
+    // An in-page link that makes the SPA re-render its fixed help bar is not a dialog.
+    expect(r.filter((x) => x.includes('dialog'))).toEqual([]);
   });
 
   it('measures slow interactions during a journey (lab INP)', () => {

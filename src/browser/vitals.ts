@@ -40,7 +40,10 @@ export const VITALS_INIT_SCRIPT = `(() => {
 export interface RawVitals {
   lcp: number | null;
   lcpElement: string | null;
-  cls: number;
+  /** null when the browser cannot measure it (no Layout Shift API). */
+  cls: number | null;
+  /** Performance entry types this browser does not support (metrics that depend on them are null). */
+  unsupported?: string[];
   clsEntries: { value: number; t: number; sources: string[] }[];
   fcp: number | null;
   ttfb: number | null;
@@ -60,8 +63,12 @@ export const READ_VITALS_SCRIPT = `(() => {
   const nav = performance.getEntriesByType('navigation')[0];
   const res = performance.getEntriesByType('resource');
   const fcp = s.fcp;
+  // Only report what this browser can measure: Firefox and WebKit lack layout-shift, longtask and some event
+  // timing entries, and a default of 0 would look like a perfect score.
+  const types = (typeof PerformanceObserver !== 'undefined' && PerformanceObserver.supportedEntryTypes) || [];
+  const has = (t) => types.includes(t);
   let tbt = null;
-  if (fcp != null) {
+  if (fcp != null && has('longtask')) {
     tbt = 0;
     for (const t of s.longTasks || []) {
       if (t.start + t.duration <= fcp) continue;
@@ -71,9 +78,11 @@ export const READ_VITALS_SCRIPT = `(() => {
   let bytes = nav ? (nav.transferSize || 0) : 0;
   for (const r of res) bytes += r.transferSize || 0;
   return {
-    lcp: s.lcp ?? null, lcpElement: s.lcpElement ?? null, cls: s.cls || 0, clsEntries: s.clsEntries || [],
+    lcp: has('largest-contentful-paint') ? (s.lcp ?? null) : null, lcpElement: s.lcpElement ?? null,
+    cls: has('layout-shift') ? (s.cls || 0) : null, clsEntries: s.clsEntries || [],
     fcp: fcp ?? null, ttfb: nav ? nav.responseStart : null, tbt,
-    inp: s.inp ?? null, interactions: (s.interactions || []).length,
+    inp: has('event') ? (s.inp ?? null) : null, interactions: (s.interactions || []).length,
+    unsupported: ['largest-contentful-paint', 'layout-shift', 'longtask', 'event'].filter((t) => !has(t)),
     domContentLoaded: nav ? nav.domContentLoadedEventEnd : null, load: nav ? nav.loadEventEnd : null,
     transferBytes: bytes, requests: res.length + 1, domNodes: document.getElementsByTagName('*').length,
   };

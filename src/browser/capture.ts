@@ -89,6 +89,13 @@ export interface ProbeResult {
   };
   clickable: { selector: string; rect: Rect; name: string; tag: string }[];
   pasteBlocked?: { selector: string; rect: Rect; type: string }[];
+  unsizedImages?: {
+    selector: string;
+    rect: Rect;
+    src: string;
+    naturalWidth: number;
+    naturalHeight: number;
+  }[];
   structure?: {
     fieldsets: { selector: string; rect: Rect; issue: string }[];
     radioGroups: { name: string; selector: string; rect: Rect; count: number }[];

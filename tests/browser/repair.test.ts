@@ -32,6 +32,7 @@ beforeAll(() => {
 
 describe('repair loop', () => {
   let baseRun = '';
+  let firstCheckpoint = '';
   it('plans fixes without writing anything', () => {
     baseRun = jourilo('audit', '.', '--viewports', 'desktop,mobile').runId;
     const plan = jourilo('optimize', baseRun);
@@ -42,6 +43,7 @@ describe('repair loop', () => {
       'jourilo/input-purpose',
       'jourilo/missing-viewport-meta',
       'jourilo/paste-blocked',
+      'jourilo/placeholder-label',
     ]);
     expect(git('status', '--short')).toBe('');
   });
@@ -49,6 +51,7 @@ describe('repair loop', () => {
   it('applies with a checkpoint, verifies improvements and no regressions', () => {
     const applied = jourilo('optimize', baseRun, '--apply');
     expect(applied.checkpoint).toBeTruthy();
+    firstCheckpoint = applied.checkpoint;
     const v = jourilo('verify', baseRun);
     expect(v.regressionFree).toBe(true);
     expect(v.introduced).toEqual([]);
@@ -61,6 +64,18 @@ describe('repair loop', () => {
     );
   });
 
+  it('reserves image space and removes the layout shift it caused', () => {
+    const run = jourilo('audit', '.', '--url', '/launch', '--runs', '3').runId;
+    const plan = jourilo('optimize', run);
+    expect(plan.fixes.map((f: { ruleId: string }) => f.ruleId)).toContain('jourilo/unsized-images');
+    jourilo('optimize', run, '--apply', '--rule', 'jourilo/unsized-images');
+    expect(readFileSync(join(app, 'launch.html'), 'utf8')).toContain('width="800" height="400"');
+    const v = jourilo('verify', run);
+    expect(v.fixed.map((f: { title: string }) => f.title).join(' ')).toMatch(/reserved space/);
+    for (const m of v.metrics.filter((x: { name: string }) => x.name === 'CLS'))
+      expect(m.after).toBeLessThan(0.02);
+  });
+
   it('is idempotent', () => {
     const again = jourilo('optimize', baseRun, '--apply');
     expect(again.fixes).toEqual([]);
@@ -70,8 +85,9 @@ describe('repair loop', () => {
   it('rolls back to the checkpoint', () => {
     const cps = jourilo('runs');
     expect(cps.length).toBeGreaterThan(0);
-    const r = jourilo('rollback', 'latest', '--yes');
-    expect(r.restored.length).toBe(5);
+    const r = jourilo('rollback', firstCheckpoint, '--yes');
+    // Everything since the first checkpoint: five files from the first fix round plus launch.html.
+    expect(r.restored.length).toBe(6);
     expect(git('status', '--short')).toBe('');
   });
 });

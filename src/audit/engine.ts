@@ -263,6 +263,18 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         ? `Performance numbers are medians of ${runs} cold-cache lab visits, not field (real-user) data.`
         : 'Performance numbers are lab measurements from one scripted visit, not field (real-user) data; use --runs 5 for medians.',
     );
+    const unsupported = [...new Set(observations.flatMap((o) => o.vitals?.unsupported ?? []))];
+    if (unsupported.length) {
+      const names: Record<string, string> = {
+        'largest-contentful-paint': 'LCP',
+        'layout-shift': 'CLS',
+        longtask: 'TBT',
+        event: 'INP',
+      };
+      limitations.push(
+        `${opts.browser} does not expose ${unsupported.map((t) => names[t] ?? t).join(', ')}: those metrics (and checks that depend on them, such as layout shift from unsized images) were not measured. Use Chromium for performance.`,
+      );
+    }
     if (opts.throttle)
       limitations.push(
         'Throttling simulated a mid-range mobile network and 4× CPU slowdown (Chromium only).',

@@ -1,6 +1,6 @@
 {
  "source": "https://alphagov.github.io/accessibility-tool-audit/",
- "date": "2026-10-30T16:21:49.296Z",
+ "date": "2026-10-30T16:50:42.027Z",
  "method": "detects = reports something on the case page beyond the tool template noise (rules on >= 60% of pages)",
  "versions": {
   "jourilo": "0.1.0",
@@ -10,10 +10,10 @@
  },
  "tools": {
   "jourilo": {
-   "seconds": 180.9,
-   "error": 45,
+   "seconds": 181.8,
+   "error": 54,
    "warning": 5,
-   "none": 92,
+   "none": 83,
    "toolError": 0,
    "noise": [
     "axe/region"
@@ -226,8 +226,10 @@
      "rules": []
     },
     {
-     "verdict": "none",
-     "rules": []
+     "verdict": "error",
+     "rules": [
+      "jourilo/table-headers"
+     ]
     },
     {
      "verdict": "none",
@@ -282,8 +284,10 @@
      ]
     },
     {
-     "verdict": "none",
-     "rules": []
+     "verdict": "error",
+     "rules": [
+      "jourilo/empty-alt-with-title"
+     ]
     },
     {
      "verdict": "none",
@@ -454,8 +458,11 @@
      ]
     },
     {
-     "verdict": "none",
-     "rules": []
+     "verdict": "error",
+     "rules": [
+      "axe/heading-order",
+      "jourilo/radio-group"
+     ]
     },
     {
      "verdict": "error",
@@ -464,12 +471,16 @@
      ]
     },
     {
-     "verdict": "none",
-     "rules": []
+     "verdict": "error",
+     "rules": [
+      "jourilo/fieldset-legend"
+     ]
     },
     {
-     "verdict": "none",
-     "rules": []
+     "verdict": "error",
+     "rules": [
+      "jourilo/fieldset-legend"
+     ]
     },
     {
      "verdict": "error",
@@ -545,8 +556,11 @@
      "rules": []
     },
     {
-     "verdict": "none",
-     "rules": []
+     "verdict": "error",
+     "rules": [
+      "jourilo/dialog-focus",
+      "jourilo/dialog-role"
+     ]
     },
     {
      "verdict": "none",
@@ -581,8 +595,12 @@
      "rules": []
     },
     {
-     "verdict": "none",
-     "rules": []
+     "verdict": "error",
+     "rules": [
+      "jourilo/dialog-focus",
+      "jourilo/dialog-role",
+      "jourilo/dialog-escape"
+     ]
     },
     {
      "verdict": "none",
@@ -597,12 +615,18 @@
      "rules": []
     },
     {
-     "verdict": "none",
-     "rules": []
+     "verdict": "error",
+     "rules": [
+      "jourilo/dialog-focus",
+      "jourilo/dialog-role"
+     ]
     },
     {
-     "verdict": "none",
-     "rules": []
+     "verdict": "error",
+     "rules": [
+      "jourilo/dialog-focus",
+      "jourilo/dialog-role"
+     ]
     },
     {
      "verdict": "error",
@@ -694,7 +718,7 @@
    ]
   },
   "pa11y": {
-   "seconds": 255.5,
+   "seconds": 242.6,
    "error": 38,
    "warning": 20,
    "none": 84,
@@ -1411,7 +1435,7 @@
    ]
   },
   "lighthouse": {
-   "seconds": 712.5,
+   "seconds": 720.9,
    "error": 34,
    "warning": 0,
    "none": 108,

@@ -599,15 +599,13 @@ export function structureFindings(obs: PageObservation): Finding[] {
   const vp = obs.viewport.name;
   const shot = obs.screenshot ? { file: obs.screenshot } : {};
   const ev = (list: { selector: string; rect: Rect }[], snippet: (i: number) => string) =>
-    list
-      .slice(0, 10)
-      .map((x, i) => ({
-        type: 'element' as const,
-        selector: x.selector,
-        rect: x.rect,
-        snippet: snippet(i),
-        ...shot,
-      }));
+    list.slice(0, 10).map((x, i) => ({
+      type: 'element' as const,
+      selector: x.selector,
+      rect: x.rect,
+      snippet: snippet(i),
+      ...shot,
+    }));
   if (st.fieldsets.length)
     out.push(
       makeFinding({

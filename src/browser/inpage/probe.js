@@ -460,6 +460,24 @@
       });
   }
 
+  // Images without reserved space, with their natural size (used to add width/height attributes).
+  const unsizedImages = imgs
+    .filter(
+      (i) =>
+        isVisible(i) &&
+        !(i.getAttribute('width') && i.getAttribute('height')) &&
+        !getComputedStyle(i).aspectRatio.includes('/') &&
+        i.naturalWidth > 0,
+    )
+    .slice(0, 20)
+    .map((i) => ({
+      selector: selectorOf(i),
+      rect: rectOf(i),
+      src: i.getAttribute('src') || '',
+      naturalWidth: i.naturalWidth,
+      naturalHeight: i.naturalHeight,
+    }));
+
   // ---- Style samples for design-system checks (computed values, visible elements only) ----
   const firstFont = (ff) =>
     ff
@@ -542,6 +560,7 @@
   );
 
   return {
+    unsizedImages,
     structure,
     styles,
     tech,

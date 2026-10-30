@@ -39969,6 +39969,24 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
       });
   }
 
+  // Images without reserved space, with their natural size (used to add width/height attributes).
+  const unsizedImages = imgs
+    .filter(
+      (i) =>
+        isVisible(i) &&
+        !(i.getAttribute('width') && i.getAttribute('height')) &&
+        !getComputedStyle(i).aspectRatio.includes('/') &&
+        i.naturalWidth > 0,
+    )
+    .slice(0, 20)
+    .map((i) => ({
+      selector: selectorOf(i),
+      rect: rectOf(i),
+      src: i.getAttribute('src') || '',
+      naturalWidth: i.naturalWidth,
+      naturalHeight: i.naturalHeight,
+    }));
+
   // ---- Style samples for design-system checks (computed values, visible elements only) ----
   const firstFont = (ff) =>
     ff
@@ -40051,6 +40069,7 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
   );
 
   return {
+    unsizedImages,
     structure,
     styles,
     tech,
@@ -40304,8 +40323,12 @@ var READ_VITALS_SCRIPT = `(() => {
   const nav = performance.getEntriesByType('navigation')[0];
   const res = performance.getEntriesByType('resource');
   const fcp = s.fcp;
+  // Only report what this browser can measure: Firefox and WebKit lack layout-shift, longtask and some event
+  // timing entries, and a default of 0 would look like a perfect score.
+  const types = (typeof PerformanceObserver !== 'undefined' && PerformanceObserver.supportedEntryTypes) || [];
+  const has = (t) => types.includes(t);
   let tbt = null;
-  if (fcp != null) {
+  if (fcp != null && has('longtask')) {
     tbt = 0;
     for (const t of s.longTasks || []) {
       if (t.start + t.duration <= fcp) continue;
@@ -40315,9 +40338,11 @@ var READ_VITALS_SCRIPT = `(() => {
   let bytes = nav ? (nav.transferSize || 0) : 0;
   for (const r of res) bytes += r.transferSize || 0;
   return {
-    lcp: s.lcp ?? null, lcpElement: s.lcpElement ?? null, cls: s.cls || 0, clsEntries: s.clsEntries || [],
+    lcp: has('largest-contentful-paint') ? (s.lcp ?? null) : null, lcpElement: s.lcpElement ?? null,
+    cls: has('layout-shift') ? (s.cls || 0) : null, clsEntries: s.clsEntries || [],
     fcp: fcp ?? null, ttfb: nav ? nav.responseStart : null, tbt,
-    inp: s.inp ?? null, interactions: (s.interactions || []).length,
+    inp: has('event') ? (s.inp ?? null) : null, interactions: (s.interactions || []).length,
+    unsupported: ['largest-contentful-paint', 'layout-shift', 'longtask', 'event'].filter((t) => !has(t)),
     domContentLoaded: nav ? nav.domContentLoadedEventEnd : null, load: nav ? nav.loadEventEnd : null,
     transferBytes: bytes, requests: res.length + 1, domNodes: document.getElementsByTagName('*').length,
   };
@@ -40460,7 +40485,9 @@ var SNAPSHOT_LAYERS = `(() => {
     const cs = getComputedStyle(e);
     return (cs.position === 'fixed' || cs.position === 'absolute') && e.getClientRects().length > 0 && cs.visibility !== 'hidden' && big(e);
   });
-  window.__jouriloLayers = new Set(layers);
+  // Signatures, not node identity: frameworks that re-render replace nodes without anything new appearing.
+  const sig = (e) => { const r = e.getBoundingClientRect(); return e.tagName + '.' + String(e.className) + '|' + Math.round(r.left) + ',' + Math.round(r.top) + ',' + Math.round(r.width) + ',' + Math.round(r.height); };
+  window.__jouriloLayers = new Set(layers.map(sig));
 })()`;
 var STATE = `(controls) => {
   const visible = (e) => !!e && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
@@ -40471,7 +40498,9 @@ var STATE = `(controls) => {
     const big = (e) => { const r = e.getBoundingClientRect(); return r.width * r.height >= innerWidth * innerHeight * 0.02; };
     const fresh = Array.from(document.querySelectorAll('body *')).filter((e) => {
       const cs = getComputedStyle(e);
-      return (cs.position === 'fixed' || cs.position === 'absolute') && visible(e) && big(e) && !window.__jouriloLayers.has(e);
+      const r = e.getBoundingClientRect();
+      const sig = e.tagName + '.' + String(e.className) + '|' + Math.round(r.left) + ',' + Math.round(r.top) + ',' + Math.round(r.width) + ',' + Math.round(r.height);
+      return (cs.position === 'fixed' || cs.position === 'absolute') && visible(e) && big(e) && !window.__jouriloLayers.has(sig);
     });
     const outer = fresh.filter((e) => !fresh.some((o) => o !== e && o.contains(e)));
     if (outer.length) { d = outer[outer.length - 1]; unlabelled = true; }
@@ -42925,7 +42954,7 @@ function performanceFindings(obs) {
         provenance: "heuristic",
         url: obs.url,
         viewport: vp,
-        description: `${p.inventory.images.withoutDimensions} visible image(s) have no width/height attributes or CSS aspect-ratio, and CLS was ${obs.vitals.cls.toFixed(3)}.`,
+        description: `${p.inventory.images.withoutDimensions} visible image(s) have no width/height attributes or CSS aspect-ratio, and CLS was ${(obs.vitals.cls ?? 0).toFixed(3)}.`,
         impact: "Content moves when images load.",
         recommendation: "Add width and height attributes (or aspect-ratio) to images.",
         standards: [CWV.CLS],
@@ -42933,7 +42962,16 @@ function performanceFindings(obs) {
           {
             type: "metric",
             data: { withoutDimensions: p.inventory.images.withoutDimensions, cls: obs.vitals.cls }
-          }
+          },
+          // src and natural size let the repair engine add exact width/height attributes.
+          ...(p.unsizedImages ?? []).slice(0, 10).map((img) => ({
+            type: "element",
+            selector: img.selector,
+            rect: img.rect,
+            snippet: `<img src="${img.src}">`,
+            data: { naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight },
+            ...obs.screenshot ? { file: obs.screenshot } : {}
+          }))
         ],
         occurrences: p.inventory.images.withoutDimensions
       })
@@ -43100,6 +43138,18 @@ async function runAudit(ws, opts) {
       "Automated accessibility checks cover only part of WCAG 2.2; criteria such as 1.3.3, 2.5.7, 3.2.6, 3.3.7 and 3.3.8 and most content quality questions need manual review.",
       runs2 > 1 ? `Performance numbers are medians of ${runs2} cold-cache lab visits, not field (real-user) data.` : "Performance numbers are lab measurements from one scripted visit, not field (real-user) data; use --runs 5 for medians."
     );
+    const unsupported = [...new Set(observations.flatMap((o) => o.vitals?.unsupported ?? []))];
+    if (unsupported.length) {
+      const names = {
+        "largest-contentful-paint": "LCP",
+        "layout-shift": "CLS",
+        longtask: "TBT",
+        event: "INP"
+      };
+      limitations.push(
+        `${opts.browser} does not expose ${unsupported.map((t) => names[t] ?? t).join(", ")}: those metrics (and checks that depend on them, such as layout shift from unsized images) were not measured. Use Chromium for performance.`
+      );
+    }
     if (opts.throttle)
       limitations.push(
         "Throttling simulated a mid-range mobile network and 4\xD7 CPU slowdown (Chromium only)."
@@ -46823,12 +46873,111 @@ var pasteAllowed = (f, _root, read2) => {
     ]
   };
 };
+var escRe = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+var imageDimensions = (f, _root, read2) => {
+  const edits = /* @__PURE__ */ new Map();
+  const done = [];
+  const notes = [];
+  for (const e of f.evidence) {
+    const src = e.snippet?.match(/^<img src="([^"]+)">$/)?.[1];
+    const w = Number(e.data?.naturalWidth);
+    const h = Number(e.data?.naturalHeight);
+    if (!src || !(w > 0 && h > 0)) continue;
+    for (const s of f.sources ?? []) {
+      const cur = edits.get(s.file)?.after ?? read2(s.file);
+      if (!cur) continue;
+      const re = new RegExp(
+        `<img\\b(?=[^>]*\\bsrc=["'{]?["']?${escRe(src)}["'])(?![^>]*\\bwidth=)(?![^>]*\\bheight=)[^>]*?(\\s*/?>)`
+      );
+      const m = cur.match(re);
+      if (!m) continue;
+      let tag = m[0];
+      if (/style=["'][^"']*width\s*:/i.test(tag) && !/style=["'][^"']*height\s*:/i.test(tag)) {
+        tag = tag.replace(
+          /style=(["'])([^"']*?)\s*;?\s*\1/i,
+          (_m2, q, css) => `style=${q}${css}; height: auto${q}`
+        );
+      } else {
+        notes.push(`${src}: check that CSS keeps it proportional (img { max-width: 100%; height: auto }).`);
+      }
+      tag = tag.replace(/(\s*\/?>)$/, ` width="${w}" height="${h}"$1`);
+      edits.set(s.file, {
+        before: edits.get(s.file)?.before ?? read2(s.file),
+        after: cur.replace(m[0], tag)
+      });
+      done.push(`${src} \u2192 ${w}\xD7${h}`);
+      break;
+    }
+  }
+  if (!edits.size) return null;
+  return {
+    ...base(
+      f,
+      "Reserve space for images (width and height)",
+      `Adds the measured natural size so the browser can reserve space before the image loads: ${done.join(", ")}.`,
+      "Less layout shift (CLS) while images load."
+    ),
+    edits: [...edits].map(([file, v]) => ({ file, ...v })),
+    assumptions: [
+      "Sizes are the natural sizes measured in the browser; responsive images keep their aspect ratio only if CSS sets height: auto.",
+      ...notes
+    ]
+  };
+};
+var placeholderLabel = (f, _root, read2) => {
+  const edits = /* @__PURE__ */ new Map();
+  const done = [];
+  for (const e of f.evidence) {
+    const name = e.snippet?.match(/name=(\S+)/)?.[1];
+    if (!name || name === "\u2205") continue;
+    for (const s of f.sources ?? []) {
+      const cur = edits.get(s.file)?.after ?? read2(s.file);
+      if (!cur) continue;
+      const jsx = isJsx(s.file);
+      const re = new RegExp(`<(input|textarea|select)\\b(?=[^>]*\\bname=["']${escRe(name)}["'])[^>]*>`);
+      const m = cur.match(re);
+      if (!m) continue;
+      const tag = m[0];
+      const placeholder = tag.match(/placeholder=["']([^"']+)["']/)?.[1];
+      if (!placeholder) continue;
+      let id = tag.match(/\bid=["']([^"']+)["']/)?.[1];
+      if (id && new RegExp(`(?:for|htmlFor)=["']${escRe(id)}["']`).test(cur)) continue;
+      let newTag = tag;
+      if (!id) {
+        id = name.replace(/[^A-Za-z0-9_-]/g, "-");
+        newTag = tag.replace(/^<(input|textarea|select)\b/, `<$1 id="${id}"`);
+      }
+      const label = `<label ${jsx ? "htmlFor" : "for"}="${id}">${placeholder}</label> `;
+      edits.set(s.file, {
+        before: edits.get(s.file)?.before ?? read2(s.file),
+        after: cur.replace(tag, `${label}${newTag}`)
+      });
+      done.push(`${name} \u2192 "${placeholder}"`);
+      break;
+    }
+  }
+  if (!edits.size) return null;
+  return {
+    ...base(
+      f,
+      "Add visible labels for placeholder-only fields",
+      `Each field gets a <label> with its placeholder text: ${done.join(", ")}.`,
+      "Fields keep a visible, programmatic label while typing (WCAG 3.3.2, 1.3.1)."
+    ),
+    edits: [...edits].map(([file, v]) => ({ file, ...v })),
+    assumptions: [
+      "Label text is copied from the placeholder; reword it if the placeholder was an example rather than a label. Check the layout with the new labels."
+    ]
+  };
+};
 var FIXERS = {
   "axe/html-has-lang": htmlLang,
   "jourilo/missing-viewport-meta": viewportMeta,
   "jourilo/input-purpose": autocomplete,
   "jourilo/focus-visible": focusVisible,
-  "jourilo/paste-blocked": pasteAllowed
+  "jourilo/paste-blocked": pasteAllowed,
+  "jourilo/unsized-images": imageDimensions,
+  "jourilo/placeholder-label": placeholderLabel
 };
 function planFixes(findings, root) {
   const cache = /* @__PURE__ */ new Map();

@@ -19,6 +19,8 @@ describe.each(['firefox', 'webkit'])('%s', (browser) => {
         cli,
         'audit',
         'fixtures/sites/acme-saas',
+        '--pages',
+        '8',
         '--browser',
         browser,
         '--workspace',
@@ -30,9 +32,18 @@ describe.each(['firefox', 'webkit'])('%s', (browser) => {
     );
     if (r.status === 4) ctx.skip();
     expect(r.status, r.stderr).toBe(0);
-    const out = JSON.parse(r.stdout) as { findings: { ruleId: string; url: string }[] };
+    const out = JSON.parse(r.stdout) as {
+      findings: { ruleId: string; url: string }[];
+      limitations: string[];
+    };
     const found = new Set(out.findings.map((f) => `${f.ruleId} ${new URL(f.url).pathname}`));
-    expect(expected.mustFind.filter((e) => !found.has(`${e.rule} ${e.path}`))).toEqual([]);
+    // CLS and TBT need Chromium-only performance APIs; the run must say so instead of reporting zeros.
+    const chromiumOnly = (rule: string) =>
+      rule === 'jourilo/unsized-images' || rule === 'perf/cls' || rule === 'perf/tbt';
+    expect(
+      expected.mustFind.filter((e) => !chromiumOnly(e.rule) && !found.has(`${e.rule} ${e.path}`)),
+    ).toEqual([]);
+    expect(out.limitations.some((l) => /does not expose CLS/.test(l))).toBe(true);
   });
 
   it('runs journeys, saves a session and audits signed-in pages and forms like Chromium', (ctx) => {

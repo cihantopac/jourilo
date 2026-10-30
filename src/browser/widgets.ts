@@ -69,7 +69,9 @@ const SNAPSHOT_LAYERS = `(() => {
     const cs = getComputedStyle(e);
     return (cs.position === 'fixed' || cs.position === 'absolute') && e.getClientRects().length > 0 && cs.visibility !== 'hidden' && big(e);
   });
-  window.__jouriloLayers = new Set(layers);
+  // Signatures, not node identity: frameworks that re-render replace nodes without anything new appearing.
+  const sig = (e) => { const r = e.getBoundingClientRect(); return e.tagName + '.' + String(e.className) + '|' + Math.round(r.left) + ',' + Math.round(r.top) + ',' + Math.round(r.width) + ',' + Math.round(r.height); };
+  window.__jouriloLayers = new Set(layers.map(sig));
 })()`;
 
 const STATE = `(controls) => {
@@ -81,7 +83,9 @@ const STATE = `(controls) => {
     const big = (e) => { const r = e.getBoundingClientRect(); return r.width * r.height >= innerWidth * innerHeight * 0.02; };
     const fresh = Array.from(document.querySelectorAll('body *')).filter((e) => {
       const cs = getComputedStyle(e);
-      return (cs.position === 'fixed' || cs.position === 'absolute') && visible(e) && big(e) && !window.__jouriloLayers.has(e);
+      const r = e.getBoundingClientRect();
+      const sig = e.tagName + '.' + String(e.className) + '|' + Math.round(r.left) + ',' + Math.round(r.top) + ',' + Math.round(r.width) + ',' + Math.round(r.height);
+      return (cs.position === 'fixed' || cs.position === 'absolute') && visible(e) && big(e) && !window.__jouriloLayers.has(sig);
     });
     const outer = fresh.filter((e) => !fresh.some((o) => o !== e && o.contains(e)));
     if (outer.length) { d = outer[outer.length - 1]; unlabelled = true; }
