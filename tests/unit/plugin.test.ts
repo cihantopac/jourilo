@@ -31,6 +31,7 @@ describe('Claude Code plugin', () => {
     const fm = md.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? '';
     expect(fm).toMatch(new RegExp(`^name: ${name}$`, 'm'));
     expect(fm).toMatch(/^description: .{40,}/m);
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the literal placeholder Claude Code substitutes
     expect(fm).toContain('Bash(node "${CLAUDE_PLUGIN_ROOT}/dist/jourilo.mjs" *)');
     const names = new Set(COMMANDS.map((c) => c.name));
     for (const m of md.matchAll(/`jourilo ([a-z-]+)/g))

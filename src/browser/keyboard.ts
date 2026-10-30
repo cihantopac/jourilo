@@ -102,8 +102,11 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
   const limit = Math.min(maxTabs, focusableCount + 5);
   const sequence: string[] = [];
 
+  // WebKit follows Safari's default, where Tab skips links and buttons; Option/Alt+Tab visits every focusable
+  // element, which is what a keyboard-only user enables.
+  const tabKey = page.context().browser()?.browserType().name() === 'webkit' ? 'Alt+Tab' : 'Tab';
   for (let i = 0; i < limit; i++) {
-    await page.keyboard.press('Tab');
+    await page.keyboard.press(tabKey);
     walk.pressed++;
     const handle = (await page.evaluateHandle('document.activeElement')) as ElementHandle;
     const data = (await handle.evaluate(inPage(FOCUS_INFO))) as Omit<

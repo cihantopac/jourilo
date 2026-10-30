@@ -1,0 +1,32 @@
+name: Release validation
+
+# Validates a release candidate. Publishing (GitHub release, npm) stays a manual, maintainer-approved step.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright-core install --with-deps chromium firefox webkit
+      - run: npm run ci
+      - name: Versions agree (package, plugin, marketplace, tag)
+        run: |
+          V=$(node -p "require('./package.json').version")
+          test "$V" = "$(node -p "require('./plugin/.claude-plugin/plugin.json').version")"
+          test "$V" = "$(node -p "require('./.claude-plugin/marketplace.json').plugins[0].version")"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then test "v$V" = "${GITHUB_REF_NAME}"; fi
+      - name: Changelog has an entry for this version
+        run: grep -q "^## \[$(node -p "require('./package.json').version")\]" CHANGELOG.md
+      - run: npm pack --dry-run

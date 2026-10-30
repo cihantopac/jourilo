@@ -1,5 +1,6 @@
 // Path handling for anything derived from user input, page content or run data.
 import { chmodSync, existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { JouriloError } from './errors.js';
 
@@ -27,4 +28,13 @@ export function writeFileSafe(
 /** Converts a run-relative path into forward-slash form for reports and JSON. */
 export function toPosix(p: string): string {
   return p.split(sep).join('/');
+}
+
+/** Path for display in reports: relative to the working directory when inside it, else with ~ for the home dir. */
+export function displayPath(p: string): string {
+  const rel = relative(process.cwd(), p);
+  if (rel === '') return '.';
+  if (!rel.startsWith('..') && !isAbsolute(rel)) return toPosix(rel);
+  const home = homedir();
+  return toPosix(p.startsWith(home) ? `~${p.slice(home.length)}` : p);
 }

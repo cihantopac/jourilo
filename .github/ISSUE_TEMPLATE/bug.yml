@@ -1,0 +1,46 @@
+name: Bug report
+description: Something Jourilo did wrong (crash, wrong finding, missed problem, unsafe behavior)
+labels: [bug]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        [
+          Crash or error,
+          False positive (reported a problem that is not there),
+          Missed problem,
+          Wrong root cause / fix,
+          Safety or privacy,
+          Report / UX,
+          Other,
+        ]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: Command(s), a public URL or a minimal HTML page. Never paste credentials or private data.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: The finding JSON (fingerprint, ruleId, evidence) or the relevant part of report.md. Check it for private data first.
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: Output of `jourilo doctor` and your OS
+    validations:
+      required: true

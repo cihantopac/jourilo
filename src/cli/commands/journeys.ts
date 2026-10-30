@@ -5,6 +5,7 @@ import { mergeFindings } from '../../audit/finding.js';
 import { type BrowserName, launchBrowser } from '../../browser/runtime.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { JouriloError } from '../../core/errors.js';
+import { displayPath } from '../../core/fs-safety.js';
 import { newRunId } from '../../core/hash.js';
 import { serveStatic } from '../../core/static-server.js';
 import type { Finding, JourneyResult, Run } from '../../core/types.js';
@@ -200,7 +201,7 @@ async function runCmd(ctx: Context) {
       id,
       tool: { name: 'jourilo', version: VERSION },
       mode: isDir || str(ctx, 'repo') ? 'repository' : 'website',
-      target: server ? `${resolve(baseArg)} (served at ${server.url})` : base.toString(),
+      target: server ? `${displayPath(resolve(baseArg))} (served at ${server.url})` : base.toString(),
       startedAt,
       finishedAt: new Date().toISOString(),
       browser: { name: browserName, version: '' },

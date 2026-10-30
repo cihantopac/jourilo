@@ -90,7 +90,7 @@ function evidenceHtml(run: Run, f: Finding): string {
   return `<ul class="evidence">${items.join('')}${more}</ul>`;
 }
 
-function findingHtml(run: Run, f: Finding, status?: string): string {
+function findingHtml(run: Run, f: Finding, status?: string, pages = 1): string {
   const stds = f.standards
     .map((s) =>
       s.url
@@ -108,7 +108,7 @@ function findingHtml(run: Run, f: Finding, status?: string): string {
     : '';
   return `<details class="finding sev-${f.severity}" data-sev="${f.severity}" data-cat="${esc(f.category)}" data-kind="${esc(f.kind)}" data-page="${esc(f.url)}"${status ? ` data-status="${esc(status)}"` : ''}>
 <summary><span class="sev">${SEV_LABEL[f.severity]}</span><span class="title">${esc(f.title)}</span>
-<span class="tags"><span class="pill kind-${esc(f.kind)}">${KIND_LABEL[f.kind]}</span><span class="pill">${esc(f.category)}</span>${status ? `<span class="pill st-${esc(status)}">${esc(status)}</span>` : ''}${f.occurrences > 1 ? `<span class="pill">×${f.occurrences}</span>` : ''}</span>
+<span class="tags"><span class="pill kind-${esc(f.kind)}">${KIND_LABEL[f.kind]}</span><span class="pill">${esc(f.category)}</span>${status ? `<span class="pill st-${esc(status)}">${esc(status)}</span>` : ''}${f.occurrences > 1 ? `<span class="pill">×${f.occurrences}</span>` : ''}${pages > 1 ? `<span class="pill">same cause on ${pages} pages</span>` : ''}</span>
 <span class="where">${esc(pathname(f.url))}${f.viewport ? ` · ${esc(f.viewport)}` : ''}</span></summary>
 <div class="body">
 <p>${esc(f.description)}</p>
@@ -220,9 +220,29 @@ export function renderHtml(run: Run, cmp?: RunComparison): string {
   }
   const findings = [...run.findings].sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
   const defects = findings.filter((f) => f.kind === 'defect');
-  const top = [...defects]
-    .sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || b.occurrences - a.occurrences)
-    .slice(0, 5);
+  // "Fix first" groups by root cause: the same rule traced to the same source line is one fix, however many pages
+  // show it.
+  const groups = new Map<string, Finding[]>();
+  for (const f of defects) {
+    const src = f.sources?.[0];
+    const key =
+      src && src.confidence !== 'low'
+        ? `${f.ruleId}|${src.file}:${src.line}`
+        : `${f.ruleId}|${f.fingerprint}`;
+    groups.set(key, [...(groups.get(key) ?? []), f]);
+  }
+  const top = [...groups.values()]
+    .map((g) => ({
+      lead: g.sort((a, b) => severityRank(a.severity) - severityRank(b.severity))[0]!,
+      pages: new Set(g.map((x) => x.url)).size,
+    }))
+    .sort(
+      (a, b) =>
+        severityRank(a.lead.severity) - severityRank(b.lead.severity) ||
+        b.pages - a.pages ||
+        b.lead.occurrences - a.lead.occurrences,
+    )
+    .slice(0, 6);
   const s = run.summary;
   const cats = [...new Set(findings.map((f) => f.category))].sort();
   const pages = [...new Set(findings.map((f) => f.url))];
@@ -250,7 +270,7 @@ ${cmp ? '<button role="tab" aria-selected="false" data-tab="compare">Before / af
 <p class="kinds"><span class="pill kind-defect">${s.byKind.defect} defects</span> <span class="pill kind-hypothesis">${s.byKind.hypothesis} conversion hypotheses</span> <span class="pill kind-needs-review">${s.byKind['needs-review']} need manual review</span> across ${new Set(run.pages.map((p) => p.url)).size} page(s)${run.journeys.length ? ` and ${run.journeys.length} journey(s)` : ''}.</p>
 <p class="muted">No overall score is shown on purpose: a single number hides what matters. Defects are measured or observed problems; hypotheses are untested ideas that need an experiment or analytics before anyone claims an effect.</p>
 <h2>Fix first</h2>
-${top.length ? top.map((f) => findingHtml(run, f, status.get(f.fingerprint))).join('') : '<p>No defects detected by automated checks. Manual review is still required (see limitations).</p>'}
+${top.length ? top.map((t) => findingHtml(run, t.lead, status.get(t.lead.fingerprint), t.pages)).join('') : '<p>No defects detected by automated checks. Manual review is still required (see limitations).</p>'}
 <h2>By category</h2><ul class="bycat">${Object.entries(s.byCategory)
     .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
     .map(([k, v]) => `<li><b>${v}</b> ${esc(k)}</li>`)

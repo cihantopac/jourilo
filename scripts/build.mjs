@@ -56,6 +56,21 @@ await build({
 });
 console.log(`built ${join(outdir, 'jourilo.mjs')}`);
 
+// Bundled third-party code keeps its license next to the bundle (axe-core is MPL-2.0; its source is published at
+// https://github.com/dequelabs/axe-core and in the npm package).
+{
+  const { copyFileSync, mkdirSync: mk } = await import('node:fs');
+  mk(join(outdir, 'licenses'), { recursive: true });
+  copyFileSync(
+    join(root, 'node_modules', 'axe-core', 'LICENSE'),
+    join(outdir, 'licenses', 'axe-core-LICENSE.txt'),
+  );
+  copyFileSync(
+    join(root, 'node_modules', 'axe-core', 'LICENSE-3RD-PARTY.txt'),
+    join(outdir, 'licenses', 'axe-core-LICENSE-3RD-PARTY.txt'),
+  );
+}
+
 // Generated docs: the CLI reference comes from the command registry so docs and plugin never drift from code.
 if (!process.argv[2]) {
   const { execFileSync } = await import('node:child_process');

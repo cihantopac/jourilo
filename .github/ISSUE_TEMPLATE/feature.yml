@@ -1,0 +1,21 @@
+name: Feature or rule proposal
+description: A new check, journey capability, integration or improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem for people using the audited product
+      description: What goes wrong for users, and how would we observe or measure it in a browser?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Standard or source
+      description: WCAG criterion, documented guideline, research, or a real example.
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Including how it could produce false positives and how a fixture would prove it.

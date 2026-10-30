@@ -81,6 +81,7 @@ var init_errors = __esm({
 
 // src/core/fs-safety.ts
 import { chmodSync, existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 function resolveInside(root, child) {
   if (child.includes("\0")) throw new JouriloError("UNSAFE_PATH", "Path contains a NUL byte.");
@@ -93,6 +94,13 @@ function resolveInside(root, child) {
 }
 function toPosix(p) {
   return p.split(sep).join("/");
+}
+function displayPath(p) {
+  const rel = relative(process.cwd(), p);
+  if (rel === "") return ".";
+  if (!rel.startsWith("..") && !isAbsolute(rel)) return toPosix(rel);
+  const home = homedir();
+  return toPosix(p.startsWith(home) ? `~${p.slice(home.length)}` : p);
 }
 var init_fs_safety = __esm({
   "src/core/fs-safety.ts"() {
@@ -38861,7 +38869,7 @@ import { dirname as dirname3, resolve as resolve3 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // src/agents/adapters.ts
-import { homedir } from "node:os";
+import { homedir as homedir2 } from "node:os";
 import { join as join2 } from "node:path";
 var MARK_START = "<!-- jourilo:start -->";
 var MARK_END = "<!-- jourilo:end -->";
@@ -38900,7 +38908,7 @@ var ADAPTERS = [
     id: "claude-skill",
     name: "Claude Code personal skill (adds a bare /jourilo command)",
     scope: "user",
-    path: () => join2(homedir(), ".claude", "skills", "jourilo", "SKILL.md"),
+    path: () => join2(homedir2(), ".claude", "skills", "jourilo", "SKILL.md"),
     render: (cmd) => `---
 name: jourilo
 description: Jourilo product experience & conversion engineering \u2014 audit UX, accessibility, performance and conversion in a real browser, run user journeys, fix root causes and verify. Use for /jourilo.
@@ -39660,8 +39668,9 @@ async function keyboardWalk(page, maxTabs = 60) {
   let prevFocused = null;
   const limit = Math.min(maxTabs, focusableCount + 5);
   const sequence = [];
+  const tabKey = page.context().browser()?.browserType().name() === "webkit" ? "Alt+Tab" : "Tab";
   for (let i = 0; i < limit; i++) {
-    await page.keyboard.press("Tab");
+    await page.keyboard.press(tabKey);
     walk2.pressed++;
     const handle = await page.evaluateHandle("document.activeElement");
     const data = await handle.evaluate(inPage(FOCUS_INFO));
@@ -42231,6 +42240,7 @@ function parseViewports(spec) {
 
 // src/cli/commands/audit.ts
 init_errors();
+init_fs_safety();
 
 // src/core/static-server.ts
 init_errors();
@@ -42375,9 +42385,11 @@ function indexRepository(root, maxFiles = 6e3) {
         continue;
       }
       if (st.isDirectory()) {
-        if (!SKIP_DIRS.has(name)) walk2(full, depth + 1);
+        const docsDir = name === "docs" && !/(^|[\\/])(src|content|app|pages)([\\/]|$)/.test(relative3(root, dir));
+        if (!SKIP_DIRS.has(name) && !docsDir) walk2(full, depth + 1);
         continue;
       }
+      if (depth === 0 && /\.(md|mdx)$/i.test(name)) continue;
       const ext = name.endsWith(".blade.php") ? ".php" : extname2(name).toLowerCase();
       if (!SOURCE_EXT.has(ext) || st.size > 512 * 1024 || /\.min\.(js|css)$/.test(name)) continue;
       try {
@@ -42398,26 +42410,32 @@ function tokensFor(f) {
     tokens.push(t);
   };
   for (const e of f.evidence) {
-    const sel = e.selector ?? "";
-    for (const m of sel.matchAll(/#([A-Za-z][\w-]*)/g))
+    const rawSel = e.selector ?? "";
+    const sel = rawSel.replace(/(?<!\\)\[(?:\\.|[^\]\\])*\]/g, " ");
+    for (const m of sel.matchAll(/#((?:\\.|[\w-])+)/g)) {
+      const id = m[1].replace(/\\(.)/g, "$1");
+      if (!/^[A-Za-z]/.test(id)) continue;
       add({
-        value: m[1],
+        value: id,
         weight: 4,
-        reason: `id "${m[1]}"`,
+        reason: `id "${id}"`,
         regex: new RegExp(
-          `${attrRe("id", m[1]).source}|#${escapeRe(m[1])}\\b|getElementById\\(\\s*["']${escapeRe(m[1])}`,
+          `${attrRe("id", id).source}|#${escapeRe(id)}\\b|getElementById\\(\\s*["']${escapeRe(id)}`,
           "i"
         )
       });
-    for (const m of sel.matchAll(/\[data-(?:testid|test|cy)="([^"]+)"\]/g))
+    }
+    for (const m of rawSel.matchAll(/\[data-(?:testid|test|cy)="([^"]+)"\]/g))
       add({
         value: m[1],
         weight: 5,
         reason: `test id "${m[1]}"`,
         regex: attrRe("data-(?:testid|test|cy)", m[1])
       });
-    for (const m of sel.matchAll(/\.([A-Za-z][\w-]{2,})/g))
-      add({ value: m[1], weight: 1, reason: `class "${m[1]}"` });
+    for (const m of sel.matchAll(/\.((?:\\.|[\w-])+)/g)) {
+      const cls = m[1].replace(/\\(.)/g, "$1");
+      if (cls.length > 2 && /^[A-Za-z]/.test(cls)) add({ value: cls, weight: 1, reason: `class "${cls}"` });
+    }
     const snip = e.snippet ?? "";
     for (const m of snip.matchAll(/\b(id|name|placeholder|href|src|for|class|aria-label)="([^"]{3,80})"/g)) {
       const [, attr, val] = m;
@@ -42438,6 +42456,25 @@ function tokensFor(f) {
       const text = snip.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
       if (text.length >= 4 && text.length <= 60 && /[A-Za-z\u00C0-\u024F]{3}/.test(text) && !/^\w+ name=/.test(text))
         add({ value: text, weight: 3, reason: `text "${text}"`, scope: "markup" });
+    }
+    if (f.ruleId.includes("contrast") && e.type === "element") {
+      const classes = [...snip.matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1].split(/\s+/));
+      for (const c of classes) {
+        const cm = c.match(/^(?:[a-z-]+:)?(?:text|bg)-([a-z][a-z0-9-]*)$/);
+        if (!cm || /^(xs|sm|base|lg|xl|\dxl|left|right|center|justify|start|end|wrap|nowrap|balance|pretty|clip|ellipsis|opacity|none|transparent|current|inherit)$/.test(
+          cm[1]
+        ) || /^\d/.test(cm[1]))
+          continue;
+        const name = cm[1];
+        add({
+          value: `--color-${name}`,
+          weight: 6,
+          reason: `color token for .${c}`,
+          scope: "style",
+          primary: true,
+          regex: new RegExp(`--(?:color-)?${escapeRe(name)}\\s*:`)
+        });
+      }
     }
     const fg = e.data?.fgColor;
     if (typeof fg === "string" && /^#[0-9a-f]{6}$/i.test(fg)) {
@@ -42695,7 +42732,7 @@ function evidenceHtml(run, f) {
   const more = f.evidence.length > 8 ? `<li class="muted">+${f.evidence.length - 8} more in run.json</li>` : "";
   return `<ul class="evidence">${items.join("")}${more}</ul>`;
 }
-function findingHtml(run, f, status) {
+function findingHtml(run, f, status, pages = 1) {
   const stds = f.standards.map(
     (s) => s.url ? `<a href="${safeHref(s.url)}" target="_blank" rel="noopener">${esc(s.standard)} ${esc(s.id)} ${esc(s.title)}</a>` : `${esc(s.standard)} ${esc(s.id)} ${esc(s.title)}`
   ).join("<br>");
@@ -42704,7 +42741,7 @@ function findingHtml(run, f, status) {
   ).join("")}</ul>` : "";
   return `<details class="finding sev-${f.severity}" data-sev="${f.severity}" data-cat="${esc(f.category)}" data-kind="${esc(f.kind)}" data-page="${esc(f.url)}"${status ? ` data-status="${esc(status)}"` : ""}>
 <summary><span class="sev">${SEV_LABEL[f.severity]}</span><span class="title">${esc(f.title)}</span>
-<span class="tags"><span class="pill kind-${esc(f.kind)}">${KIND_LABEL[f.kind]}</span><span class="pill">${esc(f.category)}</span>${status ? `<span class="pill st-${esc(status)}">${esc(status)}</span>` : ""}${f.occurrences > 1 ? `<span class="pill">\xD7${f.occurrences}</span>` : ""}</span>
+<span class="tags"><span class="pill kind-${esc(f.kind)}">${KIND_LABEL[f.kind]}</span><span class="pill">${esc(f.category)}</span>${status ? `<span class="pill st-${esc(status)}">${esc(status)}</span>` : ""}${f.occurrences > 1 ? `<span class="pill">\xD7${f.occurrences}</span>` : ""}${pages > 1 ? `<span class="pill">same cause on ${pages} pages</span>` : ""}</span>
 <span class="where">${esc(pathname(f.url))}${f.viewport ? ` \xB7 ${esc(f.viewport)}` : ""}</span></summary>
 <div class="body">
 <p>${esc(f.description)}</p>
@@ -42788,7 +42825,18 @@ function renderHtml(run, cmp) {
   }
   const findings = [...run.findings].sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
   const defects = findings.filter((f) => f.kind === "defect");
-  const top = [...defects].sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || b.occurrences - a.occurrences).slice(0, 5);
+  const groups = /* @__PURE__ */ new Map();
+  for (const f of defects) {
+    const src = f.sources?.[0];
+    const key = src && src.confidence !== "low" ? `${f.ruleId}|${src.file}:${src.line}` : `${f.ruleId}|${f.fingerprint}`;
+    groups.set(key, [...groups.get(key) ?? [], f]);
+  }
+  const top = [...groups.values()].map((g) => ({
+    lead: g.sort((a, b) => severityRank(a.severity) - severityRank(b.severity))[0],
+    pages: new Set(g.map((x) => x.url)).size
+  })).sort(
+    (a, b) => severityRank(a.lead.severity) - severityRank(b.lead.severity) || b.pages - a.pages || b.lead.occurrences - a.lead.occurrences
+  ).slice(0, 6);
   const s = run.summary;
   const cats = [...new Set(findings.map((f) => f.category))].sort();
   const pages = [...new Set(findings.map((f) => f.url))];
@@ -42814,7 +42862,7 @@ ${cmp ? '<button role="tab" aria-selected="false" data-tab="compare">Before / af
 <p class="kinds"><span class="pill kind-defect">${s.byKind.defect} defects</span> <span class="pill kind-hypothesis">${s.byKind.hypothesis} conversion hypotheses</span> <span class="pill kind-needs-review">${s.byKind["needs-review"]} need manual review</span> across ${new Set(run.pages.map((p) => p.url)).size} page(s)${run.journeys.length ? ` and ${run.journeys.length} journey(s)` : ""}.</p>
 <p class="muted">No overall score is shown on purpose: a single number hides what matters. Defects are measured or observed problems; hypotheses are untested ideas that need an experiment or analytics before anyone claims an effect.</p>
 <h2>Fix first</h2>
-${top.length ? top.map((f) => findingHtml(run, f, status.get(f.fingerprint))).join("") : "<p>No defects detected by automated checks. Manual review is still required (see limitations).</p>"}
+${top.length ? top.map((t) => findingHtml(run, t.lead, status.get(t.lead.fingerprint), t.pages)).join("") : "<p>No defects detected by automated checks. Manual review is still required (see limitations).</p>"}
 <h2>By category</h2><ul class="bycat">${Object.entries(s.byCategory).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0)).map(([k, v]) => `<li><b>${v}</b> ${esc(k)}</li>`).join("")}</ul>
 ${contextHtml(run)}
 <h2>Limitations of this run</h2><ul class="limits">${run.limitations.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
@@ -43096,7 +43144,7 @@ async function auditCommand(ctx, usage2, categories) {
     }
     const { run, runDir } = await runAudit(ctx.ws, opts);
     if (server) {
-      run.target = `${resolve4(targetArg)} (served at ${server.url})`;
+      run.target = `${displayPath(resolve4(targetArg))} (served at ${server.url})`;
       run.settings.servedDir = resolve4(targetArg);
     }
     if (repo) run.settings.repo = repo;
@@ -44571,6 +44619,7 @@ var finding = {
 import { existsSync as existsSync12, mkdirSync as mkdirSync5, readdirSync as readdirSync6, readFileSync as readFileSync9, writeFileSync as writeFileSync8 } from "node:fs";
 import { basename as basename2, join as join15, resolve as resolve7 } from "node:path";
 init_errors();
+init_fs_safety();
 init_types();
 
 // src/journeys/runner.ts
@@ -45368,7 +45417,7 @@ async function runCmd(ctx) {
       id,
       tool: { name: "jourilo", version: VERSION },
       mode: isDir || str(ctx, "repo") ? "repository" : "website",
-      target: server ? `${resolve7(baseArg)} (served at ${server.url})` : base2.toString(),
+      target: server ? `${displayPath(resolve7(baseArg))} (served at ${server.url})` : base2.toString(),
       startedAt,
       finishedAt: (/* @__PURE__ */ new Date()).toISOString(),
       browser: { name: browserName, version: "" },
@@ -45996,7 +46045,7 @@ var verify = {
         onProgress: ctx.log
       });
       if (servedDir) {
-        run.target = `${servedDir} (served at ${server.url})`;
+        run.target = `${displayPath(servedDir)} (served at ${server.url})`;
         run.settings.servedDir = servedDir;
       }
       if (repo) {

@@ -32,6 +32,7 @@
   },
   "files": [
     "plugin",
+    "schemas",
     "LICENSE",
     "NOTICE",
     "THIRD_PARTY_NOTICES.md",
@@ -39,14 +40,14 @@
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
-    "dev": "node --import tsx src/cli/main.ts",
+    "dev": "node scripts/build.mjs && node plugin/dist/jourilo.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:browser": "vitest run --project browser",
-    "bench": "node plugin/dist/jourilo.mjs bench fixtures --json",
+    "bench": "node plugin/dist/jourilo.mjs bench fixtures/sites",
     "check:dist": "node scripts/check-dist.mjs",
     "validate:plugin": "claude plugin validate . --strict && claude plugin validate plugin --strict",
     "ci": "npm run lint && npm run typecheck && npm run build && npm test && npm run check:dist"
@@ -59,7 +60,6 @@
     "@types/node": "22.20.5",
     "axe-core": "4.14.0",
     "esbuild": "0.28.2",
-    "tsx": "4.23.15",
     "typescript": "7.0.2",
     "vitest": "5.0.5"
   }

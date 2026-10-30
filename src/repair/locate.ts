@@ -78,9 +78,13 @@ export function indexRepository(root: string, maxFiles = 6000): SourceFile[] {
         continue;
       }
       if (st.isDirectory()) {
-        if (!SKIP_DIRS.has(name)) walk(full, depth + 1);
+        // Project documentation describes the UI but does not render it.
+        const docsDir =
+          name === 'docs' && !/(^|[\\/])(src|content|app|pages)([\\/]|$)/.test(relative(root, dir));
+        if (!SKIP_DIRS.has(name) && !docsDir) walk(full, depth + 1);
         continue;
       }
+      if (depth === 0 && /\.(md|mdx)$/i.test(name)) continue;
       const ext = name.endsWith('.blade.php') ? '.php' : extname(name).toLowerCase();
       if (!SOURCE_EXT.has(ext) || st.size > 512 * 1024 || /\.min\.(js|css)$/.test(name)) continue;
       try {
@@ -119,26 +123,34 @@ export function tokensFor(f: Finding): Token[] {
     tokens.push(t);
   };
   for (const e of f.evidence) {
-    const sel = e.selector ?? '';
-    for (const m of sel.matchAll(/#([A-Za-z][\w-]*)/g))
+    // Attribute selectors ([href$="#x"]) are values, not ids or classes; drop them before reading the selector.
+    const rawSel = e.selector ?? '';
+    const sel = rawSel.replace(/(?<!\\)\[(?:\\.|[^\]\\])*\]/g, ' ');
+    for (const m of sel.matchAll(/#((?:\\.|[\w-])+)/g)) {
+      const id = m[1]!.replace(/\\(.)/g, '$1');
+      if (!/^[A-Za-z]/.test(id)) continue;
       add({
-        value: m[1]!,
+        value: id,
         weight: 4,
-        reason: `id "${m[1]}"`,
+        reason: `id "${id}"`,
         regex: new RegExp(
-          `${attrRe('id', m[1]!).source}|#${escapeRe(m[1]!)}\\b|getElementById\\(\\s*["']${escapeRe(m[1]!)}`,
+          `${attrRe('id', id).source}|#${escapeRe(id)}\\b|getElementById\\(\\s*["']${escapeRe(id)}`,
           'i',
         ),
       });
-    for (const m of sel.matchAll(/\[data-(?:testid|test|cy)="([^"]+)"\]/g))
+    }
+    for (const m of rawSel.matchAll(/\[data-(?:testid|test|cy)="([^"]+)"\]/g))
       add({
         value: m[1]!,
         weight: 5,
         reason: `test id "${m[1]}"`,
         regex: attrRe('data-(?:testid|test|cy)', m[1]!),
       });
-    for (const m of sel.matchAll(/\.([A-Za-z][\w-]{2,})/g))
-      add({ value: m[1]!, weight: 1, reason: `class "${m[1]}"` });
+    // Classes may contain escaped characters (Tailwind: .hover\:text-fg, .text-\[0\.95rem\]).
+    for (const m of sel.matchAll(/\.((?:\\.|[\w-])+)/g)) {
+      const cls = m[1]!.replace(/\\(.)/g, '$1');
+      if (cls.length > 2 && /^[A-Za-z]/.test(cls)) add({ value: cls, weight: 1, reason: `class "${cls}"` });
+    }
     const snip = e.snippet ?? '';
     for (const m of snip.matchAll(/\b(id|name|placeholder|href|src|for|class|aria-label)="([^"]{3,80})"/g)) {
       const [, attr, val] = m;
@@ -171,6 +183,31 @@ export function tokensFor(f: Finding): Token[] {
         !/^\w+ name=/.test(text)
       )
         add({ value: text, weight: 3, reason: `text "${text}"`, scope: 'markup' });
+    }
+    // Utility classes that set colors (Tailwind and similar) → the design token that defines the color.
+    // text-mark → --color-mark (Tailwind v4 theme) or --mark (plain custom property).
+    if (f.ruleId.includes('contrast') && e.type === 'element') {
+      const classes = [...snip.matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1]!.split(/\s+/));
+      for (const c of classes) {
+        const cm = c.match(/^(?:[a-z-]+:)?(?:text|bg)-([a-z][a-z0-9-]*)$/);
+        if (
+          !cm ||
+          /^(xs|sm|base|lg|xl|\dxl|left|right|center|justify|start|end|wrap|nowrap|balance|pretty|clip|ellipsis|opacity|none|transparent|current|inherit)$/.test(
+            cm[1]!,
+          ) ||
+          /^\d/.test(cm[1]!)
+        )
+          continue;
+        const name = cm[1]!;
+        add({
+          value: `--color-${name}`,
+          weight: 6,
+          reason: `color token for .${c}`,
+          scope: 'style',
+          primary: true,
+          regex: new RegExp(`--(?:color-)?${escapeRe(name)}\\s*:`),
+        });
+      }
     }
     // Color facts from contrast checks → CSS declarations using that color.
     const fg = e.data?.fgColor;

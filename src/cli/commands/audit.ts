@@ -5,6 +5,7 @@ import { severityRank } from '../../audit/finding.js';
 import type { BrowserName } from '../../browser/runtime.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { JouriloError } from '../../core/errors.js';
+import { displayPath } from '../../core/fs-safety.js';
 import { serveStatic } from '../../core/static-server.js';
 import type { Category, Run, Severity } from '../../core/types.js';
 import { loadContext } from '../../integrations/context.js';
@@ -104,7 +105,7 @@ export async function auditCommand(
     }
     const { run, runDir } = await runAudit(ctx.ws, opts);
     if (server) {
-      run.target = `${resolve(targetArg)} (served at ${server.url})`;
+      run.target = `${displayPath(resolve(targetArg))} (served at ${server.url})`;
       run.settings.servedDir = resolve(targetArg);
     }
     if (repo) run.settings.repo = repo;

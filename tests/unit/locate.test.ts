@@ -80,3 +80,52 @@ describe('source location', () => {
     expect(contrast[0]).toMatchObject({ file: 'src/app/globals.css', line: 1 });
   });
 });
+
+describe('design tokens and documentation', () => {
+  it('maps color utilities to their token definitions and ignores docs', () => {
+    const root = mkdtempSync(join(tmpdir(), 'jourilo-tw-'));
+    mkdirSync(join(root, 'app'), { recursive: true });
+    mkdirSync(join(root, 'docs'), { recursive: true });
+    writeFileSync(
+      join(root, 'app/globals.css'),
+      '@theme {\n  --color-mark: var(--mark);\n}\n:root {\n  --mark: #275d42;\n}\n',
+    );
+    writeFileSync(
+      join(root, 'app/page.tsx'),
+      'export default () => <p className="t-meta text-mark">02</p>;\n',
+    );
+    writeFileSync(join(root, 'docs/plan.md'), 'The t-meta text-mark label shows "02".\n');
+    writeFileSync(join(root, 'README.md'), 'text-mark\n');
+    const files = indexRepository(root);
+    expect(files.map((f) => f.rel).sort()).toEqual(['app/globals.css', 'app/page.tsx']);
+    const src = locate(
+      finding('axe/color-contrast', '/', [
+        {
+          type: 'element',
+          selector: '.text-mark',
+          snippet: '<p class="t-meta text-mark">02</p>',
+          data: { fgColor: '#275d42' },
+        },
+      ]),
+      files,
+    );
+    expect(src[0]).toMatchObject({ file: 'app/globals.css', confidence: 'high' });
+    expect(src.map((s) => s.line)).toEqual(expect.arrayContaining([2, 5]));
+  });
+});
+
+describe('selector parsing', () => {
+  it('ignores attribute-selector values and unescapes utility classes', async () => {
+    const { tokensFor } = await import('../../src/repair/locate.js');
+    const t = tokensFor(
+      finding('x', '/', [
+        { type: 'element', selector: '.hover\\:text-fg.text-\\[0\\.95rem\\][href$="#ovokodo"] > .link-draw' },
+      ]),
+    );
+    const reasons = t.map((x) => x.reason);
+    expect(reasons).not.toContain('id "ovokodo"');
+    expect(reasons).toEqual(
+      expect.arrayContaining(['class "hover:text-fg"', 'class "text-[0.95rem]"', 'class "link-draw"']),
+    );
+  });
+});

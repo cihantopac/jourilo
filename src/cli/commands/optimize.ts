@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path';
 import { runAudit } from '../../audit/engine.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { JouriloError } from '../../core/errors.js';
-import { resolveInside } from '../../core/fs-safety.js';
+import { displayPath, resolveInside } from '../../core/fs-safety.js';
 import { serveStatic } from '../../core/static-server.js';
 import { loadContext } from '../../integrations/context.js';
 import { unifiedDiff } from '../../repair/diff.js';
@@ -150,7 +150,7 @@ export const verify: Command = {
         onProgress: ctx.log,
       });
       if (servedDir) {
-        run.target = `${servedDir} (served at ${server!.url})`;
+        run.target = `${displayPath(servedDir)} (served at ${server!.url})`;
         run.settings.servedDir = servedDir;
       }
       if (repo) {
