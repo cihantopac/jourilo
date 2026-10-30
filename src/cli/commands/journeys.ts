@@ -164,6 +164,14 @@ async function runCmd(ctx: Context) {
       limitations.push(
         '--allow-destructive is ignored on non-local hosts: irreversible and payment actions were blocked.',
       );
+    const saveAuthArg = str(ctx, 'save-auth');
+    if (saveAuthArg && specs.length !== 1)
+      throw new JouriloError('USAGE', '--save-auth needs exactly one journey (the sign-in journey).');
+    const saveAuth = saveAuthArg ? resolve(saveAuthArg) : undefined;
+    if (saveAuth)
+      limitations.push(
+        `Signed-in state saved to ${displayPath(saveAuth)} (owner-only permissions). Treat it like a password; it is a test-account session.`,
+      );
     if (flag(ctx, 'trace')) {
       mkdirSync(join(runDir, 'traces'), { recursive: true });
       limitations.push(
@@ -185,6 +193,7 @@ async function runCmd(ctx: Context) {
             stepTimeoutMs: num(ctx, 'timeout', 10) * 1000,
             ...(vp ? { viewportOverride: vp } : {}),
             ...(str(ctx, 'auth') ? { storageState: str(ctx, 'auth')! } : {}),
+            ...(saveAuth ? { saveAuth } : {}),
             log: ctx.log,
           });
           ctx.log(`  → ${result.status} (${(result.durationMs / 1000).toFixed(1)} s)`);
@@ -276,6 +285,7 @@ export const journeys: Command = {
     timeout: { type: 'string' },
     pages: { type: 'string' },
     force: { type: 'boolean' },
+    'save-auth': { type: 'string' },
   },
   details: `Subcommands:
   suggest [url|dir|run]  Derive journeys from a site (or an existing run) into .jourilo/journeys/*.json
@@ -290,6 +300,7 @@ Run options:
   --allow-destructive    Allow irreversible/payment actions — local hosts with sandbox data only
   --trace                Record a Playwright trace per journey (contains typed values; keep private)
   --auth FILE            Playwright storage state for signed-in journeys
+  --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission

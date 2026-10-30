@@ -134,6 +134,7 @@ Run options:
   --allow-destructive    Allow irreversible/payment actions — local hosts with sandbox data only
   --trace                Record a Playwright trace per journey (contains typed values; keep private)
   --auth FILE            Playwright storage state for signed-in journeys
+  --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "id": "refresh-report",
+  "name": "Refresh analytics and open a report",
+  "goal": "see fresh numbers for a report",
+  "start": "/analytics",
+  "steps": [
+    { "action": "click", "target": { "role": "button", "name": "Refresh data" } },
+    { "action": "expect", "visible": { "text": "Updated just now" } },
+    { "action": "click", "target": { "role": "link", "name": "Open report 3" } }
+  ],
+  "success": [{ "description": "Report page open", "url": "/analytics/report-3" }],
+  "source": "user"
+}

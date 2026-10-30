@@ -87,6 +87,22 @@ function inPage(src: string): (el: unknown) => unknown {
   return new Function(`return (${src})(arguments[0])`) as (el: unknown) => unknown;
 }
 
+// Focuses the first focusable element after the trapped ones (in document order, outside their container).
+const ESCAPE_TRAP = `(sels) => {
+  const trapped = sels.map((s) => document.querySelector(s)).filter(Boolean);
+  if (!trapped.length) return false;
+  const after = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+  const last = trapped.reduce((acc, el) => (after(acc, el) ? el : acc));
+  let box = last.parentElement;
+  while (box && box !== document.body && !trapped.every((t) => box.contains(t))) box = box.parentElement;
+  const all = Array.from(document.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex]:not([tabindex="-1"])'))
+    .filter((e) => !e.disabled && e.getClientRects().length > 0);
+  const next = all.find((e) => after(last, e) && !(box && box !== document.body && box.contains(e)));
+  if (!next) return false;
+  next.focus();
+  return true;
+}`;
+
 export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWalk> {
   const focusableCount = (await page.evaluate(COUNT_FOCUSABLE)) as number;
   const stops: FocusStop[] = [];
@@ -99,12 +115,19 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
   );
   let prevHandle: ElementHandle | null = null;
   let prevFocused: string[] | null = null;
-  const limit = Math.min(maxTabs, focusableCount + 5);
+  const limit = Math.min(maxTabs, focusableCount + 12);
   const sequence: string[] = [];
+  const newStop = (d: Omit<FocusStop, 'index' | 'indicatorChanges' | 'indicatorChecked'>): FocusStop => ({
+    ...d,
+    index: stops.length,
+    indicatorChanges: [],
+    indicatorChecked: false,
+  });
 
   // WebKit follows Safari's default, where Tab skips links and buttons; Option/Alt+Tab visits every focusable
   // element, which is what a keyboard-only user enables.
   const tabKey = page.context().browser()?.browserType().name() === 'webkit' ? 'Alt+Tab' : 'Tab';
+  let escaped = false;
   for (let i = 0; i < limit; i++) {
     await page.keyboard.press(tabKey);
     walk.pressed++;
@@ -125,32 +148,55 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
         last.indicatorChecked = true;
       }
     }
+    prevFocused = null;
 
     if (!data) {
       // Focus left the document (end of the tab order).
       if (stops.length) walk.completedCycle = true;
-      prevHandle = null;
-      prevFocused = null;
       break;
     }
     if (stops.length && data.selector === stops[0]!.selector) {
       walk.completedCycle = true;
       break;
     }
+    sequence.push(data.selector);
+
+    // Trap: Tab keeps cycling through a small set of elements outside a modal while the page has more.
+    if (!walk.trap && sequence.length >= 6) {
+      // The trap is the set of elements that keep coming back, not everything seen recently.
+      const tail = sequence.slice(-6);
+      const counts = new Map<string, number>();
+      for (const s of tail) counts.set(s, (counts.get(s) ?? 0) + 1);
+      const distinct = new Set([...counts].filter(([, n]) => n >= 2).map(([s]) => s));
+      const cycling = distinct.size > 0 && tail.slice(-4).every((s) => distinct.has(s));
+      if (cycling && distinct.size <= 3 && focusableCount > distinct.size + 2 && !data.inModal) {
+        walk.trap = { selectors: [...distinct] };
+        // Record the trap, then step past it once so the rest of the page is still checked.
+        if (
+          !escaped &&
+          (await page.evaluate(`(${ESCAPE_TRAP})(${JSON.stringify([...distinct])})`).catch(() => false))
+        ) {
+          escaped = true;
+          const next = (await page.evaluateHandle('document.activeElement')) as ElementHandle;
+          const info = (await next.evaluate(inPage(FOCUS_INFO))) as typeof data;
+          if (info && !stops.some((s) => s.selector === info.selector)) {
+            prevFocused = (await next.evaluate(inPage(FOCUS_STYLES)).catch(() => null)) as string[] | null;
+            prevHandle = next;
+            stops.push(newStop(info));
+          }
+          continue;
+        }
+        break;
+      }
+    }
+    // Revisits (inside a trap) are not new stops.
+    if (stops.some((s) => s.selector === data.selector)) {
+      prevHandle = null;
+      continue;
+    }
     prevFocused = (await handle.evaluate(inPage(FOCUS_STYLES)).catch(() => null)) as string[] | null;
     prevHandle = handle;
-    sequence.push(data.selector);
-    stops.push({ ...data, index: stops.length, indicatorChanges: [], indicatorChecked: false });
-  }
-
-  // Trap: Tab keeps cycling through a small set of elements outside a modal while the page has more.
-  if (!walk.completedCycle && sequence.length >= 6) {
-    const tail = sequence.slice(-6);
-    const distinct = new Set(tail);
-    const inModal = stops.slice(-6).some((s) => s.inModal);
-    if (distinct.size <= 3 && focusableCount > distinct.size + 2 && !inModal) {
-      walk.trap = { selectors: [...distinct] };
-    }
+    stops.push(newStop(data));
   }
   return walk;
 }

@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "id": "sign-in",
+  "name": "Sign in with the test account",
+  "goal": "reach the analytics dashboard",
+  "start": "/login",
+  "steps": [
+    { "action": "fill", "target": { "label": "Email" }, "value": "{{email}}" },
+    { "action": "fill", "target": { "label": "Password" }, "value": "{{password}}" },
+    { "action": "click", "target": { "role": "button", "name": "Sign in" } }
+  ],
+  "success": [
+    { "description": "Lands on Analytics", "url": "/analytics" },
+    { "description": "Dashboard heading visible", "visible": { "role": "heading", "name": "Analytics overview" } }
+  ],
+  "safety": { "submitsForms": true },
+  "source": "user"
+}

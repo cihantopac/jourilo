@@ -27,7 +27,9 @@ const AFTER = `([sel, beforeText]) => {
   const prev = new Set(beforeText);
   const lines = document.body.innerText.split('\\n').map((s) => s.trim()).filter(Boolean);
   const fresh = lines.filter((l) => !prev.has(l) && l.length < 200);
-  const errorish = fresh.filter((l) => /error|required|invalid|please|must|enter|missing|can.?t be blank|is empty|too short|zorunlu|gerekli|geçersiz|erforderlich|obligatoire|requerido/i.test(l));
+  const liveText = Array.from(document.querySelectorAll('[role="alert"], [role="status"], [aria-live="assertive"], [aria-live="polite"]')).map((r) => r.innerText.trim()).filter(Boolean);
+  // Any new text announced in a live region is feedback; elsewhere it must read like an error message.
+  const errorish = fresh.filter((l) => liveText.some((t) => t.includes(l)) || /error|required|invalid|incorrect|wrong|failed|not valid|doesn.?t match|try again|unable|please|must|enter|missing|can.?t be blank|is empty|too short|zorunlu|gerekli|geçersiz|hatalı|erforderlich|ungültig|obligatoire|incorrect|requerido|inválido/i.test(l));
   const form = document.querySelector(sel);
   const fields = form ? Array.from(form.querySelectorAll('input:not([type=hidden]):not([type=submit]), select, textarea')) : [];
   const ariaInvalid = fields.filter((f) => f.getAttribute('aria-invalid') === 'true').length;
@@ -35,8 +37,7 @@ const AFTER = `([sel, beforeText]) => {
     const ids = (f.getAttribute('aria-describedby') || '') + ' ' + (f.getAttribute('aria-errormessage') || '');
     return ids.trim().split(/\\s+/).some((id) => { const el = id && document.getElementById(id); return el && el.innerText.trim(); });
   }).length;
-  const live = Array.from(document.querySelectorAll('[role="alert"], [role="status"], [aria-live="assertive"], [aria-live="polite"]'))
-    .some((r) => r.innerText.trim() && errorish.some((e) => r.innerText.includes(e)));
+  const live = liveText.some((t) => errorish.some((e) => t.includes(e)));
   const ae = document.activeElement;
   const focusOnProblem = !!ae && ae !== document.body && (fields.includes(ae) || /error|alert/i.test((ae.getAttribute('role') || '') + ' ' + (ae.className || '') + ' ' + (ae.id || '')));
   return { errorish, freshCount: fresh.length, ariaInvalid, described, live, focusOnProblem, fieldCount: fields.length };
@@ -91,6 +92,10 @@ export async function probeFormValidation(
         findings,
       };
     }
+    // An empty submission means empty: clear prefilled text fields first.
+    await page.evaluate(
+      `(() => { const f = document.querySelector(${JSON.stringify(form.selector)}); if (!f) return; for (const el of f.querySelectorAll('input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=checkbox]):not([type=radio]), textarea')) { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); } })()`,
+    );
     const startUrl = page.url();
     const submit = page
       .locator(form.selector)

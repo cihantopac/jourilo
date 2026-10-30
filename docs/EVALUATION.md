@@ -38,6 +38,14 @@ Jourilo with other tools.
 | 3         | Shared reports leaked `/Users/<name>/…`                                     | absolute paths in targets                                                                        | `displayPath` (relative or `~`)                                      | manual check of report HTML            |
 | 4         | WebKit missed focus problems                                                | WebKit follows Safari: Tab skips links and buttons                                               | keyboard walk uses Option+Tab in WebKit                              | `cross-browser.test.ts`                |
 
+## 1b. Signed-in single-page app (`fixtures/apps/pulse-dashboard`, `tests/browser/auth-spa.test.ts`)
+
+A History-API dashboard with a fake session. A user-written sign-in journey with the fixture's test account passes and
+saves the session (`--save-auth`, file mode 0600). Without the session the audit only reaches the sign-in page; with it,
+Jourilo finds the Tab trap in the range picker, three focus stops hidden under the fixed help bar (found after stepping
+past the trap) and, in the refresh journey, a 680 ms interaction (lab INP). No false form finding on the prefilled
+settings form.
+
 ## 2. Repair loop (`tests/browser/repair.test.ts`)
 
 On a disposable git copy of acme-saas: `optimize` (dry run) proposed 5 deterministic fixes and wrote nothing;

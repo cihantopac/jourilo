@@ -92,6 +92,11 @@ function resolveInside(root, child) {
   if (rel === "" || !rel.startsWith(`..${sep}`) && rel !== ".." && !isAbsolute(rel)) return real;
   throw new JouriloError("UNSAFE_PATH", `Path escapes ${root}: ${child}`);
 }
+function writeFileSafe(path2, data, opts = {}) {
+  mkdirSync(dirname(path2), { recursive: true });
+  writeFileSync(path2, data, opts.private ? { mode: 384 } : void 0);
+  if (opts.private) chmodSync(path2, 384);
+}
 function toPosix(p) {
   return p.split(sep).join("/");
 }
@@ -943,7 +948,7 @@ var require_axe = __commonJS({
                 return object;
               }
               var promise = new Constructor(noop3);
-              resolve9(promise, object);
+              resolve10(promise, object);
               return promise;
             }
             var PROMISE_ID = Math.random().toString(36).substring(2);
@@ -974,7 +979,7 @@ var require_axe = __commonJS({
                   }
                   sealed = true;
                   if (thenable !== value) {
-                    resolve9(promise2, value);
+                    resolve10(promise2, value);
                   } else {
                     fulfill(promise2, value);
                   }
@@ -998,7 +1003,7 @@ var require_axe = __commonJS({
                 reject(promise, thenable._result);
               } else {
                 subscribe2(thenable, void 0, function(value) {
-                  return resolve9(promise, value);
+                  return resolve10(promise, value);
                 }, function(reason) {
                   return reject(promise, reason);
                 });
@@ -1017,7 +1022,7 @@ var require_axe = __commonJS({
                 }
               }
             }
-            function resolve9(promise, value) {
+            function resolve10(promise, value) {
               if (promise === value) {
                 reject(promise, selfFulfillment());
               } else if (objectOrFunction(value)) {
@@ -1104,7 +1109,7 @@ var require_axe = __commonJS({
               }
               if (promise._state !== PENDING) {
               } else if (hasCallback && succeeded) {
-                resolve9(promise, value);
+                resolve10(promise, value);
               } else if (succeeded === false) {
                 reject(promise, error);
               } else if (settled === FULFILLED) {
@@ -1116,7 +1121,7 @@ var require_axe = __commonJS({
             function initializePromise(promise, resolver) {
               try {
                 resolver(function resolvePromise(value) {
-                  resolve9(promise, value);
+                  resolve10(promise, value);
                 }, function rejectPromise(reason) {
                   reject(promise, reason);
                 });
@@ -5987,15 +5992,15 @@ var require_axe = __commonJS({
           var slice = Array.prototype.slice;
           var resolveArgs;
           resolveArgs = function resolveArgs2(args) {
-            return this.map(function(resolve9, i2) {
-              return resolve9 ? resolve9(args[i2]) : args[i2];
+            return this.map(function(resolve10, i2) {
+              return resolve10 ? resolve10(args[i2]) : args[i2];
             }).concat(slice.call(args, this.length));
           };
           module2.exports = function(resolvers) {
             resolvers = toArray2(resolvers);
-            resolvers.forEach(function(resolve9) {
-              if (isValue(resolve9)) {
-                callable(resolve9);
+            resolvers.forEach(function(resolve10) {
+              if (isValue(resolve10)) {
+                callable(resolve10);
               }
             });
             return resolveArgs.bind(resolvers);
@@ -6044,7 +6049,7 @@ var require_axe = __commonJS({
           var _on = ee.on;
           var emit = ee.emit;
           module2.exports = function(original, length, options) {
-            var cache2 = create(null), conf, memLength, get2, set2, del, _clear, extDel, extGet, extHas, normalizer, getListeners, setListeners, deleteListeners, memoized, resolve9;
+            var cache2 = create(null), conf, memLength, get2, set2, del, _clear, extDel, extGet, extHas, normalizer, getListeners, setListeners, deleteListeners, memoized, resolve10;
             if (length !== false) {
               memLength = length;
             } else if (isNaN(original.length)) {
@@ -6060,13 +6065,13 @@ var require_axe = __commonJS({
               _clear = normalizer.clear;
             }
             if (options.resolvers != null) {
-              resolve9 = resolveResolve(options.resolvers);
+              resolve10 = resolveResolve(options.resolvers);
             }
             if (get2) {
               memoized = defineLength(function(arg) {
                 var id2, result, args = arguments;
-                if (resolve9) {
-                  args = resolve9(args);
+                if (resolve10) {
+                  args = resolve10(args);
                 }
                 id2 = get2(args);
                 if (id2 !== null) {
@@ -6123,8 +6128,8 @@ var require_axe = __commonJS({
             } else {
               memoized = function memoized2(arg) {
                 var result, args = arguments, id2;
-                if (resolve9) {
-                  args = resolve9(arguments);
+                if (resolve10) {
+                  args = resolve10(arguments);
                 }
                 id2 = String(args[0]);
                 if (hasOwnProperty.call(cache2, id2)) {
@@ -6153,8 +6158,8 @@ var require_axe = __commonJS({
               memoized,
               profileName: options.profileName,
               get: function get3(args) {
-                if (resolve9) {
-                  args = resolve9(args);
+                if (resolve10) {
+                  args = resolve10(args);
                 }
                 if (get2) {
                   return get2(args);
@@ -6204,8 +6209,8 @@ var require_axe = __commonJS({
             if (get2) {
               extDel = defineLength(function(arg) {
                 var id2, args = arguments;
-                if (resolve9) {
-                  args = resolve9(args);
+                if (resolve10) {
+                  args = resolve10(args);
                 }
                 id2 = get2(args);
                 if (id2 === null) {
@@ -6219,8 +6224,8 @@ var require_axe = __commonJS({
               };
             } else {
               extDel = function extDel2(arg) {
-                if (resolve9) {
-                  arg = resolve9(arguments)[0];
+                if (resolve10) {
+                  arg = resolve10(arguments)[0];
                 }
                 return conf["delete"](arg);
               };
@@ -6230,8 +6235,8 @@ var require_axe = __commonJS({
               if (length === 0) {
                 return cache2.data;
               }
-              if (resolve9) {
-                args = resolve9(args);
+              if (resolve10) {
+                args = resolve10(args);
               }
               if (get2) {
                 id2 = get2(args);
@@ -6245,8 +6250,8 @@ var require_axe = __commonJS({
               if (length === 0) {
                 return conf.has("data");
               }
-              if (resolve9) {
-                args = resolve9(args);
+              if (resolve10) {
+                args = resolve10(args);
               }
               if (get2) {
                 id2 = get2(args);
@@ -8853,7 +8858,7 @@ var require_axe = __commonJS({
             }
           }, {
             key: "resolve",
-            value: function resolve9(number) {
+            value: function resolve10(number) {
               if (this.type === "<angle>") {
                 return number;
               }
@@ -15721,7 +15726,7 @@ var require_axe = __commonJS({
           });
         };
         var dq_element_default = DqElement;
-        function checkHelper(checkResult, options, resolve9, reject) {
+        function checkHelper(checkResult, options, resolve10, reject) {
           return {
             isAsync: false,
             async: function async() {
@@ -15729,7 +15734,7 @@ var require_axe = __commonJS({
               return function(result) {
                 if (result instanceof Error === false) {
                   checkResult.result = result;
-                  resolve9(checkResult);
+                  resolve10(checkResult);
                 } else {
                   reject(result);
                 }
@@ -16045,8 +16050,8 @@ var require_axe = __commonJS({
             defer: function defer(fn) {
               if (_typeof(fn) === "object" && fn.then && fn["catch"]) {
                 var defer2 = fn;
-                fn = function fn2(resolve9, reject) {
-                  defer2.then(resolve9)["catch"](reject);
+                fn = function fn2(resolve10, reject) {
+                  defer2.then(resolve10)["catch"](reject);
                 };
               }
               funcGuard(fn);
@@ -16492,23 +16497,23 @@ var require_axe = __commonJS({
           return !!win.frameElement;
         };
         setDefaultFrameMessenger(_respondable);
-        function _sendCommandToFrame(node, parameters, resolve9, reject) {
+        function _sendCommandToFrame(node, parameters, resolve10, reject) {
           var _parameters$options$p, _parameters$options;
           var win = node.contentWindow;
           var pingWaitTime = (_parameters$options$p = (_parameters$options = parameters.options) === null || _parameters$options === void 0 ? void 0 : _parameters$options.pingWaitTime) !== null && _parameters$options$p !== void 0 ? _parameters$options$p : 500;
           if (!win) {
             log("Frame does not have a content window", node);
-            resolve9(null);
+            resolve10(null);
             return;
           }
           if (pingWaitTime === 0) {
-            callAxeStart(node, parameters, resolve9, reject);
+            callAxeStart(node, parameters, resolve10, reject);
             return;
           }
           var timeout = setTimeout(function() {
             timeout = setTimeout(function() {
               if (!parameters.debug) {
-                resolve9(null);
+                resolve10(null);
               } else {
                 reject(err("No response from frame", node));
               }
@@ -16516,10 +16521,10 @@ var require_axe = __commonJS({
           }, pingWaitTime);
           _respondable(win, "axe.ping", null, void 0, function() {
             clearTimeout(timeout);
-            callAxeStart(node, parameters, resolve9, reject);
+            callAxeStart(node, parameters, resolve10, reject);
           });
         }
-        function callAxeStart(node, parameters, resolve9, reject) {
+        function callAxeStart(node, parameters, resolve10, reject) {
           var _parameters$options$f, _parameters$options2;
           var frameWaitTime = (_parameters$options$f = (_parameters$options2 = parameters.options) === null || _parameters$options2 === void 0 ? void 0 : _parameters$options2.frameWaitTime) !== null && _parameters$options$f !== void 0 ? _parameters$options$f : 6e4;
           var win = node.contentWindow;
@@ -16529,7 +16534,7 @@ var require_axe = __commonJS({
           _respondable(win, "axe.start", parameters, void 0, function(data) {
             clearTimeout(timeout);
             if (data instanceof Error === false) {
-              resolve9(data);
+              resolve10(data);
             } else {
               reject(data);
             }
@@ -16721,7 +16726,7 @@ var require_axe = __commonJS({
           }
           return null;
         }
-        function _collectResultsFromFrames(parentContent, options, command, parameter, resolve9, reject) {
+        function _collectResultsFromFrames(parentContent, options, command, parameter, resolve10, reject) {
           options = _extends({}, options, {
             elementRef: false
           });
@@ -16749,7 +16754,7 @@ var require_axe = __commonJS({
             });
           });
           q2.then(function(data) {
-            resolve9(merge_results_default(data, options));
+            resolve10(merge_results_default(data, options));
           })["catch"](reject);
         }
         function _contains(vNode, otherVNode) {
@@ -24365,7 +24370,7 @@ var require_axe = __commonJS({
             return Promise.resolve();
           }
           importedUrls.push(url);
-          return new Promise(function(resolve9, reject) {
+          return new Promise(function(resolve10, reject) {
             var request = new window2.XMLHttpRequest();
             request.open("GET", url);
             request.timeout = constants_default.preload.timeout;
@@ -24373,7 +24378,7 @@ var require_axe = __commonJS({
             request.addEventListener("timeout", reject);
             request.addEventListener("loadend", function(event) {
               if (event.loaded && request.responseText) {
-                return resolve9(request.responseText);
+                return resolve10(request.responseText);
               }
               reject(request.responseText);
             });
@@ -24775,13 +24780,13 @@ var require_axe = __commonJS({
         }
         var preload_media_default = preloadMedia;
         function isMediaElementReady(elm) {
-          return new Promise(function(resolve9) {
+          return new Promise(function(resolve10) {
             if (elm.readyState > 0) {
-              resolve9(elm);
+              resolve10(elm);
             }
             function onMediaReady() {
               elm.removeEventListener("loadedmetadata", onMediaReady);
-              resolve9(elm);
+              resolve10(elm);
             }
             elm.addEventListener("loadedmetadata", onMediaReady);
           });
@@ -24794,7 +24799,7 @@ var require_axe = __commonJS({
           if (!_shouldPreload(options)) {
             return Promise.resolve();
           }
-          return new Promise(function(resolve9, reject) {
+          return new Promise(function(resolve10, reject) {
             var _getPreloadConfig2 = _getPreloadConfig(options), assets = _getPreloadConfig2.assets, timeout = _getPreloadConfig2.timeout;
             var preloadTimeout = setTimeout(function() {
               return reject(new Error("Preload assets timed out."));
@@ -24808,7 +24813,7 @@ var require_axe = __commonJS({
                 return _extends({}, out, result);
               }, {});
               clearTimeout(preloadTimeout);
-              resolve9(preloadAssets);
+              resolve10(preloadAssets);
             })["catch"](function(err2) {
               clearTimeout(preloadTimeout);
               reject(err2);
@@ -25377,8 +25382,8 @@ var require_axe = __commonJS({
           }, {});
         }
         var serial_virtual_node_default = SerialVirtualNode;
-        function cleanup(resolve9, reject) {
-          resolve9 = resolve9 || function res() {
+        function cleanup(resolve10, reject) {
+          resolve10 = resolve10 || function res() {
           };
           reject = reject || axe2.log;
           if (!axe2._audit) {
@@ -25409,7 +25414,7 @@ var require_axe = __commonJS({
           });
           q2.then(function(results) {
             if (cleanupErrors.length === 0) {
-              resolve9(results);
+              resolve10(results);
             } else {
               reject(cleanupErrors);
             }
@@ -33610,13 +33615,13 @@ var require_axe = __commonJS({
           }
         }
         Check.prototype.enabled = true;
-        Check.prototype.run = function run(node, options, context, resolve9, reject) {
+        Check.prototype.run = function run(node, options, context, resolve10, reject) {
           options = options || {};
           var enabled = options.hasOwnProperty("enabled") ? options.enabled : this.enabled;
           var checkOptions = this.getOptions(options.options);
           if (enabled) {
             var checkResult = new check_result_default(this);
-            var helper = check_helper_default(checkResult, options, resolve9, reject);
+            var helper = check_helper_default(checkResult, options, resolve10, reject);
             var result;
             try {
               result = this.evaluate.call(helper, node.actualNode, checkOptions, node, context);
@@ -33629,10 +33634,10 @@ var require_axe = __commonJS({
             }
             if (!helper.isAsync) {
               checkResult.result = result;
-              resolve9(checkResult);
+              resolve10(checkResult);
             }
           } else {
-            resolve9(null);
+            resolve10(null);
           }
         };
         Check.prototype.runSync = function runSync(node, options, context) {
@@ -33749,7 +33754,7 @@ var require_axe = __commonJS({
           }
           return elements;
         };
-        Rule.prototype.runChecks = function runChecks(type2, node, options, context, resolve9, reject) {
+        Rule.prototype.runChecks = function runChecks(type2, node, options, context, resolve10, reject) {
           var self2 = this;
           var checkQueue = queue_default();
           this[type2].forEach(function(c4) {
@@ -33770,7 +33775,7 @@ var require_axe = __commonJS({
             results = results.filter(function(check) {
               return check;
             });
-            resolve9({
+            resolve10({
               type: type2,
               results
             });
@@ -33795,7 +33800,7 @@ var require_axe = __commonJS({
         Rule.prototype.run = function run2(context) {
           var _this16 = this;
           var options = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
-          var resolve9 = arguments.length > 2 ? arguments[2] : void 0;
+          var resolve10 = arguments.length > 2 ? arguments[2] : void 0;
           var reject = arguments.length > 3 ? arguments[3] : void 0;
           if (options.performanceTimer) {
             this._trackPerformance();
@@ -33851,7 +33856,7 @@ var require_axe = __commonJS({
               _this16._logRulePerformance();
             }
             setTimeout(function() {
-              resolve9(ruleResult);
+              resolve10(ruleResult);
             }, 0);
           })["catch"](function(error) {
             if (options.performanceTimer) {
@@ -34294,7 +34299,7 @@ var require_axe = __commonJS({
             }
           }, {
             key: "run",
-            value: function run(context, options, resolve9, reject) {
+            value: function run(context, options, resolve10, reject) {
               var _this20 = this;
               _normalizeRunOptions(options);
               dq_element_default.setRunOptions(options);
@@ -34334,7 +34339,7 @@ var require_axe = __commonJS({
                   var nowRulesResults = nowRulesAndPreloaderResults[0];
                   if (!runLaterRules.length) {
                     axe2._selectCache = void 0;
-                    resolve9(nowRulesResults.filter(function(result) {
+                    resolve10(nowRulesResults.filter(function(result) {
                       return !!result;
                     }));
                     return;
@@ -34346,7 +34351,7 @@ var require_axe = __commonJS({
                   });
                   laterRulesQueue.then(function(laterRuleResults) {
                     axe2._selectCache = void 0;
-                    resolve9(nowRulesResults.concat(laterRuleResults).filter(function(result) {
+                    resolve10(nowRulesResults.concat(laterRuleResults).filter(function(result) {
                       return !!result;
                     }));
                   })["catch"](reject);
@@ -34522,14 +34527,14 @@ var require_axe = __commonJS({
           if (options.performanceTimer) {
             performance_timer_default.mark("mark_rule_start_" + rule.id);
           }
-          return function(resolve9, reject) {
+          return function(resolve10, reject) {
             rule.run(context, options, function(ruleResult) {
-              return resolve9(ruleResult);
+              return resolve10(ruleResult);
             }, function(err2) {
               if (options.debug) {
                 reject(err2);
               } else {
-                resolve9(createIncompleteErrorResult(rule, err2));
+                resolve10(createIncompleteErrorResult(rule, err2));
               }
             });
           };
@@ -34598,7 +34603,7 @@ var require_axe = __commonJS({
           axe2._selectCache = void 0;
         }
         var teardown_default = teardown;
-        function runRules(context, options, resolve9, reject) {
+        function runRules(context, options, resolve10, reject) {
           try {
             context = new Context(context);
             axe2._tree = context.flatTree;
@@ -34644,7 +34649,7 @@ var require_axe = __commonJS({
                 results = results.map(_finalizeRuleResult);
               }
               try {
-                resolve9(results, teardown_default);
+                resolve10(results, teardown_default);
               } catch (e) {
                 teardown_default();
                 log(e);
@@ -34662,7 +34667,7 @@ var require_axe = __commonJS({
           axe2._audit = new audit_default(audit2);
         }
         function runCommand(data, keepalive, callback) {
-          var resolve9 = callback;
+          var resolve10 = callback;
           var reject = function reject2(err2) {
             if (err2 instanceof Error === false) {
               err2 = new Error(err2);
@@ -34678,11 +34683,11 @@ var require_axe = __commonJS({
             case "rules":
               return runRules(context, options, function(results, cleanupFn) {
                 results = node_serializer_default.mapRawResults(results);
-                resolve9(results);
+                resolve10(results);
                 cleanupFn();
               }, reject);
             case "cleanup-plugin":
-              return cleanup_default(resolve9, reject);
+              return cleanup_default(resolve10, reject);
             default:
               if (axe2._audit && axe2._audit.commands && axe2._audit.commands[data.command]) {
                 return axe2._audit.commands[data.command](data, callback);
@@ -34822,7 +34827,7 @@ var require_axe = __commonJS({
           }
           setupGlobals(args[0]);
           var _normalizeRunParams = normalizeRunParams(args), context = _normalizeRunParams.context, options = _normalizeRunParams.options, _normalizeRunParams$c = _normalizeRunParams.callback, callback = _normalizeRunParams$c === void 0 ? noop2 : _normalizeRunParams$c;
-          var _getPromiseHandlers = getPromiseHandlers(callback), thenable = _getPromiseHandlers.thenable, resolve9 = _getPromiseHandlers.resolve, reject = _getPromiseHandlers.reject;
+          var _getPromiseHandlers = getPromiseHandlers(callback), thenable = _getPromiseHandlers.thenable, resolve10 = _getPromiseHandlers.resolve, reject = _getPromiseHandlers.reject;
           try {
             assert_default(axe2._audit, "No audit configured");
             assert_default(!axe2._running, "Axe is already running. Use `await axe.run()` to wait for the previous run to finish before starting a new run.");
@@ -34844,7 +34849,7 @@ var require_axe = __commonJS({
               axe2._running = false;
               teardown2();
               try {
-                resolve9(results);
+                resolve10(results);
               } catch (e) {
                 axe2.log(e);
               }
@@ -34879,14 +34884,14 @@ var require_axe = __commonJS({
           return thenable;
         }
         function getPromiseHandlers(callback) {
-          var thenable, reject, resolve9;
+          var thenable, reject, resolve10;
           if (typeof Promise === "function" && callback === noop2) {
             thenable = new Promise(function(_resolve, _reject) {
               reject = _reject;
-              resolve9 = _resolve;
+              resolve10 = _resolve;
             });
           } else {
-            resolve9 = function resolve10(result) {
+            resolve10 = function resolve11(result) {
               return callback(null, result);
             };
             reject = function reject2(err2) {
@@ -34896,7 +34901,7 @@ var require_axe = __commonJS({
           return {
             thenable,
             reject,
-            resolve: resolve9
+            resolve: resolve10
           };
         }
         function createReport(rawResults, options, respond, reject) {
@@ -35004,9 +35009,9 @@ var require_axe = __commonJS({
           });
         }
         function createReport2(results, options) {
-          return new Promise(function(resolve9, reject) {
+          return new Promise(function(resolve10, reject) {
             var reporter = getReporter(options.reporter);
-            reporter(results, options, resolve9, reject);
+            reporter(results, options, resolve10, reject);
           });
         }
         function setup2(node) {
@@ -39009,7 +39014,7 @@ Re-run with --write to install.`
 
 // src/cli/commands/audit.ts
 import { existsSync as existsSync6, statSync as statSync4 } from "node:fs";
-import { resolve as resolve4 } from "node:path";
+import { resolve as resolve5 } from "node:path";
 
 // src/browser/capture.ts
 var import_axe_core = __toESM(require_axe(), 1);
@@ -39656,6 +39661,20 @@ var COUNT_FOCUSABLE = `(() => Array.from(document.querySelectorAll('a[href], but
 function inPage(src) {
   return new Function(`return (${src})(arguments[0])`);
 }
+var ESCAPE_TRAP = `(sels) => {
+  const trapped = sels.map((s) => document.querySelector(s)).filter(Boolean);
+  if (!trapped.length) return false;
+  const after = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+  const last = trapped.reduce((acc, el) => (after(acc, el) ? el : acc));
+  let box = last.parentElement;
+  while (box && box !== document.body && !trapped.every((t) => box.contains(t))) box = box.parentElement;
+  const all = Array.from(document.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex]:not([tabindex="-1"])'))
+    .filter((e) => !e.disabled && e.getClientRects().length > 0);
+  const next = all.find((e) => after(last, e) && !(box && box !== document.body && box.contains(e)));
+  if (!next) return false;
+  next.focus();
+  return true;
+}`;
 async function keyboardWalk(page, maxTabs = 60) {
   const focusableCount = await page.evaluate(COUNT_FOCUSABLE);
   const stops = [];
@@ -39666,9 +39685,16 @@ async function keyboardWalk(page, maxTabs = 60) {
   );
   let prevHandle = null;
   let prevFocused = null;
-  const limit = Math.min(maxTabs, focusableCount + 5);
+  const limit = Math.min(maxTabs, focusableCount + 12);
   const sequence = [];
+  const newStop = (d) => ({
+    ...d,
+    index: stops.length,
+    indicatorChanges: [],
+    indicatorChecked: false
+  });
   const tabKey = page.context().browser()?.browserType().name() === "webkit" ? "Alt+Tab" : "Tab";
+  let escaped = false;
   for (let i = 0; i < limit; i++) {
     await page.keyboard.press(tabKey);
     walk2.pressed++;
@@ -39682,28 +39708,45 @@ async function keyboardWalk(page, maxTabs = 60) {
         last.indicatorChecked = true;
       }
     }
+    prevFocused = null;
     if (!data) {
       if (stops.length) walk2.completedCycle = true;
-      prevHandle = null;
-      prevFocused = null;
       break;
     }
     if (stops.length && data.selector === stops[0].selector) {
       walk2.completedCycle = true;
       break;
     }
+    sequence.push(data.selector);
+    if (!walk2.trap && sequence.length >= 6) {
+      const tail = sequence.slice(-6);
+      const counts = /* @__PURE__ */ new Map();
+      for (const s of tail) counts.set(s, (counts.get(s) ?? 0) + 1);
+      const distinct = new Set([...counts].filter(([, n]) => n >= 2).map(([s]) => s));
+      const cycling = distinct.size > 0 && tail.slice(-4).every((s) => distinct.has(s));
+      if (cycling && distinct.size <= 3 && focusableCount > distinct.size + 2 && !data.inModal) {
+        walk2.trap = { selectors: [...distinct] };
+        if (!escaped && await page.evaluate(`(${ESCAPE_TRAP})(${JSON.stringify([...distinct])})`).catch(() => false)) {
+          escaped = true;
+          const next = await page.evaluateHandle("document.activeElement");
+          const info = await next.evaluate(inPage(FOCUS_INFO));
+          if (info && !stops.some((s) => s.selector === info.selector)) {
+            prevFocused = await next.evaluate(inPage(FOCUS_STYLES)).catch(() => null);
+            prevHandle = next;
+            stops.push(newStop(info));
+          }
+          continue;
+        }
+        break;
+      }
+    }
+    if (stops.some((s) => s.selector === data.selector)) {
+      prevHandle = null;
+      continue;
+    }
     prevFocused = await handle.evaluate(inPage(FOCUS_STYLES)).catch(() => null);
     prevHandle = handle;
-    sequence.push(data.selector);
-    stops.push({ ...data, index: stops.length, indicatorChanges: [], indicatorChecked: false });
-  }
-  if (!walk2.completedCycle && sequence.length >= 6) {
-    const tail = sequence.slice(-6);
-    const distinct = new Set(tail);
-    const inModal = stops.slice(-6).some((s) => s.inModal);
-    if (distinct.size <= 3 && focusableCount > distinct.size + 2 && !inModal) {
-      walk2.trap = { selectors: [...distinct] };
-    }
+    stops.push(newStop(data));
   }
   return walk2;
 }
@@ -41118,7 +41161,9 @@ var AFTER = `([sel, beforeText]) => {
   const prev = new Set(beforeText);
   const lines = document.body.innerText.split('\\n').map((s) => s.trim()).filter(Boolean);
   const fresh = lines.filter((l) => !prev.has(l) && l.length < 200);
-  const errorish = fresh.filter((l) => /error|required|invalid|please|must|enter|missing|can.?t be blank|is empty|too short|zorunlu|gerekli|ge\xE7ersiz|erforderlich|obligatoire|requerido/i.test(l));
+  const liveText = Array.from(document.querySelectorAll('[role="alert"], [role="status"], [aria-live="assertive"], [aria-live="polite"]')).map((r) => r.innerText.trim()).filter(Boolean);
+  // Any new text announced in a live region is feedback; elsewhere it must read like an error message.
+  const errorish = fresh.filter((l) => liveText.some((t) => t.includes(l)) || /error|required|invalid|incorrect|wrong|failed|not valid|doesn.?t match|try again|unable|please|must|enter|missing|can.?t be blank|is empty|too short|zorunlu|gerekli|ge\xE7ersiz|hatal\u0131|erforderlich|ung\xFCltig|obligatoire|incorrect|requerido|inv\xE1lido/i.test(l));
   const form = document.querySelector(sel);
   const fields = form ? Array.from(form.querySelectorAll('input:not([type=hidden]):not([type=submit]), select, textarea')) : [];
   const ariaInvalid = fields.filter((f) => f.getAttribute('aria-invalid') === 'true').length;
@@ -41126,8 +41171,7 @@ var AFTER = `([sel, beforeText]) => {
     const ids = (f.getAttribute('aria-describedby') || '') + ' ' + (f.getAttribute('aria-errormessage') || '');
     return ids.trim().split(/\\s+/).some((id) => { const el = id && document.getElementById(id); return el && el.innerText.trim(); });
   }).length;
-  const live = Array.from(document.querySelectorAll('[role="alert"], [role="status"], [aria-live="assertive"], [aria-live="polite"]'))
-    .some((r) => r.innerText.trim() && errorish.some((e) => r.innerText.includes(e)));
+  const live = liveText.some((t) => errorish.some((e) => t.includes(e)));
   const ae = document.activeElement;
   const focusOnProblem = !!ae && ae !== document.body && (fields.includes(ae) || /error|alert/i.test((ae.getAttribute('role') || '') + ' ' + (ae.className || '') + ' ' + (ae.id || '')));
   return { errorish, freshCount: fresh.length, ariaInvalid, described, live, focusOnProblem, fieldCount: fields.length };
@@ -41161,6 +41205,9 @@ async function probeFormValidation(ctx, url, form, vp, policy, runDir) {
         findings
       };
     }
+    await page.evaluate(
+      `(() => { const f = document.querySelector(${JSON.stringify(form.selector)}); if (!f) return; for (const el of f.querySelectorAll('input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=checkbox]):not([type=radio]), textarea')) { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); } })()`
+    );
     const startUrl = page.url();
     const submit = page.locator(form.selector).locator('button[type="submit"], button:not([type]), input[type="submit"]').first();
     if (await submit.count()) await submit.click({ timeout: 1e4 });
@@ -42070,7 +42117,10 @@ async function runAudit(ws, opts) {
       });
       try {
         for (const o of observations.filter((x) => x.viewport.name === vp.name && (x.status ?? 200) < 400)) {
-          for (const form of (o.probe?.inventory.forms ?? []).filter((f) => f.purpose !== "search").slice(0, 3)) {
+          const probeable = (o.probe?.inventory.forms ?? []).filter(
+            (f) => f.purpose !== "search" && (f.purpose !== "other" || f.fields.some((x) => x.required))
+          );
+          for (const form of probeable.slice(0, 3)) {
             log(`  form     ${o.url} ${form.selector}`);
             const r = await probeFormValidation(
               ctx,
@@ -42245,9 +42295,9 @@ init_fs_safety();
 // src/core/static-server.ts
 init_errors();
 init_fs_safety();
-import { existsSync as existsSync5, readFileSync as readFileSync4, statSync as statSync2 } from "node:fs";
+import { existsSync as existsSync5, readdirSync as readdirSync3, readFileSync as readFileSync4, statSync as statSync2 } from "node:fs";
 import { createServer } from "node:http";
-import { extname, join as join6 } from "node:path";
+import { extname, join as join6, resolve as resolve4 } from "node:path";
 var TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -42264,11 +42314,25 @@ var TYPES = {
   ".txt": "text/plain; charset=utf-8",
   ".xml": "application/xml"
 };
-async function serveStatic(root, port = 0) {
+function looksLikeSpa(root) {
+  try {
+    const html = readdirSync3(root).filter((f) => /\.html?$/.test(f) && f !== "404.html");
+    return html.length === 1 && html[0] === "index.html";
+  } catch {
+    return false;
+  }
+}
+function stablePort(root) {
+  let h = 0;
+  for (const ch of resolve4(root)) h = h * 31 + ch.charCodeAt(0) >>> 0;
+  return 41e3 + h % 8e3;
+}
+async function serveStatic(root, port = 0, opts = {}) {
   if (!existsSync5(root) || !statSync2(root).isDirectory())
     throw new JouriloError("NOT_FOUND", `Not a directory: ${root}`);
   const cfgFile = join6(root, "jourilo-fixture.json");
   const cfg = existsSync5(cfgFile) ? JSON.parse(readFileSync4(cfgFile, "utf8")) : {};
+  const spa = opts.spa ?? cfg.spa ?? looksLikeSpa(root);
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     let pathname2 = decodeURIComponent(url.pathname);
@@ -42281,6 +42345,7 @@ async function serveStatic(root, port = 0) {
           const html = resolveInside(root, `.${pathname2}.html`);
           if (existsSync5(html)) file = html;
         }
+        if (!existsSync5(file) && spa && !extname(pathname2)) file = join6(root, "index.html");
         if (!existsSync5(file)) {
           const notFound = join6(root, "404.html");
           res.writeHead(404, { "content-type": TYPES[".html"] });
@@ -42301,23 +42366,33 @@ async function serveStatic(root, port = 0) {
     if (delay > 0) setTimeout(send, delay);
     else send();
   });
-  await new Promise((resolve9, reject) => {
+  const listen = (p) => new Promise((resolve10, reject) => {
     server.once("error", reject);
-    server.listen(port, "127.0.0.1", () => resolve9());
+    server.listen(p, "127.0.0.1", () => resolve10());
   });
+  if (port === 0) {
+    try {
+      await listen(stablePort(root));
+    } catch {
+      server.removeAllListeners("error");
+      await listen(0);
+    }
+  } else {
+    await listen(port);
+  }
   const { port: actual } = server.address();
   return {
     url: `http://127.0.0.1:${actual}`,
-    close: () => new Promise((resolve9) => {
+    close: () => new Promise((resolve10) => {
       server.closeAllConnections();
-      server.close(() => resolve9());
+      server.close(() => resolve10());
     })
   };
 }
 
 // src/repair/locate.ts
 init_fs_safety();
-import { readdirSync as readdirSync3, readFileSync as readFileSync5, statSync as statSync3 } from "node:fs";
+import { readdirSync as readdirSync4, readFileSync as readFileSync5, statSync as statSync3 } from "node:fs";
 import { extname as extname2, join as join7, relative as relative3 } from "node:path";
 var SOURCE_EXT = /* @__PURE__ */ new Set([
   ".html",
@@ -42370,7 +42445,7 @@ function indexRepository(root, maxFiles = 6e3) {
     if (out.length >= maxFiles || depth > 12) return;
     let entries;
     try {
-      entries = readdirSync3(dir);
+      entries = readdirSync4(dir);
     } catch {
       return;
     }
@@ -43110,8 +43185,8 @@ async function auditCommand(ctx, usage2, categories) {
   const auth = str(ctx, "auth");
   if (auth && !existsSync6(auth)) throw new JouriloError("NOT_FOUND", `Auth state file not found: ${auth}`);
   const isDir = !/^[a-z]+:\/\//i.test(targetArg) && existsSync6(targetArg) && statSync4(targetArg).isDirectory();
-  const server = isDir ? await serveStatic(resolve4(targetArg)) : void 0;
-  const repo = str(ctx, "repo") ?? (isDir ? resolve4(targetArg) : void 0);
+  const server = isDir ? await serveStatic(resolve5(targetArg)) : void 0;
+  const repo = str(ctx, "repo") ?? (isDir ? resolve5(targetArg) : void 0);
   try {
     const opts = {
       target: server ? server.url : targetArg,
@@ -43144,8 +43219,8 @@ async function auditCommand(ctx, usage2, categories) {
     }
     const { run, runDir } = await runAudit(ctx.ws, opts);
     if (server) {
-      run.target = `${displayPath(resolve4(targetArg))} (served at ${server.url})`;
-      run.settings.servedDir = resolve4(targetArg);
+      run.target = `${displayPath(resolve5(targetArg))} (served at ${server.url})`;
+      run.settings.servedDir = resolve5(targetArg);
     }
     if (repo) run.settings.repo = repo;
     if (repo) {
@@ -43240,8 +43315,8 @@ var conversion = {
 };
 
 // src/cli/commands/bench.ts
-import { existsSync as existsSync7, readdirSync as readdirSync4, readFileSync as readFileSync6, writeFileSync as writeFileSync5 } from "node:fs";
-import { join as join9, resolve as resolve5 } from "node:path";
+import { existsSync as existsSync7, readdirSync as readdirSync5, readFileSync as readFileSync6, writeFileSync as writeFileSync5 } from "node:fs";
+import { join as join9, resolve as resolve6 } from "node:path";
 init_errors();
 var matches = (f, e) => f.ruleId === e.rule && pathOf(f.url).split("?")[0].replace(/\/$/, "") === e.path.replace(/\/$/, "") && (!e.viewport || (f.viewport ?? "").split(", ").includes(e.viewport));
 async function benchFixture(dir, wsRoot) {
@@ -43310,10 +43385,10 @@ var bench = {
   usage: "jourilo bench [fixtures-dir=fixtures/sites] [--only name] [--record docs/evaluation/bench-history.jsonl]",
   options: { only: { type: "string" }, record: { type: "string" } },
   async run(ctx) {
-    const root = resolve5(ctx.positionals[0] ?? "fixtures/sites");
+    const root = resolve6(ctx.positionals[0] ?? "fixtures/sites");
     if (!existsSync7(root)) throw new JouriloError("NOT_FOUND", `No fixtures at ${root}`);
     const only = str(ctx, "only");
-    const dirs = readdirSync4(root).filter((d) => existsSync7(join9(root, d, "expected.json"))).filter((d) => !only || d === only);
+    const dirs = readdirSync5(root).filter((d) => existsSync7(join9(root, d, "expected.json"))).filter((d) => !only || d === only);
     if (!dirs.length) throw new JouriloError("NOT_FOUND", `No fixtures with expected.json in ${root}`);
     const results = [];
     for (const d of dirs) {
@@ -43369,11 +43444,11 @@ var bench = {
 
 // src/cli/commands/discover.ts
 import { existsSync as existsSync9, statSync as statSync6, writeFileSync as writeFileSync6 } from "node:fs";
-import { join as join11, resolve as resolve6 } from "node:path";
+import { join as join11, resolve as resolve7 } from "node:path";
 
 // src/discovery/repo.ts
 init_fs_safety();
-import { existsSync as existsSync8, readdirSync as readdirSync5, readFileSync as readFileSync7, statSync as statSync5 } from "node:fs";
+import { existsSync as existsSync8, readdirSync as readdirSync6, readFileSync as readFileSync7, statSync as statSync5 } from "node:fs";
 import { basename, dirname as dirname5, join as join10, relative as relative4 } from "node:path";
 var SKIP = /* @__PURE__ */ new Set([
   "node_modules",
@@ -43399,7 +43474,7 @@ function walk(root, max = 2e4) {
     if (out.length >= max || depth > 14) return;
     let entries;
     try {
-      entries = readdirSync5(dir);
+      entries = readdirSync6(dir);
     } catch {
       return;
     }
@@ -43715,7 +43790,7 @@ function discoverRepository(root) {
     if (g.endsWith("*")) {
       const dir = join10(root, base2);
       if (!existsSync8(dir)) continue;
-      for (const n of readdirSync5(dir))
+      for (const n of readdirSync6(dir))
         if (existsSync8(join10(dir, n, "package.json"))) appRoots.push(join10(dir, n));
     } else if (existsSync8(join10(root, base2, "package.json"))) appRoots.push(join10(root, base2));
   }
@@ -44019,7 +44094,7 @@ var discover = {
     const target = requirePositional(ctx, 0, "path|url", discover.usage);
     ctx.ws.ensure();
     if (!target.includes("://") && existsSync9(target) && statSync6(target).isDirectory()) {
-      const profile2 = discoverRepository(resolve6(target));
+      const profile2 = discoverRepository(resolve7(target));
       const file2 = join11(ctx.ws.root, "product.json");
       writeFileSync6(file2, `${JSON.stringify(profile2, null, 2)}
 `);
@@ -44616,8 +44691,8 @@ var finding = {
 };
 
 // src/cli/commands/journeys.ts
-import { existsSync as existsSync12, mkdirSync as mkdirSync5, readdirSync as readdirSync6, readFileSync as readFileSync9, writeFileSync as writeFileSync8 } from "node:fs";
-import { basename as basename2, join as join15, resolve as resolve7 } from "node:path";
+import { existsSync as existsSync12, mkdirSync as mkdirSync5, readdirSync as readdirSync7, readFileSync as readFileSync9, writeFileSync as writeFileSync8 } from "node:fs";
+import { basename as basename2, join as join15, resolve as resolve8 } from "node:path";
 init_errors();
 init_fs_safety();
 init_types();
@@ -44966,6 +45041,9 @@ async function runJourney(browser, spec, opts) {
     if (tracePath) {
       await ctx.tracing.stop({ path: join14(opts.runDir, tracePath) });
     }
+    if (opts.saveAuth && status === "passed") {
+      writeFileSafe(opts.saveAuth, JSON.stringify(await ctx.storageState(), null, 2), { private: true });
+    }
     const result = {
       id: spec.id,
       name: spec.name,
@@ -45258,11 +45336,11 @@ function loadJourneys(ws, refs) {
   if (!refs.length) {
     if (!existsSync12(dir)) return [];
     files.push(
-      ...readdirSync6(dir).filter((f) => f.endsWith(".json")).sort().map((f) => join15(dir, f))
+      ...readdirSync7(dir).filter((f) => f.endsWith(".json")).sort().map((f) => join15(dir, f))
     );
   } else {
     for (const r of refs) {
-      if (r.endsWith(".json") && existsSync12(r)) files.push(resolve7(r));
+      if (r.endsWith(".json") && existsSync12(r)) files.push(resolve8(r));
       else if (existsSync12(join15(dir, `${r}.json`))) files.push(join15(dir, `${r}.json`));
       else throw new JouriloError("NOT_FOUND", `Journey not found: ${r} (looked in ${dir})`);
     }
@@ -45295,7 +45373,7 @@ async function suggest(ctx) {
     run = ctx.ws.loadRun(target ?? "latest").run;
   } else {
     const isDir = existsSync12(target) && !target.includes("://");
-    const server = isDir ? await serveStatic(resolve7(target)) : void 0;
+    const server = isDir ? await serveStatic(resolve8(target)) : void 0;
     try {
       ctx.log("Discovering pages to derive journeys (no audit rules applied) \u2026");
       run = (await runAudit(ctx.ws, {
@@ -45358,7 +45436,7 @@ async function runCmd(ctx) {
       "Create some with `jourilo journeys suggest <url>`."
     );
   const isDir = existsSync12(baseArg) && !baseArg.includes("://");
-  const server = isDir ? await serveStatic(resolve7(baseArg)) : void 0;
+  const server = isDir ? await serveStatic(resolve8(baseArg)) : void 0;
   try {
     const base2 = parseTargetUrl(server?.url ?? baseArg);
     const hostClass = await checkTarget(base2, { allowPrivate: flag(ctx, "allow-private") });
@@ -45379,6 +45457,14 @@ async function runCmd(ctx) {
     if (policy.allowDestructive && hostClass !== "local")
       limitations.push(
         "--allow-destructive is ignored on non-local hosts: irreversible and payment actions were blocked."
+      );
+    const saveAuthArg = str(ctx, "save-auth");
+    if (saveAuthArg && specs.length !== 1)
+      throw new JouriloError("USAGE", "--save-auth needs exactly one journey (the sign-in journey).");
+    const saveAuth = saveAuthArg ? resolve8(saveAuthArg) : void 0;
+    if (saveAuth)
+      limitations.push(
+        `Signed-in state saved to ${displayPath(saveAuth)} (owner-only permissions). Treat it like a password; it is a test-account session.`
       );
     if (flag(ctx, "trace")) {
       mkdirSync5(join15(runDir, "traces"), { recursive: true });
@@ -45401,6 +45487,7 @@ async function runCmd(ctx) {
             stepTimeoutMs: num(ctx, "timeout", 10) * 1e3,
             ...vp ? { viewportOverride: vp } : {},
             ...str(ctx, "auth") ? { storageState: str(ctx, "auth") } : {},
+            ...saveAuth ? { saveAuth } : {},
             log: ctx.log
           });
           ctx.log(`  \u2192 ${result.status} (${(result.durationMs / 1e3).toFixed(1)} s)`);
@@ -45417,7 +45504,7 @@ async function runCmd(ctx) {
       id,
       tool: { name: "jourilo", version: VERSION },
       mode: isDir || str(ctx, "repo") ? "repository" : "website",
-      target: server ? `${displayPath(resolve7(baseArg))} (served at ${server.url})` : base2.toString(),
+      target: server ? `${displayPath(resolve8(baseArg))} (served at ${server.url})` : base2.toString(),
       startedAt,
       finishedAt: (/* @__PURE__ */ new Date()).toISOString(),
       browser: { name: browserName, version: "" },
@@ -45437,7 +45524,7 @@ async function runCmd(ctx) {
         "Journeys prove that a scripted path works (or not) in one browser; they do not measure how real people choose paths."
       ]
     };
-    const repo = str(ctx, "repo") ?? (isDir ? resolve7(baseArg) : void 0);
+    const repo = str(ctx, "repo") ?? (isDir ? resolve8(baseArg) : void 0);
     if (repo) locateFindings(run, repo);
     ctx.ws.saveRun(run);
     const reports = writeReports(runDir, run);
@@ -45478,7 +45565,8 @@ var journeys = {
     repo: { type: "string" },
     timeout: { type: "string" },
     pages: { type: "string" },
-    force: { type: "boolean" }
+    force: { type: "boolean" },
+    "save-auth": { type: "string" }
   },
   details: `Subcommands:
   suggest [url|dir|run]  Derive journeys from a site (or an existing run) into .jourilo/journeys/*.json
@@ -45493,6 +45581,7 @@ Run options:
   --allow-destructive    Allow irreversible/payment actions \u2014 local hosts with sandbox data only
   --trace                Record a Playwright trace per journey (contains typed values; keep private)
   --auth FILE            Playwright storage state for signed-in journeys
+  --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission
@@ -45515,7 +45604,7 @@ ${specs.map((s) => `  ${s.id.padEnd(32)} ${s.steps.length} steps, ${s.success.le
 
 // src/cli/commands/optimize.ts
 import { existsSync as existsSync15, mkdirSync as mkdirSync7, writeFileSync as writeFileSync10 } from "node:fs";
-import { join as join17, resolve as resolve8 } from "node:path";
+import { join as join17, resolve as resolve9 } from "node:path";
 init_errors();
 init_fs_safety();
 
@@ -45801,7 +45890,7 @@ function planFixes(findings, root) {
 // src/repair/git.ts
 init_errors();
 import { spawnSync as spawnSync2 } from "node:child_process";
-import { existsSync as existsSync14, mkdirSync as mkdirSync6, readdirSync as readdirSync7, readFileSync as readFileSync11, writeFileSync as writeFileSync9 } from "node:fs";
+import { existsSync as existsSync14, mkdirSync as mkdirSync6, readdirSync as readdirSync8, readFileSync as readFileSync11, writeFileSync as writeFileSync9 } from "node:fs";
 import { join as join16 } from "node:path";
 function git(cwd, args) {
   const r = spawnSync2("git", args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
@@ -45844,7 +45933,7 @@ function createCheckpoint(root, wsRoot, note = "") {
 }
 function loadCheckpoint(wsRoot, id) {
   const dir = join16(wsRoot, "checkpoints");
-  const pick = id === "latest" ? existsSync14(dir) ? readdirSync7(dir).filter((f) => f.endsWith(".json")).sort().pop()?.replace(/\.json$/, "") : void 0 : id;
+  const pick = id === "latest" ? existsSync14(dir) ? readdirSync8(dir).filter((f) => f.endsWith(".json")).sort().pop()?.replace(/\.json$/, "") : void 0 : id;
   if (!pick || !/^[\w-]+$/.test(pick) || !existsSync14(join16(dir, `${pick}.json`)))
     throw new JouriloError("NOT_FOUND", `Checkpoint not found: ${id}`);
   return JSON.parse(readFileSync11(join16(dir, `${pick}.json`), "utf8"));
@@ -45929,7 +46018,7 @@ Without --apply nothing is written. With --apply, a git checkpoint is created fi
 Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
   async run(ctx) {
     const { run, dir } = ctx.ws.loadRun(ctx.positionals[0] ?? "latest");
-    const repo = resolve8(str(ctx, "repo") ?? run.settings.repo ?? ".");
+    const repo = resolve9(str(ctx, "repo") ?? run.settings.repo ?? ".");
     if (!existsSync15(repo)) throw new JouriloError("NOT_FOUND", `Repository not found: ${repo}`);
     if (run.findings.every((f) => !f.sources)) locateFindings(run, repo);
     const rules = list(ctx, "rule");
@@ -46017,7 +46106,7 @@ var verify = {
         "INVALID_INPUT",
         `Run ${base2.id} has no recorded scope (created by an older version or by journeys).`
       );
-    const servedDir = (str(ctx, "target") && existsSync15(str(ctx, "target")) ? resolve8(str(ctx, "target")) : void 0) ?? base2.settings.servedDir;
+    const servedDir = (str(ctx, "target") && existsSync15(str(ctx, "target")) ? resolve9(str(ctx, "target")) : void 0) ?? base2.settings.servedDir;
     const server = servedDir ? await serveStatic(servedDir) : void 0;
     try {
       const origin = server?.url ?? new URL(str(ctx, "target") ?? scope.urls[0]).origin;
@@ -46089,7 +46178,7 @@ var checkpoint = {
   usage: "jourilo checkpoint [--repo .] [--note text] | checkpoint diff [id=latest]",
   options: { repo: { type: "string" }, note: { type: "string" } },
   async run(ctx) {
-    const repo = resolve8(str(ctx, "repo") ?? ".");
+    const repo = resolve9(str(ctx, "repo") ?? ".");
     if (ctx.positionals[0] === "diff") {
       const cp2 = loadCheckpoint(ctx.ws.root, ctx.positionals[1] ?? "latest");
       const d = diffSince(repo, cp2);
@@ -46114,7 +46203,7 @@ var rollbackCmd = {
   usage: "jourilo rollback <checkpoint-id|latest> --yes [--repo .]",
   options: { repo: { type: "string" }, yes: { type: "boolean" } },
   async run(ctx) {
-    const repo = resolve8(str(ctx, "repo") ?? ".");
+    const repo = resolve9(str(ctx, "repo") ?? ".");
     const cp = loadCheckpoint(ctx.ws.root, ctx.positionals[0] ?? "latest");
     const d = diffSince(repo, cp);
     if (!flag(ctx, "yes"))
@@ -46295,7 +46384,7 @@ var serve = {
     const server = await serveStatic(dir, Number(str(ctx, "port") ?? 4173));
     process.stderr.write(`Serving ${dir} at ${server.url} (Ctrl+C to stop)
 `);
-    await new Promise((resolve9) => process.once("SIGINT", () => resolve9()));
+    await new Promise((resolve10) => process.once("SIGINT", () => resolve10()));
     await server.close();
     return { data: { url: server.url }, text: "Stopped." };
   }

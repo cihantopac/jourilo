@@ -32,7 +32,9 @@ Stated so nobody mistakes silence for a pass.
 ## Journeys and forms
 
 - Suggested journeys are heuristics from page structure; they need review. No multi-tab, file upload, OAuth popup,
-  CAPTCHA or e-mail verification support. Signed-in flows need a user-provided storage state.
+  CAPTCHA or e-mail verification support. Signed-in flows need a test account: run a sign-in journey with
+  `--save-auth`, or provide a Playwright storage state.
+- The keyboard walk steps past the first trap it finds; a second trap on the same page ends the walk.
 - Form validation probing submits empty forms on local hosts by default; servers that accept empty submissions will
   create records in local/test databases.
 

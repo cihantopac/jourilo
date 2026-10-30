@@ -1,0 +1,14 @@
+* { box-sizing: border-box; }
+body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: #111827; background: #f9fafb; }
+a, button, input { font: inherit; }
+a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
+header { display: flex; gap: 16px; align-items: center; padding: 12px 24px; background: #fff; border-bottom: 1px solid #e5e7eb; }
+header nav a { padding: 10px 8px; color: #1f2937; }
+main { max-width: 960px; margin: 0 auto; padding: 24px 16px 160px; }
+.btn { padding: 10px 16px; border-radius: 6px; border: 0; background: #1d4ed8; color: #fff; cursor: pointer; }
+.row { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #fff; border: 1px solid #e5e7eb; margin: 8px 0; }
+label { display: block; font-weight: 600; margin-top: 12px; }
+input { width: 100%; padding: 10px; border: 1px solid #6b7280; border-radius: 4px; }
+/* Seeded defect: fixed help bar covers the bottom 140px; keyboard focus lands underneath it (WCAG 2.4.11). */
+.helpbar { position: fixed; left: 0; right: 0; bottom: 0; height: 140px; background: #111827; color: #fff; padding: 16px 24px; }
+.range { display: inline-flex; gap: 8px; padding: 8px; border: 1px dashed #9ca3af; }

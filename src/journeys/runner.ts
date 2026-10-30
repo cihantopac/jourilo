@@ -8,7 +8,7 @@ import { CWV, nielsen } from '../audit/standards.js';
 import { DEFAULT_MASK, newContext, observe } from '../browser/capture.js';
 import { parseViewports } from '../browser/viewports.js';
 import { type RawVitals, READ_VITALS_SCRIPT, rate } from '../browser/vitals.js';
-import { toPosix } from '../core/fs-safety.js';
+import { toPosix, writeFileSafe } from '../core/fs-safety.js';
 import { excerpt, redactUrl } from '../core/redact.js';
 import type { Finding, JourneyResult, JourneyStepResult } from '../core/types.js';
 import type { HostClass } from '../core/url-safety.js';
@@ -25,6 +25,8 @@ export interface JourneyRunOptions {
   storageState?: string;
   stepTimeoutMs: number;
   viewportOverride?: string;
+  /** Save the browser's storage state (cookies, localStorage) after the journey, for signed-in audits. */
+  saveAuth?: string;
   log?: (msg: string) => void;
 }
 
@@ -306,6 +308,10 @@ export async function runJourney(
     const durationMs = Date.now() - t0;
     if (tracePath) {
       await ctx.tracing.stop({ path: join(opts.runDir, tracePath) });
+    }
+    if (opts.saveAuth && status === 'passed') {
+      // Session state is a credential: owner-only permissions, and only after the journey actually succeeded.
+      writeFileSafe(opts.saveAuth, JSON.stringify(await ctx.storageState(), null, 2), { private: true });
     }
     const result: JourneyResult = {
       id: spec.id,

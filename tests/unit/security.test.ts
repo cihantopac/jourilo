@@ -85,3 +85,25 @@ describe('path safety', () => {
     expect(() => resolveInside(join(root, 'runs'), 'link')).toThrow(/escapes/);
   });
 });
+
+describe('static server', () => {
+  it('serves SPA routes, refuses traversal and keeps a stable port per directory', async () => {
+    const { serveStatic, stablePort, looksLikeSpa } = await import('../../src/core/static-server.js');
+    const dir = join(import.meta.dirname, '../../fixtures/apps/pulse-dashboard');
+    expect(looksLikeSpa(dir)).toBe(true);
+    expect(stablePort(dir)).toBe(stablePort(dir));
+    const s = await serveStatic(dir);
+    try {
+      expect(new URL(s.url).port).toBe(String(stablePort(dir)));
+      expect(new URL(s.url).hostname).toBe('127.0.0.1');
+      const spa = await fetch(`${s.url}/analytics/report-3`);
+      expect(spa.status).toBe(200);
+      expect(await spa.text()).toContain('<div id="app">');
+      const evil = await fetch(`${s.url}/..%2F..%2Fpackage.json`);
+      expect([403, 404]).toContain(evil.status);
+      expect((await fetch(`${s.url}/app.js.map`)).status).toBe(404);
+    } finally {
+      await s.close();
+    }
+  });
+});

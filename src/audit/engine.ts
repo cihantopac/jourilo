@@ -174,9 +174,12 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       });
       try {
         for (const o of observations.filter((x) => x.viewport.name === vp.name && (x.status ?? 200) < 400)) {
-          for (const form of (o.probe?.inventory.forms ?? [])
-            .filter((f) => f.purpose !== 'search')
-            .slice(0, 3)) {
+          // Only forms whose input is clearly needed: a known purpose, or fields marked required. A generic form
+          // with optional fields may legitimately accept an empty submission.
+          const probeable = (o.probe?.inventory.forms ?? []).filter(
+            (f) => f.purpose !== 'search' && (f.purpose !== 'other' || f.fields.some((x) => x.required)),
+          );
+          for (const form of probeable.slice(0, 3)) {
             log(`  form     ${o.url} ${form.selector}`);
             const r = await probeFormValidation(
               ctx,

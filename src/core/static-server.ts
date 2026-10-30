@@ -1,10 +1,10 @@
 // A tiny static file server bound to 127.0.0.1, used to audit static builds (`jourilo serve`, `audit --dir`)
 // and the benchmark fixtures. Optional `jourilo-fixture.json` in the root can delay paths to simulate slow
-// resources: { "delays": { "/hero.jpg": 3000 } }.
-import { existsSync, readFileSync, statSync } from 'node:fs';
+// resources and force SPA fallback: { "delays": { "/hero.jpg": 3000 }, "spa": true }.
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { extname, join } from 'node:path';
+import { extname, join, resolve } from 'node:path';
 import { JouriloError } from './errors.js';
 import { resolveInside } from './fs-safety.js';
 
@@ -30,13 +30,34 @@ export interface StaticServer {
   close(): Promise<void>;
 }
 
-export async function serveStatic(root: string, port = 0): Promise<StaticServer> {
+/** A single-page app build: one HTML entry, client-side routes. Unknown extension-less paths serve index.html. */
+export function looksLikeSpa(root: string): boolean {
+  try {
+    const html = readdirSync(root).filter((f) => /\.html?$/.test(f) && f !== '404.html');
+    return html.length === 1 && html[0] === 'index.html';
+  } catch {
+    return false;
+  }
+}
+
+export function stablePort(root: string): number {
+  let h = 0;
+  for (const ch of resolve(root)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return 41_000 + (h % 8000);
+}
+
+export async function serveStatic(
+  root: string,
+  port = 0,
+  opts: { spa?: boolean } = {},
+): Promise<StaticServer> {
   if (!existsSync(root) || !statSync(root).isDirectory())
     throw new JouriloError('NOT_FOUND', `Not a directory: ${root}`);
   const cfgFile = join(root, 'jourilo-fixture.json');
   const cfg = existsSync(cfgFile)
-    ? (JSON.parse(readFileSync(cfgFile, 'utf8')) as { delays?: Record<string, number> })
+    ? (JSON.parse(readFileSync(cfgFile, 'utf8')) as { delays?: Record<string, number>; spa?: boolean })
     : {};
+  const spa = opts.spa ?? cfg.spa ?? looksLikeSpa(root);
   const server: Server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     let pathname = decodeURIComponent(url.pathname);
@@ -49,6 +70,7 @@ export async function serveStatic(root: string, port = 0): Promise<StaticServer>
           const html = resolveInside(root, `.${pathname}.html`);
           if (existsSync(html)) file = html;
         }
+        if (!existsSync(file) && spa && !extname(pathname)) file = join(root, 'index.html');
         if (!existsSync(file)) {
           const notFound = join(root, '404.html');
           res.writeHead(404, { 'content-type': TYPES['.html']! });
@@ -69,10 +91,23 @@ export async function serveStatic(root: string, port = 0): Promise<StaticServer>
     if (delay > 0) setTimeout(send, delay);
     else send();
   });
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(port, '127.0.0.1', () => resolve());
-  });
+  const listen = (p: number) =>
+    new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(p, '127.0.0.1', () => resolve());
+    });
+  // The same directory gets the same port, so its origin is stable across runs: saved sessions (--auth),
+  // localStorage and run comparisons keep working. Falls back to any free port.
+  if (port === 0) {
+    try {
+      await listen(stablePort(root));
+    } catch {
+      server.removeAllListeners('error');
+      await listen(0);
+    }
+  } else {
+    await listen(port);
+  }
   const { port: actual } = server.address() as AddressInfo;
   return {
     url: `http://127.0.0.1:${actual}`,
