@@ -27,5 +27,8 @@ First working version.
 - `jourilo.context/v1` integration contract with Markilo and Searvex adapters.
 - Claude Code plugin (10 skills, `ux-reviewer` agent) and adapters for a bare `/jourilo` skill, `AGENTS.md` and Cursor.
 - `bench` with fixture sites and recorded history.
+- Keyboard-operated widget checks (dialog focus, Escape, focus return; `aria-expanded` state) and `--runs N` for
+  median lab metrics with ranges.
+- Cross-browser parity: identical journey, session, signed-in audit and form results in Chromium, Firefox, WebKit.
 - Signed-in testing: `journeys run --save-auth` stores a test-account session (mode 0600) for `--auth`; static builds
   are served with SPA fallback on a stable port per directory.

@@ -17,14 +17,16 @@ Stated so nobody mistakes silence for a pass.
   alternatives, 3.2.6 consistent help, 3.3.7 redundant entry, most of 3.3.8 (only paste blocking is checked), meaning
   of alt text, reading order, screen-reader announcements, captions quality, cognitive load. A run never certifies
   compliance.
-- The keyboard walk visits up to 60 stops per page and only on keyboard (non-touch) viewports by default; it does not
-  operate menus, dialogs or widgets with arrow keys.
+- The keyboard walk visits up to 60 stops per page and only on keyboard (non-touch) viewports by default. Dialogs and
+  disclosures that declare `aria-haspopup`/`aria-expanded` are operated with Enter/Escape; arrow-key patterns
+  (menus, tabs, listboxes, grids) are not tested yet.
 - Focus-visible detection compares styles of the element and its parent; indicators drawn by other elements (e.g. a
   sibling) may be reported as missing.
 
 ## Performance
 
-- Lab numbers from one visit; no repeated-run medians yet; local servers make LCP unrealistically fast. `--throttle`
+- Lab numbers come from one visit unless `--runs N` is used (median and range of N cold-cache visits); local servers
+  make LCP unrealistically fast. `--throttle`
   approximates Lighthouse's mobile profile in Chromium only. Measured on a local fixture it slowed rendering and
   subresources (LCP 16 → 200 ms, load 13 → 342 ms) but did **not** delay the main document from 127.0.0.1 (TTFB
   unchanged), so TTFB under `--throttle` is not meaningful for local targets.

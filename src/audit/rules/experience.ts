@@ -251,7 +251,7 @@ export function performanceFindings(obs: PageObservation): Finding[] {
   if (!obs.vitals) return [];
   const out: Finding[] = [];
   const vp = obs.viewport.name;
-  for (const m of toMetrics(obs.vitals)) {
+  for (const m of toMetrics(obs.vitals, obs.vitalsSpread, obs.vitalsRuns)) {
     if (!m.rating || m.rating === 'good') continue;
     const std = CWV[m.name as keyof typeof CWV];
     if (!std) continue;
@@ -282,7 +282,7 @@ export function performanceFindings(obs: PageObservation): Finding[] {
         url: obs.url,
         viewport: vp,
         description:
-          `Measured ${m.name} = ${shown} in one lab visit (${vp} viewport). ${m.note ?? ''}`.trim(),
+          `Measured ${m.name} = ${shown} ${obs.vitalsRuns && obs.vitalsRuns > 1 ? `(median of ${obs.vitalsRuns} cold-cache lab visits)` : 'in one lab visit'} (${vp} viewport). ${m.note ?? ''}`.trim(),
         impact:
           m.name === 'CLS'
             ? 'Content jumps while people read or try to tap, causing mis-clicks.'
@@ -293,7 +293,9 @@ export function performanceFindings(obs: PageObservation): Finding[] {
         reproduction: [
           `Open ${obs.url} at the ${vp} viewport with a cold cache.`,
           'Record a performance trace (Chrome DevTools → Performance) and inspect the metric.',
-          'Lab values vary between runs and machines; compare with field data (CrUX/RUM) before prioritizing.',
+          obs.vitalsRuns && obs.vitalsRuns > 1
+            ? 'Lab values still vary between machines; compare with field data (CrUX/RUM) before prioritizing.'
+            : 'Single lab visit: rerun with --runs 5 for a median, and compare with field data (CrUX/RUM) before prioritizing.',
         ],
       }),
     );

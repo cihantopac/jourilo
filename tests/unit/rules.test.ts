@@ -320,3 +320,33 @@ describe('merge', () => {
     expect(merged[0]!.viewport).toBe('mobile, reflow');
   });
 });
+
+describe('repeated lab runs', () => {
+  it('reports medians with their range', async () => {
+    const { medianVitals } = await import('../../src/browser/capture.js');
+    const { toMetrics } = await import('../../src/browser/vitals.js');
+    const v = (lcp: number, cls: number) => ({
+      lcp,
+      lcpElement: 'h1',
+      cls,
+      clsEntries: [],
+      fcp: lcp,
+      ttfb: 10,
+      tbt: 0,
+      inp: null,
+      interactions: 0,
+      domContentLoaded: 0,
+      load: lcp,
+      transferBytes: 1000,
+      requests: 3,
+      domNodes: 10,
+    });
+    const m = medianVitals([v(3000, 0.2), v(1000, 0.05), v(2600, 0.12)]);
+    expect(m.vitals.lcp).toBe(2600);
+    expect(m.vitals.cls).toBe(0.12);
+    expect(m.spread.lcp).toEqual([1000, 3000]);
+    const lcp = toMetrics(m.vitals, m.spread, 3).find((x) => x.name === 'LCP')!;
+    expect(lcp.rating).toBe('needs-improvement');
+    expect(lcp.note).toContain('Median of 3 runs (range 1000–3000)');
+  });
+});

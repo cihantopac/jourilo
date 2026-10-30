@@ -2,7 +2,13 @@
 // merge → store a Run. Pure orchestration; measurement lives in browser/, judgment rules in audit/rules and
 // conversion/.
 import type { Browser } from 'playwright-core';
-import { capturePage, newContext, type PageObservation } from '../browser/capture.js';
+import {
+  capturePage,
+  measureVitals,
+  medianVitals,
+  newContext,
+  type PageObservation,
+} from '../browser/capture.js';
 import { type BrowserName, launchBrowser } from '../browser/runtime.js';
 import { toMetrics } from '../browser/vitals.js';
 import { conversionFindings } from '../conversion/rules.js';
@@ -75,6 +81,8 @@ export interface AuditOptions {
   allowSubmit?: boolean;
   /** Discovery only: capture inventory, skip axe, keyboard walk, forms and rules. */
   inventoryOnly?: boolean;
+  /** Visits per page × viewport for lab metrics (median reported). Default 1. */
+  runs?: number;
   /** Optional brand/search context (jourilo.context/v1). */
   context?: ExperienceContext;
   onProgress?: (msg: string) => void;
@@ -169,6 +177,29 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       }
     }
 
+    // 2b. Repeated cold-cache visits for lab metrics: report medians, not a single noisy sample.
+    const runs = Math.max(1, Math.min(9, Math.round(opts.runs ?? 1)));
+    if (runs > 1) {
+      for (const obs of observations) {
+        if (!obs.vitals || (obs.status ?? 200) >= 400) continue;
+        const samples = [obs.vitals];
+        for (let k = 1; k < runs; k++) {
+          log(`  metrics  ${obs.viewport.name.padEnd(8)} ${obs.url} (run ${k + 1}/${runs})`);
+          const v = await measureVitals(browser, obs.finalUrl, obs.viewport, {
+            runDir,
+            timeoutMs: opts.timeoutMs,
+            throttle: opts.throttle,
+            ...(opts.storageState ? { storageState: opts.storageState } : {}),
+          });
+          if (v) samples.push(v);
+        }
+        const m = medianVitals(samples);
+        obs.vitals = m.vitals;
+        obs.vitalsSpread = m.spread;
+        obs.vitalsRuns = samples.length;
+      }
+    }
+
     // 3. Form validation probes (interactive, so gated by the safety policy).
     const formFindings: Finding[] = [];
     const formsAllowed = hostClass === 'local' || opts.allowSubmit === true;
@@ -226,7 +257,9 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
 
     limitations.push(
       'Automated accessibility checks cover only part of WCAG 2.2; criteria such as 1.3.3, 2.5.7, 3.2.6, 3.3.7 and 3.3.8 and most content quality questions need manual review.',
-      'Performance numbers are lab measurements from one scripted visit, not field (real-user) data.',
+      runs > 1
+        ? `Performance numbers are medians of ${runs} cold-cache lab visits, not field (real-user) data.`
+        : 'Performance numbers are lab measurements from one scripted visit, not field (real-user) data; use --runs 5 for medians.',
     );
     if (opts.throttle)
       limitations.push(
@@ -242,7 +275,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       viewport: o.viewport.name,
       ...(o.screenshot ? { screenshot: o.screenshot } : {}),
       loadMs: o.loadMs,
-      metrics: o.vitals ? toMetrics(o.vitals) : [],
+      metrics: o.vitals ? toMetrics(o.vitals, o.vitalsSpread, o.vitalsRuns) : [],
       consoleErrors: o.console.filter((c) => c.type !== 'warning').length,
       failedRequests: o.network.length,
       inventory: o.probe?.inventory ?? emptyInventory(),
@@ -264,6 +297,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         respectRobots: opts.respectRobots,
         keyboard: opts.keyboard,
         throttle: opts.throttle,
+        runs,
         axe: observations.find((o) => o.axe)?.axe?.version ?? null,
         hostClass,
         // The exact scope, so `jourilo verify` can repeat this run after a change.

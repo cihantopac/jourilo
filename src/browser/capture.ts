@@ -103,6 +103,9 @@ export interface PageObservation {
   console: ConsoleEntry[];
   network: NetworkFailure[];
   vitals: RawVitals | null;
+  /** Min/max per vital when vitals are medians of several runs. */
+  vitalsSpread?: Record<string, [number, number]>;
+  vitalsRuns?: number;
   probe: ProbeResult | null;
   axe: { violations: AxeIssue[]; incomplete: AxeIssue[]; version: string } | null;
   keyboard: KeyboardWalk | null;
@@ -418,6 +421,60 @@ export async function capturePage(
     await page.close().catch(() => undefined);
   }
   return obs;
+}
+
+/**
+ * Extra cold-cache visits that only read lab vitals, for medians over several runs. Each visit uses a fresh
+ * context so caches and service workers do not carry over.
+ */
+export async function measureVitals(
+  browser: Browser,
+  url: string,
+  vp: Viewport,
+  opts: CaptureOptions,
+): Promise<RawVitals | null> {
+  const ctx = await newContext(browser, vp, opts);
+  const page = await ctx.newPage();
+  try {
+    if (opts.throttle) await applyThrottle(page);
+    await page.goto(url, { waitUntil: 'load', timeout: opts.timeoutMs ?? 30_000 });
+    await settle(page, opts.timeoutMs ?? 30_000);
+    return (await page.evaluate(READ_VITALS_SCRIPT)) as RawVitals;
+  } catch {
+    return null;
+  } finally {
+    await ctx.close().catch(() => undefined);
+  }
+}
+
+/** Median of each numeric vital across runs; the spread is kept for reports. */
+export function medianVitals(samples: RawVitals[]): {
+  vitals: RawVitals;
+  spread: Record<string, [number, number]>;
+} {
+  const med = (xs: number[]) => {
+    const s = [...xs].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
+  };
+  const base = { ...samples[0]! };
+  const spread: Record<string, [number, number]> = {};
+  for (const key of [
+    'lcp',
+    'cls',
+    'fcp',
+    'ttfb',
+    'tbt',
+    'load',
+    'transferBytes',
+    'domContentLoaded',
+  ] as const) {
+    const xs = samples.map((v) => v[key]).filter((x): x is number => typeof x === 'number');
+    if (!xs.length) continue;
+    (base as Record<string, unknown>)[key] = med(xs);
+    spread[key] = [Math.min(...xs), Math.max(...xs)];
+  }
+  return { vitals: base, spread };
 }
 
 /** Page text is untrusted input: redact and bound it before it is stored or shown to an agent. */

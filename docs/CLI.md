@@ -37,6 +37,7 @@ Options:
   --viewports LIST     desktop, laptop, tablet, mobile, reflow (320px) or WIDTHxHEIGHT (default desktop,mobile)
   --browser NAME       chromium (default), firefox, webkit, chrome, msedge
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
+  --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
@@ -67,6 +68,7 @@ Options:
   --viewports LIST     desktop, laptop, tablet, mobile, reflow (320px) or WIDTHxHEIGHT (default desktop,mobile)
   --browser NAME       chromium (default), firefox, webkit, chrome, msedge
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
+  --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
@@ -97,6 +99,7 @@ Options:
   --viewports LIST     desktop, laptop, tablet, mobile, reflow (320px) or WIDTHxHEIGHT (default desktop,mobile)
   --browser NAME       chromium (default), firefox, webkit, chrome, msedge
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
+  --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)

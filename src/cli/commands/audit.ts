@@ -44,6 +44,7 @@ export const AUDIT_OPTIONS: OptionSpec = {
   'no-forms': { type: 'boolean' },
   'allow-submit': { type: 'boolean' },
   brand: { type: 'string' },
+  runs: { type: 'string' },
   'fail-on': { type: 'string' },
 };
 
@@ -81,6 +82,7 @@ export async function auditCommand(
       allowPrivate: flag(ctx, 'allow-private'),
       keyboard: !flag(ctx, 'no-keyboard'),
       throttle: flag(ctx, 'throttle'),
+      runs: num(ctx, 'runs', 1),
       timeoutMs: num(ctx, 'timeout', 30) * 1000,
       mask: list(ctx, 'mask'),
       urls: list(ctx, 'url'),
@@ -181,6 +183,7 @@ export const audit: Command = {
   --viewports LIST     desktop, laptop, tablet, mobile, reflow (320px) or WIDTHxHEIGHT (default desktop,mobile)
   --browser NAME       chromium (default), firefox, webkit, chrome, msedge
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
+  --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)

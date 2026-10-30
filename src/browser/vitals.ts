@@ -98,10 +98,24 @@ export function rate(name: string, value: number): MetricValue['rating'] {
   return value <= t[0] ? 'good' : value <= t[1] ? 'needs-improvement' : 'poor';
 }
 
-export function toMetrics(v: RawVitals): MetricValue[] {
+export function toMetrics(v: RawVitals, spread?: Record<string, [number, number]>, runs = 1): MetricValue[] {
   const out: MetricValue[] = [];
+  const KEY: Record<string, string> = {
+    LCP: 'lcp',
+    CLS: 'cls',
+    FCP: 'fcp',
+    TTFB: 'ttfb',
+    TBT: 'tbt',
+    Load: 'load',
+    Transfer: 'transferBytes',
+  };
   const add = (name: string, value: number | null, unit: MetricValue['unit'], note?: string) => {
     if (value == null || Number.isNaN(value)) return;
+    const range = spread?.[KEY[name] ?? ''];
+    if (runs > 1 && range) {
+      const fmt = (x: number) => (unit === 'score' ? x.toFixed(3) : String(Math.round(x)));
+      note = `${note ? `${note} ` : ''}Median of ${runs} runs (range ${fmt(range[0])}–${fmt(range[1])}).`;
+    }
     const rounded = unit === 'score' ? Math.round(value * 1000) / 1000 : Math.round(value);
     const m: MetricValue = { name, value: rounded, unit, source: 'lab' };
     const r = rate(name, rounded);

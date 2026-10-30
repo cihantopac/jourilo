@@ -39859,10 +39859,24 @@ function rate(name, value) {
   if (!t) return void 0;
   return value <= t[0] ? "good" : value <= t[1] ? "needs-improvement" : "poor";
 }
-function toMetrics(v) {
+function toMetrics(v, spread, runs2 = 1) {
   const out = [];
+  const KEY = {
+    LCP: "lcp",
+    CLS: "cls",
+    FCP: "fcp",
+    TTFB: "ttfb",
+    TBT: "tbt",
+    Load: "load",
+    Transfer: "transferBytes"
+  };
   const add = (name, value, unit, note) => {
     if (value == null || Number.isNaN(value)) return;
+    const range = spread?.[KEY[name] ?? ""];
+    if (runs2 > 1 && range) {
+      const fmt = (x) => unit === "score" ? x.toFixed(3) : String(Math.round(x));
+      note = `${note ? `${note} ` : ""}Median of ${runs2} runs (range ${fmt(range[0])}\u2013${fmt(range[1])}).`;
+    }
     const rounded = unit === "score" ? Math.round(value * 1e3) / 1e3 : Math.round(value);
     const m = { name, value: rounded, unit, source: "lab" };
     const r = rate(name, rounded);
@@ -40301,6 +40315,45 @@ async function capturePage(ctx, url, vp, opts) {
     await page.close().catch(() => void 0);
   }
   return obs;
+}
+async function measureVitals(browser, url, vp, opts) {
+  const ctx = await newContext(browser, vp, opts);
+  const page = await ctx.newPage();
+  try {
+    if (opts.throttle) await applyThrottle(page);
+    await page.goto(url, { waitUntil: "load", timeout: opts.timeoutMs ?? 3e4 });
+    await settle(page, opts.timeoutMs ?? 3e4);
+    return await page.evaluate(READ_VITALS_SCRIPT);
+  } catch {
+    return null;
+  } finally {
+    await ctx.close().catch(() => void 0);
+  }
+}
+function medianVitals(samples) {
+  const med = (xs) => {
+    const s = [...xs].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  };
+  const base2 = { ...samples[0] };
+  const spread = {};
+  for (const key of [
+    "lcp",
+    "cls",
+    "fcp",
+    "ttfb",
+    "tbt",
+    "load",
+    "transferBytes",
+    "domContentLoaded"
+  ]) {
+    const xs = samples.map((v) => v[key]).filter((x) => typeof x === "number");
+    if (!xs.length) continue;
+    base2[key] = med(xs);
+    spread[key] = [Math.min(...xs), Math.max(...xs)];
+  }
+  return { vitals: base2, spread };
 }
 function sanitizeInventory(inv) {
   inv.h1 = inv.h1.map((t) => excerpt(t, 160));
@@ -42193,7 +42246,7 @@ function performanceFindings(obs) {
   if (!obs.vitals) return [];
   const out = [];
   const vp = obs.viewport.name;
-  for (const m of toMetrics(obs.vitals)) {
+  for (const m of toMetrics(obs.vitals, obs.vitalsSpread, obs.vitalsRuns)) {
     if (!m.rating || m.rating === "good") continue;
     const std = CWV[m.name];
     if (!std) continue;
@@ -42222,7 +42275,7 @@ function performanceFindings(obs) {
         provenance: "measured",
         url: obs.url,
         viewport: vp,
-        description: `Measured ${m.name} = ${shown} in one lab visit (${vp} viewport). ${m.note ?? ""}`.trim(),
+        description: `Measured ${m.name} = ${shown} ${obs.vitalsRuns && obs.vitalsRuns > 1 ? `(median of ${obs.vitalsRuns} cold-cache lab visits)` : "in one lab visit"} (${vp} viewport). ${m.note ?? ""}`.trim(),
         impact: m.name === "CLS" ? "Content jumps while people read or try to tap, causing mis-clicks." : "Slow pages lose visitors before they see the offer.",
         recommendation: METRIC_ADVICE[m.name] ?? "Investigate with a performance trace.",
         standards: [std],
@@ -42230,7 +42283,7 @@ function performanceFindings(obs) {
         reproduction: [
           `Open ${obs.url} at the ${vp} viewport with a cold cache.`,
           "Record a performance trace (Chrome DevTools \u2192 Performance) and inspect the metric.",
-          "Lab values vary between runs and machines; compare with field data (CrUX/RUM) before prioritizing."
+          obs.vitalsRuns && obs.vitalsRuns > 1 ? "Lab values still vary between machines; compare with field data (CrUX/RUM) before prioritizing." : "Single lab visit: rerun with --runs 5 for a median, and compare with field data (CrUX/RUM) before prioritizing."
         ]
       })
     );
@@ -42350,6 +42403,27 @@ async function runAudit(ws, opts) {
         await ctx.close().catch(() => void 0);
       }
     }
+    const runs2 = Math.max(1, Math.min(9, Math.round(opts.runs ?? 1)));
+    if (runs2 > 1) {
+      for (const obs of observations) {
+        if (!obs.vitals || (obs.status ?? 200) >= 400) continue;
+        const samples = [obs.vitals];
+        for (let k = 1; k < runs2; k++) {
+          log(`  metrics  ${obs.viewport.name.padEnd(8)} ${obs.url} (run ${k + 1}/${runs2})`);
+          const v = await measureVitals(browser, obs.finalUrl, obs.viewport, {
+            runDir,
+            timeoutMs: opts.timeoutMs,
+            throttle: opts.throttle,
+            ...opts.storageState ? { storageState: opts.storageState } : {}
+          });
+          if (v) samples.push(v);
+        }
+        const m = medianVitals(samples);
+        obs.vitals = m.vitals;
+        obs.vitalsSpread = m.spread;
+        obs.vitalsRuns = samples.length;
+      }
+    }
     const formFindings = [];
     const formsAllowed = hostClass === "local" || opts.allowSubmit === true;
     if (opts.forms !== false && !opts.inventoryOnly && formsAllowed) {
@@ -42399,7 +42473,7 @@ async function runAudit(ws, opts) {
     if (opts.categories?.length) findings = findings.filter((f) => opts.categories.includes(f.category));
     limitations.push(
       "Automated accessibility checks cover only part of WCAG 2.2; criteria such as 1.3.3, 2.5.7, 3.2.6, 3.3.7 and 3.3.8 and most content quality questions need manual review.",
-      "Performance numbers are lab measurements from one scripted visit, not field (real-user) data."
+      runs2 > 1 ? `Performance numbers are medians of ${runs2} cold-cache lab visits, not field (real-user) data.` : "Performance numbers are lab measurements from one scripted visit, not field (real-user) data; use --runs 5 for medians."
     );
     if (opts.throttle)
       limitations.push(
@@ -42414,7 +42488,7 @@ async function runAudit(ws, opts) {
       viewport: o.viewport.name,
       ...o.screenshot ? { screenshot: o.screenshot } : {},
       loadMs: o.loadMs,
-      metrics: o.vitals ? toMetrics(o.vitals) : [],
+      metrics: o.vitals ? toMetrics(o.vitals, o.vitalsSpread, o.vitalsRuns) : [],
       consoleErrors: o.console.filter((c) => c.type !== "warning").length,
       failedRequests: o.network.length,
       inventory: o.probe?.inventory ?? emptyInventory()
@@ -42435,6 +42509,7 @@ async function runAudit(ws, opts) {
         respectRobots: opts.respectRobots,
         keyboard: opts.keyboard,
         throttle: opts.throttle,
+        runs: runs2,
         axe: observations.find((o) => o.axe)?.axe?.version ?? null,
         hostClass,
         // The exact scope, so `jourilo verify` can repeat this run after a change.
@@ -43455,6 +43530,7 @@ var AUDIT_OPTIONS = {
   "no-forms": { type: "boolean" },
   "allow-submit": { type: "boolean" },
   brand: { type: "string" },
+  runs: { type: "string" },
   "fail-on": { type: "string" }
 };
 var SEVERITIES = ["critical", "serious", "moderate", "minor"];
@@ -43484,6 +43560,7 @@ async function auditCommand(ctx, usage2, categories) {
       allowPrivate: flag(ctx, "allow-private"),
       keyboard: !flag(ctx, "no-keyboard"),
       throttle: flag(ctx, "throttle"),
+      runs: num(ctx, "runs", 1),
       timeoutMs: num(ctx, "timeout", 30) * 1e3,
       mask: list(ctx, "mask"),
       urls: list(ctx, "url"),
@@ -43574,6 +43651,7 @@ var audit = {
   --viewports LIST     desktop, laptop, tablet, mobile, reflow (320px) or WIDTHxHEIGHT (default desktop,mobile)
   --browser NAME       chromium (default), firefox, webkit, chrome, msedge
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
+  --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
