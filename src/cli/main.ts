@@ -1,44 +1,7 @@
 import { exitCodeFor, JouriloError } from '../core/errors.js';
 import { VERSION } from '../core/version.js';
-import { accessibility, audit, conversion } from './commands/audit.js';
-import { bench } from './commands/bench.js';
-import { discover } from './commands/discover.js';
-import { experiment } from './commands/experiment.js';
-import { journeys } from './commands/journeys.js';
-import { checkpoint, optimize, rollbackCmd, verify } from './commands/optimize.js';
-import { compare, report, runs } from './commands/runs.js';
-import { doctor, serve, setup } from './commands/system.js';
-import { type Command, parse } from './framework.js';
-
-export const COMMANDS: Command[] = [
-  discover,
-  audit,
-  accessibility,
-  conversion,
-  journeys,
-  experiment,
-  optimize,
-  verify,
-  checkpoint,
-  rollbackCmd,
-  report,
-  compare,
-  runs,
-  bench,
-  serve,
-  setup,
-  doctor,
-];
-
-const GROUPS: [string, string[]][] = [
-  ['Understand', ['discover']],
-  ['Audit', ['audit', 'accessibility', 'conversion']],
-  ['Journeys', ['journeys']],
-  ['Experiment', ['experiment']],
-  ['Improve', ['optimize', 'verify', 'checkpoint', 'rollback']],
-  ['Results', ['report', 'compare', 'runs']],
-  ['System', ['bench', 'serve', 'setup', 'doctor']],
-];
+import { parse } from './framework.js';
+import { COMMANDS, cliMarkdown, GROUPS } from './registry.js';
 
 function usage(): string {
   const lines = [
@@ -63,6 +26,10 @@ export async function main(argv: string[]): Promise<number> {
   const [name, ...rest] = argv;
   if (!name || name === '--help' || name === '-h' || name === 'help') {
     process.stdout.write(`${usage()}\n`);
+    return 0;
+  }
+  if (name === '__cli-markdown') {
+    process.stdout.write(cliMarkdown());
     return 0;
   }
   if (name === '--version' || name === '-v' || name === 'version') {

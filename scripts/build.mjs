@@ -55,3 +55,15 @@ await build({
   },
 });
 console.log(`built ${join(outdir, 'jourilo.mjs')}`);
+
+// Generated docs: the CLI reference comes from the command registry so docs and plugin never drift from code.
+if (!process.argv[2]) {
+  const { execFileSync } = await import('node:child_process');
+  const { writeFileSync: write, mkdirSync: mkdir } = await import('node:fs');
+  const md = execFileSync(process.execPath, [join(outdir, 'jourilo.mjs'), '__cli-markdown'], {
+    encoding: 'utf8',
+  });
+  write(join(root, 'docs', 'CLI.md'), md);
+  mkdir(join(root, 'plugin', 'skills', 'jourilo', 'references'), { recursive: true });
+  write(join(root, 'plugin', 'skills', 'jourilo', 'references', 'cli.md'), md);
+}

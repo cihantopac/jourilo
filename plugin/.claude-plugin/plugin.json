@@ -1,0 +1,23 @@
+{
+  "name": "jourilo",
+  "displayName": "Jourilo",
+  "version": "0.1.0",
+  "description": "AI-powered product experience & conversion engineering studio: discovers products and user journeys, operates real interfaces in Playwright, detects UX, accessibility (WCAG 2.2), performance and conversion problems with evidence, locates root causes, applies safe fixes and verifies them.",
+  "author": {
+    "name": "Cihan Topaç",
+    "url": "https://github.com/cihantopac"
+  },
+  "homepage": "https://github.com/cihantopac/jourilo",
+  "repository": "https://github.com/cihantopac/jourilo",
+  "license": "Apache-2.0",
+  "keywords": [
+    "ux",
+    "accessibility",
+    "wcag",
+    "playwright",
+    "user-journeys",
+    "conversion",
+    "core-web-vitals",
+    "experimentation"
+  ]
+}
