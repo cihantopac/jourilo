@@ -184,6 +184,34 @@ function compareHtml(cmp: RunComparison): string {
 ${cmp.metrics.length ? `<table><thead><tr><th>Page</th><th>Viewport</th><th>Metric</th><th>Before</th><th>After</th><th>Δ</th></tr></thead><tbody>${cmp.metrics.map((m) => `<tr><td>${esc(pathname(m.url))}</td><td>${esc(m.viewport)}</td><td>${esc(m.name)}</td><td>${m.before}</td><td>${m.after}</td><td class="${m.delta < 0 ? 'good' : m.delta > 0 ? 'poor' : ''}">${m.delta > 0 ? '+' : ''}${m.delta}</td></tr>`).join('')}</tbody></table><p class="muted">Lab deltas from single visits can be noise; repeat runs before drawing conclusions.</p>` : ''}`;
 }
 
+function contextHtml(run: Run): string {
+  const c = run.context;
+  if (!c || (!c.brand && !c.search)) return '';
+  const parts = ['<h2>Context from other tools</h2>'];
+  if (c.brand)
+    parts.push(
+      `<p><b>Brand</b> (${esc(c.brand.source)}, <code>${esc(c.brand.file)}</code>): ${esc(c.brand.name)} · ${c.brand.colors.length} color tokens · fonts ${esc(c.brand.fonts.join(', ') || '—')}${c.brand.locked ? ' · <span class="pill">locked</span> recommendations keep brand tokens unchanged' : ''}</p>`,
+    );
+  if (c.search) {
+    const paths = new Set(run.pages.map((p) => pathname(p.url)));
+    const related = c.search.findings.filter((f) => f.url && paths.has(pathname(f.url)));
+    parts.push(
+      `<p><b>Search</b> (${esc(c.search.source)}, <code>${esc(c.search.file)}</code>): ${c.search.findings.length} finding(s), ${related.length} on pages in this run.</p>`,
+    );
+    if (related.length)
+      parts.push(
+        `<ul>${related
+          .slice(0, 15)
+          .map(
+            (f) =>
+              `<li><span class="pill">${esc(f.severity)}</span> ${esc(f.title)} — <code>${esc(pathname(f.url ?? ''))}</code></li>`,
+          )
+          .join('')}</ul>`,
+      );
+  }
+  return parts.join('');
+}
+
 export function renderHtml(run: Run, cmp?: RunComparison): string {
   const status = new Map<string, string>();
   if (cmp) {
@@ -227,6 +255,7 @@ ${top.length ? top.map((f) => findingHtml(run, f, status.get(f.fingerprint))).jo
     .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
     .map(([k, v]) => `<li><b>${v}</b> ${esc(k)}</li>`)
     .join('')}</ul>
+${contextHtml(run)}
 <h2>Limitations of this run</h2><ul class="limits">${run.limitations.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
 </section>
 <section id="findings" class="panel" hidden>

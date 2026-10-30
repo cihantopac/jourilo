@@ -10,6 +10,7 @@ import { JouriloError } from '../../core/errors.js';
 import { serveStatic } from '../../core/static-server.js';
 import type { Finding, Severity } from '../../core/types.js';
 import { VERSION } from '../../core/version.js';
+import { loadContext } from '../../integrations/context.js';
 import { locateFindings } from '../../repair/locate.js';
 import { type Command, str } from '../framework.js';
 
@@ -25,6 +26,8 @@ interface Expected {
   mustFind: Expectation[];
   mustNotFind: Expectation[];
   maxDefects?: { minSeverity: Severity; count: number };
+  /** Text the recommendation of a finding must contain (e.g. locked-brand guidance). */
+  recommendations?: { rule: string; path: string; includes: string }[];
   /** Expected source file for a rule (root-cause location accuracy). */
   sources?: { rule: string; path: string; file: string }[];
 }
@@ -69,9 +72,15 @@ export async function benchFixture(dir: string, wsRoot: string): Promise<Fixture
       timeoutMs: 30_000,
       mask: [],
       mode: 'repository',
+      context: loadContext(dir),
     });
     locateFindings(run, dir);
     const missed = expected.mustFind.filter((e) => !run.findings.some((f) => matches(f, e)));
+    for (const r of expected.recommendations ?? []) {
+      const f = run.findings.find((x) => matches(x, r));
+      if (!f?.recommendation.includes(r.includes))
+        missed.push({ rule: r.rule, path: r.path, why: `recommendation should include "${r.includes}"` });
+    }
     const falsePositives = expected.mustNotFind
       .filter((e) => run.findings.some((f) => matches(f, e)))
       .map((e) => ({ rule: e.rule, path: e.path, ...(e.why ? { why: e.why } : {}) }));

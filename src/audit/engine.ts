@@ -24,6 +24,8 @@ import { checkTarget, type HostClass, parseTargetUrl } from '../core/url-safety.
 import { VERSION } from '../core/version.js';
 import type { Workspace } from '../core/workspace.js';
 import { crawl } from '../discovery/crawl.js';
+import type { ExperienceContext } from '../integrations/context.js';
+import { designFindings, respectLockedBrand } from '../integrations/design-rules.js';
 import { probeFormValidation } from '../journeys/forms.js';
 import { mergeFindings } from './finding.js';
 import { axeFindings, keyboardFindings, measuredA11yFindings } from './rules/accessibility.js';
@@ -65,6 +67,10 @@ export interface AuditOptions {
   /** Submit forms empty to test validation feedback (local hosts by default; public hosts need allowSubmit). */
   forms?: boolean;
   allowSubmit?: boolean;
+  /** Discovery only: capture inventory, skip axe, keyboard walk, forms and rules. */
+  inventoryOnly?: boolean;
+  /** Optional brand/search context (jourilo.context/v1). */
+  context?: ExperienceContext;
   onProgress?: (msg: string) => void;
 }
 
@@ -143,7 +149,11 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
             timeoutMs: opts.timeoutMs,
             mask: opts.mask,
             // Keyboard walks are for keyboard devices; skip them on touch viewports unless only touch was requested.
-            keyboard: opts.keyboard && (!vp.hasTouch || opts.viewports.every((v) => v.hasTouch)),
+            keyboard:
+              !opts.inventoryOnly &&
+              opts.keyboard &&
+              (!vp.hasTouch || opts.viewports.every((v) => v.hasTouch)),
+            axe: !opts.inventoryOnly,
             throttle: opts.throttle,
           });
           observations.push(obs);
@@ -156,7 +166,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
     // 3. Form validation probes (interactive, so gated by the safety policy).
     const formFindings: Finding[] = [];
     const formsAllowed = hostClass === 'local' || opts.allowSubmit === true;
-    if (opts.forms !== false && formsAllowed) {
+    if (opts.forms !== false && !opts.inventoryOnly && formsAllowed) {
       const vp = opts.viewports.find((v) => !v.hasTouch) ?? opts.viewports[0]!;
       const ctx = await newContext(browser, vp, {
         runDir,
@@ -192,15 +202,17 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
 
     // 4. Findings.
     let findings: Finding[] = [...formFindings];
-    for (const obs of observations) {
+    for (const obs of opts.inventoryOnly ? [] : observations) {
       // An error page (4xx/5xx) is one finding — the broken link — not a list of its template's defects.
       const rules =
         obs.status !== null && obs.status >= 400 ? [PAGE_RULES.reliability!] : Object.values(PAGE_RULES);
       for (const rule of rules) findings.push(...rule(obs));
+      if (opts.context?.brand && rules.length > 1) findings.push(...designFindings(obs, opts.context.brand));
       for (const e of obs.errors)
         if (!e.startsWith('navigation:')) limitations.push(`${obs.url} (${obs.viewport.name}): ${e}`);
     }
     findings = mergeFindings(findings);
+    respectLockedBrand(findings, opts.context?.brand ?? null);
     if (opts.categories?.length) findings = findings.filter((f) => opts.categories!.includes(f.category));
 
     limitations.push(
@@ -251,6 +263,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       findings,
       summary: summarize(findings, pages.length, 0),
       limitations: [...new Set(limitations)],
+      ...(opts.context && (opts.context.brand || opts.context.search) ? { context: opts.context } : {}),
     };
     ws.saveRun(run);
     return { run, runDir, observations };

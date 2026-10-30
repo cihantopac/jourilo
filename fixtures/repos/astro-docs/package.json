@@ -1,0 +1,1 @@
+{"name": "docs", "scripts": {"dev": "astro dev"}, "dependencies": {"astro": "5.0.0"}}

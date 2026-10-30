@@ -7,6 +7,7 @@ import { parseViewports } from '../../browser/viewports.js';
 import { JouriloError } from '../../core/errors.js';
 import { serveStatic } from '../../core/static-server.js';
 import type { Category, Run, Severity } from '../../core/types.js';
+import { loadContext } from '../../integrations/context.js';
 import { locateFindings } from '../../repair/locate.js';
 import { writeReports } from '../../report/index.js';
 import {
@@ -41,6 +42,7 @@ export const AUDIT_OPTIONS: OptionSpec = {
   sarif: { type: 'boolean' },
   'no-forms': { type: 'boolean' },
   'allow-submit': { type: 'boolean' },
+  brand: { type: 'string' },
   'fail-on': { type: 'string' },
 };
 
@@ -85,6 +87,7 @@ export async function auditCommand(
       ...(auth ? { storageState: auth } : {}),
       ...(str(ctx, 'locale') ? { locale: str(ctx, 'locale')! } : {}),
       ...(categories ? { categories } : {}),
+      context: loadContext(repo ?? process.cwd(), str(ctx, 'brand') ? { brand: str(ctx, 'brand')! } : {}),
       mode: repo ? 'repository' : 'website',
       forms: !flag(ctx, 'no-forms'),
       allowSubmit: flag(ctx, 'allow-submit'),
@@ -173,7 +176,8 @@ export const audit: Command = {
   --no-keyboard        Skip the keyboard-only walk
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
-  --repo PATH          Map findings to likely source files in this repository
+  --repo PATH          Map findings to likely source files in this repository (and read its brand/search context)
+  --brand SLUG         Markilo brand to check design consistency against (default: master brand)
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
   --no-forms           Do not submit forms (by default, forms on local hosts are submitted empty to test validation)

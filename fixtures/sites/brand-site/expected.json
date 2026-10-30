@@ -1,0 +1,14 @@
+{
+  "description": "Brand-aware checks with a locked Markilo brand and Searvex context.",
+  "mustFind": [
+    { "rule": "design/off-brand-cta-color", "path": "/", "why": "pink CTA, brand is green" },
+    { "rule": "design/off-brand-font", "path": "/", "why": "h1 in Comic Sans, brand font Georgia" },
+    { "rule": "axe/color-contrast", "path": "/", "why": "brand primary-300 text on white" }
+  ],
+  "mustNotFind": [
+    { "rule": "design/off-brand-font", "path": "/start", "why": "Georgia everywhere" }
+  ],
+  "recommendations": [
+    { "rule": "axe/color-contrast", "path": "/", "includes": "locked brand token" }
+  ]
+}

@@ -818,7 +818,7 @@ var require_axe = __commonJS({
                 return object;
               }
               var promise = new Constructor(noop3);
-              resolve6(promise, object);
+              resolve7(promise, object);
               return promise;
             }
             var PROMISE_ID = Math.random().toString(36).substring(2);
@@ -849,7 +849,7 @@ var require_axe = __commonJS({
                   }
                   sealed = true;
                   if (thenable !== value) {
-                    resolve6(promise2, value);
+                    resolve7(promise2, value);
                   } else {
                     fulfill(promise2, value);
                   }
@@ -873,7 +873,7 @@ var require_axe = __commonJS({
                 reject(promise, thenable._result);
               } else {
                 subscribe2(thenable, void 0, function(value) {
-                  return resolve6(promise, value);
+                  return resolve7(promise, value);
                 }, function(reason) {
                   return reject(promise, reason);
                 });
@@ -892,7 +892,7 @@ var require_axe = __commonJS({
                 }
               }
             }
-            function resolve6(promise, value) {
+            function resolve7(promise, value) {
               if (promise === value) {
                 reject(promise, selfFulfillment());
               } else if (objectOrFunction(value)) {
@@ -979,7 +979,7 @@ var require_axe = __commonJS({
               }
               if (promise._state !== PENDING) {
               } else if (hasCallback && succeeded) {
-                resolve6(promise, value);
+                resolve7(promise, value);
               } else if (succeeded === false) {
                 reject(promise, error);
               } else if (settled === FULFILLED) {
@@ -991,7 +991,7 @@ var require_axe = __commonJS({
             function initializePromise(promise, resolver) {
               try {
                 resolver(function resolvePromise(value) {
-                  resolve6(promise, value);
+                  resolve7(promise, value);
                 }, function rejectPromise(reason) {
                   reject(promise, reason);
                 });
@@ -5862,15 +5862,15 @@ var require_axe = __commonJS({
           var slice = Array.prototype.slice;
           var resolveArgs;
           resolveArgs = function resolveArgs2(args) {
-            return this.map(function(resolve6, i2) {
-              return resolve6 ? resolve6(args[i2]) : args[i2];
+            return this.map(function(resolve7, i2) {
+              return resolve7 ? resolve7(args[i2]) : args[i2];
             }).concat(slice.call(args, this.length));
           };
           module2.exports = function(resolvers) {
             resolvers = toArray2(resolvers);
-            resolvers.forEach(function(resolve6) {
-              if (isValue(resolve6)) {
-                callable(resolve6);
+            resolvers.forEach(function(resolve7) {
+              if (isValue(resolve7)) {
+                callable(resolve7);
               }
             });
             return resolveArgs.bind(resolvers);
@@ -5919,7 +5919,7 @@ var require_axe = __commonJS({
           var _on = ee.on;
           var emit = ee.emit;
           module2.exports = function(original, length, options) {
-            var cache2 = create(null), conf, memLength, get2, set2, del, _clear, extDel, extGet, extHas, normalizer, getListeners, setListeners, deleteListeners, memoized, resolve6;
+            var cache2 = create(null), conf, memLength, get2, set2, del, _clear, extDel, extGet, extHas, normalizer, getListeners, setListeners, deleteListeners, memoized, resolve7;
             if (length !== false) {
               memLength = length;
             } else if (isNaN(original.length)) {
@@ -5935,13 +5935,13 @@ var require_axe = __commonJS({
               _clear = normalizer.clear;
             }
             if (options.resolvers != null) {
-              resolve6 = resolveResolve(options.resolvers);
+              resolve7 = resolveResolve(options.resolvers);
             }
             if (get2) {
               memoized = defineLength(function(arg) {
                 var id2, result, args = arguments;
-                if (resolve6) {
-                  args = resolve6(args);
+                if (resolve7) {
+                  args = resolve7(args);
                 }
                 id2 = get2(args);
                 if (id2 !== null) {
@@ -5998,8 +5998,8 @@ var require_axe = __commonJS({
             } else {
               memoized = function memoized2(arg) {
                 var result, args = arguments, id2;
-                if (resolve6) {
-                  args = resolve6(arguments);
+                if (resolve7) {
+                  args = resolve7(arguments);
                 }
                 id2 = String(args[0]);
                 if (hasOwnProperty.call(cache2, id2)) {
@@ -6028,8 +6028,8 @@ var require_axe = __commonJS({
               memoized,
               profileName: options.profileName,
               get: function get3(args) {
-                if (resolve6) {
-                  args = resolve6(args);
+                if (resolve7) {
+                  args = resolve7(args);
                 }
                 if (get2) {
                   return get2(args);
@@ -6079,8 +6079,8 @@ var require_axe = __commonJS({
             if (get2) {
               extDel = defineLength(function(arg) {
                 var id2, args = arguments;
-                if (resolve6) {
-                  args = resolve6(args);
+                if (resolve7) {
+                  args = resolve7(args);
                 }
                 id2 = get2(args);
                 if (id2 === null) {
@@ -6094,8 +6094,8 @@ var require_axe = __commonJS({
               };
             } else {
               extDel = function extDel2(arg) {
-                if (resolve6) {
-                  arg = resolve6(arguments)[0];
+                if (resolve7) {
+                  arg = resolve7(arguments)[0];
                 }
                 return conf["delete"](arg);
               };
@@ -6105,8 +6105,8 @@ var require_axe = __commonJS({
               if (length === 0) {
                 return cache2.data;
               }
-              if (resolve6) {
-                args = resolve6(args);
+              if (resolve7) {
+                args = resolve7(args);
               }
               if (get2) {
                 id2 = get2(args);
@@ -6120,8 +6120,8 @@ var require_axe = __commonJS({
               if (length === 0) {
                 return conf.has("data");
               }
-              if (resolve6) {
-                args = resolve6(args);
+              if (resolve7) {
+                args = resolve7(args);
               }
               if (get2) {
                 id2 = get2(args);
@@ -8728,7 +8728,7 @@ var require_axe = __commonJS({
             }
           }, {
             key: "resolve",
-            value: function resolve6(number) {
+            value: function resolve7(number) {
               if (this.type === "<angle>") {
                 return number;
               }
@@ -11093,8 +11093,8 @@ var require_axe = __commonJS({
                     space: space2,
                     method: "clip"
                   });
-                  var deltaE2 = de(mappedColor, clipped2);
-                  if (deltaE2 - jnd < \u03B511) {
+                  var deltaE22 = de(mappedColor, clipped2);
+                  if (deltaE22 - jnd < \u03B511) {
                     low = get(mappedColor, coordId);
                   } else {
                     high = get(mappedColor, coordId);
@@ -12277,7 +12277,7 @@ var require_axe = __commonJS({
             }
           });
         }
-        function deltaE(c14, c24) {
+        function deltaE2(c14, c24) {
           var o = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : {};
           if (_isString(o)) {
             o = {
@@ -12367,7 +12367,7 @@ var require_axe = __commonJS({
             c24 = _ref36[1];
             colorRange = _range(c14, c24, rangeOptions);
           }
-          var totalDelta = deltaE(c14, c24, deltaEMethod);
+          var totalDelta = deltaE2(c14, c24, deltaEMethod);
           var actualSteps = maxDeltaE > 0 ? Math.max(steps2, Math.ceil(totalDelta / maxDeltaE) + 1) : steps2;
           var ret = [];
           if (maxSteps !== void 0) {
@@ -12395,7 +12395,7 @@ var require_axe = __commonJS({
               if (i3 === 0) {
                 return 0;
               }
-              var \u0394\u0395 = deltaE(cur2.color, ret[i3 - 1].color, deltaEMethod);
+              var \u0394\u0395 = deltaE2(cur2.color, ret[i3 - 1].color, deltaEMethod);
               return Math.max(acc, \u0394\u0395);
             }, 0);
             while (maxDelta > maxDeltaE) {
@@ -12405,7 +12405,7 @@ var require_axe = __commonJS({
                 var cur = ret[i2];
                 var p3 = (cur.p + prev.p) / 2;
                 var _color2 = colorRange(p3);
-                maxDelta = Math.max(maxDelta, deltaE(_color2, prev.color, deltaEMethod), deltaE(_color2, cur.color, deltaEMethod));
+                maxDelta = Math.max(maxDelta, deltaE2(_color2, prev.color, deltaEMethod), deltaE2(_color2, cur.color, deltaEMethod));
                 ret.splice(i2, 0, {
                   p: p3,
                   color: colorRange(p3)
@@ -14475,7 +14475,7 @@ var require_axe = __commonJS({
         }
         color_default.extend(deltaE_default);
         color_default.extend({
-          deltaE
+          deltaE: deltaE2
         });
         Object.assign(color_default, {
           deltaEMethods: deltaE_default
@@ -15596,7 +15596,7 @@ var require_axe = __commonJS({
           });
         };
         var dq_element_default = DqElement;
-        function checkHelper(checkResult, options, resolve6, reject) {
+        function checkHelper(checkResult, options, resolve7, reject) {
           return {
             isAsync: false,
             async: function async() {
@@ -15604,7 +15604,7 @@ var require_axe = __commonJS({
               return function(result) {
                 if (result instanceof Error === false) {
                   checkResult.result = result;
-                  resolve6(checkResult);
+                  resolve7(checkResult);
                 } else {
                   reject(result);
                 }
@@ -15920,8 +15920,8 @@ var require_axe = __commonJS({
             defer: function defer(fn) {
               if (_typeof(fn) === "object" && fn.then && fn["catch"]) {
                 var defer2 = fn;
-                fn = function fn2(resolve6, reject) {
-                  defer2.then(resolve6)["catch"](reject);
+                fn = function fn2(resolve7, reject) {
+                  defer2.then(resolve7)["catch"](reject);
                 };
               }
               funcGuard(fn);
@@ -16367,23 +16367,23 @@ var require_axe = __commonJS({
           return !!win.frameElement;
         };
         setDefaultFrameMessenger(_respondable);
-        function _sendCommandToFrame(node, parameters, resolve6, reject) {
+        function _sendCommandToFrame(node, parameters, resolve7, reject) {
           var _parameters$options$p, _parameters$options;
           var win = node.contentWindow;
           var pingWaitTime = (_parameters$options$p = (_parameters$options = parameters.options) === null || _parameters$options === void 0 ? void 0 : _parameters$options.pingWaitTime) !== null && _parameters$options$p !== void 0 ? _parameters$options$p : 500;
           if (!win) {
             log("Frame does not have a content window", node);
-            resolve6(null);
+            resolve7(null);
             return;
           }
           if (pingWaitTime === 0) {
-            callAxeStart(node, parameters, resolve6, reject);
+            callAxeStart(node, parameters, resolve7, reject);
             return;
           }
           var timeout = setTimeout(function() {
             timeout = setTimeout(function() {
               if (!parameters.debug) {
-                resolve6(null);
+                resolve7(null);
               } else {
                 reject(err("No response from frame", node));
               }
@@ -16391,10 +16391,10 @@ var require_axe = __commonJS({
           }, pingWaitTime);
           _respondable(win, "axe.ping", null, void 0, function() {
             clearTimeout(timeout);
-            callAxeStart(node, parameters, resolve6, reject);
+            callAxeStart(node, parameters, resolve7, reject);
           });
         }
-        function callAxeStart(node, parameters, resolve6, reject) {
+        function callAxeStart(node, parameters, resolve7, reject) {
           var _parameters$options$f, _parameters$options2;
           var frameWaitTime = (_parameters$options$f = (_parameters$options2 = parameters.options) === null || _parameters$options2 === void 0 ? void 0 : _parameters$options2.frameWaitTime) !== null && _parameters$options$f !== void 0 ? _parameters$options$f : 6e4;
           var win = node.contentWindow;
@@ -16404,7 +16404,7 @@ var require_axe = __commonJS({
           _respondable(win, "axe.start", parameters, void 0, function(data) {
             clearTimeout(timeout);
             if (data instanceof Error === false) {
-              resolve6(data);
+              resolve7(data);
             } else {
               reject(data);
             }
@@ -16596,7 +16596,7 @@ var require_axe = __commonJS({
           }
           return null;
         }
-        function _collectResultsFromFrames(parentContent, options, command, parameter, resolve6, reject) {
+        function _collectResultsFromFrames(parentContent, options, command, parameter, resolve7, reject) {
           options = _extends({}, options, {
             elementRef: false
           });
@@ -16624,7 +16624,7 @@ var require_axe = __commonJS({
             });
           });
           q2.then(function(data) {
-            resolve6(merge_results_default(data, options));
+            resolve7(merge_results_default(data, options));
           })["catch"](reject);
         }
         function _contains(vNode, otherVNode) {
@@ -24240,7 +24240,7 @@ var require_axe = __commonJS({
             return Promise.resolve();
           }
           importedUrls.push(url);
-          return new Promise(function(resolve6, reject) {
+          return new Promise(function(resolve7, reject) {
             var request = new window2.XMLHttpRequest();
             request.open("GET", url);
             request.timeout = constants_default.preload.timeout;
@@ -24248,7 +24248,7 @@ var require_axe = __commonJS({
             request.addEventListener("timeout", reject);
             request.addEventListener("loadend", function(event) {
               if (event.loaded && request.responseText) {
-                return resolve6(request.responseText);
+                return resolve7(request.responseText);
               }
               reject(request.responseText);
             });
@@ -24650,13 +24650,13 @@ var require_axe = __commonJS({
         }
         var preload_media_default = preloadMedia;
         function isMediaElementReady(elm) {
-          return new Promise(function(resolve6) {
+          return new Promise(function(resolve7) {
             if (elm.readyState > 0) {
-              resolve6(elm);
+              resolve7(elm);
             }
             function onMediaReady() {
               elm.removeEventListener("loadedmetadata", onMediaReady);
-              resolve6(elm);
+              resolve7(elm);
             }
             elm.addEventListener("loadedmetadata", onMediaReady);
           });
@@ -24669,7 +24669,7 @@ var require_axe = __commonJS({
           if (!_shouldPreload(options)) {
             return Promise.resolve();
           }
-          return new Promise(function(resolve6, reject) {
+          return new Promise(function(resolve7, reject) {
             var _getPreloadConfig2 = _getPreloadConfig(options), assets = _getPreloadConfig2.assets, timeout = _getPreloadConfig2.timeout;
             var preloadTimeout = setTimeout(function() {
               return reject(new Error("Preload assets timed out."));
@@ -24683,7 +24683,7 @@ var require_axe = __commonJS({
                 return _extends({}, out, result);
               }, {});
               clearTimeout(preloadTimeout);
-              resolve6(preloadAssets);
+              resolve7(preloadAssets);
             })["catch"](function(err2) {
               clearTimeout(preloadTimeout);
               reject(err2);
@@ -25252,8 +25252,8 @@ var require_axe = __commonJS({
           }, {});
         }
         var serial_virtual_node_default = SerialVirtualNode;
-        function cleanup(resolve6, reject) {
-          resolve6 = resolve6 || function res() {
+        function cleanup(resolve7, reject) {
+          resolve7 = resolve7 || function res() {
           };
           reject = reject || axe2.log;
           if (!axe2._audit) {
@@ -25284,7 +25284,7 @@ var require_axe = __commonJS({
           });
           q2.then(function(results) {
             if (cleanupErrors.length === 0) {
-              resolve6(results);
+              resolve7(results);
             } else {
               reject(cleanupErrors);
             }
@@ -33485,13 +33485,13 @@ var require_axe = __commonJS({
           }
         }
         Check.prototype.enabled = true;
-        Check.prototype.run = function run(node, options, context, resolve6, reject) {
+        Check.prototype.run = function run(node, options, context, resolve7, reject) {
           options = options || {};
           var enabled = options.hasOwnProperty("enabled") ? options.enabled : this.enabled;
           var checkOptions = this.getOptions(options.options);
           if (enabled) {
             var checkResult = new check_result_default(this);
-            var helper = check_helper_default(checkResult, options, resolve6, reject);
+            var helper = check_helper_default(checkResult, options, resolve7, reject);
             var result;
             try {
               result = this.evaluate.call(helper, node.actualNode, checkOptions, node, context);
@@ -33504,10 +33504,10 @@ var require_axe = __commonJS({
             }
             if (!helper.isAsync) {
               checkResult.result = result;
-              resolve6(checkResult);
+              resolve7(checkResult);
             }
           } else {
-            resolve6(null);
+            resolve7(null);
           }
         };
         Check.prototype.runSync = function runSync(node, options, context) {
@@ -33624,7 +33624,7 @@ var require_axe = __commonJS({
           }
           return elements;
         };
-        Rule.prototype.runChecks = function runChecks(type2, node, options, context, resolve6, reject) {
+        Rule.prototype.runChecks = function runChecks(type2, node, options, context, resolve7, reject) {
           var self2 = this;
           var checkQueue = queue_default();
           this[type2].forEach(function(c4) {
@@ -33645,7 +33645,7 @@ var require_axe = __commonJS({
             results = results.filter(function(check) {
               return check;
             });
-            resolve6({
+            resolve7({
               type: type2,
               results
             });
@@ -33670,7 +33670,7 @@ var require_axe = __commonJS({
         Rule.prototype.run = function run2(context) {
           var _this16 = this;
           var options = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
-          var resolve6 = arguments.length > 2 ? arguments[2] : void 0;
+          var resolve7 = arguments.length > 2 ? arguments[2] : void 0;
           var reject = arguments.length > 3 ? arguments[3] : void 0;
           if (options.performanceTimer) {
             this._trackPerformance();
@@ -33726,7 +33726,7 @@ var require_axe = __commonJS({
               _this16._logRulePerformance();
             }
             setTimeout(function() {
-              resolve6(ruleResult);
+              resolve7(ruleResult);
             }, 0);
           })["catch"](function(error) {
             if (options.performanceTimer) {
@@ -34169,7 +34169,7 @@ var require_axe = __commonJS({
             }
           }, {
             key: "run",
-            value: function run(context, options, resolve6, reject) {
+            value: function run(context, options, resolve7, reject) {
               var _this20 = this;
               _normalizeRunOptions(options);
               dq_element_default.setRunOptions(options);
@@ -34209,7 +34209,7 @@ var require_axe = __commonJS({
                   var nowRulesResults = nowRulesAndPreloaderResults[0];
                   if (!runLaterRules.length) {
                     axe2._selectCache = void 0;
-                    resolve6(nowRulesResults.filter(function(result) {
+                    resolve7(nowRulesResults.filter(function(result) {
                       return !!result;
                     }));
                     return;
@@ -34221,7 +34221,7 @@ var require_axe = __commonJS({
                   });
                   laterRulesQueue.then(function(laterRuleResults) {
                     axe2._selectCache = void 0;
-                    resolve6(nowRulesResults.concat(laterRuleResults).filter(function(result) {
+                    resolve7(nowRulesResults.concat(laterRuleResults).filter(function(result) {
                       return !!result;
                     }));
                   })["catch"](reject);
@@ -34397,14 +34397,14 @@ var require_axe = __commonJS({
           if (options.performanceTimer) {
             performance_timer_default.mark("mark_rule_start_" + rule.id);
           }
-          return function(resolve6, reject) {
+          return function(resolve7, reject) {
             rule.run(context, options, function(ruleResult) {
-              return resolve6(ruleResult);
+              return resolve7(ruleResult);
             }, function(err2) {
               if (options.debug) {
                 reject(err2);
               } else {
-                resolve6(createIncompleteErrorResult(rule, err2));
+                resolve7(createIncompleteErrorResult(rule, err2));
               }
             });
           };
@@ -34473,7 +34473,7 @@ var require_axe = __commonJS({
           axe2._selectCache = void 0;
         }
         var teardown_default = teardown;
-        function runRules(context, options, resolve6, reject) {
+        function runRules(context, options, resolve7, reject) {
           try {
             context = new Context(context);
             axe2._tree = context.flatTree;
@@ -34519,7 +34519,7 @@ var require_axe = __commonJS({
                 results = results.map(_finalizeRuleResult);
               }
               try {
-                resolve6(results, teardown_default);
+                resolve7(results, teardown_default);
               } catch (e) {
                 teardown_default();
                 log(e);
@@ -34537,7 +34537,7 @@ var require_axe = __commonJS({
           axe2._audit = new audit_default(audit2);
         }
         function runCommand(data, keepalive, callback) {
-          var resolve6 = callback;
+          var resolve7 = callback;
           var reject = function reject2(err2) {
             if (err2 instanceof Error === false) {
               err2 = new Error(err2);
@@ -34553,11 +34553,11 @@ var require_axe = __commonJS({
             case "rules":
               return runRules(context, options, function(results, cleanupFn) {
                 results = node_serializer_default.mapRawResults(results);
-                resolve6(results);
+                resolve7(results);
                 cleanupFn();
               }, reject);
             case "cleanup-plugin":
-              return cleanup_default(resolve6, reject);
+              return cleanup_default(resolve7, reject);
             default:
               if (axe2._audit && axe2._audit.commands && axe2._audit.commands[data.command]) {
                 return axe2._audit.commands[data.command](data, callback);
@@ -34697,7 +34697,7 @@ var require_axe = __commonJS({
           }
           setupGlobals(args[0]);
           var _normalizeRunParams = normalizeRunParams(args), context = _normalizeRunParams.context, options = _normalizeRunParams.options, _normalizeRunParams$c = _normalizeRunParams.callback, callback = _normalizeRunParams$c === void 0 ? noop2 : _normalizeRunParams$c;
-          var _getPromiseHandlers = getPromiseHandlers(callback), thenable = _getPromiseHandlers.thenable, resolve6 = _getPromiseHandlers.resolve, reject = _getPromiseHandlers.reject;
+          var _getPromiseHandlers = getPromiseHandlers(callback), thenable = _getPromiseHandlers.thenable, resolve7 = _getPromiseHandlers.resolve, reject = _getPromiseHandlers.reject;
           try {
             assert_default(axe2._audit, "No audit configured");
             assert_default(!axe2._running, "Axe is already running. Use `await axe.run()` to wait for the previous run to finish before starting a new run.");
@@ -34719,7 +34719,7 @@ var require_axe = __commonJS({
               axe2._running = false;
               teardown2();
               try {
-                resolve6(results);
+                resolve7(results);
               } catch (e) {
                 axe2.log(e);
               }
@@ -34754,14 +34754,14 @@ var require_axe = __commonJS({
           return thenable;
         }
         function getPromiseHandlers(callback) {
-          var thenable, reject, resolve6;
+          var thenable, reject, resolve7;
           if (typeof Promise === "function" && callback === noop2) {
             thenable = new Promise(function(_resolve, _reject) {
               reject = _reject;
-              resolve6 = _resolve;
+              resolve7 = _resolve;
             });
           } else {
-            resolve6 = function resolve7(result) {
+            resolve7 = function resolve8(result) {
               return callback(null, result);
             };
             reject = function reject2(err2) {
@@ -34771,7 +34771,7 @@ var require_axe = __commonJS({
           return {
             thenable,
             reject,
-            resolve: resolve6
+            resolve: resolve7
           };
         }
         function createReport(rawResults, options, respond, reject) {
@@ -34879,9 +34879,9 @@ var require_axe = __commonJS({
           });
         }
         function createReport2(results, options) {
-          return new Promise(function(resolve6, reject) {
+          return new Promise(function(resolve7, reject) {
             var reporter = getReporter(options.reporter);
-            reporter(results, options, resolve6, reject);
+            reporter(results, options, resolve7, reject);
           });
         }
         function setup2(node) {
@@ -38704,8 +38704,8 @@ var workspace_exports = {};
 __export(workspace_exports, {
   Workspace: () => Workspace
 });
-import { existsSync as existsSync3, mkdirSync as mkdirSync2, readdirSync as readdirSync2, readFileSync as readFileSync3, writeFileSync as writeFileSync3 } from "node:fs";
-import { dirname as dirname3, join as join6, resolve as resolve2 } from "node:path";
+import { existsSync as existsSync4, mkdirSync as mkdirSync2, readdirSync as readdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync3 } from "node:fs";
+import { dirname as dirname3, join as join7, resolve as resolve2 } from "node:path";
 var Workspace;
 var init_workspace = __esm({
   "src/core/workspace.ts"() {
@@ -38719,12 +38719,12 @@ var init_workspace = __esm({
         this.root = resolve2(root ?? process.env.JOURILO_WORKSPACE ?? ".jourilo");
       }
       get runsDir() {
-        return join6(this.root, "runs");
+        return join7(this.root, "runs");
       }
       ensure() {
         mkdirSync2(this.runsDir, { recursive: true });
-        const ignore = join6(this.root, ".gitignore");
-        if (!existsSync3(ignore)) writeFileSync3(ignore, "*\n");
+        const ignore = join7(this.root, ".gitignore");
+        if (!existsSync4(ignore)) writeFileSync3(ignore, "*\n");
       }
       runDir(id) {
         return resolveInside(this.runsDir, id);
@@ -38732,24 +38732,24 @@ var init_workspace = __esm({
       createRunDir(id) {
         this.ensure();
         const dir = this.runDir(id);
-        mkdirSync2(join6(dir, "screenshots"), { recursive: true });
+        mkdirSync2(join7(dir, "screenshots"), { recursive: true });
         return dir;
       }
       saveRun(run) {
         const dir = this.createRunDir(run.id);
-        const file = join6(dir, "run.json");
+        const file = join7(dir, "run.json");
         writeFileSync3(file, `${JSON.stringify(run, null, 2)}
 `);
         return file;
       }
       listRuns() {
-        if (!existsSync3(this.runsDir)) return [];
+        if (!existsSync4(this.runsDir)) return [];
         const out = [];
-        for (const id of readdirSync2(this.runsDir).sort()) {
-          const file = join6(this.runsDir, id, "run.json");
-          if (!existsSync3(file)) continue;
+        for (const id of readdirSync3(this.runsDir).sort()) {
+          const file = join7(this.runsDir, id, "run.json");
+          if (!existsSync4(file)) continue;
           try {
-            const run = JSON.parse(readFileSync3(file, "utf8"));
+            const run = JSON.parse(readFileSync4(file, "utf8"));
             out.push({ id, target: run.target, startedAt: run.startedAt, findings: run.findings.length });
           } catch {
           }
@@ -38763,16 +38763,16 @@ var init_workspace = __esm({
           const runs2 = this.listRuns();
           const pick = runs2[runs2.length - (ref === "latest" ? 1 : 2)];
           if (!pick) throw new JouriloError("NOT_FOUND", `No ${ref} run in ${this.runsDir}.`);
-          file = join6(this.runsDir, pick.id, "run.json");
-        } else if (ref.endsWith(".json") && existsSync3(ref)) {
+          file = join7(this.runsDir, pick.id, "run.json");
+        } else if (ref.endsWith(".json") && existsSync4(ref)) {
           file = resolve2(ref);
-        } else if (existsSync3(join6(ref, "run.json"))) {
+        } else if (existsSync4(join7(ref, "run.json"))) {
           file = resolve2(ref, "run.json");
         } else {
-          file = join6(this.runDir(ref), "run.json");
+          file = join7(this.runDir(ref), "run.json");
         }
-        if (!existsSync3(file)) throw new JouriloError("NOT_FOUND", `Run not found: ${ref}`);
-        const run = JSON.parse(readFileSync3(file, "utf8"));
+        if (!existsSync4(file)) throw new JouriloError("NOT_FOUND", `Run not found: ${ref}`);
+        const run = JSON.parse(readFileSync4(file, "utf8"));
         if (run.schemaVersion !== RUN_SCHEMA_VERSION) {
           throw new JouriloError(
             "SCHEMA_MISMATCH",
@@ -38792,7 +38792,7 @@ init_errors();
 var VERSION = true ? "0.1.0" : "0.0.0-dev";
 
 // src/cli/commands/audit.ts
-import { existsSync as existsSync4, statSync as statSync3 } from "node:fs";
+import { existsSync as existsSync5, statSync as statSync4 } from "node:fs";
 import { resolve as resolve3 } from "node:path";
 
 // src/browser/capture.ts
@@ -39264,7 +39264,92 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
   ];
   const pricingSignals = PRICING.filter(([, re]) => re.test(lower)).map(([n]) => n);
 
+  // ---- Style samples for design-system checks (computed values, visible elements only) ----
+  const firstFont = (ff) =>
+    ff
+      .split(',')[0]
+      .trim()
+      .replace(/^["']|["']$/g, '');
+  const bodyCs = getComputedStyle(document.body || document.documentElement);
+  const styles = {
+    body: {
+      color: bodyCs.color,
+      background: bgOf(document.body || document.documentElement),
+      font: firstFont(bodyCs.fontFamily),
+    },
+    headings: Array.from(document.querySelectorAll('h1, h2'))
+      .filter(isVisible)
+      .slice(0, 6)
+      .map((h) => ({
+        selector: selectorOf(h),
+        color: getComputedStyle(h).color,
+        font: firstFont(getComputedStyle(h).fontFamily),
+      })),
+    ctas: ctas
+      .filter((c) => c.emphasis === 'primary')
+      .slice(0, 8)
+      .map((c) => {
+        const el = document.querySelector(c.selector);
+        const cs = el ? getComputedStyle(el) : null;
+        return {
+          selector: c.selector,
+          text: c.text,
+          background: cs ? cs.backgroundColor : '',
+          color: cs ? cs.color : '',
+          rect: c.rect,
+        };
+      }),
+  };
+
+  // ---- Technology hints (for website-mode product discovery) ----
+  const tech = [];
+  const gen = document.querySelector('meta[name="generator"]')?.getAttribute('content');
+  if (gen) tech.push(\`generator: \${gen.slice(0, 60)}\`);
+  if (window.__NEXT_DATA__ || document.querySelector('script[src*="/_next/"]')) tech.push('Next.js');
+  if (window.__NUXT__ || window.useNuxtApp || document.getElementById('__nuxt')) tech.push('Nuxt');
+  if (document.querySelector('astro-island, [data-astro-cid]') || /astro/i.test(gen || ''))
+    tech.push('Astro');
+  if (
+    document.querySelector('[data-sveltekit-preload-data], [data-sveltekit-hydrate]') ||
+    window.__sveltekit_dev
+  )
+    tech.push('SvelteKit');
+  if (document.querySelector('[ng-version]')) tech.push('Angular');
+  if (document.querySelector('flutter-view, flt-glass-pane, flt-scene-host') || window._flutter)
+    tech.push('Flutter web');
+  if (
+    document.querySelector('[data-reactroot], #__next, #root') &&
+    window.React === undefined &&
+    document.querySelector('#root')
+  )
+    tech.push('SPA root (#root)');
+  if (window.Shopify) tech.push('Shopify');
+  if (document.querySelector('link[href*="wp-content"], script[src*="wp-content"]')) tech.push('WordPress');
+  if (document.documentElement.hasAttribute('data-wf-site')) tech.push('Webflow');
+  const scriptHosts = Array.from(
+    new Set(
+      performance
+        .getEntriesByType('resource')
+        .filter((e) => e.initiatorType === 'script')
+        .map((e) => {
+          try {
+            return new URL(e.name).host;
+          } catch {
+            return '';
+          }
+        })
+        .filter((h) => h && h !== location.host),
+    ),
+  ).slice(0, 40);
+  const hreflang = Array.from(document.querySelectorAll('link[rel="alternate"][hreflang]')).map((l) =>
+    l.getAttribute('hreflang'),
+  );
+
   return {
+    styles,
+    tech,
+    scriptHosts,
+    hreflang,
     inventory: {
       lang: document.documentElement.getAttribute('lang'),
       h1: headings.filter((h) => h.level === 1).map((h) => h.text),
@@ -39358,8 +39443,8 @@ function inPage(src) {
 async function keyboardWalk(page, maxTabs = 60) {
   const focusableCount = await page.evaluate(COUNT_FOCUSABLE);
   const stops = [];
-  const walk = { stops, focusableCount, completedCycle: false, trap: null, pressed: 0 };
-  if (focusableCount === 0) return walk;
+  const walk2 = { stops, focusableCount, completedCycle: false, trap: null, pressed: 0 };
+  if (focusableCount === 0) return walk2;
   await page.evaluate(
     "(() => { document.activeElement && document.activeElement.blur && document.activeElement.blur(); window.scrollTo(0, 0); })()"
   );
@@ -39369,7 +39454,7 @@ async function keyboardWalk(page, maxTabs = 60) {
   const sequence = [];
   for (let i = 0; i < limit; i++) {
     await page.keyboard.press("Tab");
-    walk.pressed++;
+    walk2.pressed++;
     const handle = await page.evaluateHandle("document.activeElement");
     const data = await handle.evaluate(inPage(FOCUS_INFO));
     if (prevHandle && prevFocused && stops.length) {
@@ -39381,13 +39466,13 @@ async function keyboardWalk(page, maxTabs = 60) {
       }
     }
     if (!data) {
-      if (stops.length) walk.completedCycle = true;
+      if (stops.length) walk2.completedCycle = true;
       prevHandle = null;
       prevFocused = null;
       break;
     }
     if (stops.length && data.selector === stops[0].selector) {
-      walk.completedCycle = true;
+      walk2.completedCycle = true;
       break;
     }
     prevFocused = await handle.evaluate(inPage(FOCUS_STYLES)).catch(() => null);
@@ -39395,15 +39480,15 @@ async function keyboardWalk(page, maxTabs = 60) {
     sequence.push(data.selector);
     stops.push({ ...data, index: stops.length, indicatorChanges: [], indicatorChecked: false });
   }
-  if (!walk.completedCycle && sequence.length >= 6) {
+  if (!walk2.completedCycle && sequence.length >= 6) {
     const tail = sequence.slice(-6);
     const distinct = new Set(tail);
     const inModal = stops.slice(-6).some((s) => s.inModal);
     if (distinct.size <= 3 && focusableCount > distinct.size + 2 && !inModal) {
-      walk.trap = { selectors: [...distinct] };
+      walk2.trap = { selectors: [...distinct] };
     }
   }
-  return walk;
+  return walk2;
 }
 
 // src/browser/vitals.ts
@@ -40515,6 +40600,238 @@ async function crawl(ctx, start, opts) {
   return { pages: picked, skipped, robots, sitemapUrls: fromSitemap.length };
 }
 
+// src/integrations/context.ts
+init_fs_safety();
+import { existsSync as existsSync2, readdirSync, readFileSync, statSync } from "node:fs";
+import { join as join3, relative as relative2 } from "node:path";
+var CONTEXT_SCHEMA = "jourilo.context/v1";
+function readJson(file) {
+  try {
+    return JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    return null;
+  }
+}
+function flattenTokens(tokens) {
+  const colors = [];
+  const fonts = [];
+  const walk2 = (node, path2) => {
+    if (!node || typeof node !== "object") return;
+    const o = node;
+    if ("$value" in o) {
+      const type = o.$type;
+      if (type === "color" && typeof o.$value === "string")
+        colors.push({ name: path2.join("."), value: o.$value.toLowerCase() });
+      if (type === "fontFamily") {
+        const v = Array.isArray(o.$value) ? o.$value : [o.$value];
+        for (const f of v)
+          if (typeof f === "string" && !/^(system-ui|sans-serif|serif|monospace|ui-\w+|-apple-system)$/i.test(f) && !fonts.includes(f))
+            fonts.push(f);
+      }
+      return;
+    }
+    for (const [k, v] of Object.entries(o)) if (!k.startsWith("$")) walk2(v, [...path2, k]);
+  };
+  walk2(tokens, []);
+  return { colors, fonts };
+}
+function readMarkilo(root, brandSlug) {
+  for (const dir of ["branding", "brand"]) {
+    const manifestFile = join3(root, dir, "markilo.json");
+    const manifest = readJson(manifestFile);
+    if (!manifest?.brands?.length) continue;
+    const brand = manifest.brands.find((b) => b.slug === brandSlug) ?? manifest.brands.find((b) => b.role === "master") ?? manifest.brands[0];
+    const tokensFile = join3(root, dir, "brands", brand.slug, "exports", "tokens", "tokens.json");
+    if (!existsSync2(tokensFile)) continue;
+    const { colors, fonts } = flattenTokens(readJson(tokensFile));
+    return {
+      source: "markilo",
+      file: toPosix(relative2(root, tokensFile)),
+      name: brand.name,
+      locked: brand.locked === true,
+      colors,
+      fonts
+    };
+  }
+  return null;
+}
+function readSearvex(root) {
+  const runs2 = join3(root, ".searvex", "runs");
+  if (!existsSync2(runs2)) return null;
+  const dirs = readdirSync(runs2).filter((d) => existsSync2(join3(runs2, d, "report.json"))).sort(
+    (a, b) => statSync(join3(runs2, b, "report.json")).mtimeMs - statSync(join3(runs2, a, "report.json")).mtimeMs
+  );
+  if (!dirs.length) return null;
+  const file = join3(runs2, dirs[0], "report.json");
+  const report2 = readJson(file);
+  if (!report2?.findings) return null;
+  return {
+    source: "searvex",
+    file: toPosix(relative2(root, file)),
+    findings: report2.findings.slice(0, 500).map((f) => ({
+      ruleId: String(f.ruleId),
+      title: String(f.title),
+      severity: String(f.severity),
+      url: f.evidence?.find((e) => e.url)?.url ?? null,
+      message: String(f.message ?? "")
+    }))
+  };
+}
+function readExplicit(root) {
+  const file = join3(root, "jourilo.context.json");
+  const data = readJson(file);
+  if (!data) return null;
+  if (data.schema !== CONTEXT_SCHEMA)
+    return { notes: [`jourilo.context.json ignored: schema must be "${CONTEXT_SCHEMA}".`] };
+  return data;
+}
+function loadContext(root, opts = {}) {
+  const explicit = readExplicit(root);
+  const notes = [...explicit?.notes ?? []];
+  const brand = explicit?.brand ?? readMarkilo(root, opts.brand);
+  const search = explicit?.search ?? readSearvex(root);
+  if (brand)
+    notes.push(`Brand context from ${brand.source} (${brand.file})${brand.locked ? " \u2014 locked" : ""}.`);
+  if (search)
+    notes.push(
+      `Search context from ${search.source} (${search.file}), ${search.findings.length} finding(s).`
+    );
+  return { schema: CONTEXT_SCHEMA, brand: brand ?? null, search: search ?? null, notes };
+}
+function parseCssColor(c) {
+  const hex = c.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hex) {
+    const h = hex[1].length === 3 ? hex[1].replace(/(.)/g, "$1$1") : hex[1];
+    return [
+      Number.parseInt(h.slice(0, 2), 16),
+      Number.parseInt(h.slice(2, 4), 16),
+      Number.parseInt(h.slice(4, 6), 16)
+    ];
+  }
+  const rgb = c.match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+%?))?/);
+  if (rgb) {
+    if (rgb[4] !== void 0 && Number.parseFloat(rgb[4]) === 0) return null;
+    return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+  }
+  return null;
+}
+function deltaE(a, b) {
+  const lab = ([r, g, bl]) => {
+    const lin = (v) => {
+      const s = v / 255;
+      return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    const [R, G, B] = [lin(r), lin(g), lin(bl)];
+    const x = (R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047;
+    const y = R * 0.2126 + G * 0.7152 + B * 0.0722;
+    const z = (R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883;
+    const f = (t) => t > 8856e-6 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+    return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
+  };
+  const [l1, a1, b1] = lab(a);
+  const [l2, a2, b2] = lab(b);
+  return Math.hypot(l1 - l2, a1 - a2, b1 - b2);
+}
+function nearestBrandColor(value, brand) {
+  const c = parseCssColor(value);
+  if (!c) return null;
+  let best = null;
+  for (const b of brand.colors) {
+    const bc = parseCssColor(b.value);
+    if (!bc) continue;
+    const d = deltaE(c, bc);
+    if (!best || d < best.deltaE) best = { ...b, deltaE: Math.round(d * 10) / 10 };
+  }
+  return best;
+}
+
+// src/integrations/design-rules.ts
+var OFF_PALETTE = 10;
+function designFindings(obs, brand) {
+  const st = obs.probe?.styles;
+  if (!st || !brand.colors.length) return [];
+  const out = [];
+  const shot = obs.screenshot ? { file: obs.screenshot } : {};
+  const off = st.ctas.map((c) => ({ c, near: nearestBrandColor(c.background, brand) })).filter((x) => x.near && x.near.deltaE > OFF_PALETTE);
+  if (off.length) {
+    out.push(
+      makeFinding({
+        ruleId: "design/off-brand-cta-color",
+        title: "Primary buttons use colors outside the brand palette",
+        category: "design-system",
+        kind: "defect",
+        severity: "minor",
+        confidence: "medium",
+        provenance: "measured",
+        url: obs.url,
+        viewport: obs.viewport.name,
+        description: `${off.length} primary call(s) to action use a background color that is far from every ${brand.source} palette color (\u0394E > ${OFF_PALETTE}).`,
+        impact: "Inconsistent action colors weaken recognition of what is clickable and dilute the brand.",
+        recommendation: `Use the brand token closest to the intended role (nearest: ${off.slice(0, 3).map((o) => `${o.near.name} ${o.near.value}`).join(
+          ", "
+        )}).${brand.locked ? " The brand is locked: change the component, not the brand palette." : ""}`,
+        standards: [{ standard: `${brand.source} brand tokens`, id: brand.file, title: brand.name }],
+        evidence: off.map((o) => ({
+          type: "element",
+          selector: o.c.selector,
+          rect: o.c.rect,
+          snippet: o.c.text,
+          data: {
+            background: o.c.background,
+            nearest: o.near.value,
+            token: o.near.name,
+            deltaE: o.near.deltaE
+          },
+          ...shot
+        })),
+        occurrences: off.length
+      })
+    );
+  }
+  if (brand.fonts.length) {
+    const allowed = brand.fonts.map((f) => f.toLowerCase());
+    const used = [st.body.font, ...st.headings.map((h) => h.font)].filter(Boolean);
+    const foreign = [...new Set(used.filter((f) => !allowed.includes(f.toLowerCase())))];
+    if (foreign.length) {
+      out.push(
+        makeFinding({
+          ruleId: "design/off-brand-font",
+          title: "Text uses fonts that are not in the brand typography",
+          category: "design-system",
+          kind: "defect",
+          severity: "minor",
+          confidence: "medium",
+          provenance: "measured",
+          url: obs.url,
+          viewport: obs.viewport.name,
+          description: `Computed font families ${foreign.map((f) => `"${f}"`).join(", ")} are not among the brand fonts (${brand.fonts.join(", ")}). The brand font may have failed to load.`,
+          impact: "The product looks inconsistent with the brand; a failed web-font load can also shift layout.",
+          recommendation: `Load and apply ${brand.fonts[0]} through the shared typography tokens; check the font request in the network panel.`,
+          standards: [{ standard: `${brand.source} brand tokens`, id: brand.file, title: brand.name }],
+          evidence: [
+            {
+              type: "dom",
+              snippet: `body: ${st.body.font}; headings: ${st.headings.map((h) => h.font).join(", ")}`
+            }
+          ]
+        })
+      );
+    }
+  }
+  return out;
+}
+function respectLockedBrand(findings, brand) {
+  if (!brand?.locked) return;
+  for (const f of findings) {
+    if (f.ruleId !== "axe/color-contrast") continue;
+    const fg = f.evidence.find((e) => typeof e.data?.fgColor === "string")?.data?.fgColor;
+    const near = fg ? nearestBrandColor(fg, brand) : null;
+    if (near && near.deltaE < 2.3) {
+      f.recommendation = `The text color ${fg} is the locked brand token ${near.name}. Do not change it: raise contrast by changing the background, using a darker/lighter step the brand already defines for text, or increasing size/weight to qualify as large text. Consult the brand owner before any palette change.`;
+    }
+  }
+}
+
 // src/journeys/forms.ts
 init_fs_safety();
 
@@ -41516,7 +41833,8 @@ async function runAudit(ws, opts) {
             timeoutMs: opts.timeoutMs,
             mask: opts.mask,
             // Keyboard walks are for keyboard devices; skip them on touch viewports unless only touch was requested.
-            keyboard: opts.keyboard && (!vp.hasTouch || opts.viewports.every((v) => v.hasTouch)),
+            keyboard: !opts.inventoryOnly && opts.keyboard && (!vp.hasTouch || opts.viewports.every((v) => v.hasTouch)),
+            axe: !opts.inventoryOnly,
             throttle: opts.throttle
           });
           observations.push(obs);
@@ -41527,7 +41845,7 @@ async function runAudit(ws, opts) {
     }
     const formFindings = [];
     const formsAllowed = hostClass === "local" || opts.allowSubmit === true;
-    if (opts.forms !== false && formsAllowed) {
+    if (opts.forms !== false && !opts.inventoryOnly && formsAllowed) {
       const vp = opts.viewports.find((v) => !v.hasTouch) ?? opts.viewports[0];
       const ctx = await newContext(browser, vp, {
         runDir,
@@ -41559,13 +41877,15 @@ async function runAudit(ws, opts) {
       );
     }
     let findings = [...formFindings];
-    for (const obs of observations) {
+    for (const obs of opts.inventoryOnly ? [] : observations) {
       const rules = obs.status !== null && obs.status >= 400 ? [PAGE_RULES.reliability] : Object.values(PAGE_RULES);
       for (const rule of rules) findings.push(...rule(obs));
+      if (opts.context?.brand && rules.length > 1) findings.push(...designFindings(obs, opts.context.brand));
       for (const e of obs.errors)
         if (!e.startsWith("navigation:")) limitations.push(`${obs.url} (${obs.viewport.name}): ${e}`);
     }
     findings = mergeFindings(findings);
+    respectLockedBrand(findings, opts.context?.brand ?? null);
     if (opts.categories?.length) findings = findings.filter((f) => opts.categories.includes(f.category));
     limitations.push(
       "Automated accessibility checks cover only part of WCAG 2.2; criteria such as 1.3.3, 2.5.7, 3.2.6, 3.3.7 and 3.3.8 and most content quality questions need manual review.",
@@ -41612,7 +41932,8 @@ async function runAudit(ws, opts) {
       journeys: [],
       findings,
       summary: summarize(findings, pages.length, 0),
-      limitations: [...new Set(limitations)]
+      limitations: [...new Set(limitations)],
+      ...opts.context && (opts.context.brand || opts.context.search) ? { context: opts.context } : {}
     };
     ws.saveRun(run);
     return { run, runDir, observations };
@@ -41704,9 +42025,9 @@ init_errors();
 // src/core/static-server.ts
 init_errors();
 init_fs_safety();
-import { existsSync as existsSync2, readFileSync, statSync } from "node:fs";
+import { existsSync as existsSync3, readFileSync as readFileSync2, statSync as statSync2 } from "node:fs";
 import { createServer } from "node:http";
-import { extname, join as join3 } from "node:path";
+import { extname, join as join4 } from "node:path";
 var TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -41724,10 +42045,10 @@ var TYPES = {
   ".xml": "application/xml"
 };
 async function serveStatic(root, port = 0) {
-  if (!existsSync2(root) || !statSync(root).isDirectory())
+  if (!existsSync3(root) || !statSync2(root).isDirectory())
     throw new JouriloError("NOT_FOUND", `Not a directory: ${root}`);
-  const cfgFile = join3(root, "jourilo-fixture.json");
-  const cfg = existsSync2(cfgFile) ? JSON.parse(readFileSync(cfgFile, "utf8")) : {};
+  const cfgFile = join4(root, "jourilo-fixture.json");
+  const cfg = existsSync3(cfgFile) ? JSON.parse(readFileSync2(cfgFile, "utf8")) : {};
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     let pathname2 = decodeURIComponent(url.pathname);
@@ -41735,22 +42056,22 @@ async function serveStatic(root, port = 0) {
     const send = () => {
       try {
         let file = resolveInside(root, `.${pathname2}`);
-        if (existsSync2(file) && statSync(file).isDirectory()) file = join3(file, "index.html");
-        if (!existsSync2(file) && !extname(pathname2)) {
+        if (existsSync3(file) && statSync2(file).isDirectory()) file = join4(file, "index.html");
+        if (!existsSync3(file) && !extname(pathname2)) {
           const html = resolveInside(root, `.${pathname2}.html`);
-          if (existsSync2(html)) file = html;
+          if (existsSync3(html)) file = html;
         }
-        if (!existsSync2(file)) {
-          const notFound = join3(root, "404.html");
+        if (!existsSync3(file)) {
+          const notFound = join4(root, "404.html");
           res.writeHead(404, { "content-type": TYPES[".html"] });
-          res.end(existsSync2(notFound) ? readFileSync(notFound) : "Not found");
+          res.end(existsSync3(notFound) ? readFileSync2(notFound) : "Not found");
           return;
         }
         res.writeHead(200, {
           "content-type": TYPES[extname(file).toLowerCase()] ?? "application/octet-stream",
           "cache-control": "no-store"
         });
-        res.end(readFileSync(file));
+        res.end(readFileSync2(file));
       } catch {
         res.writeHead(403);
         res.end("Forbidden");
@@ -41760,24 +42081,24 @@ async function serveStatic(root, port = 0) {
     if (delay > 0) setTimeout(send, delay);
     else send();
   });
-  await new Promise((resolve6, reject) => {
+  await new Promise((resolve7, reject) => {
     server.once("error", reject);
-    server.listen(port, "127.0.0.1", () => resolve6());
+    server.listen(port, "127.0.0.1", () => resolve7());
   });
   const { port: actual } = server.address();
   return {
     url: `http://127.0.0.1:${actual}`,
-    close: () => new Promise((resolve6) => {
+    close: () => new Promise((resolve7) => {
       server.closeAllConnections();
-      server.close(() => resolve6());
+      server.close(() => resolve7());
     })
   };
 }
 
 // src/repair/locate.ts
 init_fs_safety();
-import { readdirSync, readFileSync as readFileSync2, statSync as statSync2 } from "node:fs";
-import { extname as extname2, join as join4, relative as relative2 } from "node:path";
+import { readdirSync as readdirSync2, readFileSync as readFileSync3, statSync as statSync3 } from "node:fs";
+import { extname as extname2, join as join5, relative as relative3 } from "node:path";
 var SOURCE_EXT = /* @__PURE__ */ new Set([
   ".html",
   ".htm",
@@ -41825,37 +42146,37 @@ var SKIP_DIRS = /* @__PURE__ */ new Set([
 var STYLE_EXT = /* @__PURE__ */ new Set([".css", ".scss", ".sass", ".less"]);
 function indexRepository(root, maxFiles = 6e3) {
   const out = [];
-  const walk = (dir, depth) => {
+  const walk2 = (dir, depth) => {
     if (out.length >= maxFiles || depth > 12) return;
     let entries;
     try {
-      entries = readdirSync(dir);
+      entries = readdirSync2(dir);
     } catch {
       return;
     }
     for (const name of entries) {
       if (out.length >= maxFiles) return;
       if (name.startsWith(".") && name !== ".vitepress") continue;
-      const full = join4(dir, name);
+      const full = join5(dir, name);
       let st;
       try {
-        st = statSync2(full);
+        st = statSync3(full);
       } catch {
         continue;
       }
       if (st.isDirectory()) {
-        if (!SKIP_DIRS.has(name)) walk(full, depth + 1);
+        if (!SKIP_DIRS.has(name)) walk2(full, depth + 1);
         continue;
       }
       const ext = name.endsWith(".blade.php") ? ".php" : extname2(name).toLowerCase();
       if (!SOURCE_EXT.has(ext) || st.size > 512 * 1024 || /\.min\.(js|css)$/.test(name)) continue;
       try {
-        out.push({ rel: toPosix(relative2(root, full)), ext, lines: readFileSync2(full, "utf8").split("\n") });
+        out.push({ rel: toPosix(relative3(root, full)), ext, lines: readFileSync3(full, "utf8").split("\n") });
       } catch {
       }
     }
   };
-  walk(root, 0);
+  walk2(root, 0);
   return out;
 }
 var escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -42092,7 +42413,7 @@ function locateFindings(run, repoRoot) {
 
 // src/report/index.ts
 import { writeFileSync as writeFileSync2 } from "node:fs";
-import { join as join5 } from "node:path";
+import { join as join6 } from "node:path";
 
 // src/report/html.ts
 function esc(s) {
@@ -42226,6 +42547,29 @@ function compareHtml(cmp) {
 <p class="muted">Baseline run <code>${esc(cmp.base.id)}</code> (${esc(cmp.base.startedAt)}) vs <code>${esc(cmp.head.id)}</code> (${esc(cmp.head.startedAt)}).</p>
 ${cmp.metrics.length ? `<table><thead><tr><th>Page</th><th>Viewport</th><th>Metric</th><th>Before</th><th>After</th><th>\u0394</th></tr></thead><tbody>${cmp.metrics.map((m) => `<tr><td>${esc(pathname(m.url))}</td><td>${esc(m.viewport)}</td><td>${esc(m.name)}</td><td>${m.before}</td><td>${m.after}</td><td class="${m.delta < 0 ? "good" : m.delta > 0 ? "poor" : ""}">${m.delta > 0 ? "+" : ""}${m.delta}</td></tr>`).join("")}</tbody></table><p class="muted">Lab deltas from single visits can be noise; repeat runs before drawing conclusions.</p>` : ""}`;
 }
+function contextHtml(run) {
+  const c = run.context;
+  if (!c || !c.brand && !c.search) return "";
+  const parts = ["<h2>Context from other tools</h2>"];
+  if (c.brand)
+    parts.push(
+      `<p><b>Brand</b> (${esc(c.brand.source)}, <code>${esc(c.brand.file)}</code>): ${esc(c.brand.name)} \xB7 ${c.brand.colors.length} color tokens \xB7 fonts ${esc(c.brand.fonts.join(", ") || "\u2014")}${c.brand.locked ? ' \xB7 <span class="pill">locked</span> recommendations keep brand tokens unchanged' : ""}</p>`
+    );
+  if (c.search) {
+    const paths = new Set(run.pages.map((p) => pathname(p.url)));
+    const related = c.search.findings.filter((f) => f.url && paths.has(pathname(f.url)));
+    parts.push(
+      `<p><b>Search</b> (${esc(c.search.source)}, <code>${esc(c.search.file)}</code>): ${c.search.findings.length} finding(s), ${related.length} on pages in this run.</p>`
+    );
+    if (related.length)
+      parts.push(
+        `<ul>${related.slice(0, 15).map(
+          (f) => `<li><span class="pill">${esc(f.severity)}</span> ${esc(f.title)} \u2014 <code>${esc(pathname(f.url ?? ""))}</code></li>`
+        ).join("")}</ul>`
+      );
+  }
+  return parts.join("");
+}
 function renderHtml(run, cmp) {
   const status = /* @__PURE__ */ new Map();
   if (cmp) {
@@ -42262,6 +42606,7 @@ ${cmp ? '<button role="tab" aria-selected="false" data-tab="compare">Before / af
 <h2>Fix first</h2>
 ${top.length ? top.map((f) => findingHtml(run, f, status.get(f.fingerprint))).join("") : "<p>No defects detected by automated checks. Manual review is still required (see limitations).</p>"}
 <h2>By category</h2><ul class="bycat">${Object.entries(s.byCategory).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0)).map(([k, v]) => `<li><b>${v}</b> ${esc(k)}</li>`).join("")}</ul>
+${contextHtml(run)}
 <h2>Limitations of this run</h2><ul class="limits">${run.limitations.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
 </section>
 <section id="findings" class="panel" hidden>
@@ -42457,13 +42802,13 @@ function renderSarif(run) {
 
 // src/report/index.ts
 function writeReports(dir, run, cmp, opts = {}) {
-  const html = join5(dir, "report.html");
-  const markdown = join5(dir, "report.md");
+  const html = join6(dir, "report.html");
+  const markdown = join6(dir, "report.md");
   writeFileSync2(html, renderHtml(run, cmp));
   writeFileSync2(markdown, renderMarkdown(run, cmp));
   const out = { html, markdown };
   if (opts.sarif) {
-    out.sarif = join5(dir, "report.sarif");
+    out.sarif = join6(dir, "report.sarif");
     writeFileSync2(out.sarif, `${JSON.stringify(renderSarif(run), null, 2)}
 `);
   }
@@ -42555,6 +42900,7 @@ var AUDIT_OPTIONS = {
   sarif: { type: "boolean" },
   "no-forms": { type: "boolean" },
   "allow-submit": { type: "boolean" },
+  brand: { type: "string" },
   "fail-on": { type: "string" }
 };
 var SEVERITIES = ["critical", "serious", "moderate", "minor"];
@@ -42568,8 +42914,8 @@ async function auditCommand(ctx, usage2, categories) {
   if (failOn && !SEVERITIES.includes(failOn))
     throw new JouriloError("USAGE", `--fail-on must be one of ${SEVERITIES.join(", ")}.`);
   const auth = str(ctx, "auth");
-  if (auth && !existsSync4(auth)) throw new JouriloError("NOT_FOUND", `Auth state file not found: ${auth}`);
-  const isDir = !/^[a-z]+:\/\//i.test(targetArg) && existsSync4(targetArg) && statSync3(targetArg).isDirectory();
+  if (auth && !existsSync5(auth)) throw new JouriloError("NOT_FOUND", `Auth state file not found: ${auth}`);
+  const isDir = !/^[a-z]+:\/\//i.test(targetArg) && existsSync5(targetArg) && statSync4(targetArg).isDirectory();
   const server = isDir ? await serveStatic(resolve3(targetArg)) : void 0;
   const repo = str(ctx, "repo") ?? (isDir ? resolve3(targetArg) : void 0);
   try {
@@ -42591,6 +42937,7 @@ async function auditCommand(ctx, usage2, categories) {
       ...auth ? { storageState: auth } : {},
       ...str(ctx, "locale") ? { locale: str(ctx, "locale") } : {},
       ...categories ? { categories } : {},
+      context: loadContext(repo ?? process.cwd(), str(ctx, "brand") ? { brand: str(ctx, "brand") } : {}),
       mode: repo ? "repository" : "website",
       forms: !flag(ctx, "no-forms"),
       allowSubmit: flag(ctx, "allow-submit"),
@@ -42669,7 +43016,8 @@ var audit = {
   --no-keyboard        Skip the keyboard-only walk
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
-  --repo PATH          Map findings to likely source files in this repository
+  --repo PATH          Map findings to likely source files in this repository (and read its brand/search context)
+  --brand SLUG         Markilo brand to check design consistency against (default: master brand)
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
   --no-forms           Do not submit forms (by default, forms on local hosts are submitted empty to test validation)
@@ -42694,12 +43042,12 @@ var conversion = {
 };
 
 // src/cli/commands/bench.ts
-import { existsSync as existsSync5, readdirSync as readdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync4 } from "node:fs";
-import { join as join7, resolve as resolve4 } from "node:path";
+import { existsSync as existsSync6, readdirSync as readdirSync4, readFileSync as readFileSync5, writeFileSync as writeFileSync4 } from "node:fs";
+import { join as join8, resolve as resolve4 } from "node:path";
 init_errors();
 var matches = (f, e) => f.ruleId === e.rule && pathOf(f.url).split("?")[0].replace(/\/$/, "") === e.path.replace(/\/$/, "") && (!e.viewport || (f.viewport ?? "").split(", ").includes(e.viewport));
 async function benchFixture(dir, wsRoot) {
-  const expected = JSON.parse(readFileSync4(join7(dir, "expected.json"), "utf8"));
+  const expected = JSON.parse(readFileSync5(join8(dir, "expected.json"), "utf8"));
   const server = await serveStatic(dir);
   const t0 = Date.now();
   try {
@@ -42718,10 +43066,16 @@ async function benchFixture(dir, wsRoot) {
       throttle: false,
       timeoutMs: 3e4,
       mask: [],
-      mode: "repository"
+      mode: "repository",
+      context: loadContext(dir)
     });
     locateFindings(run, dir);
     const missed = expected.mustFind.filter((e) => !run.findings.some((f) => matches(f, e)));
+    for (const r of expected.recommendations ?? []) {
+      const f = run.findings.find((x) => matches(x, r));
+      if (!f?.recommendation.includes(r.includes))
+        missed.push({ rule: r.rule, path: r.path, why: `recommendation should include "${r.includes}"` });
+    }
     const falsePositives = expected.mustNotFind.filter((e) => run.findings.some((f) => matches(f, e))).map((e) => ({ rule: e.rule, path: e.path, ...e.why ? { why: e.why } : {} }));
     const excessDefects = expected.maxDefects ? run.findings.filter(
       (f) => f.kind === "defect" && severityRank(f.severity) <= severityRank(expected.maxDefects.minSeverity)
@@ -42759,14 +43113,14 @@ var bench = {
   options: { only: { type: "string" }, record: { type: "string" } },
   async run(ctx) {
     const root = resolve4(ctx.positionals[0] ?? "fixtures/sites");
-    if (!existsSync5(root)) throw new JouriloError("NOT_FOUND", `No fixtures at ${root}`);
+    if (!existsSync6(root)) throw new JouriloError("NOT_FOUND", `No fixtures at ${root}`);
     const only = str(ctx, "only");
-    const dirs = readdirSync3(root).filter((d) => existsSync5(join7(root, d, "expected.json"))).filter((d) => !only || d === only);
+    const dirs = readdirSync4(root).filter((d) => existsSync6(join8(root, d, "expected.json"))).filter((d) => !only || d === only);
     if (!dirs.length) throw new JouriloError("NOT_FOUND", `No fixtures with expected.json in ${root}`);
     const results = [];
     for (const d of dirs) {
       ctx.log(`bench: ${d}`);
-      results.push(await benchFixture(join7(root, d), join7(ctx.ws.root, "bench")));
+      results.push(await benchFixture(join8(root, d), join8(ctx.ws.root, "bench")));
     }
     const found = results.reduce((a, r) => a + r.found, 0);
     const expected = results.reduce((a, r) => a + r.expected, 0);
@@ -42785,7 +43139,7 @@ var bench = {
     };
     const record = str(ctx, "record");
     if (record) {
-      const prev = existsSync5(record) ? readFileSync4(record, "utf8") : "";
+      const prev = existsSync6(record) ? readFileSync5(record, "utf8") : "";
       writeFileSync4(
         record,
         `${prev}${JSON.stringify({ ...summary, fixtures: results.map((r) => ({ fixture: r.fixture, found: r.found, expected: r.expected, fp: r.falsePositives.length + r.excessDefects.length, seconds: r.seconds })) })}
@@ -42815,14 +43169,1160 @@ var bench = {
   }
 };
 
+// src/cli/commands/discover.ts
+import { existsSync as existsSync8, statSync as statSync6, writeFileSync as writeFileSync5 } from "node:fs";
+import { join as join10, resolve as resolve5 } from "node:path";
+
+// src/discovery/repo.ts
+init_fs_safety();
+import { existsSync as existsSync7, readdirSync as readdirSync5, readFileSync as readFileSync6, statSync as statSync5 } from "node:fs";
+import { basename, dirname as dirname4, join as join9, relative as relative4 } from "node:path";
+var SKIP = /* @__PURE__ */ new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  ".next",
+  ".nuxt",
+  ".output",
+  ".svelte-kit",
+  "coverage",
+  "vendor",
+  ".jourilo",
+  ".turbo",
+  ".dart_tool",
+  "out",
+  ".astro",
+  "storage"
+]);
+function walk(root, max = 2e4) {
+  const out = [];
+  const rec = (dir, depth) => {
+    if (out.length >= max || depth > 14) return;
+    let entries;
+    try {
+      entries = readdirSync5(dir);
+    } catch {
+      return;
+    }
+    for (const n of entries) {
+      if (SKIP.has(n) || n.startsWith(".") && n !== ".github") continue;
+      const full = join9(dir, n);
+      let st;
+      try {
+        st = statSync5(full);
+      } catch {
+        continue;
+      }
+      if (st.isDirectory()) rec(full, depth + 1);
+      else out.push(toPosix(relative4(root, full)));
+    }
+  };
+  rec(root, 0);
+  return out;
+}
+function readJson2(file) {
+  try {
+    return JSON.parse(readFileSync6(file, "utf8"));
+  } catch {
+    return null;
+  }
+}
+function read(file, max = 4e5) {
+  try {
+    const st = statSync5(file);
+    if (st.size > max) return "";
+    return readFileSync6(file, "utf8");
+  } catch {
+    return "";
+  }
+}
+var fact = (value, source) => ({ value, source, provenance: "observed" });
+var DEP_SIGNALS = [
+  { dep: /^next$/, group: "framework", label: "Next.js" },
+  { dep: /^nuxt$/, group: "framework", label: "Nuxt" },
+  { dep: /^@sveltejs\/kit$/, group: "framework", label: "SvelteKit" },
+  { dep: /^astro$/, group: "framework", label: "Astro" },
+  { dep: /^@remix-run\/(react|node)$|^react-router$/, group: "framework", label: "Remix / React Router" },
+  { dep: /^gatsby$/, group: "framework", label: "Gatsby" },
+  { dep: /^@angular\/core$/, group: "framework", label: "Angular" },
+  { dep: /^vue$/, group: "framework", label: "Vue" },
+  { dep: /^react$/, group: "framework", label: "React" },
+  { dep: /^svelte$/, group: "framework", label: "Svelte" },
+  { dep: /^solid-js$/, group: "framework", label: "Solid" },
+  { dep: /^vite$/, group: "framework", label: "Vite" },
+  { dep: /^react-router-dom$/, group: "framework", label: "React Router" },
+  { dep: /^vue-router$/, group: "framework", label: "Vue Router" },
+  { dep: /^@mui\/material$/, group: "ui", label: "MUI" },
+  { dep: /^@chakra-ui\/react$/, group: "ui", label: "Chakra UI" },
+  { dep: /^@radix-ui\//, group: "ui", label: "Radix UI" },
+  { dep: /^antd$/, group: "ui", label: "Ant Design" },
+  { dep: /^bootstrap$|^react-bootstrap$/, group: "ui", label: "Bootstrap" },
+  { dep: /^@headlessui\//, group: "ui", label: "Headless UI" },
+  { dep: /^vuetify$/, group: "ui", label: "Vuetify" },
+  { dep: /^@mantine\/core$/, group: "ui", label: "Mantine" },
+  { dep: /^tailwindcss$/, group: "ui", label: "Tailwind CSS" },
+  {
+    dep: /^next-intl$|^next-i18next$|^i18next$|^react-i18next$|^vue-i18n$|^@nuxtjs\/i18n$|^svelte-i18n$|^@lingui\/core$|^react-intl$/,
+    group: "i18n",
+    label: ""
+  },
+  {
+    dep: /^next-auth$|^@auth\/core$|^@clerk\/|^@supabase\/auth|^@supabase\/supabase-js$|^firebase$|^passport$|^lucia$|^better-auth$|^@kinde-oss\//,
+    group: "auth",
+    label: ""
+  },
+  {
+    dep: /^stripe$|^@stripe\/|^@paddle\/|^@lemonsqueezy\/|^@paypal\/|^braintree/,
+    group: "payments",
+    label: ""
+  },
+  {
+    dep: /^posthog-js$|^posthog-node$|^@amplitude\/|^amplitude-js$|^@segment\/|^mixpanel|^@vercel\/analytics$|^plausible|^react-ga4?$|^@next\/third-parties$|^@fullstory\/|^@microsoft\/clarity$/,
+    group: "analytics",
+    label: ""
+  },
+  {
+    dep: /^launchdarkly|^@launchdarkly\/|^@growthbook\/|^unleash|^@unleash\/|^@statsig\/|^statsig|^@optimizely\/|^flagsmith|^@vercel\/flags$|^@openfeature\//,
+    group: "flags",
+    label: ""
+  }
+];
+function routePath(segments) {
+  const parts = [];
+  let dynamic = false;
+  for (const raw of segments) {
+    if (/^\(.*\)$/.test(raw) || raw.startsWith("@") || raw === "index" || raw === "") continue;
+    const m = raw.match(/^\[{1,2}(\.\.\.)?([^\]]+)\]{1,2}$/) ?? raw.match(/^\$(.*)$/);
+    if (m) {
+      dynamic = true;
+      parts.push(`:${m[2] ?? m[1] ?? "param"}`);
+    } else parts.push(raw);
+  }
+  return { path: `/${parts.join("/")}`, dynamic };
+}
+function roleOf(path2) {
+  const p = path2.toLowerCase();
+  if (p === "/") return "home";
+  const table = [
+    [/pric|plans|billing\/plans/, "pricing"],
+    [/sign-?up|register|join|onboard/, "signup"],
+    [/log-?in|sign-?in|auth/, "login"],
+    [/forgot|reset|recover/, "recovery"],
+    [/checkout|cart|basket|payment/, "checkout"],
+    [/cancel|unsubscribe|delete/, "cancellation"],
+    [/dashboard|app\b|home\/|overview/, "dashboard"],
+    [/settings|account|profile|preferences|billing/, "settings"],
+    [/search/, "search"],
+    [/admin/, "admin"],
+    [/product|shop|store|catalog|collection/, "product"],
+    [/docs|help|support|faq|contact/, "support"],
+    [/blog|news|changelog/, "content"],
+    [/terms|privacy|legal|cookie/, "legal"]
+  ];
+  for (const [re, r] of table) if (re.test(p)) return r;
+  return "page";
+}
+function fileRoutes(appRoot, files, frameworks) {
+  const routes = [];
+  const add = (path2, file, kind, framework, dynamic) => {
+    if (routes.some((r) => r.path === path2 && r.kind === kind && r.framework === framework)) return;
+    routes.push({ path: path2, file, kind, framework, dynamic, role: roleOf(path2) });
+  };
+  const has = (f) => frameworks.includes(f);
+  const kindOf = (k) => k === "route" || k === "server" ? "api" : k === "layout" ? "layout" : "page";
+  const FILE_RULES = [
+    [
+      "Next.js",
+      /^(?:src\/)?app\/(.*?)\/?(page|route|layout)\.(tsx|jsx|ts|js|mdx|md)$/,
+      (m) => ({ segs: (m[1] ?? "").split("/"), kind: kindOf(m[2]) })
+    ],
+    [
+      "Next.js",
+      /^(?:src\/)?pages\/(.+)\.(tsx|jsx|ts|js|mdx|md)$/,
+      (m) => /^_(app|document|error)/.test(basename(m[1])) ? null : { segs: m[1].split("/"), kind: m[1].startsWith("api/") ? "api" : "page" }
+    ],
+    ["Nuxt", /^(?:app\/)?pages\/(.+)\.vue$/, (m) => ({ segs: m[1].split("/"), kind: "page" })],
+    [
+      "SvelteKit",
+      /^src\/routes\/(.*?)\/?\+(page|server|layout)\.(svelte|ts|js)$/,
+      (m) => ({ segs: (m[1] ?? "").split("/"), kind: kindOf(m[2]) })
+    ],
+    [
+      "Astro",
+      /^src\/pages\/(.+)\.(astro|md|mdx|html|ts|js)$/,
+      (m, f) => ({ segs: m[1].split("/"), kind: /\.(ts|js)$/.test(f) ? "api" : "page" })
+    ],
+    // Remix flat routes: app/routes/pricing.tsx, app/routes/_index.tsx, app/routes/blog.$slug.tsx
+    [
+      "Remix / React Router",
+      /^app\/routes\/(.+)\.(tsx|jsx|ts|js)$/,
+      (m) => ({
+        segs: m[1].replace(/\/route$/, "").split(".").map((s) => s === "_index" ? "" : s.replace(/^_/, "")),
+        kind: "page"
+      })
+    ]
+  ];
+  for (const f of files) {
+    let matched = false;
+    for (const [fw, re, toRoute] of FILE_RULES) {
+      if (!has(fw)) continue;
+      const m = f.match(re);
+      if (!m) continue;
+      matched = true;
+      const r = toRoute(m, f);
+      if (r) {
+        const { path: path2, dynamic } = routePath(r.segs);
+        add(path2, f, r.kind, fw === "Remix / React Router" ? "Remix" : fw, dynamic);
+      }
+      break;
+    }
+    if (matched) continue;
+    if (/\.html?$/.test(f) && !frameworks.length && !/(^|\/)(node_modules|test|tests|fixtures|coverage)\//.test(f)) {
+      const segs = f.replace(/\.html?$/, "").split("/");
+      if (segs[segs.length - 1] === "404") continue;
+      const { path: path2 } = routePath(segs);
+      add(path2, f, "page", "Static HTML", false);
+    }
+  }
+  const codeRoute = [
+    [/\.(t|j)sx?$/, /<Route\s[^>]*path=["'`]([^"'`]+)["'`]/g, "React Router"],
+    [/\.(t|j)sx?$|\.vue$/, /\bpath:\s*["'`](\/[^"'`]*)["'`]/g, "Router config"],
+    [/routes\/web\.php$/, /Route::(?:get|view|match|any)\(\s*['"]([^'"]+)['"]/g, "Laravel"],
+    [
+      /\.dart$/,
+      /GoRoute\(\s*(?:name:\s*['"][^'"]*['"]\s*,\s*)?path:\s*['"]([^'"]+)['"]/g,
+      "Flutter go_router"
+    ],
+    [/\.dart$/, /['"](\/[a-z0-9/_-]*)['"]\s*:\s*\(\s*context\s*\)/gi, "Flutter routes"]
+  ];
+  for (const f of files) {
+    for (const [fileRe, re, label] of codeRoute) {
+      if (!fileRe.test(f)) continue;
+      const text = read(join9(appRoot, f));
+      if (!text) continue;
+      for (const m of text.matchAll(re)) {
+        const raw = m[1].trim();
+        if (!raw || raw.includes("*") || raw.length > 120) continue;
+        const path2 = raw.startsWith("/") ? raw : `/${raw}`;
+        if (label === "Router config" && !/routes|router/i.test(f + text.slice(0, 2e3))) continue;
+        add(path2.replace(/\{(\w+)\??\}/g, ":$1"), f, "page", label, /[:{]/.test(path2));
+      }
+    }
+  }
+  return routes.sort((a, b) => a.path.localeCompare(b.path));
+}
+function devCommand(appRoot, pkg, frameworks, rel) {
+  const scripts = pkg?.scripts ?? {};
+  const script = scripts.dev ? "dev" : scripts.start ? "start" : scripts.serve ? "serve" : null;
+  const portFrom = (s) => {
+    const m = s?.match(/(?:-p|--port)[ =](\d{2,5})/);
+    return m ? Number(m[1]) : null;
+  };
+  const defaults = {
+    "Next.js": 3e3,
+    Nuxt: 3e3,
+    Astro: 4321,
+    SvelteKit: 5173,
+    Vite: 5173,
+    Gatsby: 8e3,
+    Angular: 4200,
+    Remix: 3e3
+  };
+  const def = frameworks.map((f) => defaults[f]).find(Boolean) ?? null;
+  if (script) {
+    const lock = existsSync7(join9(appRoot, "pnpm-lock.yaml")) ? "pnpm" : existsSync7(join9(appRoot, "yarn.lock")) ? "yarn" : existsSync7(join9(appRoot, "bun.lockb")) || existsSync7(join9(appRoot, "bun.lock")) ? "bun" : "npm";
+    return {
+      command: lock,
+      args: ["run", script],
+      port: portFrom(scripts[script]) ?? def,
+      source: `${rel || "."}/package.json`
+    };
+  }
+  if (existsSync7(join9(appRoot, "artisan")))
+    return { command: "php", args: ["artisan", "serve"], port: 8e3, source: `${rel || "."}/artisan` };
+  if (existsSync7(join9(appRoot, "pubspec.yaml")) && existsSync7(join9(appRoot, "web")))
+    return {
+      command: "flutter",
+      args: ["run", "-d", "web-server", "--web-port", "8080"],
+      port: 8080,
+      source: `${rel || "."}/pubspec.yaml`
+    };
+  return null;
+}
+function profileApp(repoRoot, appRoot, files) {
+  const rel = toPosix(relative4(repoRoot, appRoot));
+  const pkgFile = join9(appRoot, "package.json");
+  const pkg = existsSync7(pkgFile) ? readJson2(pkgFile) : null;
+  const deps = {
+    ...pkg?.dependencies ?? {},
+    ...pkg?.devDependencies ?? {}
+  };
+  const frameworks = [];
+  for (const d of Object.keys(deps)) {
+    for (const s of DEP_SIGNALS)
+      if (s.group === "framework" && s.dep.test(d) && !frameworks.some((f) => f.value === s.label))
+        frameworks.push(fact(s.label, `${rel || "."}/package.json`));
+  }
+  const composer = existsSync7(join9(appRoot, "composer.json")) ? readJson2(join9(appRoot, "composer.json")) : null;
+  if (composer && JSON.stringify(composer.require ?? {}).includes("laravel/framework"))
+    frameworks.push(fact("Laravel", `${rel || "."}/composer.json`));
+  const pubspec = read(join9(appRoot, "pubspec.yaml"));
+  if (/\bflutter:\s*\n\s+sdk:\s*flutter/.test(pubspec))
+    frameworks.push(
+      fact(
+        existsSync7(join9(appRoot, "web")) ? "Flutter (web enabled)" : "Flutter",
+        `${rel || "."}/pubspec.yaml`
+      )
+    );
+  if (/go_router/.test(pubspec)) frameworks.push(fact("go_router", `${rel || "."}/pubspec.yaml`));
+  const names = frameworks.map((f) => f.value);
+  const appFiles = files.filter((f) => !rel || f.startsWith(`${rel}/`)).map((f) => rel ? f.slice(rel.length + 1) : f);
+  const routes = fileRoutes(appRoot, appFiles, names).map((r) => ({
+    ...r,
+    file: rel ? `${rel}/${r.file}` : r.file
+  }));
+  const componentFiles = appFiles.filter(
+    (f) => /(^|\/)components?\//i.test(f) && /\.(tsx|jsx|vue|svelte|astro|dart|blade\.php)$/.test(f)
+  );
+  return {
+    root: rel || ".",
+    name: pkg?.name ?? basename(appRoot),
+    frameworks,
+    routes,
+    devCommand: devCommand(appRoot, pkg, names, rel),
+    components: {
+      count: componentFiles.length,
+      dirs: [...new Set(componentFiles.map((f) => dirname4(f)))].slice(0, 12)
+    }
+  };
+}
+function discoverRepository(root) {
+  const files = walk(root);
+  const gaps = [];
+  const rootPkg = existsSync7(join9(root, "package.json")) ? readJson2(join9(root, "package.json")) : null;
+  let monorepo = null;
+  const appRoots = [];
+  const ws = rootPkg?.workspaces;
+  const wsGlobs = Array.isArray(ws) ? ws : Array.isArray(ws?.packages) ? ws.packages : [];
+  const pnpm = read(join9(root, "pnpm-workspace.yaml"));
+  for (const m of pnpm.matchAll(/^\s*-\s*['"]?([^'"\n]+)['"]?\s*$/gm)) wsGlobs.push(m[1]);
+  if (wsGlobs.length)
+    monorepo = fact(
+      `workspaces: ${wsGlobs.join(", ")}`,
+      existsSync7(join9(root, "pnpm-workspace.yaml")) ? "pnpm-workspace.yaml" : "package.json"
+    );
+  for (const g of wsGlobs) {
+    const base = g.replace(/\/\*\*?$/, "");
+    if (g.endsWith("*")) {
+      const dir = join9(root, base);
+      if (!existsSync7(dir)) continue;
+      for (const n of readdirSync5(dir))
+        if (existsSync7(join9(dir, n, "package.json"))) appRoots.push(join9(dir, n));
+    } else if (existsSync7(join9(root, base, "package.json"))) appRoots.push(join9(root, base));
+  }
+  const apps = (appRoots.length ? appRoots : [root]).map((r) => profileApp(root, r, files)).filter(
+    (a, _, all) => all.length === 1 || a.routes.length > 0 || a.frameworks.some((f) => !["React", "Vue", "Svelte", "Vite"].includes(f.value))
+  );
+  if (!apps.length) apps.push(profileApp(root, root, files));
+  const allPkgs = files.filter((f) => f.endsWith("package.json")).slice(0, 60);
+  const signals = /* @__PURE__ */ new Map();
+  for (const p of allPkgs) {
+    const j = readJson2(join9(root, p));
+    const deps = Object.keys({
+      ...j?.dependencies ?? {},
+      ...j?.devDependencies ?? {}
+    });
+    for (const d of deps)
+      for (const s of DEP_SIGNALS) {
+        if (s.group === "framework" || !s.dep.test(d)) continue;
+        const list2 = signals.get(s.group) ?? [];
+        if (!list2.some((x) => x.value === (s.label || d))) list2.push(fact(s.label || d, p));
+        signals.set(s.group, list2);
+      }
+  }
+  const composer = existsSync7(join9(root, "composer.json")) ? JSON.stringify(readJson2(join9(root, "composer.json"))?.require ?? {}) : "";
+  if (/laravel\/(breeze|fortify|jetstream|sanctum)/.test(composer))
+    (signals.get("auth") ?? signals.set("auth", []).get("auth")).push(
+      fact(composer.match(/laravel\/(breeze|fortify|jetstream|sanctum)/)[0], "composer.json")
+    );
+  if (/laravel\/cashier/.test(composer))
+    (signals.get("payments") ?? signals.set("payments", []).get("payments")).push(
+      fact("laravel/cashier", "composer.json")
+    );
+  const tokens = [];
+  const fonts = [];
+  let cssVariables = 0;
+  for (const f of files) {
+    if (/(^|\/)(tokens?|design-tokens|theme)\.(json|ts|js|css)$/i.test(f) || /\.tokens\.json$/.test(f))
+      tokens.push(fact(basename(f), f));
+    if (/\.(css|scss)$/.test(f)) {
+      const t = read(join9(root, f), 3e5);
+      cssVariables += (t.match(/--[a-z0-9-]+\s*:/gi) ?? []).length;
+      for (const m of t.matchAll(/font-family\s*:\s*["']?([A-Za-z][\w -]+?)["']?\s*[,;]/g)) {
+        const name = m[1].trim();
+        if (!/^(inherit|initial|system-ui|sans-serif|serif|monospace|var)$/i.test(name) && !fonts.some((x) => x.value === name))
+          fonts.push(fact(name, f));
+      }
+    }
+    if (/\.(tsx|jsx|ts|js)$/.test(f) && /layout|_app|_document/.test(f)) {
+      const t = read(join9(root, f));
+      for (const m of t.matchAll(/import\s*\{\s*([A-Z][\w,\s]+)\}\s*from\s*['"]next\/font\/google['"]/g))
+        for (const n of m[1].split(",").map((s) => s.trim()).filter(Boolean))
+          if (!fonts.some((x) => x.value === n)) fonts.push(fact(n.replace(/_/g, " "), f));
+    }
+  }
+  const twFile = files.find((f) => /(^|\/)tailwind\.config\.(js|ts|cjs|mjs)$/.test(f));
+  const tailwind = twFile ? fact("Tailwind config", twFile) : signals.get("ui")?.find((x) => x.value === "Tailwind CSS") ?? null;
+  const locales = /* @__PURE__ */ new Set();
+  for (const f of files) {
+    const m = f.match(
+      /(?:^|\/)(?:locales?|messages|i18n|lang|translations)\/([a-z]{2}(?:[-_][A-Za-z]{2})?)(?:\/|\.json|\.ya?ml|\.php|\.arb)/
+    ) ?? f.match(/(?:^|\/)app_([a-z]{2})\.arb$/);
+    if (m) locales.add(m[1].replace("_", "-"));
+  }
+  const roles = [];
+  const allRoutes = apps.flatMap((a) => a.routes);
+  if (allRoutes.some((r) => r.role === "admin"))
+    roles.push(fact("admin", allRoutes.find((r) => r.role === "admin").file));
+  if (allRoutes.some((r) => r.role === "dashboard" || r.role === "settings"))
+    roles.push(
+      fact("signed-in user", allRoutes.find((r) => r.role === "dashboard" || r.role === "settings").file)
+    );
+  roles.unshift(fact("visitor", "public routes"));
+  for (const f of files.filter((x) => /\.(ts|tsx|js|php|dart|rb|py)$/.test(x)).slice(0, 3e3)) {
+    const t = read(join9(root, f), 12e4);
+    for (const m of t.matchAll(
+      /\brole\s*(?:===?|==|:)\s*['"](owner|admin|editor|viewer|member|manager|customer|seller|vendor|teacher|student)['"]/gi
+    )) {
+      const r = m[1].toLowerCase();
+      if (!roles.some((x) => x.value === r)) roles.push(fact(r, f));
+    }
+  }
+  const byRole = (r) => allRoutes.filter((x) => x.role === r && x.kind === "page").map((x) => x.path);
+  const candidateJourneys = [];
+  const cj = (name, rs, why) => {
+    if (rs.length) candidateJourneys.push({ name, routes: [...new Set(rs)].slice(0, 6), why });
+  };
+  cj(
+    "Sign up and reach the product",
+    [...byRole("signup"), ...byRole("dashboard")],
+    "signup and dashboard routes exist"
+  );
+  cj("Sign in", byRole("login"), "login route exists");
+  cj("Recover access", byRole("recovery"), "password recovery route exists");
+  cj(
+    "Compare plans and start checkout",
+    [...byRole("pricing"), ...byRole("checkout")],
+    "pricing/checkout routes exist"
+  );
+  cj("Cancel or downgrade", byRole("cancellation"), "cancellation route exists");
+  cj("Find something with search", byRole("search"), "search route exists");
+  cj("Change settings", byRole("settings"), "settings/account routes exist");
+  cj("Browse products", byRole("product"), "product/catalog routes exist");
+  let readmeSummary = null;
+  const readmeFile = files.find((f) => /^readme\.md$/i.test(f));
+  if (readmeFile) {
+    const para = read(join9(root, readmeFile)).split(/\n\s*\n/).map((p) => p.replace(/<[^>]+>|!\[[^\]]*\]\([^)]*\)|\[!\[[^\]]*\]\([^)]*\)\]\([^)]*\)/g, "").trim()).find((p) => p.length > 60 && !p.startsWith("#") && !p.startsWith("```") && !p.startsWith("|"));
+    if (para) readmeSummary = fact(para.replace(/\s+/g, " ").slice(0, 400), readmeFile);
+  }
+  const description = typeof rootPkg?.description === "string" ? fact(rootPkg.description, "package.json") : null;
+  if (!apps.some((a) => a.routes.length))
+    gaps.push("No routes could be read from the code; run a website-mode discovery against the running app.");
+  if (!apps.some((a) => a.devCommand))
+    gaps.push("No dev server command found; start the app yourself and pass its URL.");
+  if (!readmeSummary && !description)
+    gaps.push(
+      "No README or package description: product purpose must come from the user or the running site."
+    );
+  if (!signals.get("analytics")?.length)
+    gaps.push(
+      "No analytics library detected: funnel metrics for experiments must be instrumented or supplied."
+    );
+  const markilo = files.find(
+    (f) => /(^|\/)(brand|branding)\/brands\/[^/]+\/(exports\/tokens\/)?tokens\.json$/.test(f) || /(^|\/)branding\/markilo\.json$/.test(f)
+  ) ?? null;
+  const searvex = files.find((f) => /(^|\/)\.searvex\/.*\.json$|(^|\/)searvex-report\.json$/.test(f)) ?? null;
+  return {
+    schemaVersion: 1,
+    kind: "repository",
+    root,
+    name: rootPkg?.name ?? basename(root),
+    description,
+    readmeSummary,
+    monorepo,
+    apps,
+    designSystem: {
+      uiLibraries: signals.get("ui") ?? [],
+      tokens: tokens.slice(0, 20),
+      fonts: fonts.slice(0, 12),
+      cssVariables,
+      tailwind
+    },
+    i18n: { libraries: signals.get("i18n") ?? [], locales: [...locales].sort() },
+    auth: signals.get("auth") ?? [],
+    payments: signals.get("payments") ?? [],
+    analytics: signals.get("analytics") ?? [],
+    featureFlags: signals.get("flags") ?? [],
+    roles,
+    candidateJourneys,
+    integrations: { markilo, searvex },
+    gaps
+  };
+}
+
+// src/discovery/site.ts
+var KNOWN_HOSTS = [
+  [/google-analytics\.com|analytics\.google\.com/, "Google Analytics", "analytics"],
+  [/googletagmanager\.com/, "Google Tag Manager", "tag-manager"],
+  [/posthog\.com/, "PostHog", "analytics"],
+  [/amplitude\.com/, "Amplitude", "analytics"],
+  [/segment\.(com|io)/, "Segment", "analytics"],
+  [/mxpnl\.com|mixpanel\.com/, "Mixpanel", "analytics"],
+  [/plausible\.io/, "Plausible", "analytics"],
+  [/clarity\.ms/, "Microsoft Clarity", "session-replay"],
+  [/hotjar\.(com|io)/, "Hotjar", "session-replay"],
+  [/fullstory\.com/, "FullStory", "session-replay"],
+  [/growthbook\.io/, "GrowthBook", "experimentation"],
+  [/launchdarkly\.com/, "LaunchDarkly", "experimentation"],
+  [/optimizely\.com/, "Optimizely", "experimentation"],
+  [/visualwebsiteoptimizer\.com|vwo\.com/, "VWO", "experimentation"],
+  [/js\.stripe\.com/, "Stripe", "payments"],
+  [/paddle\.com/, "Paddle", "payments"],
+  [/paypal\.com/, "PayPal", "payments"],
+  [/intercom(cdn)?\.(com|io)/, "Intercom", "support"],
+  [/crisp\.chat/, "Crisp", "support"],
+  [/zdassets\.com|zendesk\.com/, "Zendesk", "support"]
+];
+function buildSiteProfile(run, observations) {
+  const desktop = observations.filter((o) => o.viewport.name === run.viewports[0]?.name);
+  const home = desktop.find((o) => pathOf(o.url).split("?")[0] === "/") ?? desktop[0];
+  const tech = /* @__PURE__ */ new Set();
+  const services = /* @__PURE__ */ new Map();
+  const langs = /* @__PURE__ */ new Set();
+  for (const o of desktop) {
+    for (const t of o.probe?.tech ?? []) tech.add(t);
+    for (const h of o.probe?.scriptHosts ?? [])
+      for (const [re, name, kind] of KNOWN_HOSTS) if (re.test(h)) services.set(name, kind);
+    if (o.probe?.inventory.lang) langs.add(o.probe.inventory.lang);
+    for (const h of o.probe?.hreflang ?? []) if (h && h !== "x-default") langs.add(h);
+  }
+  const pages = desktop.map((o) => {
+    const inv = o.probe?.inventory;
+    return {
+      path: pathOf(o.url),
+      role: pageRole(o.url),
+      title: o.title,
+      h1: inv?.h1[0] ?? null,
+      forms: (inv?.forms ?? []).map((f) => f.purpose),
+      primaryCtas: (inv?.ctas ?? []).filter((c) => c.emphasis === "primary").map((c) => c.text).slice(0, 5),
+      status: o.status
+    };
+  });
+  const conversionPoints = [];
+  for (const o of desktop) {
+    for (const f of o.probe?.inventory.forms ?? [])
+      if (["signup", "checkout", "newsletter", "contact", "login"].includes(f.purpose))
+        conversionPoints.push({ path: pathOf(o.url), kind: `${f.purpose} form`, label: f.submitText ?? "" });
+    const cta = o.probe?.inventory.ctas.find((c) => c.emphasis === "primary" && c.aboveFold);
+    if (cta) conversionPoints.push({ path: pathOf(o.url), kind: "primary CTA", label: cta.text });
+  }
+  const gaps = [];
+  if (![...services.values()].includes("analytics"))
+    gaps.push("No analytics script detected on the audited pages (it may load after consent).");
+  if (!pages.some((p) => p.role === "pricing")) gaps.push("No pricing page found within the crawl budget.");
+  if (!pages.some((p) => p.forms.includes("signup")))
+    gaps.push(
+      "No signup form found within the crawl budget (it may be behind a button or on another domain)."
+    );
+  gaps.push(
+    "Audience, goals and business model are not observable from pages alone; confirm them with the user."
+  );
+  return {
+    schemaVersion: 1,
+    kind: "website",
+    target: run.target,
+    runId: run.id,
+    title: home?.title ?? null,
+    headline: home?.probe?.inventory.h1[0] ?? null,
+    description: home?.probe?.inventory.metaDescription ?? null,
+    languages: [...langs].sort(),
+    technologies: [...tech],
+    services: [...services].map(([name, kind]) => ({ name, kind })),
+    pages,
+    trustSignals: [...new Set(desktop.flatMap((o) => o.probe?.inventory.trustSignals ?? []))],
+    pricingSignals: [...new Set(desktop.flatMap((o) => o.probe?.inventory.pricingSignals ?? []))],
+    conversionPoints,
+    gaps
+  };
+}
+
+// src/cli/commands/discover.ts
+function repoText(p) {
+  const v = (xs) => xs.length ? xs.map((x) => x.value).join(", ") : "\u2014";
+  const lines = [
+    `${p.name} (repository: ${p.root})`,
+    p.readmeSummary ? `  About:      ${p.readmeSummary.value.slice(0, 160)} [${p.readmeSummary.source}]` : "",
+    p.monorepo ? `  Monorepo:   ${p.monorepo.value}` : ""
+  ];
+  for (const a of p.apps) {
+    lines.push(
+      `  App ${a.root}: ${v(a.frameworks)}`,
+      `    ${a.routes.filter((r) => r.kind === "page").length} page routes, ${a.routes.filter((r) => r.kind === "api").length} API routes, ${a.components.count} components`,
+      a.devCommand ? `    dev: ${a.devCommand.command} ${a.devCommand.args.join(" ")}${a.devCommand.port ? ` (port ${a.devCommand.port})` : ""}` : "    dev: not found"
+    );
+    for (const r of a.routes.filter((x) => x.kind === "page").slice(0, 25))
+      lines.push(`      ${r.path.padEnd(32)} ${r.role.padEnd(12)} ${r.file}`);
+  }
+  lines.push(
+    `  UI:         ${v(p.designSystem.uiLibraries)}; fonts ${v(p.designSystem.fonts)}; ${p.designSystem.cssVariables} CSS variables`,
+    `  i18n:       ${v(p.i18n.libraries)}; locales ${p.i18n.locales.join(", ") || "\u2014"}`,
+    `  Auth:       ${v(p.auth)}   Payments: ${v(p.payments)}`,
+    `  Analytics:  ${v(p.analytics)}   Flags: ${v(p.featureFlags)}`,
+    `  Roles:      ${v(p.roles)}`,
+    "  Candidate journeys:",
+    ...p.candidateJourneys.map((j) => `    - ${j.name}: ${j.routes.join(", ")}`),
+    p.integrations.markilo ? `  Markilo brand data: ${p.integrations.markilo}` : "",
+    p.integrations.searvex ? `  Searvex data: ${p.integrations.searvex}` : "",
+    "  Gaps:",
+    ...p.gaps.map((g) => `    - ${g}`)
+  );
+  return lines.filter(Boolean).join("\n");
+}
+function siteText(p) {
+  return [
+    `${p.title ?? p.target} (website)`,
+    p.headline ? `  Headline:   ${p.headline}` : "",
+    p.description ? `  Meta:       ${p.description}` : "",
+    `  Languages:  ${p.languages.join(", ") || "\u2014"}`,
+    `  Tech:       ${p.technologies.join(", ") || "\u2014"}`,
+    `  Services:   ${p.services.map((s) => `${s.name} (${s.kind})`).join(", ") || "\u2014"}`,
+    `  Trust:      ${p.trustSignals.join(", ") || "\u2014"}   Pricing: ${p.pricingSignals.join(", ") || "\u2014"}`,
+    "  Pages:",
+    ...p.pages.map(
+      (x) => `    ${x.path.padEnd(28)} ${x.role.padEnd(10)} ${x.status ?? ""} ${x.h1 ?? x.title}${x.forms.length ? `  forms: ${x.forms.join(", ")}` : ""}`
+    ),
+    "  Conversion points:",
+    ...p.conversionPoints.map((c) => `    ${c.path.padEnd(28)} ${c.kind}: ${c.label}`),
+    "  Gaps:",
+    ...p.gaps.map((g) => `    - ${g}`)
+  ].filter(Boolean).join("\n");
+}
+var discover = {
+  name: "discover",
+  summary: "Product intelligence: map a repository (frameworks, routes, design system, i18n, auth, analytics) or a website (pages, conversion points, services).",
+  usage: "jourilo discover <path|url> [--pages 10]",
+  options: {
+    pages: { type: "string" },
+    "allow-private": { type: "boolean" },
+    "ignore-robots": { type: "boolean" }
+  },
+  async run(ctx) {
+    const target = requirePositional(ctx, 0, "path|url", discover.usage);
+    ctx.ws.ensure();
+    if (!target.includes("://") && existsSync8(target) && statSync6(target).isDirectory()) {
+      const profile2 = discoverRepository(resolve5(target));
+      const file2 = join10(ctx.ws.root, "product.json");
+      writeFileSync5(file2, `${JSON.stringify(profile2, null, 2)}
+`);
+      return { data: { file: file2, profile: profile2 }, text: `${repoText(profile2)}
+
+  Saved: ${file2}` };
+    }
+    const { run, observations } = await runAudit(ctx.ws, {
+      target,
+      viewports: parseViewports("desktop"),
+      maxPages: num(ctx, "pages", 10),
+      maxDepth: 3,
+      browser: "chromium",
+      headed: false,
+      respectRobots: !flag(ctx, "ignore-robots"),
+      allowPrivate: flag(ctx, "allow-private"),
+      keyboard: false,
+      throttle: false,
+      timeoutMs: 3e4,
+      mask: [],
+      inventoryOnly: true,
+      mode: "website",
+      onProgress: ctx.log
+    });
+    const profile = buildSiteProfile(run, observations);
+    const file = join10(ctx.ws.root, "site.json");
+    writeFileSync5(file, `${JSON.stringify(profile, null, 2)}
+`);
+    return { data: { file, profile }, text: `${siteText(profile)}
+
+  Saved: ${file}` };
+  }
+};
+
+// src/cli/commands/experiment.ts
+init_errors();
+import { existsSync as existsSync9, mkdirSync as mkdirSync3, readFileSync as readFileSync7, writeFileSync as writeFileSync6 } from "node:fs";
+import { join as join11 } from "node:path";
+
+// src/experiment/stats.ts
+function normCdf(z) {
+  const t = 1 / (1 + 0.3275911 * (Math.abs(z) / Math.SQRT2));
+  const y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-(z * z) / 2);
+  return z >= 0 ? 0.5 * (1 + y) : 0.5 * (1 - y);
+}
+function normInv(p) {
+  if (p <= 0 || p >= 1) throw new RangeError("p must be in (0, 1)");
+  const a = [
+    -39.69683028665376,
+    220.9460984245205,
+    -275.9285104469687,
+    138.357751867269,
+    -30.66479806614716,
+    2.506628277459239
+  ];
+  const b = [
+    -54.47609879822406,
+    161.5858368580409,
+    -155.6989798598866,
+    66.80131188771972,
+    -13.28068155288572
+  ];
+  const c = [
+    -0.007784894002430293,
+    -0.3223964580411365,
+    -2.400758277161838,
+    -2.549732539343734,
+    4.374664141464968,
+    2.938163982698783
+  ];
+  const d = [0.007784695709041462, 0.3224671290700398, 2.445134137142996, 3.754408661907416];
+  const lo = 0.02425;
+  if (p < lo) {
+    const q2 = Math.sqrt(-2 * Math.log(p));
+    return (((((c[0] * q2 + c[1]) * q2 + c[2]) * q2 + c[3]) * q2 + c[4]) * q2 + c[5]) / ((((d[0] * q2 + d[1]) * q2 + d[2]) * q2 + d[3]) * q2 + 1);
+  }
+  if (p > 1 - lo) return -normInv(1 - p);
+  const q = p - 0.5;
+  const r = q * q;
+  return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+}
+function gammaP(a, x) {
+  if (x <= 0) return 0;
+  const lnGammaA = lnGamma(a);
+  if (x < a + 1) {
+    let sum = 1 / a;
+    let del = sum;
+    for (let n = 1; n < 500; n++) {
+      del *= x / (a + n);
+      sum += del;
+      if (Math.abs(del) < Math.abs(sum) * 1e-14) break;
+    }
+    return sum * Math.exp(-x + a * Math.log(x) - lnGammaA);
+  }
+  let b = x + 1 - a;
+  let c = 1 / 1e-300;
+  let d = 1 / b;
+  let h = d;
+  for (let i = 1; i < 500; i++) {
+    const an = -i * (i - a);
+    b += 2;
+    d = an * d + b;
+    if (Math.abs(d) < 1e-300) d = 1e-300;
+    c = b + an / c;
+    if (Math.abs(c) < 1e-300) c = 1e-300;
+    d = 1 / d;
+    const del = d * c;
+    h *= del;
+    if (Math.abs(del - 1) < 1e-14) break;
+  }
+  return 1 - Math.exp(-x + a * Math.log(x) - lnGammaA) * h;
+}
+function lnGamma(z) {
+  const g = 7;
+  const coef = [
+    0.9999999999998099,
+    676.5203681218851,
+    -1259.1392167224028,
+    771.3234287776531,
+    -176.6150291621406,
+    12.507343278686905,
+    -0.13857109526572012,
+    9984369578019572e-21,
+    15056327351493116e-23
+  ];
+  if (z < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * z)) - lnGamma(1 - z);
+  z -= 1;
+  let x = coef[0];
+  for (let i = 1; i < g + 2; i++) x += coef[i] / (z + i);
+  const t = z + g + 0.5;
+  return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(x);
+}
+function chiSquareP(stat, df) {
+  return 1 - gammaP(df / 2, stat / 2);
+}
+function sampleSize(i) {
+  const alpha = i.alpha ?? 0.05;
+  const power = i.power ?? 0.8;
+  const variants = Math.max(2, Math.round(i.variants ?? 2));
+  if (!(i.baseline > 0 && i.baseline < 1))
+    throw new RangeError("baseline must be a rate between 0 and 1 (e.g. 0.04)");
+  if (!(i.mde > 0)) throw new RangeError("mde must be positive");
+  const p1 = i.baseline;
+  const p2 = i.absolute ? p1 + i.mde : p1 * (1 + i.mde);
+  if (!(p2 > 0 && p2 < 1)) throw new RangeError("baseline + effect must stay between 0 and 1");
+  const a = alpha / (variants - 1);
+  const za = normInv(1 - a / 2);
+  const zb = normInv(power);
+  const pbar = (p1 + p2) / 2;
+  const n = (za * Math.sqrt(2 * pbar * (1 - pbar)) + zb * Math.sqrt(p1 * (1 - p1) + p2 * (1 - p2))) ** 2 / (p2 - p1) ** 2;
+  const perVariant = Math.ceil(n);
+  return {
+    perVariant,
+    total: perVariant * variants,
+    baseline: p1,
+    target: p2,
+    alpha,
+    alphaPerComparison: a,
+    power,
+    variants
+  };
+}
+function analyze(control, variant, opts = {}) {
+  for (const a of [control, variant]) {
+    if (!Number.isInteger(a.visitors) || !Number.isInteger(a.conversions) || a.visitors <= 0 || a.conversions < 0 || a.conversions > a.visitors)
+      throw new RangeError(`${a.name}: visitors must be a positive integer and 0 \u2264 conversions \u2264 visitors`);
+  }
+  const alpha = opts.alpha ?? 0.05;
+  const p1 = control.conversions / control.visitors;
+  const p2 = variant.conversions / variant.visitors;
+  const pooled = (control.conversions + variant.conversions) / (control.visitors + variant.visitors);
+  const sePooled = Math.sqrt(pooled * (1 - pooled) * (1 / control.visitors + 1 / variant.visitors));
+  const z = sePooled > 0 ? (p2 - p1) / sePooled : 0;
+  const pValue = 2 * (1 - normCdf(Math.abs(z)));
+  const se = Math.sqrt(p1 * (1 - p1) / control.visitors + p2 * (1 - p2) / variant.visitors);
+  const zc = normInv(1 - alpha / 2);
+  const ciAbsolute = [p2 - p1 - zc * se, p2 - p1 + zc * se];
+  let ciRelative = null;
+  if (p1 > 0 && p2 > 0) {
+    const seLog = Math.sqrt((1 - p1) / (p1 * control.visitors) + (1 - p2) / (p2 * variant.visitors));
+    const l = Math.log(p2 / p1);
+    ciRelative = [Math.exp(l - zc * seLog) - 1, Math.exp(l + zc * seLog) - 1];
+  }
+  const share = opts.expectedShare ?? 0.5;
+  const total = control.visitors + variant.visitors;
+  const e1 = total * share;
+  const e2 = total * (1 - share);
+  const chi = (control.visitors - e1) ** 2 / e1 + (variant.visitors - e2) ** 2 / e2;
+  const srmP = chiSquareP(chi, 1);
+  const srm = { chiSquare: chi, pValue: srmP, mismatch: srmP < 5e-4, expectedShare: share };
+  const significant = pValue < alpha;
+  const pct = (x) => `${(x * 100).toFixed(2)}%`;
+  const interpretation = [];
+  if (srm.mismatch)
+    interpretation.push(
+      `Sample ratio mismatch (\u03C7\xB2 p = ${srmP.toExponential(2)} < 0.0005): the traffic split is not what was configured. Do not trust the result until the cause (bucketing, redirects, logging) is found.`
+    );
+  if (opts.plannedPerVariant && Math.min(control.visitors, variant.visitors) < opts.plannedPerVariant)
+    interpretation.push(
+      `Only ${Math.min(control.visitors, variant.visitors)} of the planned ${opts.plannedPerVariant} visitors per arm so far: stopping now inflates false positives (peeking). Wait for the planned sample.`
+    );
+  interpretation.push(
+    significant ? `${variant.name} converted at ${pct(p2)} vs ${pct(p1)} for ${control.name} (difference ${pct(p2 - p1)}, ${(1 - alpha) * 100}% CI ${pct(ciAbsolute[0])} to ${pct(ciAbsolute[1])}); p = ${pValue.toPrecision(3)} < ${alpha}. The difference is statistically significant for this sample.` : `No statistically significant difference: ${pct(p2)} vs ${pct(p1)}, p = ${pValue.toPrecision(3)} \u2265 ${alpha}. The ${(1 - alpha) * 100}% CI for the difference (${pct(ciAbsolute[0])} to ${pct(ciAbsolute[1])}) includes effects of either sign or zero; "no evidence of a difference" is not evidence of no difference.`
+  );
+  interpretation.push(
+    "Check guardrail metrics (errors, latency, refunds, retention) before shipping; statistical significance is not business significance."
+  );
+  return {
+    control: { ...control, rate: p1 },
+    variant: { ...variant, rate: p2 },
+    absoluteDiff: p2 - p1,
+    relativeLift: p1 > 0 ? p2 / p1 - 1 : Number.NaN,
+    ciAbsolute,
+    ciRelative,
+    z,
+    pValue,
+    significant,
+    alpha,
+    srm,
+    interpretation
+  };
+}
+
+// src/experiment/plan.ts
+var METRICS = {
+  "conv/no-primary-cta-above-fold": {
+    name: "Landing CTA click-through",
+    definition: "visitors who click the primary CTA \xF7 visitors who view the landing page",
+    events: ["landing_viewed", "primary_cta_clicked"]
+  },
+  "conv/competing-ctas": {
+    name: "Primary CTA click-through",
+    definition: "clicks on the primary CTA \xF7 landing views",
+    events: ["landing_viewed", "primary_cta_clicked", "secondary_cta_clicked"]
+  },
+  "conv/unclear-value-proposition": {
+    name: "Landing \u2192 next step rate",
+    definition: "visitors who reach the next funnel step \xF7 landing views",
+    events: ["landing_viewed", "funnel_step_2_viewed"]
+  },
+  "conv/vague-cta-label": {
+    name: "CTA click-through",
+    definition: "clicks on the control \xF7 views of the page",
+    events: ["page_viewed", "cta_clicked"]
+  },
+  "conv/signup-friction": {
+    name: "Signup completion",
+    definition: "accounts created \xF7 visitors who started the signup form",
+    events: ["signup_form_started", "signup_completed"]
+  },
+  "conv/forced-account-checkout": {
+    name: "Checkout completion",
+    definition: "orders \xF7 checkout starts",
+    events: ["checkout_started", "order_completed"]
+  },
+  "conv/no-trust-signals": {
+    name: "Form completion",
+    definition: "form submissions \xF7 form starts",
+    events: ["form_started", "form_submitted"]
+  },
+  "conv/pricing-period-unclear": {
+    name: "Pricing \u2192 plan selection",
+    definition: "plan selections \xF7 pricing page views",
+    events: ["pricing_viewed", "plan_selected"]
+  }
+};
+function planExperiment(runId, f, opts = {}) {
+  const metric = METRICS[f.ruleId] ?? {
+    name: "Primary conversion",
+    definition: "define the conversion event this change should move",
+    events: ["exposure", "conversion"]
+  };
+  const alpha = opts.alpha ?? 0.05;
+  const power = opts.power ?? 0.8;
+  let size = null;
+  if (opts.baseline !== void 0 && opts.mde !== void 0)
+    size = sampleSize({ baseline: opts.baseline, mde: opts.mde, alpha, power });
+  const days = size && opts.dailyTraffic ? Math.ceil(size.total / opts.dailyTraffic) : null;
+  const tooling = [];
+  const p = opts.product;
+  if (p) {
+    for (const x of [...p.featureFlags, ...p.analytics]) tooling.push(`${x.value} (found in ${x.source})`);
+  }
+  const notes = tooling.length ? [
+    "Use the existing flag/analytics tooling above for assignment and events; keep assignment server-side or before first paint to avoid flicker."
+  ] : [
+    "No feature-flag or analytics library was detected: assignment and the events above must be added before the test can run."
+  ];
+  return {
+    schemaVersion: 1,
+    id: `exp-${f.fingerprint}`,
+    source: { runId, finding: f.fingerprint, ruleId: f.ruleId, url: f.url },
+    hypothesis: `If we address "${f.title}" (${f.recommendation}), then ${metric.name.toLowerCase()} will increase, because ${f.description.replace(/\.$/, "")}.`,
+    change: f.recommendation,
+    primaryMetric: metric,
+    guardrails: [
+      {
+        name: "Downstream conversion",
+        why: "a click-through gain must not come from less qualified traffic"
+      },
+      { name: "JavaScript errors and failed requests", why: "the variant must not break the page" },
+      { name: "LCP / INP (field data where available)", why: "the change must not slow the page" },
+      { name: "Refunds, cancellations or support contacts", why: "catch misleading or confusing variants" }
+    ],
+    design: {
+      type: "A/B",
+      split: "50/50, randomized per visitor",
+      audience: `visitors who reach ${f.url}${f.viewport ? ` (finding seen on ${f.viewport})` : ""}`,
+      alpha,
+      power,
+      mde: opts.mde !== void 0 ? `${(opts.mde * 100).toFixed(1)}% relative` : "unknown \u2014 choose the smallest effect worth shipping",
+      baseline: opts.baseline !== void 0 ? `${(opts.baseline * 100).toFixed(2)}% (user-supplied)` : "unknown \u2014 measure the current rate first",
+      sampleSize: size,
+      duration: days ? `${days} day(s) at ${opts.dailyTraffic} eligible visitors/day; run whole weeks (at least ${Math.max(7, Math.ceil(days / 7) * 7)} days) to cover weekly cycles` : "unknown \u2014 needs baseline, MDE and daily traffic",
+      stoppingRule: "Fixed horizon: analyze once at the planned sample size. Do not stop early on significance (peeking inflates false positives) unless a guardrail is breached."
+    },
+    implementation: { tooling, notes },
+    analysis: [
+      "Check sample ratio mismatch first (chi-square, p < 0.0005 blocks analysis): `jourilo experiment analyze \u2026 --expected-share 0.5`.",
+      `Two-sided two-proportion test at \u03B1 = ${alpha}; report the confidence interval of the difference, not only the p-value.`,
+      "Review guardrails; segment only with pre-registered segments (device, new vs returning)."
+    ],
+    risks: [
+      "Novelty effects can fade; consider a holdout or a longer run for UI changes.",
+      "This hypothesis comes from a heuristic page analysis, not from user research or analytics; it may not be the biggest opportunity."
+    ],
+    status: "planned"
+  };
+}
+function planMarkdown(p) {
+  const s = p.design.sampleSize;
+  return [
+    `# Experiment plan ${p.id}`,
+    "",
+    `Source: finding \`${p.source.finding}\` (${p.source.ruleId}) in run \`${p.source.runId}\` on ${p.source.url}`,
+    "",
+    "## Hypothesis",
+    "",
+    p.hypothesis,
+    "",
+    "## Primary metric",
+    "",
+    `**${p.primaryMetric.name}**: ${p.primaryMetric.definition}. Events: ${p.primaryMetric.events.map((e) => `\`${e}\``).join(", ")}.`,
+    "",
+    "## Guardrails",
+    "",
+    ...p.guardrails.map((g) => `- **${g.name}** \u2014 ${g.why}`),
+    "",
+    "## Design",
+    "",
+    `- ${p.design.type}, ${p.design.split}; audience: ${p.design.audience}`,
+    `- \u03B1 = ${p.design.alpha}, power = ${p.design.power}, baseline ${p.design.baseline}, MDE ${p.design.mde}`,
+    s ? `- Sample size: **${s.perVariant.toLocaleString("en-US")} per variant** (${s.total.toLocaleString("en-US")} total) to detect ${(s.baseline * 100).toFixed(2)}% \u2192 ${(s.target * 100).toFixed(2)}%` : "- Sample size: unknown until baseline and MDE are supplied",
+    `- Duration: ${p.design.duration}`,
+    `- Stopping rule: ${p.design.stoppingRule}`,
+    "",
+    "## Implementation",
+    "",
+    ...p.implementation.tooling.length ? p.implementation.tooling.map((t) => `- ${t}`) : [],
+    ...p.implementation.notes.map((n) => `- ${n}`),
+    "",
+    "## Analysis plan",
+    "",
+    ...p.analysis.map((a) => `- ${a}`),
+    "",
+    "## Risks",
+    "",
+    ...p.risks.map((r) => `- ${r}`),
+    "",
+    "_No result exists yet. Jourilo does not predict the effect of this change._",
+    ""
+  ].join("\n");
+}
+
+// src/cli/commands/experiment.ts
+function numOpt(ctx, key) {
+  const v = str(ctx, key);
+  if (v === void 0) return void 0;
+  const n = Number(v.endsWith("%") ? Number(v.slice(0, -1)) / 100 : v);
+  if (!Number.isFinite(n)) throw new JouriloError("USAGE", `--${key} must be a number (e.g. 0.04 or 4%).`);
+  return n;
+}
+function arm(spec, name) {
+  const m = spec?.match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (!m)
+    throw new JouriloError(
+      "USAGE",
+      `--${name} must be conversions/visitors, e.g. 120/2400 (your measured data).`
+    );
+  return { name, conversions: Number(m[1]), visitors: Number(m[2]) };
+}
+var experiment = {
+  name: "experiment",
+  summary: "Plan and analyze experiments: sample size, plans from conversion hypotheses, significance and SRM checks on your data.",
+  usage: "jourilo experiment <size|plan|analyze> \u2026",
+  options: {
+    baseline: { type: "string" },
+    mde: { type: "string" },
+    absolute: { type: "boolean" },
+    alpha: { type: "string" },
+    power: { type: "string" },
+    variants: { type: "string" },
+    "daily-traffic": { type: "string" },
+    run: { type: "string" },
+    finding: { type: "string" },
+    control: { type: "string" },
+    variant: { type: "string" },
+    "expected-share": { type: "string" },
+    planned: { type: "string" }
+  },
+  details: `Subcommands:
+  size     --baseline 4% --mde 10% [--absolute] [--alpha 0.05] [--power 0.8] [--variants 2] [--daily-traffic N]
+  plan     --finding <fingerprint> [--run latest] [--baseline 4%] [--mde 10%] [--daily-traffic N]
+  analyze  --control 120/2400 --variant 150/2380 [--alpha 0.05] [--expected-share 0.5] [--planned N]
+
+Jourilo never invents traffic, conversions or effects: every number comes from you or from the formulas.`,
+  async run(ctx) {
+    const sub = ctx.positionals[0];
+    if (sub === "size") {
+      const baseline = numOpt(ctx, "baseline");
+      const mde = numOpt(ctx, "mde");
+      if (baseline === void 0 || mde === void 0)
+        throw new JouriloError("USAGE", "size needs --baseline and --mde.");
+      let r;
+      try {
+        r = sampleSize({
+          baseline,
+          mde,
+          absolute: flag(ctx, "absolute"),
+          alpha: numOpt(ctx, "alpha") ?? 0.05,
+          power: numOpt(ctx, "power") ?? 0.8,
+          variants: numOpt(ctx, "variants") ?? 2
+        });
+      } catch (e) {
+        throw new JouriloError("INVALID_INPUT", e.message);
+      }
+      const daily = numOpt(ctx, "daily-traffic");
+      const days = daily ? Math.ceil(r.total / daily) : null;
+      return {
+        data: { ...r, days },
+        text: [
+          `Detect ${(r.baseline * 100).toFixed(2)}% \u2192 ${(r.target * 100).toFixed(2)}% (\u03B1 ${r.alpha}${r.variants > 2 ? `, ${r.alphaPerComparison.toFixed(4)} per comparison` : ""}, power ${r.power}, two-sided)`,
+          `  ${r.perVariant.toLocaleString("en-US")} visitors per variant, ${r.total.toLocaleString("en-US")} total`,
+          days ? `  \u2248 ${days} day(s) at ${daily}/day \u2014 run whole weeks` : "  Add --daily-traffic to estimate duration."
+        ].join("\n")
+      };
+    }
+    if (sub === "plan") {
+      const fp = str(ctx, "finding");
+      if (!fp)
+        throw new JouriloError(
+          "USAGE",
+          "plan needs --finding <fingerprint> (see the report or `jourilo report --format json`)."
+        );
+      const { run } = ctx.ws.loadRun(str(ctx, "run") ?? "latest");
+      const f = run.findings.find((x) => x.fingerprint === fp);
+      if (!f) throw new JouriloError("NOT_FOUND", `Finding ${fp} is not in run ${run.id}.`);
+      if (f.kind !== "hypothesis")
+        ctx.log(`Note: ${f.ruleId} is a ${f.kind}; defects should usually be fixed, not A/B tested.`);
+      const productFile = join11(ctx.ws.root, "product.json");
+      const product = existsSync9(productFile) ? JSON.parse(readFileSync7(productFile, "utf8")) : null;
+      const plan = planExperiment(run.id, f, {
+        ...numOpt(ctx, "baseline") !== void 0 ? { baseline: numOpt(ctx, "baseline") } : {},
+        ...numOpt(ctx, "mde") !== void 0 ? { mde: numOpt(ctx, "mde") } : {},
+        ...numOpt(ctx, "daily-traffic") !== void 0 ? { dailyTraffic: numOpt(ctx, "daily-traffic") } : {},
+        product
+      });
+      const outDir = join11(ctx.ws.root, "experiments");
+      mkdirSync3(outDir, { recursive: true });
+      const md2 = join11(outDir, `${plan.id}.md`);
+      writeFileSync6(md2, planMarkdown(plan));
+      writeFileSync6(join11(outDir, `${plan.id}.json`), `${JSON.stringify(plan, null, 2)}
+`);
+      return { data: { plan, file: md2 }, text: `${planMarkdown(plan)}
+Saved: ${md2}` };
+    }
+    if (sub === "analyze") {
+      try {
+        const r = analyze(arm(str(ctx, "control"), "control"), arm(str(ctx, "variant"), "variant"), {
+          alpha: numOpt(ctx, "alpha") ?? 0.05,
+          expectedShare: numOpt(ctx, "expected-share") ?? 0.5,
+          ...numOpt(ctx, "planned") ? { plannedPerVariant: numOpt(ctx, "planned") } : {}
+        });
+        return { data: r, text: r.interpretation.map((l) => `\u2022 ${l}`).join("\n") };
+      } catch (e) {
+        if (e instanceof JouriloError) throw e;
+        throw new JouriloError("INVALID_INPUT", e.message);
+      }
+    }
+    throw new JouriloError("USAGE", "Use: experiment size | plan | analyze (see --help).");
+  }
+};
+
 // src/cli/commands/journeys.ts
-import { existsSync as existsSync6, mkdirSync as mkdirSync3, readdirSync as readdirSync4, readFileSync as readFileSync5, writeFileSync as writeFileSync5 } from "node:fs";
-import { basename, join as join9, resolve as resolve5 } from "node:path";
+import { existsSync as existsSync10, mkdirSync as mkdirSync4, readdirSync as readdirSync6, readFileSync as readFileSync8, writeFileSync as writeFileSync7 } from "node:fs";
+import { basename as basename2, join as join13, resolve as resolve6 } from "node:path";
 init_errors();
 init_types();
 
 // src/journeys/runner.ts
-import { join as join8 } from "node:path";
+import { join as join12 } from "node:path";
 init_fs_safety();
 
 // src/journeys/schema.ts
@@ -43052,7 +44552,7 @@ async function runJourney(browser, spec, opts) {
     runDir: opts.runDir,
     ...opts.storageState ? { storageState: opts.storageState } : {}
   });
-  const tracePath = opts.trace ? join8("traces", `${spec.id}-${vp.name}.zip`) : void 0;
+  const tracePath = opts.trace ? join12("traces", `${spec.id}-${vp.name}.zip`) : void 0;
   if (tracePath) await ctx.tracing.start({ screenshots: true, snapshots: true, title: spec.name });
   const page = await ctx.newPage();
   const live = observe(page, opts.base.origin);
@@ -43063,10 +44563,10 @@ async function runJourney(browser, spec, opts) {
   const startUrl = new URL(interpolate(spec.start, opts.data), opts.base);
   const allSteps = [{ action: "goto", url: startUrl.toString() }, ...spec.steps];
   const shot = async (i) => {
-    const file = join8("screenshots", `journey-${spec.id}-${vp.name}-${String(i).padStart(2, "0")}.jpg`);
+    const file = join12("screenshots", `journey-${spec.id}-${vp.name}-${String(i).padStart(2, "0")}.jpg`);
     try {
       await page.screenshot({
-        path: join8(opts.runDir, file),
+        path: join12(opts.runDir, file),
         type: "jpeg",
         quality: 70,
         animations: "disabled",
@@ -43163,7 +44663,7 @@ async function runJourney(browser, spec, opts) {
     const vitals = await page.evaluate(READ_VITALS_SCRIPT).catch(() => null);
     const durationMs = Date.now() - t0;
     if (tracePath) {
-      await ctx.tracing.stop({ path: join8(opts.runDir, tracePath) });
+      await ctx.tracing.stop({ path: join12(opts.runDir, tracePath) });
     }
     const result = {
       id: spec.id,
@@ -43449,31 +44949,31 @@ function suggestJourneys(run) {
 
 // src/cli/commands/journeys.ts
 function journeysDir(ws) {
-  return join9(ws.root, "journeys");
+  return join13(ws.root, "journeys");
 }
 function loadJourneys(ws, refs) {
   const dir = journeysDir(ws);
   const files = [];
   if (!refs.length) {
-    if (!existsSync6(dir)) return [];
+    if (!existsSync10(dir)) return [];
     files.push(
-      ...readdirSync4(dir).filter((f) => f.endsWith(".json")).sort().map((f) => join9(dir, f))
+      ...readdirSync6(dir).filter((f) => f.endsWith(".json")).sort().map((f) => join13(dir, f))
     );
   } else {
     for (const r of refs) {
-      if (r.endsWith(".json") && existsSync6(r)) files.push(resolve5(r));
-      else if (existsSync6(join9(dir, `${r}.json`))) files.push(join9(dir, `${r}.json`));
+      if (r.endsWith(".json") && existsSync10(r)) files.push(resolve6(r));
+      else if (existsSync10(join13(dir, `${r}.json`))) files.push(join13(dir, `${r}.json`));
       else throw new JouriloError("NOT_FOUND", `Journey not found: ${r} (looked in ${dir})`);
     }
   }
   return files.map((f) => {
     let raw;
     try {
-      raw = JSON.parse(readFileSync5(f, "utf8"));
+      raw = JSON.parse(readFileSync8(f, "utf8"));
     } catch (err) {
-      throw new JouriloError("INVALID_INPUT", `${basename(f)} is not valid JSON: ${err.message}`);
+      throw new JouriloError("INVALID_INPUT", `${basename2(f)} is not valid JSON: ${err.message}`);
     }
-    return validateJourney(raw, basename(f));
+    return validateJourney(raw, basename2(f));
   });
 }
 function parseVars(ctx) {
@@ -43493,8 +44993,8 @@ async function suggest(ctx) {
   if (!target || ctx.ws.listRuns().some((r) => r.id === target) || target === "latest") {
     run = ctx.ws.loadRun(target ?? "latest").run;
   } else {
-    const isDir = existsSync6(target) && !target.includes("://");
-    const server = isDir ? await serveStatic(resolve5(target)) : void 0;
+    const isDir = existsSync10(target) && !target.includes("://");
+    const server = isDir ? await serveStatic(resolve6(target)) : void 0;
     try {
       ctx.log("Discovering pages to derive journeys (no audit rules applied) \u2026");
       run = (await runAudit(ctx.ws, {
@@ -43520,16 +45020,16 @@ async function suggest(ctx) {
   }
   const specs = suggestJourneys(run);
   const dir = journeysDir(ctx.ws);
-  mkdirSync3(dir, { recursive: true });
+  mkdirSync4(dir, { recursive: true });
   const written = [];
   const kept = [];
   for (const s of specs) {
-    const file = join9(dir, `${s.id}.json`);
-    if (existsSync6(file) && !flag(ctx, "force")) {
+    const file = join13(dir, `${s.id}.json`);
+    if (existsSync10(file) && !flag(ctx, "force")) {
       kept.push(s.id);
       continue;
     }
-    writeFileSync5(file, `${JSON.stringify(s, null, 2)}
+    writeFileSync7(file, `${JSON.stringify(s, null, 2)}
 `);
     written.push(file);
   }
@@ -43556,8 +45056,8 @@ async function runCmd(ctx) {
       "No journeys to run.",
       "Create some with `jourilo journeys suggest <url>`."
     );
-  const isDir = existsSync6(baseArg) && !baseArg.includes("://");
-  const server = isDir ? await serveStatic(resolve5(baseArg)) : void 0;
+  const isDir = existsSync10(baseArg) && !baseArg.includes("://");
+  const server = isDir ? await serveStatic(resolve6(baseArg)) : void 0;
   try {
     const base = parseTargetUrl(server?.url ?? baseArg);
     const hostClass = await checkTarget(base, { allowPrivate: flag(ctx, "allow-private") });
@@ -43580,7 +45080,7 @@ async function runCmd(ctx) {
         "--allow-destructive is ignored on non-local hosts: irreversible and payment actions were blocked."
       );
     if (flag(ctx, "trace")) {
-      mkdirSync3(join9(runDir, "traces"), { recursive: true });
+      mkdirSync4(join13(runDir, "traces"), { recursive: true });
       limitations.push(
         "Playwright traces contain DOM snapshots and typed values: keep them private (they are excluded from git)."
       );
@@ -43616,7 +45116,7 @@ async function runCmd(ctx) {
       id,
       tool: { name: "jourilo", version: VERSION },
       mode: isDir || str(ctx, "repo") ? "repository" : "website",
-      target: server ? `${resolve5(baseArg)} (served at ${server.url})` : base.toString(),
+      target: server ? `${resolve6(baseArg)} (served at ${server.url})` : base.toString(),
       startedAt,
       finishedAt: (/* @__PURE__ */ new Date()).toISOString(),
       browser: { name: browserName, version: "" },
@@ -43636,7 +45136,7 @@ async function runCmd(ctx) {
         "Journeys prove that a scripted path works (or not) in one browser; they do not measure how real people choose paths."
       ]
     };
-    const repo = str(ctx, "repo") ?? (isDir ? resolve5(baseArg) : void 0);
+    const repo = str(ctx, "repo") ?? (isDir ? resolve6(baseArg) : void 0);
     if (repo) locateFindings(run, repo);
     ctx.ws.saveRun(run);
     const reports = writeReports(runDir, run);
@@ -43910,7 +45410,7 @@ var serve = {
     const server = await serveStatic(dir, Number(str(ctx, "port") ?? 4173));
     process.stderr.write(`Serving ${dir} at ${server.url} (Ctrl+C to stop)
 `);
-    await new Promise((resolve6) => process.once("SIGINT", () => resolve6()));
+    await new Promise((resolve7) => process.once("SIGINT", () => resolve7()));
     await server.close();
     return { data: { url: server.url }, text: "Stopped." };
   }
@@ -43918,10 +45418,12 @@ var serve = {
 
 // src/cli/main.ts
 var COMMANDS = [
+  discover,
   audit,
   accessibility,
   conversion,
   journeys,
+  experiment,
   report,
   compare,
   runs,
@@ -43931,8 +45433,10 @@ var COMMANDS = [
   doctor
 ];
 var GROUPS = [
+  ["Understand", ["discover"]],
   ["Audit", ["audit", "accessibility", "conversion"]],
   ["Journeys", ["journeys"]],
+  ["Experiment", ["experiment"]],
   ["Results", ["report", "compare", "runs"]],
   ["System", ["bench", "serve", "setup", "doctor"]]
 ];

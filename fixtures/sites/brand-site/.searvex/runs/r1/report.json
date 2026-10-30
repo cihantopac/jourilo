@@ -1,0 +1,1 @@
+{ "findings": [ { "ruleId": "meta/description-missing", "title": "Missing meta description", "severity": "medium", "message": "No meta description.", "evidence": [ { "url": "http://localhost/" } ] } ] }

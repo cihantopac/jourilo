@@ -59,6 +59,14 @@ export interface AxeIssue {
 
 export interface ProbeResult {
   inventory: PageInventory;
+  tech?: string[];
+  scriptHosts?: string[];
+  styles?: {
+    body: { color: string; background: { r: number; g: number; b: number; a: number }; font: string };
+    headings: { selector: string; color: string; font: string }[];
+    ctas: { selector: string; text: string; background: string; color: string; rect: Rect }[];
+  };
+  hreflang?: string[];
   undersized: {
     selector: string;
     rect: Rect;

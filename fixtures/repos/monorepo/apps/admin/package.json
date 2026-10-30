@@ -1,0 +1,1 @@
+{"name": "@acme/admin", "scripts": {"dev": "vite --port 5200"}, "dependencies": {"react": "19.0.0", "react-router-dom": "7.0.0"}, "devDependencies": {"vite": "7.0.0"}}

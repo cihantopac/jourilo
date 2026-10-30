@@ -2,16 +2,20 @@ import { exitCodeFor, JouriloError } from '../core/errors.js';
 import { VERSION } from '../core/version.js';
 import { accessibility, audit, conversion } from './commands/audit.js';
 import { bench } from './commands/bench.js';
+import { discover } from './commands/discover.js';
+import { experiment } from './commands/experiment.js';
 import { journeys } from './commands/journeys.js';
 import { compare, report, runs } from './commands/runs.js';
 import { doctor, serve, setup } from './commands/system.js';
 import { type Command, parse } from './framework.js';
 
 export const COMMANDS: Command[] = [
+  discover,
   audit,
   accessibility,
   conversion,
   journeys,
+  experiment,
   report,
   compare,
   runs,
@@ -22,8 +26,10 @@ export const COMMANDS: Command[] = [
 ];
 
 const GROUPS: [string, string[]][] = [
+  ['Understand', ['discover']],
   ['Audit', ['audit', 'accessibility', 'conversion']],
   ['Journeys', ['journeys']],
+  ['Experiment', ['experiment']],
   ['Results', ['report', 'compare', 'runs']],
   ['System', ['bench', 'serve', 'setup', 'doctor']],
 ];

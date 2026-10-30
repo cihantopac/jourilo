@@ -14,6 +14,11 @@ describe('fixture benchmark', () => {
     expect(r.falsePositives).toEqual([]);
     expect(r.sourceMisses).toEqual([]);
   });
+  it('checks design consistency against a locked Markilo brand', async () => {
+    const r = await benchFixture(join(import.meta.dirname, '../../fixtures/sites/brand-site'), ws);
+    expect(r.missed).toEqual([]);
+    expect(r.falsePositives).toEqual([]);
+  });
   it('reports no moderate-or-worse defects on the clean control site', async () => {
     const r = await benchFixture(join(import.meta.dirname, '../../fixtures/sites/clean-shop'), ws);
     expect(r.excessDefects).toEqual([]);

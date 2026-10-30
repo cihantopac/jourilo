@@ -255,4 +255,6 @@ export interface Run {
   limitations: string[];
   /** Product intelligence attached by `discover`, when available. */
   product?: unknown;
+  /** Brand/search context (jourilo.context/v1) used by this run, when present. */
+  context?: import('../integrations/context.js').ExperienceContext;
 }

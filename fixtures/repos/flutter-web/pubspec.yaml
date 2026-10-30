@@ -1,0 +1,5 @@
+name: habits
+dependencies:
+  flutter:
+    sdk: flutter
+  go_router: ^14.0.0

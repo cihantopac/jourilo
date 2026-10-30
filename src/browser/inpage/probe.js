@@ -395,7 +395,92 @@
   ];
   const pricingSignals = PRICING.filter(([, re]) => re.test(lower)).map(([n]) => n);
 
+  // ---- Style samples for design-system checks (computed values, visible elements only) ----
+  const firstFont = (ff) =>
+    ff
+      .split(',')[0]
+      .trim()
+      .replace(/^["']|["']$/g, '');
+  const bodyCs = getComputedStyle(document.body || document.documentElement);
+  const styles = {
+    body: {
+      color: bodyCs.color,
+      background: bgOf(document.body || document.documentElement),
+      font: firstFont(bodyCs.fontFamily),
+    },
+    headings: Array.from(document.querySelectorAll('h1, h2'))
+      .filter(isVisible)
+      .slice(0, 6)
+      .map((h) => ({
+        selector: selectorOf(h),
+        color: getComputedStyle(h).color,
+        font: firstFont(getComputedStyle(h).fontFamily),
+      })),
+    ctas: ctas
+      .filter((c) => c.emphasis === 'primary')
+      .slice(0, 8)
+      .map((c) => {
+        const el = document.querySelector(c.selector);
+        const cs = el ? getComputedStyle(el) : null;
+        return {
+          selector: c.selector,
+          text: c.text,
+          background: cs ? cs.backgroundColor : '',
+          color: cs ? cs.color : '',
+          rect: c.rect,
+        };
+      }),
+  };
+
+  // ---- Technology hints (for website-mode product discovery) ----
+  const tech = [];
+  const gen = document.querySelector('meta[name="generator"]')?.getAttribute('content');
+  if (gen) tech.push(`generator: ${gen.slice(0, 60)}`);
+  if (window.__NEXT_DATA__ || document.querySelector('script[src*="/_next/"]')) tech.push('Next.js');
+  if (window.__NUXT__ || window.useNuxtApp || document.getElementById('__nuxt')) tech.push('Nuxt');
+  if (document.querySelector('astro-island, [data-astro-cid]') || /astro/i.test(gen || ''))
+    tech.push('Astro');
+  if (
+    document.querySelector('[data-sveltekit-preload-data], [data-sveltekit-hydrate]') ||
+    window.__sveltekit_dev
+  )
+    tech.push('SvelteKit');
+  if (document.querySelector('[ng-version]')) tech.push('Angular');
+  if (document.querySelector('flutter-view, flt-glass-pane, flt-scene-host') || window._flutter)
+    tech.push('Flutter web');
+  if (
+    document.querySelector('[data-reactroot], #__next, #root') &&
+    window.React === undefined &&
+    document.querySelector('#root')
+  )
+    tech.push('SPA root (#root)');
+  if (window.Shopify) tech.push('Shopify');
+  if (document.querySelector('link[href*="wp-content"], script[src*="wp-content"]')) tech.push('WordPress');
+  if (document.documentElement.hasAttribute('data-wf-site')) tech.push('Webflow');
+  const scriptHosts = Array.from(
+    new Set(
+      performance
+        .getEntriesByType('resource')
+        .filter((e) => e.initiatorType === 'script')
+        .map((e) => {
+          try {
+            return new URL(e.name).host;
+          } catch {
+            return '';
+          }
+        })
+        .filter((h) => h && h !== location.host),
+    ),
+  ).slice(0, 40);
+  const hreflang = Array.from(document.querySelectorAll('link[rel="alternate"][hreflang]')).map((l) =>
+    l.getAttribute('hreflang'),
+  );
+
   return {
+    styles,
+    tech,
+    scriptHosts,
+    hreflang,
     inventory: {
       lang: document.documentElement.getAttribute('lang'),
       h1: headings.filter((h) => h.level === 1).map((h) => h.text),
