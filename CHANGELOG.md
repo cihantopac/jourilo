@@ -4,7 +4,7 @@ All notable changes are documented here. The project follows [Semantic Versionin
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-10-30
+## [0.1.0] - 2026-10-31
 
 First working version.
 
@@ -37,5 +37,6 @@ First working version.
   error detection and field purposes. **Safety fix:** non-English payment and delete buttons ("Satın al",
   "Jetzt kaufen", "Supprimer le compte"…) were not blocked by name before.
 - Cross-browser parity: identical journey, session, signed-in audit and form results in Chromium, Firefox, WebKit.
+  WebKit on Windows cannot move keyboard focus to links; the report says so instead of skipping those checks silently.
 - Signed-in testing: `journeys run --save-auth` stores a test-account session (mode 0600) for `--auth`; static builds
   are served with SPA fallback on a stable port per directory.
