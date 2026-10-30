@@ -17,7 +17,9 @@ const rawPlugin = {
   setup(b) {
     // Paths stay relative to the repository so the bundle is identical on every machine (and leaks no home dir).
     b.onResolve({ filter: /\?raw$/ }, (args) => ({
-      path: relative(root, resolve(args.resolveDir, args.path.replace(/\?raw$/, ''))).split(sep).join('/'),
+      path: relative(root, resolve(args.resolveDir, args.path.replace(/\?raw$/, '')))
+        .split(sep)
+        .join('/'),
       namespace: 'raw',
     }));
     b.onLoad({ filter: /.*/, namespace: 'raw' }, (args) => ({
