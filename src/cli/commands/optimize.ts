@@ -8,7 +8,14 @@ import { serveStatic } from '../../core/static-server.js';
 import { loadContext } from '../../integrations/context.js';
 import { unifiedDiff } from '../../repair/diff.js';
 import { planFixes } from '../../repair/fixes.js';
-import { createCheckpoint, diffSince, isGitRepo, loadCheckpoint, rollback } from '../../repair/git.js';
+import {
+  backupFiles,
+  createCheckpoint,
+  diffSince,
+  isGitRepo,
+  loadCheckpoint,
+  rollback,
+} from '../../repair/git.js';
 import { locateFindings } from '../../repair/locate.js';
 import { compareRuns } from '../../report/compare.js';
 import { writeReports } from '../../report/index.js';
@@ -59,11 +66,13 @@ Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
       );
     let checkpoint: string | null = null;
     if (flag(ctx, 'apply') && plans.length) {
-      if (isGitRepo(repo))
-        checkpoint = createCheckpoint(repo, ctx.ws.root, `before optimize of run ${run.id}`).id;
-      else ctx.log('Warning: not a git repository, so no checkpoint/rollback is available.');
       const finalContent = new Map<string, string>();
       for (const p of plans) for (const e of p.edits) finalContent.set(e.file, e.after);
+      if (isGitRepo(repo)) {
+        const cp = createCheckpoint(repo, ctx.ws.root, `before optimize of run ${run.id}`);
+        backupFiles(repo, ctx.ws.root, cp, [...finalContent.keys()]);
+        checkpoint = cp.id;
+      } else ctx.log('Warning: not a git repository, so no checkpoint/rollback is available.');
       for (const [file, content] of finalContent) writeFileSync(resolveInside(repo, file), content);
       const outDir = join(ctx.ws.root, 'fixes');
       mkdirSync(outDir, { recursive: true });
@@ -230,7 +239,7 @@ export const rollbackCmd: Command = {
         text: `Would restore:\n${d.stat || '(nothing)'}\nRe-run with --yes to roll back.`,
         exitCode: 0,
       };
-    const r = rollback(repo, cp);
+    const r = rollback(repo, cp, ctx.ws.root);
     return {
       data: r,
       text: `Restored ${r.restored.length} file(s) to checkpoint ${cp.id}.${r.leftUntracked.length ? `\nNot removed (created after the checkpoint): ${r.leftUntracked.join(', ')}` : ''}`,

@@ -45943,9 +45943,10 @@ function planFixes(findings, root) {
 
 // src/repair/git.ts
 init_errors();
+init_fs_safety();
 import { spawnSync as spawnSync2 } from "node:child_process";
 import { existsSync as existsSync14, mkdirSync as mkdirSync6, readdirSync as readdirSync8, readFileSync as readFileSync11, writeFileSync as writeFileSync9 } from "node:fs";
-import { join as join16 } from "node:path";
+import { dirname as dirname6, join as join16 } from "node:path";
 function git(cwd, args) {
   const r = spawnSync2("git", args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   return { ok: r.status === 0, out: (r.stdout ?? "").trim(), err: (r.stderr ?? "").trim() };
@@ -45998,26 +45999,58 @@ function diffSince(root, cp) {
   const newFiles = untrackedFiles(root).filter((f) => !cp.untracked.includes(f));
   return { stat, patch, newFiles };
 }
-function rollback(root, cp) {
-  const changed = git(root, ["diff", "--name-only", cp.snapshot]).out.split("\n").filter(Boolean);
-  if (changed.length) {
-    const r = git(root, ["restore", `--source=${cp.snapshot}`, "--worktree", "--", ...changed]);
-    if (!r.ok) {
-      const restorable = changed.filter((f) => git(root, ["cat-file", "-e", `${cp.snapshot}:${f}`]).ok);
-      if (restorable.length) {
-        const r2 = git(root, ["restore", `--source=${cp.snapshot}`, "--worktree", "--", ...restorable]);
-        if (!r2.ok) throw new JouriloError("INTERNAL", `git restore failed: ${r2.err}`);
-      }
-      return {
-        restored: restorable,
-        leftUntracked: [
-          ...changed.filter((f) => !restorable.includes(f)),
-          ...untrackedFiles(root).filter((f) => !cp.untracked.includes(f))
-        ]
-      };
-    }
+function backupDir(wsRoot, cp) {
+  return join16(wsRoot, "checkpoints", cp.id);
+}
+function backupFiles(root, wsRoot, cp, files) {
+  for (const f of files) {
+    const src = resolveInside(root, f);
+    if (!existsSync14(src)) continue;
+    const dest = resolveInside(backupDir(wsRoot, cp), f);
+    mkdirSync6(dirname6(dest), { recursive: true });
+    writeFileSync9(dest, readFileSync11(src));
   }
-  return { restored: changed, leftUntracked: untrackedFiles(root).filter((f) => !cp.untracked.includes(f)) };
+}
+function blob(root, rev, file) {
+  const r = spawnSync2("git", ["cat-file", "blob", `${rev}:${file}`], {
+    cwd: root,
+    maxBuffer: 64 * 1024 * 1024
+  });
+  return r.status === 0 ? r.stdout : null;
+}
+function rollback(root, cp, wsRoot) {
+  const changed = git(root, ["diff", "--name-only", cp.snapshot]).out.split("\n").filter(Boolean);
+  const restored = [];
+  const notRestorable = [];
+  for (const f of changed) {
+    const target = resolveInside(root, f);
+    const saved = wsRoot ? resolveInside(backupDir(wsRoot, cp), f) : null;
+    if (saved && existsSync14(saved)) {
+      writeFileSync9(target, readFileSync11(saved));
+      restored.push(f);
+      continue;
+    }
+    const content = blob(root, cp.snapshot, f);
+    if (!content) {
+      notRestorable.push(f);
+      continue;
+    }
+    let out = content;
+    const current = existsSync14(target) ? readFileSync11(target) : null;
+    if (current?.includes("\r\n") && !content.includes("\r\n"))
+      out = Buffer.from(content.toString("utf8").replace(/\n/g, "\r\n"), "utf8");
+    mkdirSync6(dirname6(target), { recursive: true });
+    writeFileSync9(target, out);
+    restored.push(f);
+  }
+  return {
+    restored,
+    // Files that did not exist at checkpoint time are listed, never deleted.
+    leftUntracked: [
+      ...notRestorable,
+      ...untrackedFiles(root).filter((f) => !cp.untracked.includes(f) && !notRestorable.includes(f))
+    ]
+  };
 }
 
 // src/report/compare.ts
@@ -46100,11 +46133,13 @@ Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
       );
     let checkpoint2 = null;
     if (flag(ctx, "apply") && plans.length) {
-      if (isGitRepo(repo))
-        checkpoint2 = createCheckpoint(repo, ctx.ws.root, `before optimize of run ${run.id}`).id;
-      else ctx.log("Warning: not a git repository, so no checkpoint/rollback is available.");
       const finalContent = /* @__PURE__ */ new Map();
       for (const p of plans) for (const e of p.edits) finalContent.set(e.file, e.after);
+      if (isGitRepo(repo)) {
+        const cp = createCheckpoint(repo, ctx.ws.root, `before optimize of run ${run.id}`);
+        backupFiles(repo, ctx.ws.root, cp, [...finalContent.keys()]);
+        checkpoint2 = cp.id;
+      } else ctx.log("Warning: not a git repository, so no checkpoint/rollback is available.");
       for (const [file, content] of finalContent) writeFileSync10(resolveInside(repo, file), content);
       const outDir = join17(ctx.ws.root, "fixes");
       mkdirSync7(outDir, { recursive: true });
@@ -46268,7 +46303,7 @@ ${d.stat || "(nothing)"}
 Re-run with --yes to roll back.`,
         exitCode: 0
       };
-    const r = rollback(repo, cp);
+    const r = rollback(repo, cp, ctx.ws.root);
     return {
       data: r,
       text: `Restored ${r.restored.length} file(s) to checkpoint ${cp.id}.${r.leftUntracked.length ? `
