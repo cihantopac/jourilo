@@ -20,5 +20,5 @@ Priorities follow the rule: correctness and evidence before breadth.
   `width`/`height` on images) — each with a fixture and a verify test.
 - Analytics/flag adapters that read (never write) funnel rates for experiment plans: PostHog, GrowthBook, Amplitude.
 - Sequential testing option for experiments.
-- Localization of heuristic keyword lists (trust, pricing, validation messages).
+- More languages for the shared lexicon (`src/core/lexicon.ts`), each with a fixture site.
 - npm publication and public marketplace listing (requires maintainer approval).

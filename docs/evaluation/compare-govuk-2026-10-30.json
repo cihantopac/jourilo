@@ -1,0 +1,2914 @@
+{
+ "source": "https://alphagov.github.io/accessibility-tool-audit/",
+ "date": "2026-10-30T16:21:49.296Z",
+ "method": "detects = reports something on the case page beyond the tool template noise (rules on >= 60% of pages)",
+ "versions": {
+  "jourilo": "0.1.0",
+  "pa11y": "10.0.0 (HTML_CodeSniffer, WCAG2AA, warnings included)",
+  "lighthouse": "13.6.0 (accessibility category, desktop)",
+  "chromium": "chromium-1248"
+ },
+ "tools": {
+  "jourilo": {
+   "seconds": 180.9,
+   "error": 45,
+   "warning": 5,
+   "none": 92,
+   "toolError": 0,
+   "noise": [
+    "axe/region"
+   ],
+   "perCase": [
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/heading-order"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/scrollable-region-focusable",
+      "~axe-review/color-contrast"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/color-contrast"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/color-contrast"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/color-contrast"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/color-contrast"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/blink"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/marquee"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/valid-lang"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/heading-order",
+      "axe/empty-heading"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/heading-order"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/listitem"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/dlitem"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/list"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~axe-review/th-has-data-cells"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/target-size"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/empty-table-header"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/aria-allowed-role"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/image-alt"
+     ]
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~axe-review/color-contrast"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~axe-review/video-caption"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/link-name"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/heading-order"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/link-name"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/image-redundant-alt"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/input-image-alt"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/button-name"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/input-image-alt"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "jourilo/input-purpose"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/label"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "jourilo/input-purpose"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "jourilo/input-purpose"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/label"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/label"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/heading-order"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/label"
+     ]
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~axe-review/form-field-multiple-labels"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/color-contrast",
+      "jourilo/input-purpose"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "jourilo/input-purpose"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/label"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "jourilo/placeholder-label"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "jourilo/input-purpose"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/target-size"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/tabindex"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "jourilo/focus-visible"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "jourilo/pointer-only-control"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/frame-title"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/target-size"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "axe/aria-roles",
+      "~axe-review/color-contrast"
+     ]
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~axe-review/color-contrast"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    }
+   ]
+  },
+  "pa11y": {
+   "seconds": 255.5,
+   "error": 38,
+   "warning": 20,
+   "none": 84,
+   "toolError": 0,
+   "noise": [],
+   "perCase": [
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_3.1_3_1_A.G141"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle2.Guideline2_2.2_2_2.F47"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_3.1_3_1_A.G141",
+      "WCAG2AA.Principle1.Guideline1_3.1_3_1.H42.2"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_3.1_3_1_A.G141"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle1.Guideline1_3.1_3_1.H43.HeadersRequired"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle1.Guideline1_3.1_3_1.H43,H63"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle1.Guideline1_3.1_3_1.H43,H63",
+      "~WCAG2AA.Principle1.Guideline1_3.1_3_1.H39.3.NoCaption"
+     ]
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_3.1_3_1.H39.3.NoCaption"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle1.Guideline1_3.1_3_1.H39.3.LayoutTable"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle1.Guideline1_3.1_3_1.H43.MissingHeaderIds"
+     ]
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_3.1_3_1.H39.3.NoCaption"
+     ]
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_3.1_3_1.H39.3.NoCaption"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle1.Guideline1_3.1_3_1.H63.1"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle1.Guideline1_1.1_1_1.H37"
+     ]
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_4.1_4_3.G18.BgImage"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle1.Guideline1_1.1_1_1.H67.1"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_1.1_1_1.H67.2"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle1.Guideline1_1.1_1_1.H30.2"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_3.1_3_1_A.G141"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_3.1_3_1.H48"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle4.Guideline4_1.4_1_2.H91.A.NoContent"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle1.Guideline1_1.1_1_1.H36",
+      "WCAG2AA.Principle4.Guideline4_1.4_1_2.H91.InputImage.Name"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle4.Guideline4_1.4_1_2.H91.Button.Name"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle1.Guideline1_1.1_1_1.H36",
+      "WCAG2AA.Principle4.Guideline4_1.4_1_2.H91.InputImage.Name"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2",
+      "WCAG2AA.Principle4.Guideline4_1.4_1_2.H91.InputText.Name",
+      "WCAG2AA.Principle1.Guideline1_3.1_3_1.F68"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_3.1_3_1.H71.SameName",
+      "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2",
+      "~WCAG2AA.Principle1.Guideline1_3.1_3_1_A.G141"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2",
+      "WCAG2AA.Principle4.Guideline4_1.4_1_2.H91.InputText.Name",
+      "WCAG2AA.Principle1.Guideline1_3.1_3_1.F68"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2",
+      "WCAG2AA.Principle4.Guideline4_1.4_1_2.H91.Fieldset.Name",
+      "WCAG2AA.Principle1.Guideline1_3.1_3_1.H71.NoLegend"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2",
+      "WCAG2AA.Principle4.Guideline4_1.4_1_2.H91.Fieldset.Name"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2",
+      "WCAG2AA.Principle4.Guideline4_1.4_1_2.H91.InputCheckbox.Name",
+      "WCAG2AA.Principle1.Guideline1_3.1_3_1.F68"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_3.1_3_1.H71.SameName",
+      "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2",
+      "~WCAG2AA.Principle1.Guideline1_3.1_3_1_A.G141"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2",
+      "WCAG2AA.Principle1.Guideline1_4.1_4_3.G18.Fail"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2",
+      "WCAG2AA.Principle4.Guideline4_1.4_1_2.H91.InputCheckbox.Name",
+      "WCAG2AA.Principle1.Guideline1_3.1_3_1.F68"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle4.Guideline4_1.4_1_2.H91.InputSearch.Name"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle3.Guideline3_2.3_2_2.H32.2",
+      "~WCAG2AA.Principle4.Guideline4_1.4_1_2.H91.Select.Value",
+      "~WCAG2AA.Principle1.Guideline1_3.1_3_1.H85.2"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_4.1_4_10.C32,C31,C33,C38,SCR34,G206"
+     ]
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_3.1_3_1.H48"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_4.1_4_10.C32,C31,C33,C38,SCR34,G206"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_4.1_4_10.C32,C31,C33,C38,SCR34,G206"
+     ]
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_4.1_4_10.C32,C31,C33,C38,SCR34,G206"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle2.Guideline2_4.2_4_1.H64.1"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_4.1_4_3.G18.Abs",
+      "~WCAG2AA.Principle1.Guideline1_3.1_3_1.H48"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle4.Guideline4_1.4_1_1.F77"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle1.Guideline1_3.1_3_1.H49.Center"
+     ]
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_4.1_4_3.G18.BgImage"
+     ]
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle2.Guideline2_1.2_1_2.F10"
+     ]
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_1.1_1_1.H67.2"
+     ]
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_4.1_4_3_F24.F24.FGColour"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "warning",
+     "rules": [
+      "~WCAG2AA.Principle1.Guideline1_4.1_4_10.C32,C31,C33,C38,SCR34,G206"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "WCAG2AA.Principle1.Guideline1_3.1_3_1.H49.Font"
+     ]
+    }
+   ]
+  },
+  "lighthouse": {
+   "seconds": 712.5,
+   "error": 34,
+   "warning": 0,
+   "none": 108,
+   "toolError": 0,
+   "noise": [],
+   "perCase": [
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "heading-order"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "color-contrast"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "color-contrast"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "color-contrast"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "color-contrast"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "valid-lang"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "heading-order"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "heading-order"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "listitem"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "dlitem"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "list"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "td-has-header"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "table-fake-caption"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "target-size"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "image-alt"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "link-name"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "heading-order"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "link-name"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "input-image-alt"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "button-name"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "input-image-alt"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "label"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "heading-order"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "label"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "label"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "heading-order"
+     ]
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "label"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "color-contrast"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "label"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "target-size"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "tabindex"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "frame-title"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "target-size"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "error",
+     "rules": [
+      "aria-roles"
+     ]
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    },
+    {
+     "verdict": "none",
+     "rules": []
+    }
+   ]
+  }
+ },
+ "cases": [
+  {
+   "id": "content-content-identified-by-location",
+   "category": "Content",
+   "title": "Content identified by location",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/content-content-identified-by-location.html"
+  },
+  {
+   "id": "content-plain-language-is-not-used",
+   "category": "Content",
+   "title": "Plain language is not used",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/content-plain-language-is-not-used.html"
+  },
+  {
+   "id": "content-content-is-not-in-correct-reading-order-in-source-code",
+   "category": "Content",
+   "title": "Content is not in correct reading order in source code",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/content-content-is-not-in-correct-reading-order-in-source-code.html"
+  },
+  {
+   "id": "content-content-is-not-organised-into-well-defined-groups-or-chunks-using-headings,-lists,-and-other-visual-mechanisms",
+   "category": "Content",
+   "title": "Content is not organised into well-defined groups or chunks, using headings, lists, and other visual mechanisms",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/content-content-is-not-organised-into-well-defined-groups-or-chunks-using-headings,-lists,-and-other-visual-mechanisms.html"
+  },
+  {
+   "id": "content-first-instance-of-abbreviation-not-expanded",
+   "category": "Content",
+   "title": "First instance of abbreviation not expanded",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/content-first-instance-of-abbreviation-not-expanded.html"
+  },
+  {
+   "id": "page-layout-wide-page-forces-users-to-scroll-horizontally",
+   "category": "Page Layout",
+   "title": "Wide page forces users to scroll horizontally",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/page-layout-wide-page-forces-users-to-scroll-horizontally.html"
+  },
+  {
+   "id": "colour-and-contrast-colour-alone-is-used-to-convey-content",
+   "category": "Colour and Contrast",
+   "title": "Colour alone is used to convey content",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/colour-and-contrast-colour-alone-is-used-to-convey-content.html"
+  },
+  {
+   "id": "colour-and-contrast-small-text-does-not-have-a-contrast-ratio-of-at-least-45-1-so-does-not-meet-aa",
+   "category": "Colour and Contrast",
+   "title": "Small text does not have a contrast ratio of at least 4.5:1 so does not meet AA",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/colour-and-contrast-small-text-does-not-have-a-contrast-ratio-of-at-least-45-1-so-does-not-meet-aa.html"
+  },
+  {
+   "id": "colour-and-contrast-large-text-does-not-have-a-contrast-ratio-of-at-least-31-so-does-not-meet-aa",
+   "category": "Colour and Contrast",
+   "title": "Large text does not have a contrast ratio of at least 3:1 so does not meet AA",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/colour-and-contrast-large-text-does-not-have-a-contrast-ratio-of-at-least-31-so-does-not-meet-aa.html"
+  },
+  {
+   "id": "colour-and-contrast-small-text-does-not-have-a-contrast-ratio-of-at-least-71-so-does-not-meet-aaa",
+   "category": "Colour and Contrast",
+   "title": "Small text does not have a contrast ratio of at least 7:1 so does not meet AAA",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/colour-and-contrast-small-text-does-not-have-a-contrast-ratio-of-at-least-71-so-does-not-meet-aaa.html"
+  },
+  {
+   "id": "colour-and-contrast-large-text-does-not-have-a-contrast-ratio-of-at-least-45-1-so-does-not-meet-aaa",
+   "category": "Colour and Contrast",
+   "title": "Large text does not have a contrast ratio of at least 4.5:1 so does not meet AAA",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/colour-and-contrast-large-text-does-not-have-a-contrast-ratio-of-at-least-45-1-so-does-not-meet-aaa.html"
+  },
+  {
+   "id": "colour-and-contrast-focus-not-visible",
+   "category": "Colour and Contrast",
+   "title": "Focus not visible",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/colour-and-contrast-focus-not-visible.html"
+  },
+  {
+   "id": "typography-inadequate-line-height-used",
+   "category": "Typography",
+   "title": "Inadequate line height used",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/typography-inadequate-line-height-used.html"
+  },
+  {
+   "id": "typography-all-caps-text-found",
+   "category": "Typography",
+   "title": "All caps text found",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/typography-all-caps-text-found.html"
+  },
+  {
+   "id": "typography-blink-element-found",
+   "category": "Typography",
+   "title": "Blink element found",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/typography-blink-element-found.html"
+  },
+  {
+   "id": "typography-italics-used-on-long-sections-of-text",
+   "category": "Typography",
+   "title": "Italics used on long sections of text",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/typography-italics-used-on-long-sections-of-text.html"
+  },
+  {
+   "id": "typography-marquee-element-found",
+   "category": "Typography",
+   "title": "Marquee element found",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/typography-marquee-element-found.html"
+  },
+  {
+   "id": "typography-long-lines-of-text",
+   "category": "Typography",
+   "title": "Long lines of text",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/typography-long-lines-of-text.html"
+  },
+  {
+   "id": "typography-very-small-text-found",
+   "category": "Typography",
+   "title": "Very small text found",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/typography-very-small-text-found.html"
+  },
+  {
+   "id": "typography-justified-text-found",
+   "category": "Typography",
+   "title": "Justified text found",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/typography-justified-text-found.html"
+  },
+  {
+   "id": "language-of-content-text-language-changed-without-required-change-in-direction",
+   "category": "Language of content",
+   "title": "Text language changed without required change in direction",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/language-of-content-text-language-changed-without-required-change-in-direction.html"
+  },
+  {
+   "id": "language-of-content-html-element-has-an-empty-lang-attribute",
+   "category": "Language of content",
+   "title": "html element has an empty lang attribute",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/language-of-content-html-element-has-an-empty-lang-attribute.html"
+  },
+  {
+   "id": "language-of-content-lang-attribute-not-used-to-identify-change-of-language",
+   "category": "Language of content",
+   "title": "lang attribute not used to identify change of language",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/language-of-content-lang-attribute-not-used-to-identify-change-of-language.html"
+  },
+  {
+   "id": "language-of-content-text-language-is-in-the-wrong-direction",
+   "category": "Language of content",
+   "title": "Text language is in the wrong direction",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/language-of-content-text-language-is-in-the-wrong-direction.html"
+  },
+  {
+   "id": "language-of-content-html-element-has-an-invalid-value-in-the-lang-attribute",
+   "category": "Language of content",
+   "title": "html element has an invalid value in the lang attribute",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/language-of-content-html-element-has-an-invalid-value-in-the-lang-attribute.html"
+  },
+  {
+   "id": "language-of-content-lang-attribute-used-to-identify-change-of-language-but-with-invalid-value",
+   "category": "Language of content",
+   "title": "lang attribute used to identify change of language, but with invalid value",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/language-of-content-lang-attribute-used-to-identify-change-of-language-but-with-invalid-value.html"
+  },
+  {
+   "id": "language-of-content-html-element-is-missing-a-lang-attribute",
+   "category": "Language of content",
+   "title": "html element is missing a lang attribute",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/language-of-content-html-element-is-missing-a-lang-attribute.html"
+  },
+  {
+   "id": "language-of-content-html-element-has-lang-attribute-set-to-wrong-language",
+   "category": "Language of content",
+   "title": "html element has lang attribute set to wrong language",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/language-of-content-html-element-has-lang-attribute-set-to-wrong-language.html"
+  },
+  {
+   "id": "language-of-content-lang-attribute-used-to-identify-change-of-language-but-with-wrong-language",
+   "category": "Language of content",
+   "title": "lang attribute used to identify change of language, but with wrong language",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/language-of-content-lang-attribute-used-to-identify-change-of-language-but-with-wrong-language.html"
+  },
+  {
+   "id": "page-title-inappropriate-page-title",
+   "category": "Page Title",
+   "title": "Inappropriate page title",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/page-title-inappropriate-page-title.html"
+  },
+  {
+   "id": "page-title-empty-page-title",
+   "category": "Page Title",
+   "title": "Empty page title",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/page-title-empty-page-title.html"
+  },
+  {
+   "id": "page-title-missing-page-title",
+   "category": "Page Title",
+   "title": "Missing page title",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/page-title-missing-page-title.html"
+  },
+  {
+   "id": "headings-empty-heading",
+   "category": "Headings",
+   "title": "Empty heading",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/headings-empty-heading.html"
+  },
+  {
+   "id": "headings-missing-h1",
+   "category": "Headings",
+   "title": "Missing H1",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/headings-missing-h1.html"
+  },
+  {
+   "id": "headings-text-formatting-used-instead-of-an-actual-heading",
+   "category": "Headings",
+   "title": "Text formatting used instead of an actual heading",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/headings-text-formatting-used-instead-of-an-actual-heading.html"
+  },
+  {
+   "id": "headings-headings-not-structured-in-a-hierarchical-manner",
+   "category": "Headings",
+   "title": "Headings not structured in a hierarchical manner",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/headings-headings-not-structured-in-a-hierarchical-manner.html"
+  },
+  {
+   "id": "lists-li-element-with-no-parent",
+   "category": "Lists",
+   "title": "LI element with no parent",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/lists-li-element-with-no-parent.html"
+  },
+  {
+   "id": "lists-list-not-marked-up-as-a-list",
+   "category": "Lists",
+   "title": "List not marked up as a list",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/lists-list-not-marked-up-as-a-list.html"
+  },
+  {
+   "id": "lists-dt-or-dd-elements-that-are-not-contained-within-a-dl-element",
+   "category": "Lists",
+   "title": "DT or DD elements that are not contained within a DL element",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/lists-dt-or-dd-elements-that-are-not-contained-within-a-dl-element.html"
+  },
+  {
+   "id": "lists-improperly-nested-lists",
+   "category": "Lists",
+   "title": "Improperly nested lists",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/lists-improperly-nested-lists.html"
+  },
+  {
+   "id": "tables-table-with-column-headers-and-double-row-headers",
+   "category": "Tables",
+   "title": "Table with column headers and double row headers",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/tables-table-with-column-headers-and-double-row-headers.html"
+  },
+  {
+   "id": "tables-table-has-no-scope-attributes",
+   "category": "Tables",
+   "title": "Table has no scope attributes",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/tables-table-has-no-scope-attributes.html"
+  },
+  {
+   "id": "tables-table-nested-within-table-header",
+   "category": "Tables",
+   "title": "Table nested within table header",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/tables-table-nested-within-table-header.html"
+  },
+  {
+   "id": "tables-table-nested-within-table",
+   "category": "Tables",
+   "title": "Table nested within table",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/tables-table-nested-within-table.html"
+  },
+  {
+   "id": "tables-table-has-no-table-headings",
+   "category": "Tables",
+   "title": "Table has no table headings",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/tables-table-has-no-table-headings.html"
+  },
+  {
+   "id": "tables-table-with-inconsistent-numbers-of-columns-in-rows",
+   "category": "Tables",
+   "title": "Table with inconsistent numbers of columns in rows",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/tables-table-with-inconsistent-numbers-of-columns-in-rows.html"
+  },
+  {
+   "id": "tables-table-that-only-has-th-elements-in-it",
+   "category": "Tables",
+   "title": "Table that only has TH elements in it",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/tables-table-that-only-has-th-elements-in-it.html"
+  },
+  {
+   "id": "tables-table-is-missing-a-caption",
+   "category": "Tables",
+   "title": "Table is missing a caption",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/tables-table-is-missing-a-caption.html"
+  },
+  {
+   "id": "tables-table-used-for-layout",
+   "category": "Tables",
+   "title": "Table used for layout",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/tables-table-used-for-layout.html"
+  },
+  {
+   "id": "tables-table-has-an-empty-table-header",
+   "category": "Welcome to our homepage",
+   "title": "Table has an empty table header",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/tables-table-has-an-empty-table-header.html"
+  },
+  {
+   "id": "tables-table-with-some-empty-cells",
+   "category": "Welcome to our homepage",
+   "title": "Table with some empty cells",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/tables-table-with-some-empty-cells.html"
+  },
+  {
+   "id": "images-image-has-alt-and-title-that-are-different",
+   "category": "Images",
+   "title": "Image has alt and title that are different",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/images-image-has-alt-and-title-that-are-different.html"
+  },
+  {
+   "id": "images-image-with-presentation-role-has-non-empty-alt",
+   "category": "Images",
+   "title": "Image with presentation role has non-empty alt",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/images-image-with-presentation-role-has-non-empty-alt.html"
+  },
+  {
+   "id": "images-image-with-no-alt-attribute",
+   "category": "Images",
+   "title": "Image with no alt attribute",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/images-image-with-no-alt-attribute.html"
+  },
+  {
+   "id": "images-background-image-that-conveys-information-does-not-have-a-text-alternative",
+   "category": "Images",
+   "title": "Background image that conveys information does not have a text alternative",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/images-background-image-that-conveys-information-does-not-have-a-text-alternative.html"
+  },
+  {
+   "id": "images-image-has-empty-alt-and-non-empty-title",
+   "category": "Images",
+   "title": "Image has empty alt and non-empty title",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/images-image-has-empty-alt-and-non-empty-title.html"
+  },
+  {
+   "id": "images-a-distraction-is-present-an-animated-gif",
+   "category": "Images",
+   "title": "A distraction is present, an animated gif",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/images-a-distraction-is-present-an-animated-gif.html"
+  },
+  {
+   "id": "images-image-that-conveys-information-has-an-empty-alt-attribute",
+   "category": "Images",
+   "title": "Image that conveys information has an empty alt attribute",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/images-image-that-conveys-information-has-an-empty-alt-attribute.html"
+  },
+  {
+   "id": "images-image-that-conveys-information-has-inappropriate-alt-text",
+   "category": "Images",
+   "title": "Image that conveys information has inappropriate alt text",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/images-image-that-conveys-information-has-inappropriate-alt-text.html"
+  },
+  {
+   "id": "images-image-alt-attribute-contains-image-file-name",
+   "category": "Images",
+   "title": "Image alt attribute contains image file name",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/images-image-alt-attribute-contains-image-file-name.html"
+  },
+  {
+   "id": "images-image-with-partial-text-alternative",
+   "category": "Images",
+   "title": "Image with partial text alternative",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/images-image-with-partial-text-alternative.html"
+  },
+  {
+   "id": "multimedia-embedded-video-file-is-missing-text-alternative",
+   "category": "Multimedia",
+   "title": "Embedded video file is missing text alternative",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/multimedia-embedded-video-file-is-missing-text-alternative.html"
+  },
+  {
+   "id": "multimedia-flashing-content-doesnt-have-warning",
+   "category": "Multimedia",
+   "title": "Flashing content doesn&#39;t have warning",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/multimedia-flashing-content-doesnt-have-warning.html"
+  },
+  {
+   "id": "multimedia-embedded-audio-file-is-missing-text-alternative",
+   "category": "Multimedia",
+   "title": "Embedded audio file is missing text alternative",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/multimedia-embedded-audio-file-is-missing-text-alternative.html"
+  },
+  {
+   "id": "links-image-link-with-no-alternative-text",
+   "category": "Links",
+   "title": "Image link with no alternative text",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-image-link-with-no-alternative-text.html"
+  },
+  {
+   "id": "links-link-to-javascript-invalid-hypertext-reference",
+   "category": "Links",
+   "title": "Link to javascript, invalid hypertext reference",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-link-to-javascript-invalid-hypertext-reference.html"
+  },
+  {
+   "id": "links-uninformative-link-text",
+   "category": "Links",
+   "title": "Uninformative link text",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-uninformative-link-text.html"
+  },
+  {
+   "id": "links-link-launches-new-window-with-no-warning",
+   "category": "Links",
+   "title": "Link launches new window with no warning",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-link-launches-new-window-with-no-warning.html"
+  },
+  {
+   "id": "links-links-not-separated-by-printable-characters",
+   "category": "Links",
+   "title": "Links not separated by printable characters",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-links-not-separated-by-printable-characters.html"
+  },
+  {
+   "id": "links-link-text-with-identical-title",
+   "category": "Links",
+   "title": "Link text with identical title",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-link-text-with-identical-title.html"
+  },
+  {
+   "id": "links-links-to-a-sound-file-no-transcript",
+   "category": "Links",
+   "title": "Links to a sound file, no transcript",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-links-to-a-sound-file-no-transcript.html"
+  },
+  {
+   "id": "links-identifying-links-by-colour-alone",
+   "category": "Links",
+   "title": "Identifying links by colour alone",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-identifying-links-by-colour-alone.html"
+  },
+  {
+   "id": "links-link-to-pdf-does-not-include-information-on-file-format-and-file-size",
+   "category": "Links",
+   "title": "Link to PDF does not include information on file format and file size",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-link-to-pdf-does-not-include-information-on-file-format-and-file-size.html"
+  },
+  {
+   "id": "links-link-to-,-invalid-hypertext-reference",
+   "category": "Links",
+   "title": "Link to #, invalid hypertext reference",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-link-to-,-invalid-hypertext-reference.html"
+  },
+  {
+   "id": "links-blank-link-text",
+   "category": "Links",
+   "title": "Blank link text",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-blank-link-text.html"
+  },
+  {
+   "id": "links-links-with-the-same-text-go-to-different-pages",
+   "category": "Links",
+   "title": "Links with the same text go to different pages",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-links-with-the-same-text-go-to-different-pages.html"
+  },
+  {
+   "id": "links-link-text-does-not-make-sense-out-of-context",
+   "category": "Links",
+   "title": "Link text does not make sense out of context",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-link-text-does-not-make-sense-out-of-context.html"
+  },
+  {
+   "id": "links-adjacent-links-going-to-the-same-destination",
+   "category": "Links",
+   "title": "Adjacent links going to the same destination",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-adjacent-links-going-to-the-same-destination.html"
+  },
+  {
+   "id": "links-link-contains-only-a-full-stop",
+   "category": "Links",
+   "title": "Link contains only a full stop",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-link-contains-only-a-full-stop.html"
+  },
+  {
+   "id": "links-image-link-alt-text-repeats-text-in-the-link",
+   "category": "Links",
+   "title": "Image link alt text repeats text in the link",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-image-link-alt-text-repeats-text-in-the-link.html"
+  },
+  {
+   "id": "links-link-not-clearly-identifiable-and-distinguishable-from-surrounding-text",
+   "category": "Links",
+   "title": "Link not clearly identifiable and distinguishable from surrounding text",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-link-not-clearly-identifiable-and-distinguishable-from-surrounding-text.html"
+  },
+  {
+   "id": "links-link-to-a-multimedia-file-no-transcript",
+   "category": "Links",
+   "title": "Link to a multimedia file, no transcript",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-link-to-a-multimedia-file-no-transcript.html"
+  },
+  {
+   "id": "links-non-specific-link-text",
+   "category": "Links",
+   "title": "Non-specific link text",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-non-specific-link-text.html"
+  },
+  {
+   "id": "links-link-to-an-image-no-text-alternative",
+   "category": "Links",
+   "title": "Link to an image, no text alternative",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/links-link-to-an-image-no-text-alternative.html"
+  },
+  {
+   "id": "buttons-image-button-has-no-alt-attribute",
+   "category": "Buttons",
+   "title": "Image button has no alt attribute",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/buttons-image-button-has-no-alt-attribute.html"
+  },
+  {
+   "id": "buttons-empty-button",
+   "category": "Buttons",
+   "title": "Empty button",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/buttons-empty-button.html"
+  },
+  {
+   "id": "buttons-uninformative-alt-attribute-value-on-image-button",
+   "category": "Buttons",
+   "title": "Uninformative alt attribute value on image button",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/buttons-uninformative-alt-attribute-value-on-image-button.html"
+  },
+  {
+   "id": "buttons-empty-alt-attribute-on-image-button",
+   "category": "Buttons",
+   "title": "Empty alt attribute on image button",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/buttons-empty-alt-attribute-on-image-button.html"
+  },
+  {
+   "id": "forms-errors-identified-by-colour-only",
+   "category": "Forms",
+   "title": "Errors identified by colour only",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-errors-identified-by-colour-only.html"
+  },
+  {
+   "id": "forms-labels-missing-when-they-would-look-clumsy-for-some-form-controls",
+   "category": "Forms",
+   "title": "Labels missing when they would look clumsy for some form controls",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-labels-missing-when-they-would-look-clumsy-for-some-form-controls.html"
+  },
+  {
+   "id": "forms-error-messages-no-suggestion-for-corrections-given-e.g.-required-format",
+   "category": "Forms",
+   "title": "Error messages - no suggestion for corrections given, e.g. required format",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-error-messages-no-suggestion-for-corrections-given-e.g.-required-format.html"
+  },
+  {
+   "id": "forms-left-aligned-form-labels-with-too-much-white-space",
+   "category": "Forms",
+   "title": "Left aligned form labels with too much white space",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-left-aligned-form-labels-with-too-much-white-space.html"
+  },
+  {
+   "id": "forms-group-of-radio-buttons-not-enclosed-in-a-fieldset",
+   "category": "Forms",
+   "title": "Group of radio buttons not enclosed in a fieldset",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-group-of-radio-buttons-not-enclosed-in-a-fieldset.html"
+  },
+  {
+   "id": "forms-form-element-has-no-label",
+   "category": "Forms",
+   "title": "Form element has no label",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-form-element-has-no-label.html"
+  },
+  {
+   "id": "forms-fieldset-without-a-legend",
+   "category": "Forms",
+   "title": "Fieldset without a legend",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-fieldset-without-a-legend.html"
+  },
+  {
+   "id": "forms-empty-legend",
+   "category": "Forms",
+   "title": "Empty legend",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-empty-legend.html"
+  },
+  {
+   "id": "forms-label-element-with-for-attribute-but-not-matching-id=-attribute-of-form-control",
+   "category": "Forms",
+   "title": "Label element with for= attribute but not matching id= attribute of form control",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-label-element-with-for-attribute-but-not-matching-id=-attribute-of-form-control.html"
+  },
+  {
+   "id": "forms-group-of-check-boxes-not-enclosed-in-a-fieldset",
+   "category": "Forms",
+   "title": "Group of check boxes not enclosed in a fieldset",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-group-of-check-boxes-not-enclosed-in-a-fieldset.html"
+  },
+  {
+   "id": "forms-empty-label-found",
+   "category": "Forms",
+   "title": "Empty label found",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-empty-label-found.html"
+  },
+  {
+   "id": "forms-two-unique-labels-but-identical-for=-attributes",
+   "category": "Forms",
+   "title": "Two unique labels, but identical for= attributes",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-two-unique-labels-but-identical-for=-attributes.html"
+  },
+  {
+   "id": "forms-errors-identified-with-a-poor-colour-contrast",
+   "category": "Forms",
+   "title": "Errors identified with a poor colour contrast",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-errors-identified-with-a-poor-colour-contrast.html"
+  },
+  {
+   "id": "forms-non-unique-field-label-found",
+   "category": "Forms",
+   "title": "Non-unique field label found",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-non-unique-field-label-found.html"
+  },
+  {
+   "id": "forms-missing-labels-in-checkboxes",
+   "category": "Forms",
+   "title": "Missing labels in checkboxes",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-missing-labels-in-checkboxes.html"
+  },
+  {
+   "id": "forms-field-hint-not-associated-with-input",
+   "category": "Forms",
+   "title": "Field hint not associated with input",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-field-hint-not-associated-with-input.html"
+  },
+  {
+   "id": "forms-placeholder-no-label",
+   "category": "Forms",
+   "title": "Placeholder no label",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-placeholder-no-label.html"
+  },
+  {
+   "id": "forms-errors-are-not-identified",
+   "category": "Forms",
+   "title": "Errors are not identified",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-errors-are-not-identified.html"
+  },
+  {
+   "id": "forms-form-control-that-changes-context-without-warning",
+   "category": "Forms",
+   "title": "Form control that changes context without warning",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/forms-form-control-that-changes-context-without-warning.html"
+  },
+  {
+   "id": "navigation-inadequately-sized-clickable-targets-found",
+   "category": "Navigation",
+   "title": "Inadequately-sized clickable targets found",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/navigation-inadequately-sized-clickable-targets-found.html"
+  },
+  {
+   "id": "keyboard-access-alert-shows-for-a-short-time",
+   "category": "Keyboard Access",
+   "title": "Alert shows for a short time",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/keyboard-access-alert-shows-for-a-short-time.html"
+  },
+  {
+   "id": "keyboard-access-lightbox-close-button-doesnt-receive-focus",
+   "category": "Keyboard Access",
+   "title": "Lightbox - close button doesn&#39;t receive focus",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/keyboard-access-lightbox-close-button-doesnt-receive-focus.html"
+  },
+  {
+   "id": "keyboard-access-focus-order-in-wrong-order",
+   "category": "Keyboard Access",
+   "title": "Focus order in wrong order",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/keyboard-access-focus-order-in-wrong-order.html"
+  },
+  {
+   "id": "keyboard-access-tabindex-greater-than-0",
+   "category": "Keyboard Access",
+   "title": "Tabindex greater than 0",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/keyboard-access-tabindex-greater-than-0.html"
+  },
+  {
+   "id": "keyboard-access-keyboard-focus-is-not-indicated-visually",
+   "category": "Keyboard Access",
+   "title": "Keyboard focus is not indicated visually",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/keyboard-access-keyboard-focus-is-not-indicated-visually.html"
+  },
+  {
+   "id": "keyboard-access-keyboard-focus-assigned-to-a-non-focusable-element-using-tabindex0",
+   "category": "Keyboard Access",
+   "title": "Keyboard focus assigned to a non focusable element using tabindex=0",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/keyboard-access-keyboard-focus-assigned-to-a-non-focusable-element-using-tabindex0.html"
+  },
+  {
+   "id": "keyboard-access-concertina-items-dont-get-keyboard-focus",
+   "category": "Keyboard Access",
+   "title": "Concertina items don&#39;t get keyboard focus",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/keyboard-access-concertina-items-dont-get-keyboard-focus.html"
+  },
+  {
+   "id": "keyboard-access-keyboard-trap",
+   "category": "Keyboard Access",
+   "title": "Keyboard trap",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/keyboard-access-keyboard-trap.html"
+  },
+  {
+   "id": "keyboard-access-dropdown-navigation-only-the-top-level-items-receive-focus",
+   "category": "Keyboard Access",
+   "title": "Dropdown navigation - only the top level items receive focus",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/keyboard-access-dropdown-navigation-only-the-top-level-items-receive-focus.html"
+  },
+  {
+   "id": "keyboard-access-lightbox-esc-key-doesnt-close-the-lightbox",
+   "category": "Keyboard Access",
+   "title": "Lightbox - ESC key doesn&#39;t close the lightbox",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/keyboard-access-lightbox-esc-key-doesnt-close-the-lightbox.html"
+  },
+  {
+   "id": "keyboard-access-link-with-a-rolebutton-does-not-work-with-space-bar",
+   "category": "Keyboard Access",
+   "title": "Link with a role=button does not work with space bar",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/keyboard-access-link-with-a-rolebutton-does-not-work-with-space-bar.html"
+  },
+  {
+   "id": "keyboard-access-tooltips-dont-receive-keyboard-focus",
+   "category": "Keyboard Access",
+   "title": "Tooltips don&#39;t receive keyboard focus",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/keyboard-access-tooltips-dont-receive-keyboard-focus.html"
+  },
+  {
+   "id": "keyboard-access-accesskey-attribute-used",
+   "category": "Keyboard Access",
+   "title": "Accesskey attribute used",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/keyboard-access-accesskey-attribute-used.html"
+  },
+  {
+   "id": "keyboard-access-lightbox-focus-is-not-moved-immediately-to-lightbox",
+   "category": "Keyboard Access",
+   "title": "Lightbox - focus is not moved immediately to lightbox",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/keyboard-access-lightbox-focus-is-not-moved-immediately-to-lightbox.html"
+  },
+  {
+   "id": "keyboard-access-lightbox-focus-is-not-retained-within-the-lightbox",
+   "category": "Keyboard Access",
+   "title": "Lightbox - focus is not retained within the lightbox",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/keyboard-access-lightbox-focus-is-not-retained-within-the-lightbox.html"
+  },
+  {
+   "id": "keyboard-access-fake-button-is-not-keyboard-accessible",
+   "category": "Keyboard Access",
+   "title": "Fake button is not keyboard accessible",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/keyboard-access-fake-button-is-not-keyboard-accessible.html"
+  },
+  {
+   "id": "frames-iframe-is-missing-a-title-attribute",
+   "category": "Frames",
+   "title": "iframe is missing a title attribute",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/frames-iframe-is-missing-a-title-attribute.html"
+  },
+  {
+   "id": "frames-iframe-title-attribute-does-not-describe-the-content-or-purpose-of-the-iframe",
+   "category": "Frames",
+   "title": "iframe title attribute does not describe the content or purpose of the iframe",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/frames-iframe-title-attribute-does-not-describe-the-content-or-purpose-of-the-iframe.html"
+  },
+  {
+   "id": "css-content-is-not-readable-and-functional-when-text-is-increased",
+   "category": "CSS",
+   "title": "Content is not readable and functional when text is increased",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/css-content-is-not-readable-and-functional-when-text-is-increased.html"
+  },
+  {
+   "id": "css-non-decorative-content-inserted-using-css",
+   "category": "CSS",
+   "title": "Non-decorative content inserted using CSS",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/css-non-decorative-content-inserted-using-css.html"
+  },
+  {
+   "id": "css-visibilityhidden-used-to-visually-hide-content-when-it-should-be-available-to-screenreader",
+   "category": "CSS",
+   "title": "visibility:hidden used to visually hide content when it should be available to screenreader",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/css-visibilityhidden-used-to-visually-hide-content-when-it-should-be-available-to-screenreader.html"
+  },
+  {
+   "id": "css-displaynone-used-to-visually-hide-content-when-it-should-be-available-to-screenreader",
+   "category": "CSS",
+   "title": "display:none used to visually hide content when it should be available to screenreader",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/css-displaynone-used-to-visually-hide-content-when-it-should-be-available-to-screenreader.html"
+  },
+  {
+   "id": "css-page-zoom-boxes-that-dont-expand-with-the-text",
+   "category": "CSS",
+   "title": "Page zoom - boxes that don&#39;t expand with the text",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/css-page-zoom-boxes-that-dont-expand-with-the-text.html"
+  },
+  {
+   "id": "html-duplicate-id",
+   "category": "HTML",
+   "title": "Duplicate id",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/html-duplicate-id.html"
+  },
+  {
+   "id": "html-article-element-used-to-mark-up-an-element-thats-not-an-article-blog-post-etc.",
+   "category": "HTML",
+   "title": "Article element used to mark-up an element that&#39;s not an article/blog post etc.",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/html-article-element-used-to-mark-up-an-element-thats-not-an-article-blog-post-etc..html"
+  },
+  {
+   "id": "html-empty-paragraph",
+   "category": "Elsewhere on GOV.UK",
+   "title": "Empty paragraph",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/html-empty-paragraph.html"
+  },
+  {
+   "id": "html-deprecated-center-element",
+   "category": "Elsewhere on GOV.UK",
+   "title": "Deprecated center element",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/html-deprecated-center-element.html"
+  },
+  {
+   "id": "html-invalid-aria-role-names",
+   "category": "Elsewhere on GOV.UK",
+   "title": "Invalid ARIA role names",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/html-invalid-aria-role-names.html"
+  },
+  {
+   "id": "html-object-not-embedded-accessibly-wmode-parameter-not-set-to-window",
+   "category": "Elsewhere on GOV.UK",
+   "title": "Object not embedded accessibly - wmode parameter not set to window",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/html-object-not-embedded-accessibly-wmode-parameter-not-set-to-window.html"
+  },
+  {
+   "id": "html-spacer-image-found",
+   "category": "Elsewhere on GOV.UK",
+   "title": "Spacer image found",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/html-spacer-image-found.html"
+  },
+  {
+   "id": "html-inline-style-adds-colour",
+   "category": "Elsewhere on GOV.UK",
+   "title": "Inline style adds colour",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/html-inline-style-adds-colour.html"
+  },
+  {
+   "id": "html-start-and-close-tags-dont-match",
+   "category": "Elsewhere on GOV.UK",
+   "title": "Start and close tags don&#39;t match",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/html-start-and-close-tags-dont-match.html"
+  },
+  {
+   "id": "html-pre-element-without-code-element-inside-it",
+   "category": "Elsewhere on GOV.UK",
+   "title": "PRE element without CODE element inside it",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/html-pre-element-without-code-element-inside-it.html"
+  },
+  {
+   "id": "html-deprecated-font-element",
+   "category": "Elsewhere on GOV.UK",
+   "title": "Deprecated font element",
+   "url": "https://alphagov.github.io/accessibility-tool-audit/tests/html-deprecated-font-element.html"
+  }
+ ]
+}

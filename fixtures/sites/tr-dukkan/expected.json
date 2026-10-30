@@ -1,0 +1,16 @@
+{
+  "description": "Turkish shop: conversion heuristics, form error feedback and field purpose in Turkish.",
+  "mustFind": [
+    { "rule": "conv/unclear-value-proposition", "path": "/", "why": "h1 'Hoş geldiniz'" },
+    { "rule": "conv/vague-cta-label", "path": "/", "why": "primary CTA 'Devam'" },
+    { "rule": "conv/vague-cta-label", "path": "/kayit", "why": "submit 'Gönder'" },
+    { "rule": "conv/pricing-period-unclear", "path": "/fiyatlar", "why": "₺199 without /ay" },
+    { "rule": "conv/signup-friction", "path": "/kayit", "why": "7 fields, password repeat, required phone" },
+    { "rule": "conv/no-trust-signals", "path": "/kayit", "why": "no reassurance next to signup" },
+    { "rule": "jourilo/input-purpose", "path": "/kayit", "why": "ad/soyad/eposta/telefon/şehir without autocomplete" },
+    { "rule": "a11y/errors-not-associated", "path": "/kayit", "why": "'E-posta alanı zorunludur.' not associated" }
+  ],
+  "mustNotFind": [
+    { "rule": "conv/no-trust-signals", "path": "/odeme", "why": "'Güvenli ödeme … şifrelenir' is a security signal" }
+  ]
+}

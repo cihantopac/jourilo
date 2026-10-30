@@ -29,6 +29,9 @@ First working version.
 - `bench` with fixture sites and recorded history.
 - Keyboard-operated widget checks (dialog focus, Escape, focus return; `aria-expanded` state) and `--runs N` for
   median lab metrics with ranges.
+- Multilingual lexicon (en, tr, de, es, fr) shared by the safety policy, conversion rules, form classification,
+  error detection and field purposes. **Safety fix:** non-English payment and delete buttons ("Satın al",
+  "Jetzt kaufen", "Supprimer le compte"…) were not blocked by name before.
 - Cross-browser parity: identical journey, session, signed-in audit and form results in Chromium, Firefox, WebKit.
 - Signed-in testing: `journeys run --save-auth` stores a test-account session (mode 0600) for `--auth`; static builds
   are served with SPA fallback on a stable port per directory.

@@ -7,6 +7,9 @@
   const sy = window.scrollY;
   const sx = window.scrollX;
   const MAX = opts.maxItems || 40;
+  // Multilingual vocabulary (en, tr, de, es, fr) from core/lexicon.ts; English fallbacks keep the probe usable alone.
+  const LEX = opts.lex || {};
+  const lex = (k, fallback) => new RegExp(LEX[k] || fallback, 'iu');
 
   const cssEscape = (s) => (window.CSS?.escape ? CSS.escape(s) : s.replace(/[^a-zA-Z0-9_-]/g, '\\$&'));
   const selectorOf = (el) => {
@@ -306,27 +309,33 @@
     return null;
   };
   const classify = (form, fields, submitText) => {
-    const blob =
-      `${text(form).slice(0, 400)} ${submitText || ''} ${form.getAttribute('action') || ''} ${form.id} ${form.className}`.toLowerCase();
-    const types = fields
-      .map((f) => `${f.type} ${f.name || ''} ${f.autocomplete || ''}`.toLowerCase())
-      .join(' ');
+    const blob = `${text(form).slice(0, 400)} ${submitText || ''} ${form.getAttribute('action') || ''} ${form.id} ${form.className}`;
+    const types = fields.map((f) => `${f.type} ${f.name || ''} ${f.autocomplete || ''}`).join(' ');
     const pw = fields.filter((f) => f.type === 'password').length;
-    if (/cc-number|card|cvc|cvv|expir|checkout|payment|billing/.test(`${types} ${blob}`)) return 'checkout';
+    if (
+      /cc-number|cc-csc|cvc|cvv|expir/i.test(types) ||
+      (lex('checkout', 'checkout|payment|billing|card').test(`${types} ${blob}`) &&
+        fields.some((f) => /cc-|card|cvc|cvv/i.test(`${f.name} ${f.autocomplete}`)))
+    )
+      return 'checkout';
     if (
       form.getAttribute('role') === 'search' ||
-      (/type="search"|\bsearch\b|\bq\b|query/.test(`${types} ${blob}`) && fields.length <= 2)
+      ((/type="?search|\bq\b/i.test(types) ||
+        lex('search', 'search|query').test(`${types} ${submitText || ''}`)) &&
+        fields.length <= 2)
     )
       return 'search';
-    if (/forgot|reset|recover/.test(blob) && pw === 0) return 'recovery';
+    if (lex('recovery', 'forgot|reset|recover').test(blob) && pw === 0) return 'recovery';
     if (
       pw >= 2 ||
-      (pw === 1 && /sign ?up|register|create|get started|join|new-password/.test(`${blob} ${types}`))
+      (pw === 1 &&
+        (lex('signup', 'sign ?up|register|create|get started|join').test(blob) || /new-password/.test(types)))
     )
       return 'signup';
     if (pw === 1) return 'login';
-    if (/subscribe|newsletter/.test(blob) && fields.length <= 2) return 'newsletter';
-    if (fields.some((f) => f.type === 'textarea') && /email/.test(types)) return 'contact';
+    if (lex('newsletter', 'subscribe|newsletter').test(blob) && fields.length <= 2) return 'newsletter';
+    if (lex('checkout', 'checkout|payment|billing').test(blob) && fields.length >= 3) return 'checkout';
+    if (fields.some((f) => f.type === 'textarea') && /email/i.test(types)) return 'contact';
     return 'other';
   };
   const formEls = Array.from(document.querySelectorAll('form')).filter(isVisible);
@@ -370,28 +379,32 @@
   const bodyText = text(document.body).slice(0, 200000);
   const lower = bodyText.toLowerCase();
   const TRUST = [
-    ['testimonials', /testimonial|what (our )?customers say|reviews?\b/],
-    ['ratings', /★|\b[1-5](\.\d)? ?(\/ ?5|out of 5|stars?)\b/],
-    ['customer logos', /trusted by|used by|loved by|customers include|companies (use|trust)/],
-    ['guarantee', /money.back|guarantee|risk.free|cancel any ?time/],
-    ['security', /\bsecure\b|encrypt|ssl|soc ?2|iso ?27001|gdpr|hipaa|pci/],
+    ['testimonials', lex('trustTestimonials', 'testimonial|reviews?')],
+    ['ratings', /★|\b[1-5]([.,]\d)? ?(\/ ?5|out of 5|stars?|yıldız|sterne|estrellas|étoiles)\b/iu],
+    ['customer logos', lex('trustLogos', 'trusted by|used by')],
+    ['guarantee', lex('trustGuarantee', 'money.back|guarantee')],
+    ['security', lex('trustSecurity', 'secure|encrypt')],
     [
       'social proof numbers',
-      /\b\d[\d,.]*\+? ?(k\b|m\b|million|thousand)?\s*(users|customers|teams|companies|developers)\b/,
+      /\b\d[\d,.]*\+? ?(k\b|m\b|million|thousand|bin|milyon|tausend|mil|millones|mille)?\s*(users|customers|teams|companies|developers|kullanıcı|müşteri|nutzer|kunden|usuarios|clientes|utilisateurs|clients)\b/iu,
     ],
-    ['case studies', /case stud(y|ies)/],
+    ['case studies', /case stud(y|ies)|başarı hikaye|fallstudie|casos de éxito|études de cas/iu],
   ];
   const trustSignals = TRUST.filter(([, re]) => re.test(lower)).map(([n]) => n);
-  if (links.some((l) => /privacy/i.test(l.text) || /privacy/i.test(l.href)))
+  if (
+    links.some((l) =>
+      /privacy|gizlilik|datenschutz|privacidad|confidentialité|kvkk/i.test(`${l.text} ${l.href}`),
+    )
+  )
     trustSignals.push('privacy policy link');
   const PRICING = [
-    ['price amounts', /[$€£¥₺]\s?\d|\d\s?(usd|eur|gbp|try)\b/],
+    ['price amounts', /[$€£¥₺]\s?\d|\d\s?([$€£₺]|usd|eur|gbp|try|tl)(?![\p{L}])/iu],
+    ['billing period', lex('pricingPeriod', '\\/ ?(mo|month)|per (month|year|user)')],
+    ['free trial', lex('freeTrial', 'free trial|try (it )?free|start free')],
     [
-      'billing period',
-      /\/ ?(mo|month|yr|year)\b|per (month|year|user|seat)|billed (annually|monthly|yearly)/,
+      'free plan',
+      /\bfree plan\b|\bfree forever\b|\$0\b|ücretsiz plan|kostenloser plan|plan gratuito|offre gratuite/iu,
     ],
-    ['free trial', /free trial|try (it )?free|start free/],
-    ['free plan', /\bfree plan\b|\bfree forever\b|\$0\b/],
   ];
   const pricingSignals = PRICING.filter(([, re]) => re.test(lower)).map(([n]) => n);
 

@@ -444,19 +444,21 @@ export function suggestAutocomplete(
   label: string | null,
   purpose: string,
 ): string {
+  // Field names and labels in en, tr, de, es, fr.
   const s = `${name ?? ''} ${label ?? ''}`.toLowerCase();
   if (type === 'password') return purpose === 'signup' ? 'new-password' : 'current-password';
-  if (type === 'email' || /e-?mail/.test(s)) return 'email';
-  if (type === 'tel' || /phone|tel|mobile/.test(s)) return 'tel';
-  if (/first|given/.test(s)) return 'given-name';
-  if (/last|family|surname/.test(s)) return 'family-name';
-  if (/user/.test(s)) return 'username';
-  if (/zip|postal/.test(s)) return 'postal-code';
-  if (/city|town/.test(s)) return 'address-level2';
-  if (/country/.test(s)) return 'country-name';
-  if (/street|address/.test(s)) return 'street-address';
-  if (/company|organi[sz]ation/.test(s)) return 'organization';
-  if (/name/.test(s)) return 'name';
+  if (type === 'email' || /e-?mail|e-?posta|correo|courriel/.test(s)) return 'email';
+  if (type === 'tel' || /phone|tel|mobile|cep|handy|móvil|portable/.test(s)) return 'tel';
+  if (/first|given|vorname|prénom|^\s*ad\b|\bad\s*$|nombre(?! de usuario)/.test(s)) return 'given-name';
+  if (/last|family|surname|soyad|nachname|apellido|\bnom de famille\b/.test(s)) return 'family-name';
+  if (/user|kullanıcı adı|benutzername|usuario|identifiant/.test(s)) return 'username';
+  if (/zip|postal|posta kodu|plz|postleitzahl|código postal|code postal/.test(s)) return 'postal-code';
+  if (/city|town|şehir|\bil\b|stadt|\bort\b|ciudad|ville/.test(s)) return 'address-level2';
+  if (/country|ülke|land|país|pays/.test(s)) return 'country-name';
+  if (/street|address|adres|straße|strasse|dirección|adresse/.test(s)) return 'street-address';
+  if (/company|organi[sz]ation|şirket|firma|unternehmen|empresa|entreprise|société/.test(s))
+    return 'organization';
+  if (/name|isim|\bad\b|nombre|\bnom\b/.test(s)) return 'name';
   return 'on (choose the matching token)';
 }
 

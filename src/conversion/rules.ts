@@ -4,10 +4,11 @@
 import { makeFinding, pathOf } from '../audit/finding.js';
 import { nielsen } from '../audit/standards.js';
 import type { PageObservation } from '../browser/capture.js';
+import { lexicon, lexiconSource } from '../core/lexicon.js';
 import type { Finding, FormInfo } from '../core/types.js';
 
-const VAGUE = /^(submit|send|go|click here|here|ok|continue|next|learn more|read more|more|start|enter)$/i;
-const GENERIC_H1 = /^(welcome|home|homepage|hello|index|untitled|main)\b/i;
+const VAGUE = lexicon('vagueCta', { exact: true });
+const GENERIC_H1 = new RegExp(`^\\s*${lexiconSource('genericHeadline')}`, 'iu');
 
 export function isLandingPath(url: string): boolean {
   const p = pathOf(url).split('?')[0]!;
@@ -16,7 +17,10 @@ export function isLandingPath(url: string): boolean {
 
 export function isPricingPage(obs: PageObservation): boolean {
   const inv = obs.probe?.inventory;
-  return /pric|plans|subscribe/i.test(pathOf(obs.url)) || (inv?.pricingSignals.length ?? 0) >= 2;
+  return (
+    /pric|plans|subscribe|fiyat|preise|precios|tarifs|abonelik/i.test(pathOf(obs.url)) ||
+    (inv?.pricingSignals.length ?? 0) >= 2
+  );
 }
 
 function hypothesis(

@@ -88,6 +88,24 @@ describe('journeys', () => {
     expect(allowed.journeys[0].status).toBe('passed');
   });
 
+  it('blocks a Turkish payment action ("Ödemeyi tamamla") on a local host by default', () => {
+    const dir = join(ws, 'journeys');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, 'odeme.json'),
+      JSON.stringify({
+        version: 1,
+        id: 'odeme',
+        name: 'Siparişi tamamla',
+        start: '/odeme',
+        steps: [{ action: 'click', target: { role: 'link', name: 'Ödemeyi tamamla' } }],
+        success: [{ description: 'Teşekkürler sayfası', url: '/tesekkurler' }],
+      }),
+    );
+    const out = JSON.parse(jourilo('journeys', 'run', 'odeme', '--base', 'fixtures/sites/tr-dukkan').stdout);
+    expect(out.journeys[0].status).toBe('blocked');
+  });
+
   it('rejects invalid journey files with clear messages', () => {
     const invalid = join(ws, 'invalid.json');
     writeFileSync(

@@ -5,6 +5,7 @@ import axe from 'axe-core';
 import type { Browser, BrowserContext, Page } from 'playwright-core';
 import { toPosix } from '../core/fs-safety.js';
 import { shortHash, slug } from '../core/hash.js';
+import { lexiconSources } from '../core/lexicon.js';
 import { excerpt, redactText, redactUrl } from '../core/redact.js';
 import type { PageInventory, Rect, Viewport } from '../core/types.js';
 import PROBE_SOURCE from './inpage/probe.js?raw';
@@ -357,7 +358,7 @@ export async function capturePage(
 
     obs.probe = (await page
       .evaluate(
-        `(${PROBE_SOURCE.trim().replace(/;$/, '')})(${JSON.stringify({ maxItems: 40, viewportWidth: vp.width, viewportHeight: vp.height })})`,
+        `(${PROBE_SOURCE.trim().replace(/;$/, '')})(${JSON.stringify({ maxItems: 40, viewportWidth: vp.width, viewportHeight: vp.height, lex: lexiconSources() })})`,
       )
       .catch((e: Error) => {
         obs.errors.push(`probe: ${e.message.split('\n')[0]}`);

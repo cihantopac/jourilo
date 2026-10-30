@@ -43,7 +43,9 @@ Stated so nobody mistakes silence for a pass.
 
 ## Conversion and experiments
 
-- Conversion rules are text/structure heuristics (English-centric keyword lists for trust and pricing signals).
+- Conversion rules are text/structure heuristics. Vocabulary (calls to action, trust and pricing signals, form
+  purposes, error messages, field names, and the safety policy's destructive/financial actions) covers English,
+  Turkish, German, Spanish and French; other languages fall back to structure-only signals.
 - Experiment statistics: two-proportion z-test with fixed horizon only; no sequential testing, no continuous metrics,
   no CUPED. Jourilo does not connect to analytics or flag providers yet; plans list detected tools only.
 

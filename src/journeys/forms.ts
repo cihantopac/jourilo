@@ -7,6 +7,7 @@ import { nielsen, wcag } from '../audit/standards.js';
 import { DEFAULT_MASK } from '../browser/capture.js';
 import { toPosix } from '../core/fs-safety.js';
 import { shortHash } from '../core/hash.js';
+import { lexiconSource } from '../core/lexicon.js';
 import { excerpt, redactUrl } from '../core/redact.js';
 import type { Finding, FormInfo, Viewport } from '../core/types.js';
 import { checkAction, type SafetyPolicy } from './safety.js';
@@ -24,12 +25,13 @@ const BEFORE = `(sel) => {
 }`;
 
 const AFTER = `([sel, beforeText]) => {
+  const ERROR_RE = new RegExp(${JSON.stringify(lexiconSource('formError'))}, 'iu');
   const prev = new Set(beforeText);
   const lines = document.body.innerText.split('\\n').map((s) => s.trim()).filter(Boolean);
   const fresh = lines.filter((l) => !prev.has(l) && l.length < 200);
   const liveText = Array.from(document.querySelectorAll('[role="alert"], [role="status"], [aria-live="assertive"], [aria-live="polite"]')).map((r) => r.innerText.trim()).filter(Boolean);
   // Any new text announced in a live region is feedback; elsewhere it must read like an error message.
-  const errorish = fresh.filter((l) => liveText.some((t) => t.includes(l)) || /error|required|invalid|incorrect|wrong|failed|not valid|doesn.?t match|try again|unable|please|must|enter|missing|can.?t be blank|is empty|too short|zorunlu|gerekli|geçersiz|hatalı|erforderlich|ungültig|obligatoire|incorrect|requerido|inválido/i.test(l));
+  const errorish = fresh.filter((l) => liveText.some((t) => t.includes(l)) || ERROR_RE.test(l));
   const form = document.querySelector(sel);
   const fields = form ? Array.from(form.querySelectorAll('input:not([type=hidden]):not([type=submit]), select, textarea')) : [];
   const ariaInvalid = fields.filter((f) => f.getAttribute('aria-invalid') === 'true').length;

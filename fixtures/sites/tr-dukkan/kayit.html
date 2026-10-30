@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="tr">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Kayıt ol – Kahve Dükkanı</title><link rel="stylesheet" href="/stil.css"></head>
+<body><main>
+  <h1>Hesap oluştur</h1>
+  <form id="kayit" action="/kayit" method="post" novalidate>
+    <label for="ad">Adınız</label><input id="ad" name="ad">
+    <label for="soyad">Soyadınız</label><input id="soyad" name="soyad">
+    <label for="eposta">E-posta adresi</label><input id="eposta" name="eposta" type="email">
+    <label for="telefon">Cep telefonu</label><input id="telefon" name="telefon" type="tel" required>
+    <label for="sehir">Şehir</label><input id="sehir" name="sehir">
+    <label for="sifre">Şifre</label><input id="sifre" name="sifre" type="password">
+    <label for="sifre2">Şifre (tekrar)</label><input id="sifre2" name="sifre2" type="password">
+    <p class="hata" id="kayit-hata" hidden></p>
+    <p><button class="btn" type="submit">Gönder</button></p>
+  </form>
+</main>
+<script>
+  // Seeded: Turkish errors shown visually, not tied to fields or announced.
+  document.getElementById('kayit').addEventListener('submit', function (e) {
+    if (!document.getElementById('eposta').value) {
+      e.preventDefault();
+      var h = document.getElementById('kayit-hata'); h.textContent = 'E-posta alanı zorunludur.'; h.hidden = false;
+    }
+  });
+</script>
+</body>
+</html>

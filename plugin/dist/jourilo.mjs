@@ -39045,6 +39045,416 @@ function slug(text, max = 48) {
   return s || "item";
 }
 
+// src/core/lexicon.ts
+var LEX = {
+  destructive: [
+    // en
+    "delete",
+    "remove",
+    "destroy",
+    "erase",
+    "deactivate",
+    "close (my )?account",
+    "cancel (my )?(subscription|plan|membership|order|account)",
+    "unsubscribe",
+    "terminate",
+    "revoke",
+    "wipe",
+    "reset (all|data)",
+    "transfer",
+    "withdraw",
+    "send (money|payment)",
+    // tr
+    "sil(in)?",
+    "kald\u0131r(\u0131n)?",
+    "hesab(\u0131|\u0131m\u0131) (kapat|sil)(\u0131n)?",
+    "(aboneli\u011Fi|\xFCyeli\u011Fi|sipari\u015Fi) iptal( et(in)?)?",
+    "abonelikten \xE7\u0131k(\u0131n)?",
+    "para (g\xF6nder|transfer)",
+    // de
+    "l\xF6schen",
+    "entfernen",
+    "k\xFCndigen",
+    "konto (l\xF6schen|schlie\xDFen)",
+    "abo(nnement)? (k\xFCndigen|beenden)",
+    "abmelden vom newsletter",
+    "\xFCberweisen",
+    // es
+    "eliminar",
+    "borrar",
+    "cancelar (la )?(suscripci\xF3n|cuenta|pedido)",
+    "darse de baja",
+    "cerrar (mi )?cuenta",
+    "transferir",
+    // fr
+    "supprimer",
+    "effacer",
+    "r\xE9silier",
+    "se d\xE9sabonner",
+    "fermer (mon )?compte",
+    "annuler (l.abonnement|la commande)",
+    "virement"
+  ],
+  financial: [
+    "pay( now)?",
+    "purchase",
+    "buy( now)?",
+    "place (the )?order",
+    "complete (the )?(order|purchase|checkout|payment)",
+    "confirm (the )?(order|payment|purchase)",
+    "checkout now",
+    "submit (order|payment)",
+    "donate",
+    "upgrade now",
+    "start (paid|subscription)",
+    "\xF6de(yin)?",
+    "\xF6deme yap(\u0131n)?",
+    "\xF6demeyi (tamamla|onayla)(y\u0131n)?",
+    "(\u015Fimdi )?sat\u0131n al(\u0131n)?",
+    "sipari\u015Fi (tamamla|onayla|ver)(y\u0131n|in)?",
+    "sipari\u015F ver(in)?",
+    "ba\u011F\u0131\u015F yap(\u0131n)?",
+    "bezahlen",
+    "jetzt (bezahlen|kaufen)",
+    "kaufen",
+    "kostenpflichtig bestellen",
+    "bestellung abschlie\xDFen",
+    "zahlungspflichtig",
+    "pagar",
+    "comprar( ahora)?",
+    "realizar (el )?pedido",
+    "finalizar (la )?compra",
+    "confirmar (el )?pago",
+    "donar",
+    "payer",
+    "acheter",
+    "commander",
+    "valider (la )?commande",
+    "confirmer (le )?paiement",
+    "faire un don"
+  ],
+  vagueCta: [
+    "submit",
+    "send",
+    "go",
+    "click here",
+    "here",
+    "ok",
+    "continue",
+    "next",
+    "learn more",
+    "read more",
+    "more",
+    "start",
+    "enter",
+    "g\xF6nder",
+    "t\u0131kla",
+    "buraya t\u0131klay\u0131n",
+    "devam",
+    "ileri",
+    "tamam",
+    "daha fazla",
+    "devam\u0131n\u0131 oku",
+    "ba\u015Fla",
+    "senden",
+    "absenden",
+    "weiter",
+    "hier klicken",
+    "mehr",
+    "mehr erfahren",
+    "los",
+    "enviar",
+    "clic aqu\xED",
+    "haz clic aqu\xED",
+    "continuar",
+    "siguiente",
+    "m\xE1s",
+    "leer m\xE1s",
+    "empezar",
+    "envoyer",
+    "cliquez ici",
+    "continuer",
+    "suivant",
+    "en savoir plus",
+    "plus",
+    "commencer",
+    "valider"
+  ],
+  genericHeadline: [
+    "welcome",
+    "home",
+    "homepage",
+    "hello",
+    "index",
+    "untitled",
+    "main",
+    "ho\u015F geldiniz",
+    "ana sayfa",
+    "merhaba",
+    "willkommen",
+    "startseite",
+    "bienvenido",
+    "bienvenida",
+    "inicio",
+    "bienvenue",
+    "accueil"
+  ],
+  signup: [
+    "sign ?up",
+    "register",
+    "create( an)? account",
+    "get started",
+    "join",
+    "new-password",
+    "kay\u0131t ol",
+    "\xFCye ol",
+    "hesap olu\u015Ftur",
+    "registrieren",
+    "konto erstellen",
+    "jetzt starten",
+    "reg\xEDstrate",
+    "registrarse",
+    "crear( una)? cuenta",
+    "s.inscrire",
+    "inscription",
+    "cr\xE9er un compte"
+  ],
+  login: [
+    "log ?in",
+    "sign ?in",
+    "giri\u015F yap",
+    "oturum a\xE7",
+    "anmelden",
+    "einloggen",
+    "iniciar sesi\xF3n",
+    "acceder",
+    "se connecter",
+    "connexion"
+  ],
+  recovery: [
+    "forgot",
+    "reset",
+    "recover",
+    "\u015Fifremi unuttum",
+    "\u015Fifre s\u0131f\u0131rla",
+    "passwort vergessen",
+    "zur\xFCcksetzen",
+    "olvid\xE9",
+    "restablecer",
+    "oubli\xE9",
+    "r\xE9initialiser"
+  ],
+  search: [
+    "search",
+    "query",
+    "ara",
+    "arama",
+    "suche",
+    "suchen",
+    "buscar",
+    "b\xFAsqueda",
+    "rechercher",
+    "recherche"
+  ],
+  newsletter: [
+    "subscribe",
+    "newsletter",
+    "b\xFClten",
+    "abone ol",
+    "abonnieren",
+    "suscribirse",
+    "bolet\xEDn",
+    "s.abonner",
+    "lettre d.information"
+  ],
+  checkout: [
+    "checkout",
+    "payment",
+    "billing",
+    "card",
+    "\xF6deme",
+    "fatura",
+    "kart",
+    "kasse",
+    "zahlung",
+    "rechnung",
+    "karte",
+    "pago",
+    "facturaci\xF3n",
+    "tarjeta",
+    "paiement",
+    "facturation",
+    "carte"
+  ],
+  formError: [
+    "error",
+    "required",
+    "invalid",
+    "incorrect",
+    "wrong",
+    "failed",
+    "not valid",
+    "doesn.?t match",
+    "try again",
+    "unable",
+    "please",
+    "must",
+    "enter",
+    "missing",
+    "can.?t be blank",
+    "is empty",
+    "too short",
+    "hata",
+    "hatal\u0131",
+    "zorunlu",
+    "gerekli",
+    "ge\xE7ersiz",
+    "yanl\u0131\u015F",
+    "l\xFCtfen",
+    "bo\u015F b\u0131rak\u0131lamaz",
+    "e\u015Fle\u015Fmiyor",
+    "tekrar deneyin",
+    "fehler",
+    "erforderlich",
+    "pflichtfeld",
+    "ung\xFCltig",
+    "falsch",
+    "bitte",
+    "darf nicht leer",
+    "error",
+    "obligatorio",
+    "requerido",
+    "inv\xE1lido",
+    "incorrecto",
+    "por favor",
+    "no puede estar vac\xEDo",
+    "erreur",
+    "obligatoire",
+    "invalide",
+    "incorrect",
+    "veuillez",
+    "ne peut pas \xEAtre vide"
+  ],
+  trustTestimonials: [
+    "testimonial",
+    "what (our )?customers say",
+    "reviews?",
+    "m\xFC\u015Fteri yorumlar\u0131",
+    "yorumlar",
+    "kundenstimmen",
+    "bewertungen",
+    "testimonios",
+    "opiniones",
+    "rese\xF1as",
+    "t\xE9moignages",
+    "avis"
+  ],
+  trustGuarantee: [
+    "money.back",
+    "guarantee",
+    "risk.free",
+    "cancel any ?time",
+    "para iade",
+    "garanti",
+    "istedi\u011Finiz zaman iptal",
+    "geld.zur\xFCck",
+    "garantie",
+    "jederzeit k\xFCndbar",
+    "garant\xEDa",
+    "devoluci\xF3n",
+    "cancela cuando quieras",
+    "satisfait ou rembours\xE9",
+    "r\xE9siliable \xE0 tout moment"
+  ],
+  trustSecurity: [
+    "secure",
+    "encrypt",
+    "ssl",
+    "soc ?2",
+    "iso ?27001",
+    "gdpr",
+    "hipaa",
+    "pci",
+    "g\xFCvenli",
+    "\u015Fifreli",
+    "kvkk",
+    "sicher",
+    "verschl\xFCsselt",
+    "dsgvo",
+    "seguro",
+    "cifrado",
+    "rgpd",
+    "s\xE9curis\xE9",
+    "chiffr\xE9"
+  ],
+  trustLogos: [
+    "trusted by",
+    "used by",
+    "loved by",
+    "customers include",
+    "companies (use|trust)",
+    "g\xFCvendi\u011Fi",
+    "kullanan \u015Firketler",
+    "vertrauen uns",
+    "conf\xEDan en nosotros",
+    "ils nous font confiance"
+  ],
+  pricingPeriod: [
+    "/ ?(mo|month|yr|year)",
+    "per (month|year|user|seat)",
+    "billed (annually|monthly|yearly)",
+    "/ ?(ay|y\u0131l)",
+    "ayl\u0131k",
+    "y\u0131ll\u0131k",
+    "kullan\u0131c\u0131 ba\u015F\u0131na",
+    "/ ?(monat|jahr)",
+    "pro (monat|jahr|nutzer)",
+    "monatlich",
+    "j\xE4hrlich",
+    "/ ?(mes|a\xF1o)",
+    "al mes",
+    "por (mes|a\xF1o|usuario)",
+    "mensual",
+    "anual",
+    "/ ?(mois|an)",
+    "par (mois|an|utilisateur)",
+    "mensuel",
+    "annuel"
+  ],
+  freeTrial: [
+    "free trial",
+    "try (it )?free",
+    "start free",
+    "\xFCcretsiz dene",
+    "\xFCcretsiz deneme",
+    "kostenlos testen",
+    "gratis testen",
+    "prueba gratis",
+    "prueba gratuita",
+    "essai gratuit",
+    "essayer gratuitement"
+  ]
+};
+var STEMS = /* @__PURE__ */ new Set([
+  "formError",
+  "trustTestimonials",
+  "trustGuarantee",
+  "trustSecurity",
+  "trustLogos",
+  "freeTrial"
+]);
+function lexiconSource(concept, opts = {}) {
+  const alt = LEX[concept].join("|");
+  if (opts.exact) return `^\\s*(?:${alt})\\s*[.!\u2026]?\\s*$`;
+  return `(?<![\\p{L}\\p{N}])(?:${alt})${STEMS.has(concept) ? "" : "(?![\\p{L}\\p{N}])"}`;
+}
+function lexicon(concept, opts = {}) {
+  return new RegExp(lexiconSource(concept, opts), "iu");
+}
+function lexiconSources() {
+  return Object.fromEntries(Object.keys(LEX).map((k) => [k, lexiconSource(k)]));
+}
+
 // src/core/redact.ts
 var SENSITIVE_PARAM = /^(?:.*[-_])?(token|access[-_]?token|refresh[-_]?token|id[-_]?token|auth|authorization|key|api[-_]?key|apikey|secret|client[-_]?secret|password|passwd|pwd|session|sessionid|sid|jwt|code|signature|sig|otp|ssn|email|phone)$/i;
 var PATTERNS = [
@@ -39106,6 +39516,9 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
   const sy = window.scrollY;
   const sx = window.scrollX;
   const MAX = opts.maxItems || 40;
+  // Multilingual vocabulary (en, tr, de, es, fr) from core/lexicon.ts; English fallbacks keep the probe usable alone.
+  const LEX = opts.lex || {};
+  const lex = (k, fallback) => new RegExp(LEX[k] || fallback, 'iu');
 
   const cssEscape = (s) => (window.CSS?.escape ? CSS.escape(s) : s.replace(/[^a-zA-Z0-9_-]/g, '\\\\$&'));
   const selectorOf = (el) => {
@@ -39405,27 +39818,33 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
     return null;
   };
   const classify = (form, fields, submitText) => {
-    const blob =
-      \`\${text(form).slice(0, 400)} \${submitText || ''} \${form.getAttribute('action') || ''} \${form.id} \${form.className}\`.toLowerCase();
-    const types = fields
-      .map((f) => \`\${f.type} \${f.name || ''} \${f.autocomplete || ''}\`.toLowerCase())
-      .join(' ');
+    const blob = \`\${text(form).slice(0, 400)} \${submitText || ''} \${form.getAttribute('action') || ''} \${form.id} \${form.className}\`;
+    const types = fields.map((f) => \`\${f.type} \${f.name || ''} \${f.autocomplete || ''}\`).join(' ');
     const pw = fields.filter((f) => f.type === 'password').length;
-    if (/cc-number|card|cvc|cvv|expir|checkout|payment|billing/.test(\`\${types} \${blob}\`)) return 'checkout';
+    if (
+      /cc-number|cc-csc|cvc|cvv|expir/i.test(types) ||
+      (lex('checkout', 'checkout|payment|billing|card').test(\`\${types} \${blob}\`) &&
+        fields.some((f) => /cc-|card|cvc|cvv/i.test(\`\${f.name} \${f.autocomplete}\`)))
+    )
+      return 'checkout';
     if (
       form.getAttribute('role') === 'search' ||
-      (/type="search"|\\bsearch\\b|\\bq\\b|query/.test(\`\${types} \${blob}\`) && fields.length <= 2)
+      ((/type="?search|\\bq\\b/i.test(types) ||
+        lex('search', 'search|query').test(\`\${types} \${submitText || ''}\`)) &&
+        fields.length <= 2)
     )
       return 'search';
-    if (/forgot|reset|recover/.test(blob) && pw === 0) return 'recovery';
+    if (lex('recovery', 'forgot|reset|recover').test(blob) && pw === 0) return 'recovery';
     if (
       pw >= 2 ||
-      (pw === 1 && /sign ?up|register|create|get started|join|new-password/.test(\`\${blob} \${types}\`))
+      (pw === 1 &&
+        (lex('signup', 'sign ?up|register|create|get started|join').test(blob) || /new-password/.test(types)))
     )
       return 'signup';
     if (pw === 1) return 'login';
-    if (/subscribe|newsletter/.test(blob) && fields.length <= 2) return 'newsletter';
-    if (fields.some((f) => f.type === 'textarea') && /email/.test(types)) return 'contact';
+    if (lex('newsletter', 'subscribe|newsletter').test(blob) && fields.length <= 2) return 'newsletter';
+    if (lex('checkout', 'checkout|payment|billing').test(blob) && fields.length >= 3) return 'checkout';
+    if (fields.some((f) => f.type === 'textarea') && /email/i.test(types)) return 'contact';
     return 'other';
   };
   const formEls = Array.from(document.querySelectorAll('form')).filter(isVisible);
@@ -39469,28 +39888,32 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
   const bodyText = text(document.body).slice(0, 200000);
   const lower = bodyText.toLowerCase();
   const TRUST = [
-    ['testimonials', /testimonial|what (our )?customers say|reviews?\\b/],
-    ['ratings', /\u2605|\\b[1-5](\\.\\d)? ?(\\/ ?5|out of 5|stars?)\\b/],
-    ['customer logos', /trusted by|used by|loved by|customers include|companies (use|trust)/],
-    ['guarantee', /money.back|guarantee|risk.free|cancel any ?time/],
-    ['security', /\\bsecure\\b|encrypt|ssl|soc ?2|iso ?27001|gdpr|hipaa|pci/],
+    ['testimonials', lex('trustTestimonials', 'testimonial|reviews?')],
+    ['ratings', /\u2605|\\b[1-5]([.,]\\d)? ?(\\/ ?5|out of 5|stars?|y\u0131ld\u0131z|sterne|estrellas|\xE9toiles)\\b/iu],
+    ['customer logos', lex('trustLogos', 'trusted by|used by')],
+    ['guarantee', lex('trustGuarantee', 'money.back|guarantee')],
+    ['security', lex('trustSecurity', 'secure|encrypt')],
     [
       'social proof numbers',
-      /\\b\\d[\\d,.]*\\+? ?(k\\b|m\\b|million|thousand)?\\s*(users|customers|teams|companies|developers)\\b/,
+      /\\b\\d[\\d,.]*\\+? ?(k\\b|m\\b|million|thousand|bin|milyon|tausend|mil|millones|mille)?\\s*(users|customers|teams|companies|developers|kullan\u0131c\u0131|m\xFC\u015Fteri|nutzer|kunden|usuarios|clientes|utilisateurs|clients)\\b/iu,
     ],
-    ['case studies', /case stud(y|ies)/],
+    ['case studies', /case stud(y|ies)|ba\u015Far\u0131 hikaye|fallstudie|casos de \xE9xito|\xE9tudes de cas/iu],
   ];
   const trustSignals = TRUST.filter(([, re]) => re.test(lower)).map(([n]) => n);
-  if (links.some((l) => /privacy/i.test(l.text) || /privacy/i.test(l.href)))
+  if (
+    links.some((l) =>
+      /privacy|gizlilik|datenschutz|privacidad|confidentialit\xE9|kvkk/i.test(\`\${l.text} \${l.href}\`),
+    )
+  )
     trustSignals.push('privacy policy link');
   const PRICING = [
-    ['price amounts', /[$\u20AC\xA3\xA5\u20BA]\\s?\\d|\\d\\s?(usd|eur|gbp|try)\\b/],
+    ['price amounts', /[$\u20AC\xA3\xA5\u20BA]\\s?\\d|\\d\\s?([$\u20AC\xA3\u20BA]|usd|eur|gbp|try|tl)(?![\\p{L}])/iu],
+    ['billing period', lex('pricingPeriod', '\\\\/ ?(mo|month)|per (month|year|user)')],
+    ['free trial', lex('freeTrial', 'free trial|try (it )?free|start free')],
     [
-      'billing period',
-      /\\/ ?(mo|month|yr|year)\\b|per (month|year|user|seat)|billed (annually|monthly|yearly)/,
+      'free plan',
+      /\\bfree plan\\b|\\bfree forever\\b|\\$0\\b|\xFCcretsiz plan|kostenloser plan|plan gratuito|offre gratuite/iu,
     ],
-    ['free trial', /free trial|try (it )?free|start free/],
-    ['free plan', /\\bfree plan\\b|\\bfree forever\\b|\\$0\\b/],
   ];
   const pricingSignals = PRICING.filter(([, re]) => re.test(lower)).map(([n]) => n);
 
@@ -39899,8 +40322,8 @@ function toMetrics(v, spread, runs2 = 1) {
 }
 
 // src/journeys/safety.ts
-var DESTRUCTIVE = /\b(delete|remove|destroy|erase|deactivate|close (my )?account|cancel (my )?(subscription|plan|membership|order|account)|unsubscribe|terminate|revoke|wipe|reset (all|data)|transfer|withdraw|send (money|payment))\b/i;
-var FINANCIAL = /\b(pay( now)?|purchase|buy( now)?|place (the )?order|complete (the )?(order|purchase|checkout|payment)|confirm (the )?(order|payment|purchase)|checkout now|submit (order|payment)|donate|upgrade now|start (paid|subscription))\b/i;
+var DESTRUCTIVE = lexicon("destructive");
+var FINANCIAL = lexicon("financial");
 function checkAction(ctx, policy) {
   const safeHost = policy.hostClass === "local";
   const risky = DESTRUCTIVE.test(ctx.name) ? "destructive" : FINANCIAL.test(ctx.name) || ctx.paymentForm ? "financial" : null;
@@ -40256,7 +40679,7 @@ async function capturePage(ctx, url, vp, opts) {
       return null;
     });
     obs.probe = await page.evaluate(
-      `(${probe_default.trim().replace(/;$/, "")})(${JSON.stringify({ maxItems: 40, viewportWidth: vp.width, viewportHeight: vp.height })})`
+      `(${probe_default.trim().replace(/;$/, "")})(${JSON.stringify({ maxItems: 40, viewportWidth: vp.width, viewportHeight: vp.height, lex: lexiconSources() })})`
     ).catch((e) => {
       obs.errors.push(`probe: ${e.message.split("\n")[0]}`);
       return null;
@@ -40620,15 +41043,15 @@ function nielsen(n) {
 }
 
 // src/conversion/rules.ts
-var VAGUE = /^(submit|send|go|click here|here|ok|continue|next|learn more|read more|more|start|enter)$/i;
-var GENERIC_H1 = /^(welcome|home|homepage|hello|index|untitled|main)\b/i;
+var VAGUE = lexicon("vagueCta", { exact: true });
+var GENERIC_H1 = new RegExp(`^\\s*${lexiconSource("genericHeadline")}`, "iu");
 function isLandingPath(url) {
   const p = pathOf(url).split("?")[0];
   return p === "/" || p === "" || /^\/(index(\.html?)?|home|[a-z]{2}(-[a-z]{2})?)\/?$/i.test(p);
 }
 function isPricingPage(obs) {
   const inv = obs.probe?.inventory;
-  return /pric|plans|subscribe/i.test(pathOf(obs.url)) || (inv?.pricingSignals.length ?? 0) >= 2;
+  return /pric|plans|subscribe|fiyat|preise|precios|tarifs|abonelik/i.test(pathOf(obs.url)) || (inv?.pricingSignals.length ?? 0) >= 2;
 }
 function hypothesis(obs, ruleId, title, description, recommendation, metric, evidence, opts = {}) {
   return makeFinding({
@@ -41364,12 +41787,13 @@ var BEFORE = `(sel) => {
   };
 }`;
 var AFTER = `([sel, beforeText]) => {
+  const ERROR_RE = new RegExp(${JSON.stringify(lexiconSource("formError"))}, 'iu');
   const prev = new Set(beforeText);
   const lines = document.body.innerText.split('\\n').map((s) => s.trim()).filter(Boolean);
   const fresh = lines.filter((l) => !prev.has(l) && l.length < 200);
   const liveText = Array.from(document.querySelectorAll('[role="alert"], [role="status"], [aria-live="assertive"], [aria-live="polite"]')).map((r) => r.innerText.trim()).filter(Boolean);
   // Any new text announced in a live region is feedback; elsewhere it must read like an error message.
-  const errorish = fresh.filter((l) => liveText.some((t) => t.includes(l)) || /error|required|invalid|incorrect|wrong|failed|not valid|doesn.?t match|try again|unable|please|must|enter|missing|can.?t be blank|is empty|too short|zorunlu|gerekli|ge\xE7ersiz|hatal\u0131|erforderlich|ung\xFCltig|obligatoire|incorrect|requerido|inv\xE1lido/i.test(l));
+  const errorish = fresh.filter((l) => liveText.some((t) => t.includes(l)) || ERROR_RE.test(l));
   const form = document.querySelector(sel);
   const fields = form ? Array.from(form.querySelectorAll('input:not([type=hidden]):not([type=submit]), select, textarea')) : [];
   const ariaInvalid = fields.filter((f) => f.getAttribute('aria-invalid') === 'true').length;
@@ -41917,17 +42341,18 @@ function measuredA11yFindings(obs) {
 function suggestAutocomplete(type, name, label, purpose) {
   const s = `${name ?? ""} ${label ?? ""}`.toLowerCase();
   if (type === "password") return purpose === "signup" ? "new-password" : "current-password";
-  if (type === "email" || /e-?mail/.test(s)) return "email";
-  if (type === "tel" || /phone|tel|mobile/.test(s)) return "tel";
-  if (/first|given/.test(s)) return "given-name";
-  if (/last|family|surname/.test(s)) return "family-name";
-  if (/user/.test(s)) return "username";
-  if (/zip|postal/.test(s)) return "postal-code";
-  if (/city|town/.test(s)) return "address-level2";
-  if (/country/.test(s)) return "country-name";
-  if (/street|address/.test(s)) return "street-address";
-  if (/company|organi[sz]ation/.test(s)) return "organization";
-  if (/name/.test(s)) return "name";
+  if (type === "email" || /e-?mail|e-?posta|correo|courriel/.test(s)) return "email";
+  if (type === "tel" || /phone|tel|mobile|cep|handy|móvil|portable/.test(s)) return "tel";
+  if (/first|given|vorname|prénom|^\s*ad\b|\bad\s*$|nombre(?! de usuario)/.test(s)) return "given-name";
+  if (/last|family|surname|soyad|nachname|apellido|\bnom de famille\b/.test(s)) return "family-name";
+  if (/user|kullanıcı adı|benutzername|usuario|identifiant/.test(s)) return "username";
+  if (/zip|postal|posta kodu|plz|postleitzahl|código postal|code postal/.test(s)) return "postal-code";
+  if (/city|town|şehir|\bil\b|stadt|\bort\b|ciudad|ville/.test(s)) return "address-level2";
+  if (/country|ülke|land|país|pays/.test(s)) return "country-name";
+  if (/street|address|adres|straße|strasse|dirección|adresse/.test(s)) return "street-address";
+  if (/company|organi[sz]ation|şirket|firma|unternehmen|empresa|entreprise|société/.test(s))
+    return "organization";
+  if (/name|isim|\bad\b|nombre|\bnom\b/.test(s)) return "name";
   return "on (choose the matching token)";
 }
 var WIDGET_RULES = {
@@ -45550,15 +45975,15 @@ function valueFor(f) {
   const s = `${f.type} ${f.name ?? ""} ${f.label ?? ""} ${f.autocomplete ?? ""}`.toLowerCase();
   if (f.type === "checkbox" || f.type === "radio" || f.type === "file" || f.type === "hidden") return null;
   if (f.type === "password") return "{{password}}";
-  if (f.type === "email" || /e-?mail/.test(s)) return "{{email}}";
-  if (f.type === "tel" || /phone|tel|mobile/.test(s)) return "{{phone}}";
-  if (f.type === "search" || /search|query|\bq\b/.test(s)) return "{{search}}";
-  if (/first|given/.test(s)) return "{{firstName}}";
-  if (/last|family|surname/.test(s)) return "{{lastName}}";
-  if (/company|organi[sz]ation/.test(s)) return "{{company}}";
-  if (/zip|postal/.test(s)) return "{{zip}}";
-  if (/card|cc-number/.test(s)) return "{{testCard}}";
-  if (/name|user/.test(s)) return "{{name}}";
+  if (f.type === "email" || /e-?mail|e-?posta|correo|courriel/.test(s)) return "{{email}}";
+  if (f.type === "tel" || /phone|tel|mobile|cep|handy|móvil/.test(s)) return "{{phone}}";
+  if (f.type === "search" || /search|query|\bq\b|arama|suche|buscar|recherche/.test(s)) return "{{search}}";
+  if (/first|given|vorname|prénom|given-name/.test(s)) return "{{firstName}}";
+  if (/last|family|surname|soyad|nachname|apellido/.test(s)) return "{{lastName}}";
+  if (/company|organi[sz]ation|şirket|firma|empresa|entreprise/.test(s)) return "{{company}}";
+  if (/zip|postal|posta kodu|plz/.test(s)) return "{{zip}}";
+  if (/card|cc-number|kart|karte|tarjeta|carte/.test(s)) return "{{testCard}}";
+  if (/name|user|isim|\bad\b|nombre|\bnom\b|kullanıcı/.test(s)) return "{{name}}";
   if (f.type === "textarea" || f.type === "text") return "Jourilo test message";
   if (f.type === "number") return "1";
   return null;

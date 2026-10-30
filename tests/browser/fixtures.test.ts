@@ -25,6 +25,11 @@ describe('fixture benchmark', () => {
     expect(r.falsePositives).toEqual([]);
     expect(r.excessDefects).toEqual([]);
   });
+  it('applies conversion, form and field-purpose heuristics to a Turkish site', async () => {
+    const r = await benchFixture(join(import.meta.dirname, '../../fixtures/sites/tr-dukkan'), ws);
+    expect(r.missed).toEqual([]);
+    expect(r.falsePositives).toEqual([]);
+  });
   it('reports no moderate-or-worse defects on the clean control site', async () => {
     const r = await benchFixture(join(import.meta.dirname, '../../fixtures/sites/clean-shop'), ws);
     expect(r.excessDefects).toEqual([]);

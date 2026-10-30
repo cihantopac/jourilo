@@ -5,12 +5,12 @@
 //    with test accounts only).
 // The policy looks at the accessible name of the element actually about to be activated, not at the journey's
 // own description, so a mislabelled journey cannot bypass it.
+import { lexicon } from '../core/lexicon.js';
 import type { HostClass } from '../core/url-safety.js';
 
-export const DESTRUCTIVE =
-  /\b(delete|remove|destroy|erase|deactivate|close (my )?account|cancel (my )?(subscription|plan|membership|order|account)|unsubscribe|terminate|revoke|wipe|reset (all|data)|transfer|withdraw|send (money|payment))\b/i;
-export const FINANCIAL =
-  /\b(pay( now)?|purchase|buy( now)?|place (the )?order|complete (the )?(order|purchase|checkout|payment)|confirm (the )?(order|payment|purchase)|checkout now|submit (order|payment)|donate|upgrade now|start (paid|subscription))\b/i;
+// Multilingual (en, tr, de, es, fr) vocabulary from core/lexicon.ts, matched on Unicode word boundaries.
+export const DESTRUCTIVE = lexicon('destructive');
+export const FINANCIAL = lexicon('financial');
 
 export interface SafetyPolicy {
   hostClass: HostClass;
