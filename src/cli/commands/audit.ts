@@ -103,7 +103,11 @@ export async function auditCommand(
       ctx.log('Note: --ignore-robots is only appropriate for sites you own or are authorized to test.');
     }
     const { run, runDir } = await runAudit(ctx.ws, opts);
-    if (server) run.target = `${resolve(targetArg)} (served at ${server.url})`;
+    if (server) {
+      run.target = `${resolve(targetArg)} (served at ${server.url})`;
+      run.settings.servedDir = resolve(targetArg);
+    }
+    if (repo) run.settings.repo = repo;
     if (repo) {
       const located = locateFindings(run, repo);
       ctx.log(`Mapped ${located} finding(s) to likely source locations in ${repo}`);

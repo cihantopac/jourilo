@@ -257,6 +257,8 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         throttle: opts.throttle,
         axe: observations.find((o) => o.axe)?.axe?.version ?? null,
         hostClass,
+        // The exact scope, so `jourilo verify` can repeat this run after a change.
+        scope: { urls: [...new Set(urls.map((u) => u.url))], viewports: opts.viewports.map((v) => v.name) },
       },
       pages,
       journeys: [],

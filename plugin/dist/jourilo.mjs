@@ -818,7 +818,7 @@ var require_axe = __commonJS({
                 return object;
               }
               var promise = new Constructor(noop3);
-              resolve7(promise, object);
+              resolve8(promise, object);
               return promise;
             }
             var PROMISE_ID = Math.random().toString(36).substring(2);
@@ -849,7 +849,7 @@ var require_axe = __commonJS({
                   }
                   sealed = true;
                   if (thenable !== value) {
-                    resolve7(promise2, value);
+                    resolve8(promise2, value);
                   } else {
                     fulfill(promise2, value);
                   }
@@ -873,7 +873,7 @@ var require_axe = __commonJS({
                 reject(promise, thenable._result);
               } else {
                 subscribe2(thenable, void 0, function(value) {
-                  return resolve7(promise, value);
+                  return resolve8(promise, value);
                 }, function(reason) {
                   return reject(promise, reason);
                 });
@@ -892,7 +892,7 @@ var require_axe = __commonJS({
                 }
               }
             }
-            function resolve7(promise, value) {
+            function resolve8(promise, value) {
               if (promise === value) {
                 reject(promise, selfFulfillment());
               } else if (objectOrFunction(value)) {
@@ -979,7 +979,7 @@ var require_axe = __commonJS({
               }
               if (promise._state !== PENDING) {
               } else if (hasCallback && succeeded) {
-                resolve7(promise, value);
+                resolve8(promise, value);
               } else if (succeeded === false) {
                 reject(promise, error);
               } else if (settled === FULFILLED) {
@@ -991,7 +991,7 @@ var require_axe = __commonJS({
             function initializePromise(promise, resolver) {
               try {
                 resolver(function resolvePromise(value) {
-                  resolve7(promise, value);
+                  resolve8(promise, value);
                 }, function rejectPromise(reason) {
                   reject(promise, reason);
                 });
@@ -5316,7 +5316,7 @@ var require_axe = __commonJS({
           var emit;
           var methods;
           var descriptors;
-          var base;
+          var base2;
           on = function on2(type2, listener) {
             var data;
             callable(listener);
@@ -5427,9 +5427,9 @@ var require_axe = __commonJS({
             off: d2(off),
             emit: d2(emit)
           };
-          base = defineProperties({}, descriptors);
+          base2 = defineProperties({}, descriptors);
           module2.exports = exports2 = function exports3(o) {
-            return o == null ? create(base) : defineProperties(Object(o), descriptors);
+            return o == null ? create(base2) : defineProperties(Object(o), descriptors);
           };
           exports2.methods = methods;
         });
@@ -5862,15 +5862,15 @@ var require_axe = __commonJS({
           var slice = Array.prototype.slice;
           var resolveArgs;
           resolveArgs = function resolveArgs2(args) {
-            return this.map(function(resolve7, i2) {
-              return resolve7 ? resolve7(args[i2]) : args[i2];
+            return this.map(function(resolve8, i2) {
+              return resolve8 ? resolve8(args[i2]) : args[i2];
             }).concat(slice.call(args, this.length));
           };
           module2.exports = function(resolvers) {
             resolvers = toArray2(resolvers);
-            resolvers.forEach(function(resolve7) {
-              if (isValue(resolve7)) {
-                callable(resolve7);
+            resolvers.forEach(function(resolve8) {
+              if (isValue(resolve8)) {
+                callable(resolve8);
               }
             });
             return resolveArgs.bind(resolvers);
@@ -5919,7 +5919,7 @@ var require_axe = __commonJS({
           var _on = ee.on;
           var emit = ee.emit;
           module2.exports = function(original, length, options) {
-            var cache2 = create(null), conf, memLength, get2, set2, del, _clear, extDel, extGet, extHas, normalizer, getListeners, setListeners, deleteListeners, memoized, resolve7;
+            var cache2 = create(null), conf, memLength, get2, set2, del, _clear, extDel, extGet, extHas, normalizer, getListeners, setListeners, deleteListeners, memoized, resolve8;
             if (length !== false) {
               memLength = length;
             } else if (isNaN(original.length)) {
@@ -5935,13 +5935,13 @@ var require_axe = __commonJS({
               _clear = normalizer.clear;
             }
             if (options.resolvers != null) {
-              resolve7 = resolveResolve(options.resolvers);
+              resolve8 = resolveResolve(options.resolvers);
             }
             if (get2) {
               memoized = defineLength(function(arg) {
                 var id2, result, args = arguments;
-                if (resolve7) {
-                  args = resolve7(args);
+                if (resolve8) {
+                  args = resolve8(args);
                 }
                 id2 = get2(args);
                 if (id2 !== null) {
@@ -5998,8 +5998,8 @@ var require_axe = __commonJS({
             } else {
               memoized = function memoized2(arg) {
                 var result, args = arguments, id2;
-                if (resolve7) {
-                  args = resolve7(arguments);
+                if (resolve8) {
+                  args = resolve8(arguments);
                 }
                 id2 = String(args[0]);
                 if (hasOwnProperty.call(cache2, id2)) {
@@ -6028,8 +6028,8 @@ var require_axe = __commonJS({
               memoized,
               profileName: options.profileName,
               get: function get3(args) {
-                if (resolve7) {
-                  args = resolve7(args);
+                if (resolve8) {
+                  args = resolve8(args);
                 }
                 if (get2) {
                   return get2(args);
@@ -6079,8 +6079,8 @@ var require_axe = __commonJS({
             if (get2) {
               extDel = defineLength(function(arg) {
                 var id2, args = arguments;
-                if (resolve7) {
-                  args = resolve7(args);
+                if (resolve8) {
+                  args = resolve8(args);
                 }
                 id2 = get2(args);
                 if (id2 === null) {
@@ -6094,8 +6094,8 @@ var require_axe = __commonJS({
               };
             } else {
               extDel = function extDel2(arg) {
-                if (resolve7) {
-                  arg = resolve7(arguments)[0];
+                if (resolve8) {
+                  arg = resolve8(arguments)[0];
                 }
                 return conf["delete"](arg);
               };
@@ -6105,8 +6105,8 @@ var require_axe = __commonJS({
               if (length === 0) {
                 return cache2.data;
               }
-              if (resolve7) {
-                args = resolve7(args);
+              if (resolve8) {
+                args = resolve8(args);
               }
               if (get2) {
                 id2 = get2(args);
@@ -6120,8 +6120,8 @@ var require_axe = __commonJS({
               if (length === 0) {
                 return conf.has("data");
               }
-              if (resolve7) {
-                args = resolve7(args);
+              if (resolve8) {
+                args = resolve8(args);
               }
               if (get2) {
                 id2 = get2(args);
@@ -6564,17 +6564,17 @@ var require_axe = __commonJS({
           var apply = Function.prototype.apply;
           var create = Object.create;
           require_registered_extensions().async = function(tbi, conf) {
-            var waiting = create(null), cache2 = create(null), base = conf.memoized, original = conf.original, currentCallback, currentContext, currentArgs;
+            var waiting = create(null), cache2 = create(null), base2 = conf.memoized, original = conf.original, currentCallback, currentContext, currentArgs;
             conf.memoized = defineLength(function(arg) {
               var args = arguments, last = args[args.length - 1];
               if (typeof last === "function") {
                 currentCallback = last;
                 args = slice.call(args, 0, -1);
               }
-              return base.apply(currentContext = this, currentArgs = args);
-            }, base);
+              return base2.apply(currentContext = this, currentArgs = args);
+            }, base2);
             try {
-              mixin(conf.memoized, base);
+              mixin(conf.memoized, base2);
             } catch (ignore) {
             }
             conf.on("get", function(id2) {
@@ -6605,7 +6605,7 @@ var require_axe = __commonJS({
                   currentCallback = cb;
                   currentContext = context;
                   currentArgs = args;
-                  base.apply(context, args);
+                  base2.apply(context, args);
                 }
               });
             });
@@ -7056,7 +7056,7 @@ var require_axe = __commonJS({
           var create = Object.create;
           var hasOwnProperty2 = Object.prototype.hasOwnProperty;
           module2.exports = function(limit) {
-            var size = 0, base = 1, queue2 = create(null), map = create(null), index = 0, del;
+            var size = 0, base2 = 1, queue2 = create(null), map = create(null), index = 0, del;
             limit = toPosInt(limit);
             return {
               hit: function hit(id2) {
@@ -7068,15 +7068,15 @@ var require_axe = __commonJS({
                   if (size <= limit) {
                     return;
                   }
-                  id2 = queue2[base];
+                  id2 = queue2[base2];
                   del(id2);
                   return id2;
                 }
                 delete queue2[oldIndex];
-                if (base !== oldIndex) {
+                if (base2 !== oldIndex) {
                   return;
                 }
-                while (!hasOwnProperty2.call(queue2, ++base)) {
+                while (!hasOwnProperty2.call(queue2, ++base2)) {
                   continue;
                 }
               },
@@ -7088,21 +7088,21 @@ var require_axe = __commonJS({
                 delete queue2[oldIndex];
                 delete map[id2];
                 --size;
-                if (base !== oldIndex) {
+                if (base2 !== oldIndex) {
                   return;
                 }
                 if (!size) {
                   index = 0;
-                  base = 1;
+                  base2 = 1;
                   return;
                 }
-                while (!hasOwnProperty2.call(queue2, ++base)) {
+                while (!hasOwnProperty2.call(queue2, ++base2)) {
                   continue;
                 }
               },
               clear: function clear() {
                 size = 0;
-                base = 1;
+                base2 = 1;
                 queue2 = create(null);
                 map = create(null);
                 index = 0;
@@ -8441,8 +8441,8 @@ var require_axe = __commonJS({
         function _copySign(to2, from) {
           return Math.sign(to2) === Math.sign(from) ? to2 : -to2;
         }
-        function _spow(base, exp2) {
-          return _copySign(Math.pow(Math.abs(base), exp2), base);
+        function _spow(base2, exp2) {
+          return _copySign(Math.pow(Math.abs(base2), exp2), base2);
         }
         function _zdiv(n3, d2) {
           return d2 === 0 ? 0 : n3 / d2;
@@ -8728,7 +8728,7 @@ var require_axe = __commonJS({
             }
           }, {
             key: "resolve",
-            value: function resolve7(number) {
+            value: function resolve8(number) {
               if (this.type === "<angle>") {
                 return number;
               }
@@ -9156,8 +9156,8 @@ var require_axe = __commonJS({
               return _ColorSpace2.get(space2);
             });
             this.bases = [];
-            for (var base = this.base; base; base = base.base) {
-              this.bases.push(base);
+            for (var base2 = this.base; base2; base2 = base2.base) {
+              this.bases.push(base2);
             }
             if (options.rgbGamut) {
               this.rgbGamut = options.rgbGamut;
@@ -11345,14 +11345,14 @@ var require_axe = __commonJS({
             var _options$chroma, _options$coords2, _options$formats2;
             var _this6;
             _classCallCheck(this, GamutRelativeColorSpace2);
-            var base = ColorSpace_default.get(options.base);
+            var base2 = ColorSpace_default.get(options.base);
             var chroma = (_options$chroma = options.chroma) !== null && _options$chroma !== void 0 ? _options$chroma : "c";
-            var ids = Object.keys(base.coords);
+            var ids = Object.keys(base2.coords);
             var chromaIndex = ids.indexOf(chroma);
             if (chromaIndex === -1) {
-              throw new TypeError('GamutRelativeColorSpace needs a "'.concat(chroma, '" coordinate, got ').concat(base.id));
+              throw new TypeError('GamutRelativeColorSpace needs a "'.concat(chroma, '" coordinate, got ').concat(base2.id));
             }
-            var coords2 = Object.fromEntries(Object.entries(base.coords).map(function(_ref22) {
+            var coords2 = Object.fromEntries(Object.entries(base2.coords).map(function(_ref22) {
               var _ref23 = _slicedToArray(_ref22, 2), id2 = _ref23[0], meta = _ref23[1];
               return [id2, _extends({}, meta)];
             }));
@@ -11363,10 +11363,10 @@ var require_axe = __commonJS({
               color: {
                 coords: ids.map(function(id2) {
                   var _ref26, _base$coords$id$range;
-                  if (base.coords[id2].type === "angle") {
+                  if (base2.coords[id2].type === "angle") {
                     return "<number> | <angle>";
                   }
-                  var _ref24 = (_ref26 = (_base$coords$id$range = base.coords[id2].range) !== null && _base$coords$id$range !== void 0 ? _base$coords$id$range : base.coords[id2].refRange) !== null && _ref26 !== void 0 ? _ref26 : [], _ref25 = _slicedToArray(_ref24, 2), min = _ref25[0], max2 = _ref25[1];
+                  var _ref24 = (_ref26 = (_base$coords$id$range = base2.coords[id2].range) !== null && _base$coords$id$range !== void 0 ? _base$coords$id$range : base2.coords[id2].refRange) !== null && _ref26 !== void 0 ? _ref26 : [], _ref25 = _slicedToArray(_ref24, 2), min = _ref25[0], max2 = _ref25[1];
                   var pctFirst = id2 === chroma || min === 0 && max2 === 1;
                   return pctFirst ? "<percentage> | <number>" : "<number> | <percentage>";
                 })
@@ -11374,10 +11374,10 @@ var require_axe = __commonJS({
             };
             _this6 = _callSuper(this, GamutRelativeColorSpace2, [options]);
             _this6.chromaIndex = chromaIndex;
-            _this6.method = "".concat(base.id, ".").concat(chroma);
+            _this6.method = "".concat(base2.id, ".").concat(chroma);
             var corners = [[0, 0, 1], [0, 1, 0], [0, 1, 1], [1, 0, 0], [1, 0, 1], [1, 1, 0]];
             _this6.oogChroma = 1.01 * Math.max.apply(Math, _toConsumableArray(corners.map(function(rgb) {
-              return base.from(_this6.gamutSpace, rgb)[_this6.chromaIndex] || 0;
+              return base2.from(_this6.gamutSpace, rgb)[_this6.chromaIndex] || 0;
             })));
             return _this6;
           }
@@ -15596,7 +15596,7 @@ var require_axe = __commonJS({
           });
         };
         var dq_element_default = DqElement;
-        function checkHelper(checkResult, options, resolve7, reject) {
+        function checkHelper(checkResult, options, resolve8, reject) {
           return {
             isAsync: false,
             async: function async() {
@@ -15604,7 +15604,7 @@ var require_axe = __commonJS({
               return function(result) {
                 if (result instanceof Error === false) {
                   checkResult.result = result;
-                  resolve7(checkResult);
+                  resolve8(checkResult);
                 } else {
                   reject(result);
                 }
@@ -15920,8 +15920,8 @@ var require_axe = __commonJS({
             defer: function defer(fn) {
               if (_typeof(fn) === "object" && fn.then && fn["catch"]) {
                 var defer2 = fn;
-                fn = function fn2(resolve7, reject) {
-                  defer2.then(resolve7)["catch"](reject);
+                fn = function fn2(resolve8, reject) {
+                  defer2.then(resolve8)["catch"](reject);
                 };
               }
               funcGuard(fn);
@@ -16367,23 +16367,23 @@ var require_axe = __commonJS({
           return !!win.frameElement;
         };
         setDefaultFrameMessenger(_respondable);
-        function _sendCommandToFrame(node, parameters, resolve7, reject) {
+        function _sendCommandToFrame(node, parameters, resolve8, reject) {
           var _parameters$options$p, _parameters$options;
           var win = node.contentWindow;
           var pingWaitTime = (_parameters$options$p = (_parameters$options = parameters.options) === null || _parameters$options === void 0 ? void 0 : _parameters$options.pingWaitTime) !== null && _parameters$options$p !== void 0 ? _parameters$options$p : 500;
           if (!win) {
             log("Frame does not have a content window", node);
-            resolve7(null);
+            resolve8(null);
             return;
           }
           if (pingWaitTime === 0) {
-            callAxeStart(node, parameters, resolve7, reject);
+            callAxeStart(node, parameters, resolve8, reject);
             return;
           }
           var timeout = setTimeout(function() {
             timeout = setTimeout(function() {
               if (!parameters.debug) {
-                resolve7(null);
+                resolve8(null);
               } else {
                 reject(err("No response from frame", node));
               }
@@ -16391,10 +16391,10 @@ var require_axe = __commonJS({
           }, pingWaitTime);
           _respondable(win, "axe.ping", null, void 0, function() {
             clearTimeout(timeout);
-            callAxeStart(node, parameters, resolve7, reject);
+            callAxeStart(node, parameters, resolve8, reject);
           });
         }
-        function callAxeStart(node, parameters, resolve7, reject) {
+        function callAxeStart(node, parameters, resolve8, reject) {
           var _parameters$options$f, _parameters$options2;
           var frameWaitTime = (_parameters$options$f = (_parameters$options2 = parameters.options) === null || _parameters$options2 === void 0 ? void 0 : _parameters$options2.frameWaitTime) !== null && _parameters$options$f !== void 0 ? _parameters$options$f : 6e4;
           var win = node.contentWindow;
@@ -16404,7 +16404,7 @@ var require_axe = __commonJS({
           _respondable(win, "axe.start", parameters, void 0, function(data) {
             clearTimeout(timeout);
             if (data instanceof Error === false) {
-              resolve7(data);
+              resolve8(data);
             } else {
               reject(data);
             }
@@ -16596,7 +16596,7 @@ var require_axe = __commonJS({
           }
           return null;
         }
-        function _collectResultsFromFrames(parentContent, options, command, parameter, resolve7, reject) {
+        function _collectResultsFromFrames(parentContent, options, command, parameter, resolve8, reject) {
           options = _extends({}, options, {
             elementRef: false
           });
@@ -16624,7 +16624,7 @@ var require_axe = __commonJS({
             });
           });
           q2.then(function(data) {
-            resolve7(merge_results_default(data, options));
+            resolve8(merge_results_default(data, options));
           })["catch"](reject);
         }
         function _contains(vNode, otherVNode) {
@@ -20430,7 +20430,7 @@ var require_axe = __commonJS({
           accessibleTextVirtual: function accessibleTextVirtual() {
             return _accessibleTextVirtual;
           },
-          autocomplete: function autocomplete() {
+          autocomplete: function autocomplete2() {
             return _autocomplete;
           },
           formControlValue: function formControlValue2() {
@@ -24200,9 +24200,9 @@ var require_axe = __commonJS({
           return Promise.all(promises);
         }
         function resolveImportUrl(url, sheet) {
-          var base = sheet.href || document2.baseURI;
+          var base2 = sheet.href || document2.baseURI;
           try {
-            return new window2.URL(url, base).href;
+            return new window2.URL(url, base2).href;
           } catch (_unused8) {
             return url;
           }
@@ -24240,7 +24240,7 @@ var require_axe = __commonJS({
             return Promise.resolve();
           }
           importedUrls.push(url);
-          return new Promise(function(resolve7, reject) {
+          return new Promise(function(resolve8, reject) {
             var request = new window2.XMLHttpRequest();
             request.open("GET", url);
             request.timeout = constants_default.preload.timeout;
@@ -24248,7 +24248,7 @@ var require_axe = __commonJS({
             request.addEventListener("timeout", reject);
             request.addEventListener("loadend", function(event) {
               if (event.loaded && request.responseText) {
-                return resolve7(request.responseText);
+                return resolve8(request.responseText);
               }
               reject(request.responseText);
             });
@@ -24650,13 +24650,13 @@ var require_axe = __commonJS({
         }
         var preload_media_default = preloadMedia;
         function isMediaElementReady(elm) {
-          return new Promise(function(resolve7) {
+          return new Promise(function(resolve8) {
             if (elm.readyState > 0) {
-              resolve7(elm);
+              resolve8(elm);
             }
             function onMediaReady() {
               elm.removeEventListener("loadedmetadata", onMediaReady);
-              resolve7(elm);
+              resolve8(elm);
             }
             elm.addEventListener("loadedmetadata", onMediaReady);
           });
@@ -24669,7 +24669,7 @@ var require_axe = __commonJS({
           if (!_shouldPreload(options)) {
             return Promise.resolve();
           }
-          return new Promise(function(resolve7, reject) {
+          return new Promise(function(resolve8, reject) {
             var _getPreloadConfig2 = _getPreloadConfig(options), assets = _getPreloadConfig2.assets, timeout = _getPreloadConfig2.timeout;
             var preloadTimeout = setTimeout(function() {
               return reject(new Error("Preload assets timed out."));
@@ -24683,7 +24683,7 @@ var require_axe = __commonJS({
                 return _extends({}, out, result);
               }, {});
               clearTimeout(preloadTimeout);
-              resolve7(preloadAssets);
+              resolve8(preloadAssets);
             })["catch"](function(err2) {
               clearTimeout(preloadTimeout);
               reject(err2);
@@ -25252,8 +25252,8 @@ var require_axe = __commonJS({
           }, {});
         }
         var serial_virtual_node_default = SerialVirtualNode;
-        function cleanup(resolve7, reject) {
-          resolve7 = resolve7 || function res() {
+        function cleanup(resolve8, reject) {
+          resolve8 = resolve8 || function res() {
           };
           reject = reject || axe2.log;
           if (!axe2._audit) {
@@ -25284,7 +25284,7 @@ var require_axe = __commonJS({
           });
           q2.then(function(results) {
             if (cleanupErrors.length === 0) {
-              resolve7(results);
+              resolve8(results);
             } else {
               reject(cleanupErrors);
             }
@@ -30553,7 +30553,7 @@ var require_axe = __commonJS({
         var only_listitems_evaluate_default = onlyListitemsEvaluate;
         function onlyDlitemsEvaluate(node, options, virtualNode) {
           var ALLOWED_ROLES = ["definition", "term", "list"];
-          var base = {
+          var base2 = {
             badNodes: [],
             hasNonEmptyTextNode: false
           };
@@ -30578,7 +30578,7 @@ var require_axe = __commonJS({
               out.hasNonEmptyTextNode = true;
             }
             return out;
-          }, base);
+          }, base2);
           if (result.badNodes.length) {
             this.relatedNodes(result.badNodes);
           }
@@ -33485,13 +33485,13 @@ var require_axe = __commonJS({
           }
         }
         Check.prototype.enabled = true;
-        Check.prototype.run = function run(node, options, context, resolve7, reject) {
+        Check.prototype.run = function run(node, options, context, resolve8, reject) {
           options = options || {};
           var enabled = options.hasOwnProperty("enabled") ? options.enabled : this.enabled;
           var checkOptions = this.getOptions(options.options);
           if (enabled) {
             var checkResult = new check_result_default(this);
-            var helper = check_helper_default(checkResult, options, resolve7, reject);
+            var helper = check_helper_default(checkResult, options, resolve8, reject);
             var result;
             try {
               result = this.evaluate.call(helper, node.actualNode, checkOptions, node, context);
@@ -33504,10 +33504,10 @@ var require_axe = __commonJS({
             }
             if (!helper.isAsync) {
               checkResult.result = result;
-              resolve7(checkResult);
+              resolve8(checkResult);
             }
           } else {
-            resolve7(null);
+            resolve8(null);
           }
         };
         Check.prototype.runSync = function runSync(node, options, context) {
@@ -33624,7 +33624,7 @@ var require_axe = __commonJS({
           }
           return elements;
         };
-        Rule.prototype.runChecks = function runChecks(type2, node, options, context, resolve7, reject) {
+        Rule.prototype.runChecks = function runChecks(type2, node, options, context, resolve8, reject) {
           var self2 = this;
           var checkQueue = queue_default();
           this[type2].forEach(function(c4) {
@@ -33645,7 +33645,7 @@ var require_axe = __commonJS({
             results = results.filter(function(check) {
               return check;
             });
-            resolve7({
+            resolve8({
               type: type2,
               results
             });
@@ -33670,7 +33670,7 @@ var require_axe = __commonJS({
         Rule.prototype.run = function run2(context) {
           var _this16 = this;
           var options = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
-          var resolve7 = arguments.length > 2 ? arguments[2] : void 0;
+          var resolve8 = arguments.length > 2 ? arguments[2] : void 0;
           var reject = arguments.length > 3 ? arguments[3] : void 0;
           if (options.performanceTimer) {
             this._trackPerformance();
@@ -33726,7 +33726,7 @@ var require_axe = __commonJS({
               _this16._logRulePerformance();
             }
             setTimeout(function() {
-              resolve7(ruleResult);
+              resolve8(ruleResult);
             }, 0);
           })["catch"](function(error) {
             if (options.performanceTimer) {
@@ -34169,7 +34169,7 @@ var require_axe = __commonJS({
             }
           }, {
             key: "run",
-            value: function run(context, options, resolve7, reject) {
+            value: function run(context, options, resolve8, reject) {
               var _this20 = this;
               _normalizeRunOptions(options);
               dq_element_default.setRunOptions(options);
@@ -34209,7 +34209,7 @@ var require_axe = __commonJS({
                   var nowRulesResults = nowRulesAndPreloaderResults[0];
                   if (!runLaterRules.length) {
                     axe2._selectCache = void 0;
-                    resolve7(nowRulesResults.filter(function(result) {
+                    resolve8(nowRulesResults.filter(function(result) {
                       return !!result;
                     }));
                     return;
@@ -34221,7 +34221,7 @@ var require_axe = __commonJS({
                   });
                   laterRulesQueue.then(function(laterRuleResults) {
                     axe2._selectCache = void 0;
-                    resolve7(nowRulesResults.concat(laterRuleResults).filter(function(result) {
+                    resolve8(nowRulesResults.concat(laterRuleResults).filter(function(result) {
                       return !!result;
                     }));
                   })["catch"](reject);
@@ -34376,7 +34376,7 @@ var require_axe = __commonJS({
           return b3 || a2;
         };
         function getRulesToRun(rules, context, options) {
-          var base = {
+          var base2 = {
             now: [],
             later: []
           };
@@ -34390,21 +34390,21 @@ var require_axe = __commonJS({
             }
             out.now.push(rule);
             return out;
-          }, base);
+          }, base2);
           return splitRules;
         }
         function getDefferedRule(rule, context, options) {
           if (options.performanceTimer) {
             performance_timer_default.mark("mark_rule_start_" + rule.id);
           }
-          return function(resolve7, reject) {
+          return function(resolve8, reject) {
             rule.run(context, options, function(ruleResult) {
-              return resolve7(ruleResult);
+              return resolve8(ruleResult);
             }, function(err2) {
               if (options.debug) {
                 reject(err2);
               } else {
-                resolve7(createIncompleteErrorResult(rule, err2));
+                resolve8(createIncompleteErrorResult(rule, err2));
               }
             });
           };
@@ -34473,7 +34473,7 @@ var require_axe = __commonJS({
           axe2._selectCache = void 0;
         }
         var teardown_default = teardown;
-        function runRules(context, options, resolve7, reject) {
+        function runRules(context, options, resolve8, reject) {
           try {
             context = new Context(context);
             axe2._tree = context.flatTree;
@@ -34519,7 +34519,7 @@ var require_axe = __commonJS({
                 results = results.map(_finalizeRuleResult);
               }
               try {
-                resolve7(results, teardown_default);
+                resolve8(results, teardown_default);
               } catch (e) {
                 teardown_default();
                 log(e);
@@ -34537,7 +34537,7 @@ var require_axe = __commonJS({
           axe2._audit = new audit_default(audit2);
         }
         function runCommand(data, keepalive, callback) {
-          var resolve7 = callback;
+          var resolve8 = callback;
           var reject = function reject2(err2) {
             if (err2 instanceof Error === false) {
               err2 = new Error(err2);
@@ -34553,11 +34553,11 @@ var require_axe = __commonJS({
             case "rules":
               return runRules(context, options, function(results, cleanupFn) {
                 results = node_serializer_default.mapRawResults(results);
-                resolve7(results);
+                resolve8(results);
                 cleanupFn();
               }, reject);
             case "cleanup-plugin":
-              return cleanup_default(resolve7, reject);
+              return cleanup_default(resolve8, reject);
             default:
               if (axe2._audit && axe2._audit.commands && axe2._audit.commands[data.command]) {
                 return axe2._audit.commands[data.command](data, callback);
@@ -34697,7 +34697,7 @@ var require_axe = __commonJS({
           }
           setupGlobals(args[0]);
           var _normalizeRunParams = normalizeRunParams(args), context = _normalizeRunParams.context, options = _normalizeRunParams.options, _normalizeRunParams$c = _normalizeRunParams.callback, callback = _normalizeRunParams$c === void 0 ? noop2 : _normalizeRunParams$c;
-          var _getPromiseHandlers = getPromiseHandlers(callback), thenable = _getPromiseHandlers.thenable, resolve7 = _getPromiseHandlers.resolve, reject = _getPromiseHandlers.reject;
+          var _getPromiseHandlers = getPromiseHandlers(callback), thenable = _getPromiseHandlers.thenable, resolve8 = _getPromiseHandlers.resolve, reject = _getPromiseHandlers.reject;
           try {
             assert_default(axe2._audit, "No audit configured");
             assert_default(!axe2._running, "Axe is already running. Use `await axe.run()` to wait for the previous run to finish before starting a new run.");
@@ -34719,7 +34719,7 @@ var require_axe = __commonJS({
               axe2._running = false;
               teardown2();
               try {
-                resolve7(results);
+                resolve8(results);
               } catch (e) {
                 axe2.log(e);
               }
@@ -34754,14 +34754,14 @@ var require_axe = __commonJS({
           return thenable;
         }
         function getPromiseHandlers(callback) {
-          var thenable, reject, resolve7;
+          var thenable, reject, resolve8;
           if (typeof Promise === "function" && callback === noop2) {
             thenable = new Promise(function(_resolve, _reject) {
               reject = _reject;
-              resolve7 = _resolve;
+              resolve8 = _resolve;
             });
           } else {
-            resolve7 = function resolve8(result) {
+            resolve8 = function resolve9(result) {
               return callback(null, result);
             };
             reject = function reject2(err2) {
@@ -34771,7 +34771,7 @@ var require_axe = __commonJS({
           return {
             thenable,
             reject,
-            resolve: resolve7
+            resolve: resolve8
           };
         }
         function createReport(rawResults, options, respond, reject) {
@@ -34879,9 +34879,9 @@ var require_axe = __commonJS({
           });
         }
         function createReport2(results, options) {
-          return new Promise(function(resolve7, reject) {
+          return new Promise(function(resolve8, reject) {
             var reporter = getReporter(options.reporter);
-            reporter(results, options, resolve7, reject);
+            reporter(results, options, resolve8, reject);
           });
         }
         function setup2(node) {
@@ -38673,10 +38673,10 @@ import { chmodSync, existsSync, mkdirSync, realpathSync, writeFileSync } from "n
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 function resolveInside(root, child) {
   if (child.includes("\0")) throw new JouriloError("UNSAFE_PATH", "Path contains a NUL byte.");
-  const base = existsSync(root) ? realpathSync(root) : resolve(root);
-  const target = resolve(base, child);
+  const base2 = existsSync(root) ? realpathSync(root) : resolve(root);
+  const target = resolve(base2, child);
   const real = existsSync(target) ? realpathSync(target) : target;
-  const rel = relative(base, real);
+  const rel = relative(base2, real);
   if (rel === "" || !rel.startsWith(`..${sep}`) && rel !== ".." && !isAbsolute(rel)) return real;
   throw new JouriloError("UNSAFE_PATH", `Path escapes ${root}: ${child}`);
 }
@@ -39794,10 +39794,10 @@ async function capturePage(ctx, url, vp, opts) {
       });
     }
     if (opts.screenshots !== false) {
-      const base = `${slug(new URL(url).pathname.replace(/^\/$/, "home"), 40)}-${shortHash(url).slice(0, 6)}-${vp.name}`;
+      const base2 = `${slug(new URL(url).pathname.replace(/^\/$/, "home"), 40)}-${shortHash(url).slice(0, 6)}-${vp.name}`;
       const mask = [...DEFAULT_MASK, ...opts.mask ?? []].map((s) => page.locator(s));
-      const full = join("screenshots", `${base}.jpg`);
-      const fold = join("screenshots", `${base}-fold.jpg`);
+      const full = join("screenshots", `${base2}.jpg`);
+      const fold = join("screenshots", `${base2}-fold.jpg`);
       try {
         const height = Math.min(obs.probe?.scroll.height ?? vp.height, 12e3);
         await page.screenshot({
@@ -40863,7 +40863,7 @@ function checkAction(ctx, policy) {
 }
 function testData(runId, vars = {}) {
   const tag = runId.replace(/[^a-z0-9]/gi, "").slice(-10).toLowerCase();
-  const base = {
+  const base2 = {
     email: `jourilo+${tag}@example.test`,
     password: `Jr-${tag}-Q7!x`,
     name: "Jordan Test",
@@ -40876,7 +40876,7 @@ function testData(runId, vars = {}) {
     // Published test card from Stripe's docs; only useful in a provider's test mode.
     testCard: "4242 4242 4242 4242"
   };
-  return { ...base, ...vars };
+  return { ...base2, ...vars };
 }
 function interpolate(value, data) {
   return value.replace(/\{\{\s*([A-Za-z][\w]*)\s*\}\}/g, (m, k) => data[k] ?? m);
@@ -40917,7 +40917,7 @@ var AFTER = `([sel, beforeText]) => {
 }`;
 async function probeFormValidation(ctx, url, form, vp, policy, runDir) {
   const page = await ctx.newPage();
-  const base = {
+  const base2 = {
     url: redactUrl(url),
     form: form.selector,
     purpose: form.purpose
@@ -40927,17 +40927,17 @@ async function probeFormValidation(ctx, url, form, vp, policy, runDir) {
     await page.goto(url, { waitUntil: "load", timeout: 3e4 });
     await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
     const before = await page.evaluate(`(${BEFORE})(${JSON.stringify(form.selector)})`);
-    if (!before) return { result: { ...base, outcome: "error", detail: "form not found" }, findings };
+    if (!before) return { result: { ...base2, outcome: "error", detail: "form not found" }, findings };
     const verdict = checkAction(
       { action: "click", name: before.submitName, submitsForm: true, paymentForm: before.payment },
       policy
     );
     if (!verdict.allowed)
-      return { result: { ...base, outcome: "blocked", detail: verdict.reason }, findings };
+      return { result: { ...base2, outcome: "blocked", detail: verdict.reason }, findings };
     if (before.nativeBlocks) {
       return {
         result: {
-          ...base,
+          ...base2,
           outcome: "native-validation",
           detail: "Browser constraint validation blocks the empty submission."
         },
@@ -40992,7 +40992,7 @@ async function probeFormValidation(ctx, url, form, vp, policy, runDir) {
       );
       return {
         result: {
-          ...base,
+          ...base2,
           outcome: navigated ? "navigated" : "no-feedback",
           detail: "no visible error feedback"
         },
@@ -41052,14 +41052,14 @@ async function probeFormValidation(ctx, url, form, vp, policy, runDir) {
     }
     return {
       result: {
-        ...base,
+        ...base2,
         outcome: "feedback",
         detail: `${after.errorish.length} message(s), aria-invalid on ${after.ariaInvalid}`
       },
       findings
     };
   } catch (err) {
-    return { result: { ...base, outcome: "error", detail: excerpt(err.message, 200) }, findings };
+    return { result: { ...base2, outcome: "error", detail: excerpt(err.message, 200) }, findings };
   } finally {
     await page.close().catch(() => void 0);
   }
@@ -41926,7 +41926,9 @@ async function runAudit(ws, opts) {
         keyboard: opts.keyboard,
         throttle: opts.throttle,
         axe: observations.find((o) => o.axe)?.axe?.version ?? null,
-        hostClass
+        hostClass,
+        // The exact scope, so `jourilo verify` can repeat this run after a change.
+        scope: { urls: [...new Set(urls.map((u) => u.url))], viewports: opts.viewports.map((v) => v.name) }
       },
       pages,
       journeys: [],
@@ -42081,16 +42083,16 @@ async function serveStatic(root, port = 0) {
     if (delay > 0) setTimeout(send, delay);
     else send();
   });
-  await new Promise((resolve7, reject) => {
+  await new Promise((resolve8, reject) => {
     server.once("error", reject);
-    server.listen(port, "127.0.0.1", () => resolve7());
+    server.listen(port, "127.0.0.1", () => resolve8());
   });
   const { port: actual } = server.address();
   return {
     url: `http://127.0.0.1:${actual}`,
-    close: () => new Promise((resolve7) => {
+    close: () => new Promise((resolve8) => {
       server.closeAllConnections();
-      server.close(() => resolve7());
+      server.close(() => resolve8());
     })
   };
 }
@@ -42949,7 +42951,11 @@ async function auditCommand(ctx, usage2, categories) {
       ctx.log("Note: --ignore-robots is only appropriate for sites you own or are authorized to test.");
     }
     const { run, runDir } = await runAudit(ctx.ws, opts);
-    if (server) run.target = `${resolve3(targetArg)} (served at ${server.url})`;
+    if (server) {
+      run.target = `${resolve3(targetArg)} (served at ${server.url})`;
+      run.settings.servedDir = resolve3(targetArg);
+    }
+    if (repo) run.settings.repo = repo;
     if (repo) {
       const located = locateFindings(run, repo);
       ctx.log(`Mapped ${located} finding(s) to likely source locations in ${repo}`);
@@ -43513,13 +43519,13 @@ function discoverRepository(root) {
       existsSync7(join9(root, "pnpm-workspace.yaml")) ? "pnpm-workspace.yaml" : "package.json"
     );
   for (const g of wsGlobs) {
-    const base = g.replace(/\/\*\*?$/, "");
+    const base2 = g.replace(/\/\*\*?$/, "");
     if (g.endsWith("*")) {
-      const dir = join9(root, base);
+      const dir = join9(root, base2);
       if (!existsSync7(dir)) continue;
       for (const n of readdirSync5(dir))
         if (existsSync7(join9(dir, n, "package.json"))) appRoots.push(join9(dir, n));
-    } else if (existsSync7(join9(root, base, "package.json"))) appRoots.push(join9(root, base));
+    } else if (existsSync7(join9(root, base2, "package.json"))) appRoots.push(join9(root, base2));
   }
   const apps = (appRoots.length ? appRoots : [root]).map((r) => profileApp(root, r, files)).filter(
     (a, _, all) => all.length === 1 || a.routes.length > 0 || a.frameworks.some((f) => !["React", "Vue", "Svelte", "Vite"].includes(f.value))
@@ -45059,8 +45065,8 @@ async function runCmd(ctx) {
   const isDir = existsSync10(baseArg) && !baseArg.includes("://");
   const server = isDir ? await serveStatic(resolve6(baseArg)) : void 0;
   try {
-    const base = parseTargetUrl(server?.url ?? baseArg);
-    const hostClass = await checkTarget(base, { allowPrivate: flag(ctx, "allow-private") });
+    const base2 = parseTargetUrl(server?.url ?? baseArg);
+    const hostClass = await checkTarget(base2, { allowPrivate: flag(ctx, "allow-private") });
     const id = newRunId();
     const runDir = ctx.ws.createRunDir(id);
     const browserName = str(ctx, "browser") ?? "chromium";
@@ -45091,7 +45097,7 @@ async function runCmd(ctx) {
         for (const vp of viewports) {
           ctx.log(`journey ${spec.id}${vp ? ` (${vp})` : ""}`);
           const { result, findings: jf } = await runJourney(browser, spec, {
-            base,
+            base: base2,
             runDir,
             hostClass,
             policy,
@@ -45116,7 +45122,7 @@ async function runCmd(ctx) {
       id,
       tool: { name: "jourilo", version: VERSION },
       mode: isDir || str(ctx, "repo") ? "repository" : "website",
-      target: server ? `${resolve6(baseArg)} (served at ${server.url})` : base.toString(),
+      target: server ? `${resolve6(baseArg)} (served at ${server.url})` : base2.toString(),
       startedAt,
       finishedAt: (/* @__PURE__ */ new Date()).toISOString(),
       browser: { name: browserName, version: "" },
@@ -45212,8 +45218,369 @@ ${specs.map((s) => `  ${s.id.padEnd(32)} ${s.steps.length} steps, ${s.success.le
   }
 };
 
-// src/cli/commands/runs.ts
+// src/cli/commands/optimize.ts
+import { existsSync as existsSync13, mkdirSync as mkdirSync6, writeFileSync as writeFileSync9 } from "node:fs";
+import { join as join15, resolve as resolve7 } from "node:path";
 init_errors();
+init_fs_safety();
+
+// src/repair/diff.ts
+function unifiedDiff(file, before, after, context = 3) {
+  if (before === after) return "";
+  const a = before.split("\n");
+  const b = after.split("\n");
+  const ops = [];
+  if (a.length * b.length > 4e6) {
+    for (const l of a) ops.push({ t: "-", line: l });
+    for (const l of b) ops.push({ t: "+", line: l });
+  } else {
+    const n = a.length;
+    const m = b.length;
+    const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+    for (let i2 = n - 1; i2 >= 0; i2--)
+      for (let j2 = m - 1; j2 >= 0; j2--)
+        dp[i2][j2] = a[i2] === b[j2] ? dp[i2 + 1][j2 + 1] + 1 : Math.max(dp[i2 + 1][j2], dp[i2][j2 + 1]);
+    let i = 0;
+    let j = 0;
+    while (i < n && j < m) {
+      if (a[i] === b[j]) {
+        ops.push({ t: " ", line: a[i] });
+        i++;
+        j++;
+      } else if (dp[i + 1][j] >= dp[i][j + 1]) ops.push({ t: "-", line: a[i++] });
+      else ops.push({ t: "+", line: b[j++] });
+    }
+    while (i < n) ops.push({ t: "-", line: a[i++] });
+    while (j < m) ops.push({ t: "+", line: b[j++] });
+  }
+  const out = [`--- a/${file}`, `+++ b/${file}`];
+  let k = 0;
+  let aLine = 1;
+  let bLine = 1;
+  while (k < ops.length) {
+    if (ops[k].t === " ") {
+      k++;
+      aLine++;
+      bLine++;
+      continue;
+    }
+    const start = Math.max(0, k - context);
+    let end = k;
+    let lastChange = k;
+    while (end < ops.length && (ops[end].t !== " " || end - lastChange <= context * 2)) {
+      if (ops[end].t !== " ") lastChange = end;
+      end++;
+    }
+    end = Math.min(ops.length, lastChange + context + 1);
+    const back = k - start;
+    const hunk = ops.slice(start, end);
+    const aStart = aLine - back;
+    const bStart = bLine - back;
+    const aCount = hunk.filter((o) => o.t !== "+").length;
+    const bCount = hunk.filter((o) => o.t !== "-").length;
+    out.push(`@@ -${aStart},${aCount} +${bStart},${bCount} @@`);
+    for (const o of hunk) out.push(`${o.t}${o.line}`);
+    for (let x = k; x < end; x++) {
+      if (ops[x].t !== "+") aLine++;
+      if (ops[x].t !== "-") bLine++;
+    }
+    k = end;
+  }
+  return `${out.join("\n")}
+`;
+}
+
+// src/repair/fixes.ts
+import { existsSync as existsSync11, readFileSync as readFileSync9 } from "node:fs";
+import { extname as extname3 } from "node:path";
+init_fs_safety();
+function base(f, title, explanation, expectedEffect) {
+  return { fingerprint: f.fingerprint, ruleId: f.ruleId, title, explanation, expectedEffect };
+}
+var isJsx = (file) => /\.(jsx|tsx)$/.test(file);
+var htmlLang = (f, _root, read2) => {
+  const src = f.sources?.find((s) => s.reason.includes("<html>"));
+  if (!src) return null;
+  const text = read2(src.file);
+  if (!text) return null;
+  const path2 = (() => {
+    try {
+      return new URL(f.url).pathname;
+    } catch {
+      return "/";
+    }
+  })();
+  const seg = path2.split("/").filter(Boolean)[0] ?? "";
+  const lang = /^[a-z]{2}(-[a-z]{2})?$/i.test(seg) ? seg.toLowerCase() : "en";
+  const after = text.replace(/<html(?![^>]*\blang=)([^>]*)>/i, `<html lang="${lang}"$1>`);
+  if (after === text) return null;
+  return {
+    ...base(
+      f,
+      `Add lang="${lang}" to <html>`,
+      "Screen readers choose pronunciation from the page language; without it they guess.",
+      "axe html-has-lang passes; correct pronunciation in screen readers."
+    ),
+    edits: [{ file: src.file, before: text, after }],
+    assumptions: [
+      seg === lang ? `Language "${lang}" was inferred from the URL path /${seg}; confirm it matches the page content.` : 'Language "en" is assumed; change it if the page is in another language.'
+    ]
+  };
+};
+var viewportMeta = (f, _root, read2) => {
+  const src = f.sources?.find((s) => /\.html?$/.test(s.file) && s.reason.includes("viewport"));
+  if (!src) return null;
+  const text = read2(src.file);
+  if (!text || /name=["']viewport["']/i.test(text)) return null;
+  const anchor = /<meta\s+charset=[^>]*>/i.test(text) ? /(<meta\s+charset=[^>]*>)(\r?\n?)(\s*)/i : /(<head\b[^>]*>)(\r?\n?)(\s*)/i;
+  const after = text.replace(
+    anchor,
+    (_m, tag, nl, indent) => `${tag}${nl || "\n"}${indent}<meta name="viewport" content="width=device-width, initial-scale=1">
+${indent}`
+  );
+  if (after === text) return null;
+  return {
+    ...base(
+      f,
+      "Add a responsive viewport meta tag",
+      "Without it, mobile browsers lay the page out at ~980 px and zoom out.",
+      "The page renders at device width on phones; text and targets get their intended size."
+    ),
+    edits: [{ file: src.file, before: text, after }],
+    assumptions: [
+      "Check that the layout actually works at narrow widths after this change (rerun the mobile audit)."
+    ]
+  };
+};
+var autocomplete = (f, root, read2) => {
+  const edits = /* @__PURE__ */ new Map();
+  const tokens = [];
+  for (const e of f.evidence) {
+    const m = e.snippet?.match(/^(\w+) name=(\S+) label=(.*)$/);
+    if (!m) continue;
+    const [, type, name, label] = m;
+    if (!name || name === "\u2205") continue;
+    const purpose = /signup|register/i.test(f.description) ? "signup" : "other";
+    const token = suggestAutocomplete(type, name, label === "\u2205" ? null : label, purpose);
+    if (token.startsWith("on (")) continue;
+    for (const s of f.sources ?? []) {
+      const cur = edits.get(s.file)?.after ?? read2(s.file);
+      if (!cur) continue;
+      const attr = isJsx(s.file) ? "autoComplete" : "autocomplete";
+      const re = new RegExp(
+        `(<input\\b(?=[^>]*\\bname=["']${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'])(?![^>]*\\bauto[cC]omplete=)[^>]*?)(\\s*/?>)`
+      );
+      const next = cur.replace(re, `$1 ${attr}="${token}"$2`);
+      if (next !== cur) {
+        edits.set(s.file, { before: edits.get(s.file)?.before ?? read2(s.file), after: next });
+        tokens.push(`${name} \u2192 ${token}`);
+        break;
+      }
+    }
+  }
+  void root;
+  if (!edits.size) return null;
+  return {
+    ...base(
+      f,
+      "Add autocomplete tokens to personal-data fields",
+      `Lets browsers and password managers fill: ${tokens.join(", ")}.`,
+      "WCAG 1.3.5 satisfied for these fields; fewer keystrokes in signup/checkout."
+    ),
+    edits: [...edits].map(([file, v]) => ({ file, ...v })),
+    assumptions: [
+      "Tokens were chosen from field names and labels; confirm each matches what the field collects."
+    ]
+  };
+};
+var focusVisible = (f, _root, read2) => {
+  const src = f.sources?.find((s) => /\.(css|scss|less)$/.test(s.file) && s.reason.includes("focus outline"));
+  if (!src) return null;
+  const text = read2(src.file);
+  if (!text) return null;
+  const lines = text.split("\n");
+  let start = src.line - 1;
+  while (start > 0 && !lines[start].includes("{")) start--;
+  const selectorText = lines.slice(Math.max(0, start - 3), start + 1).join(" ").split("}").pop().split("{")[0].replace(/\/\*[\s\S]*?\*\//g, "").trim();
+  const sels = selectorText.split(",").map((s) => s.trim()).filter((s) => /:focus\b/.test(s) && !/:focus-visible/.test(s)).map((s) => s.replace(/:focus\b/, ":focus-visible"));
+  if (!sels.length) return null;
+  if (sels.some((sel) => text.includes(sel))) return null;
+  const rule = `
+/* Keyboard focus indicator (WCAG 2.4.7). Mouse focus keeps the original look. */
+${sels.join(",\n")} {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+`;
+  const after = `${text.replace(/\n*$/, "\n")}${rule}`;
+  return {
+    ...base(
+      f,
+      "Restore a visible keyboard focus indicator",
+      `The stylesheet removes the outline on ${selectorText}. A :focus-visible rule with the same specificity, later in the file, shows a ring only for keyboard focus.`,
+      "Keyboard users see where focus is (WCAG 2.4.7); mouse users see no change."
+    ),
+    edits: [{ file: src.file, before: text, after }],
+    assumptions: [
+      "currentColor must have at least 3:1 contrast against the surrounding background; adjust to a brand token if needed."
+    ]
+  };
+};
+var pasteAllowed = (f, _root, read2) => {
+  const src = f.sources?.find((s) => s.reason.includes("paste"));
+  if (!src) return null;
+  const text = read2(src.file);
+  if (!text) return null;
+  const after = text.replace(/(<input\b[^>]*?)\s+on[pP]aste=(?:"[^"]*"|'[^']*'|\{[^}]*\})([^>]*>)/g, "$1$2");
+  if (after === text) return null;
+  return {
+    ...base(
+      f,
+      "Allow pasting into credential fields",
+      "Inline paste handlers cancel pasting, which blocks password managers.",
+      "Password managers and copy-paste work again (WCAG 3.3.8)."
+    ),
+    edits: [{ file: src.file, before: text, after }],
+    assumptions: [
+      "Script-attached paste listeners (addEventListener) are not removed automatically; search for them if the finding remains."
+    ]
+  };
+};
+var FIXERS = {
+  "axe/html-has-lang": htmlLang,
+  "jourilo/missing-viewport-meta": viewportMeta,
+  "jourilo/input-purpose": autocomplete,
+  "jourilo/focus-visible": focusVisible,
+  "jourilo/paste-blocked": pasteAllowed
+};
+function planFixes(findings, root) {
+  const cache = /* @__PURE__ */ new Map();
+  const read2 = (file) => {
+    if (!cache.has(file)) {
+      try {
+        const abs = resolveInside(root, file);
+        cache.set(
+          file,
+          existsSync11(abs) && [
+            ".html",
+            ".htm",
+            ".css",
+            ".scss",
+            ".less",
+            ".jsx",
+            ".tsx",
+            ".js",
+            ".ts",
+            ".vue",
+            ".svelte",
+            ".astro",
+            ".php"
+          ].includes(extname3(abs).toLowerCase()) ? readFileSync9(abs, "utf8") : null
+        );
+      } catch {
+        cache.set(file, null);
+      }
+    }
+    return cache.get(file);
+  };
+  const plans = [];
+  const touched = /* @__PURE__ */ new Map();
+  for (const f of findings) {
+    const fixer = FIXERS[f.ruleId];
+    if (!fixer || !f.sources?.length) continue;
+    const plan = fixer(f, root, (file) => touched.get(file) ?? read2(file));
+    if (!plan) continue;
+    for (const e of plan.edits) {
+      e.before = touched.get(e.file) ?? read2(e.file) ?? e.before;
+      touched.set(e.file, e.after);
+    }
+    if (plans.some(
+      (p) => p.ruleId === plan.ruleId && p.edits.every((e) => plan.edits.some((x) => x.file === e.file))
+    ))
+      continue;
+    plans.push(plan);
+  }
+  return plans;
+}
+
+// src/repair/git.ts
+init_errors();
+import { spawnSync as spawnSync2 } from "node:child_process";
+import { existsSync as existsSync12, mkdirSync as mkdirSync5, readdirSync as readdirSync7, readFileSync as readFileSync10, writeFileSync as writeFileSync8 } from "node:fs";
+import { join as join14 } from "node:path";
+function git(cwd, args) {
+  const r = spawnSync2("git", args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  return { ok: r.status === 0, out: (r.stdout ?? "").trim(), err: (r.stderr ?? "").trim() };
+}
+function isGitRepo(root) {
+  return git(root, ["rev-parse", "--is-inside-work-tree"]).out === "true";
+}
+function untrackedFiles(root) {
+  return git(root, ["ls-files", "--others", "--exclude-standard"]).out.split("\n").filter(Boolean);
+}
+function createCheckpoint(root, wsRoot, note = "") {
+  if (!isGitRepo(root))
+    throw new JouriloError(
+      "INVALID_INPUT",
+      `${root} is not a git repository; checkpoints need git.`,
+      "Run `git init` and commit, or keep your own backup before applying fixes."
+    );
+  const head = git(root, ["rev-parse", "HEAD"]);
+  if (!head.ok)
+    throw new JouriloError(
+      "INVALID_INPUT",
+      "The repository has no commits yet; commit once before using checkpoints."
+    );
+  const stash = git(root, ["stash", "create", `jourilo checkpoint ${note}`.trim()]);
+  const cp = {
+    id: newRunId(),
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    head: head.out,
+    snapshot: stash.out || head.out,
+    untracked: untrackedFiles(root),
+    note
+  };
+  git(root, ["update-ref", `refs/jourilo/checkpoints/${cp.id}`, cp.snapshot]);
+  const dir = join14(wsRoot, "checkpoints");
+  mkdirSync5(dir, { recursive: true });
+  writeFileSync8(join14(dir, `${cp.id}.json`), `${JSON.stringify(cp, null, 2)}
+`);
+  return cp;
+}
+function loadCheckpoint(wsRoot, id) {
+  const dir = join14(wsRoot, "checkpoints");
+  const pick = id === "latest" ? existsSync12(dir) ? readdirSync7(dir).filter((f) => f.endsWith(".json")).sort().pop()?.replace(/\.json$/, "") : void 0 : id;
+  if (!pick || !/^[\w-]+$/.test(pick) || !existsSync12(join14(dir, `${pick}.json`)))
+    throw new JouriloError("NOT_FOUND", `Checkpoint not found: ${id}`);
+  return JSON.parse(readFileSync10(join14(dir, `${pick}.json`), "utf8"));
+}
+function diffSince(root, cp) {
+  const stat = git(root, ["diff", "--stat", cp.snapshot]).out;
+  const patch = git(root, ["diff", cp.snapshot]).out;
+  const newFiles = untrackedFiles(root).filter((f) => !cp.untracked.includes(f));
+  return { stat, patch, newFiles };
+}
+function rollback(root, cp) {
+  const changed = git(root, ["diff", "--name-only", cp.snapshot]).out.split("\n").filter(Boolean);
+  if (changed.length) {
+    const r = git(root, ["restore", `--source=${cp.snapshot}`, "--worktree", "--", ...changed]);
+    if (!r.ok) {
+      const restorable = changed.filter((f) => git(root, ["cat-file", "-e", `${cp.snapshot}:${f}`]).ok);
+      if (restorable.length) {
+        const r2 = git(root, ["restore", `--source=${cp.snapshot}`, "--worktree", "--", ...restorable]);
+        if (!r2.ok) throw new JouriloError("INTERNAL", `git restore failed: ${r2.err}`);
+      }
+      return {
+        restored: restorable,
+        leftUntracked: [
+          ...changed.filter((f) => !restorable.includes(f)),
+          ...untrackedFiles(root).filter((f) => !cp.untracked.includes(f))
+        ]
+      };
+    }
+  }
+  return { restored: changed, leftUntracked: untrackedFiles(root).filter((f) => !cp.untracked.includes(f)) };
+}
 
 // src/report/compare.ts
 function pathKey(u) {
@@ -45224,17 +45591,17 @@ function pathKey(u) {
     return u;
   }
 }
-function compareRuns(base, head) {
-  const before = new Map(base.findings.map((f) => [f.fingerprint, f]));
+function compareRuns(base2, head) {
+  const before = new Map(base2.findings.map((f) => [f.fingerprint, f]));
   const after = new Map(head.findings.map((f) => [f.fingerprint, f]));
   const headPages = new Set(head.pages.map((p) => pathKey(p.url)));
-  const fixed = base.findings.filter((f) => !after.has(f.fingerprint) && headPages.has(pathKey(f.url)));
+  const fixed = base2.findings.filter((f) => !after.has(f.fingerprint) && headPages.has(pathKey(f.url)));
   const introduced = head.findings.filter((f) => !before.has(f.fingerprint));
   const persisting = head.findings.filter((f) => before.has(f.fingerprint));
   const changed = persisting.map((f) => ({ before: before.get(f.fingerprint), after: f })).filter((c) => c.before.severity !== c.after.severity || c.before.occurrences !== c.after.occurrences);
   const metrics = [];
   for (const hp of head.pages) {
-    const bp = base.pages.find((p) => pathKey(p.url) === pathKey(hp.url) && p.viewport === hp.viewport);
+    const bp = base2.pages.find((p) => pathKey(p.url) === pathKey(hp.url) && p.viewport === hp.viewport);
     if (!bp) continue;
     for (const name of ["LCP", "CLS", "TBT", "FCP", "Transfer"]) {
       const a = bp.metrics.find((m) => m.name === name);
@@ -45247,10 +45614,233 @@ function compareRuns(base, head) {
   const regressionFree = !introduced.some(
     (f) => f.kind === "defect" && (f.severity === "critical" || f.severity === "serious")
   );
-  return { base, head, fixed, introduced, persisting, changed, metrics, regressionFree };
+  return { base: base2, head, fixed, introduced, persisting, changed, metrics, regressionFree };
 }
 
+// src/cli/commands/optimize.ts
+var optimize = {
+  name: "optimize",
+  summary: "Plan (and with --apply, make) minimal source fixes for located findings; shows diffs, checkpoints first.",
+  usage: "jourilo optimize [run=latest] --repo <path> [--rule id ...] [--apply]",
+  options: {
+    repo: { type: "string" },
+    rule: { type: "string", multiple: true },
+    finding: { type: "string", multiple: true },
+    apply: { type: "boolean" }
+  },
+  details: `Deterministic fixers (others are reported with source candidates for a person or agent to fix):
+  axe/html-has-lang, jourilo/missing-viewport-meta, jourilo/input-purpose, jourilo/focus-visible, jourilo/paste-blocked
+Without --apply nothing is written. With --apply, a git checkpoint is created first (jourilo rollback undoes it).
+Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
+  async run(ctx) {
+    const { run, dir } = ctx.ws.loadRun(ctx.positionals[0] ?? "latest");
+    const repo = resolve7(str(ctx, "repo") ?? run.settings.repo ?? ".");
+    if (!existsSync13(repo)) throw new JouriloError("NOT_FOUND", `Repository not found: ${repo}`);
+    if (run.findings.every((f) => !f.sources)) locateFindings(run, repo);
+    const rules = list(ctx, "rule");
+    const only = list(ctx, "finding");
+    const selected = run.findings.filter(
+      (f) => (!rules.length || rules.includes(f.ruleId)) && (!only.length || only.includes(f.fingerprint))
+    );
+    const plans = planFixes(selected, repo);
+    const manual = selected.filter(
+      (f) => f.kind === "defect" && !plans.some((p) => p.fingerprint === f.fingerprint)
+    );
+    const diffs = plans.map((p) => ({
+      ...p,
+      diff: p.edits.map((e) => unifiedDiff(e.file, e.before, e.after)).join("")
+    }));
+    const lines = [`${plans.length} deterministic fix(es) for run ${run.id} in ${repo}`];
+    for (const d of diffs)
+      lines.push(
+        "",
+        `## ${d.title} (${d.ruleId}, ${d.fingerprint})`,
+        d.explanation,
+        `Expected effect: ${d.expectedEffect}`,
+        ...d.assumptions.map((a) => `Assumption: ${a}`),
+        d.diff
+      );
+    let checkpoint2 = null;
+    if (flag(ctx, "apply") && plans.length) {
+      if (isGitRepo(repo))
+        checkpoint2 = createCheckpoint(repo, ctx.ws.root, `before optimize of run ${run.id}`).id;
+      else ctx.log("Warning: not a git repository, so no checkpoint/rollback is available.");
+      const finalContent = /* @__PURE__ */ new Map();
+      for (const p of plans) for (const e of p.edits) finalContent.set(e.file, e.after);
+      for (const [file, content] of finalContent) writeFileSync9(resolveInside(repo, file), content);
+      const outDir = join15(ctx.ws.root, "fixes");
+      mkdirSync6(outDir, { recursive: true });
+      writeFileSync9(
+        join15(outDir, `${run.id}.json`),
+        `${JSON.stringify({ run: run.id, checkpoint: checkpoint2, applied: plans.map((p) => ({ fingerprint: p.fingerprint, ruleId: p.ruleId, title: p.title, files: p.edits.map((e) => e.file) })) }, null, 2)}
+`
+      );
+      lines.push(
+        `Applied ${plans.length} fix(es) to ${finalContent.size} file(s).${checkpoint2 ? ` Checkpoint ${checkpoint2} (jourilo rollback ${checkpoint2}).` : ""}`,
+        `Next: jourilo verify ${run.id}`
+      );
+    } else if (plans.length) {
+      lines.push("Dry run: nothing written. Re-run with --apply to make these changes.");
+    }
+    lines.push(
+      "",
+      `${manual.length} other defect(s) need a person or agent; source candidates are in the report (${join15(dir, "report.html")}).`
+    );
+    return {
+      data: {
+        run: run.id,
+        repo,
+        applied: flag(ctx, "apply"),
+        checkpoint: checkpoint2,
+        fixes: diffs.map(({ edits, ...rest }) => ({ ...rest, files: edits.map((e) => e.file) })),
+        manual: manual.map((f) => ({
+          fingerprint: f.fingerprint,
+          ruleId: f.ruleId,
+          title: f.title,
+          url: f.url,
+          sources: f.sources ?? []
+        }))
+      },
+      text: lines.join("\n")
+    };
+  }
+};
+var verify = {
+  name: "verify",
+  summary: "Repeat a run with the same scope (pages, viewports) after a change and compare: fixed, new, persisting, metric deltas.",
+  usage: "jourilo verify <baseline-run> [--target url|dir] [--fail-on-regression]",
+  options: {
+    target: { type: "string" },
+    "fail-on-regression": { type: "boolean" },
+    repo: { type: "string" }
+  },
+  async run(ctx) {
+    const base2 = ctx.ws.loadRun(ctx.positionals[0] ?? "latest").run;
+    const scope = base2.settings.scope;
+    if (!scope)
+      throw new JouriloError(
+        "INVALID_INPUT",
+        `Run ${base2.id} has no recorded scope (created by an older version or by journeys).`
+      );
+    const servedDir = (str(ctx, "target") && existsSync13(str(ctx, "target")) ? resolve7(str(ctx, "target")) : void 0) ?? base2.settings.servedDir;
+    const server = servedDir ? await serveStatic(servedDir) : void 0;
+    try {
+      const origin = server?.url ?? new URL(str(ctx, "target") ?? scope.urls[0]).origin;
+      const urls = scope.urls.map((u) => {
+        const x = new URL(u);
+        return `${x.pathname}${x.search}`;
+      });
+      const repo = str(ctx, "repo") ?? base2.settings.repo;
+      const { run, runDir } = await runAudit(ctx.ws, {
+        target: origin,
+        urls,
+        viewports: parseViewports(scope.viewports.join(",")),
+        maxPages: urls.length,
+        maxDepth: 1,
+        browser: base2.browser.name ?? "chromium",
+        headed: false,
+        respectRobots: base2.settings.respectRobots !== false,
+        allowPrivate: base2.settings.hostClass === "private",
+        keyboard: base2.settings.keyboard !== false,
+        throttle: base2.settings.throttle === true,
+        timeoutMs: 3e4,
+        mask: [],
+        mode: base2.mode,
+        ...repo ? { context: loadContext(repo) } : {},
+        onProgress: ctx.log
+      });
+      if (servedDir) {
+        run.target = `${servedDir} (served at ${server.url})`;
+        run.settings.servedDir = servedDir;
+      }
+      if (repo) {
+        run.settings.repo = repo;
+        locateFindings(run, repo);
+      }
+      run.settings.baseline = base2.id;
+      ctx.ws.saveRun(run);
+      const cmp = compareRuns(base2, run);
+      const reports = writeReports(runDir, run, cmp);
+      const failed = flag(ctx, "fail-on-regression") && !cmp.regressionFree;
+      return {
+        data: {
+          baseline: base2.id,
+          run: run.id,
+          fixed: cmp.fixed.map((f) => ({ fingerprint: f.fingerprint, title: f.title })),
+          introduced: cmp.introduced,
+          persisting: cmp.persisting.length,
+          metrics: cmp.metrics,
+          regressionFree: cmp.regressionFree,
+          report: reports.html
+        },
+        text: [
+          `Verified ${run.id} against ${base2.id}`,
+          `  fixed ${cmp.fixed.length} \xB7 new ${cmp.introduced.length} \xB7 still present ${cmp.persisting.length}`,
+          ...cmp.fixed.map((f) => `  \u2713 fixed  ${f.title} (${new URL(f.url).pathname})`),
+          ...cmp.introduced.map((f) => `  \u2717 new    ${f.severity} ${f.title} (${new URL(f.url).pathname})`),
+          cmp.regressionFree ? "  No new serious/critical defects." : "  \u26A0 Regression: new serious/critical defects.",
+          `  Report: ${reports.html}`
+        ].join("\n"),
+        exitCode: failed ? 1 : 0
+      };
+    } finally {
+      await server?.close();
+    }
+  }
+};
+var checkpoint = {
+  name: "checkpoint",
+  summary: "Record a git checkpoint of the working tree (no commits, branches or stash entries are created).",
+  usage: "jourilo checkpoint [--repo .] [--note text] | checkpoint diff [id=latest]",
+  options: { repo: { type: "string" }, note: { type: "string" } },
+  async run(ctx) {
+    const repo = resolve7(str(ctx, "repo") ?? ".");
+    if (ctx.positionals[0] === "diff") {
+      const cp2 = loadCheckpoint(ctx.ws.root, ctx.positionals[1] ?? "latest");
+      const d = diffSince(repo, cp2);
+      return {
+        data: { checkpoint: cp2, ...d },
+        text: `${d.stat || "No tracked changes since checkpoint."}${d.newFiles.length ? `
+New untracked files: ${d.newFiles.join(", ")}` : ""}
+
+${d.patch}`
+      };
+    }
+    const cp = createCheckpoint(repo, ctx.ws.root, str(ctx, "note") ?? "");
+    return {
+      data: cp,
+      text: `Checkpoint ${cp.id} (snapshot ${cp.snapshot.slice(0, 10)}). Undo later with: jourilo rollback ${cp.id} --yes`
+    };
+  }
+};
+var rollbackCmd = {
+  name: "rollback",
+  summary: "Restore tracked files to a checkpoint (requires --yes). Untracked files created since are listed, not deleted.",
+  usage: "jourilo rollback <checkpoint-id|latest> --yes [--repo .]",
+  options: { repo: { type: "string" }, yes: { type: "boolean" } },
+  async run(ctx) {
+    const repo = resolve7(str(ctx, "repo") ?? ".");
+    const cp = loadCheckpoint(ctx.ws.root, ctx.positionals[0] ?? "latest");
+    const d = diffSince(repo, cp);
+    if (!flag(ctx, "yes"))
+      return {
+        data: { checkpoint: cp, wouldRestore: d.stat, newFiles: d.newFiles },
+        text: `Would restore:
+${d.stat || "(nothing)"}
+Re-run with --yes to roll back.`,
+        exitCode: 0
+      };
+    const r = rollback(repo, cp);
+    return {
+      data: r,
+      text: `Restored ${r.restored.length} file(s) to checkpoint ${cp.id}.${r.leftUntracked.length ? `
+Not removed (created after the checkpoint): ${r.leftUntracked.join(", ")}` : ""}`
+    };
+  }
+};
+
 // src/cli/commands/runs.ts
+init_errors();
 var runs = {
   name: "runs",
   summary: "List stored runs in the workspace (.jourilo/runs).",
@@ -45296,14 +45886,14 @@ var compare = {
   async run(ctx) {
     const baseRef = ctx.positionals[0] ?? "previous";
     const headRef = ctx.positionals[1] ?? "latest";
-    const base = ctx.ws.loadRun(baseRef).run;
+    const base2 = ctx.ws.loadRun(baseRef).run;
     const { run: head, dir } = ctx.ws.loadRun(headRef);
-    if (base.id === head.id) throw new JouriloError("USAGE", "Baseline and head are the same run.");
-    const cmp = compareRuns(base, head);
+    if (base2.id === head.id) throw new JouriloError("USAGE", "Baseline and head are the same run.");
+    const cmp = compareRuns(base2, head);
     const written = writeReports(dir, head, cmp);
     const failed = flag(ctx, "fail-on-regression") && !cmp.regressionFree;
     const lines = [
-      `Baseline ${base.id} \u2192 ${head.id}`,
+      `Baseline ${base2.id} \u2192 ${head.id}`,
       `  fixed ${cmp.fixed.length} \xB7 new ${cmp.introduced.length} \xB7 still present ${cmp.persisting.length} \xB7 changed ${cmp.changed.length}`,
       ...cmp.introduced.slice(0, 10).map((f) => `  NEW    ${f.severity.padEnd(9)} ${f.title} (${f.url})`),
       ...cmp.fixed.slice(0, 10).map((f) => `  FIXED  ${f.severity.padEnd(9)} ${f.title} (${f.url})`),
@@ -45312,7 +45902,7 @@ var compare = {
     ];
     return {
       data: {
-        base: base.id,
+        base: base2.id,
         head: head.id,
         fixed: cmp.fixed,
         introduced: cmp.introduced,
@@ -45410,7 +46000,7 @@ var serve = {
     const server = await serveStatic(dir, Number(str(ctx, "port") ?? 4173));
     process.stderr.write(`Serving ${dir} at ${server.url} (Ctrl+C to stop)
 `);
-    await new Promise((resolve7) => process.once("SIGINT", () => resolve7()));
+    await new Promise((resolve8) => process.once("SIGINT", () => resolve8()));
     await server.close();
     return { data: { url: server.url }, text: "Stopped." };
   }
@@ -45424,6 +46014,10 @@ var COMMANDS = [
   conversion,
   journeys,
   experiment,
+  optimize,
+  verify,
+  checkpoint,
+  rollbackCmd,
   report,
   compare,
   runs,
@@ -45437,6 +46031,7 @@ var GROUPS = [
   ["Audit", ["audit", "accessibility", "conversion"]],
   ["Journeys", ["journeys"]],
   ["Experiment", ["experiment"]],
+  ["Improve", ["optimize", "verify", "checkpoint", "rollback"]],
   ["Results", ["report", "compare", "runs"]],
   ["System", ["bench", "serve", "setup", "doctor"]]
 ];
