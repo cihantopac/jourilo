@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Acme Cloud</title>
+<link rel="stylesheet" href="/style.css">
+<script src="/analytics-missing.js"></script>
+</head>
+<body>
+<header>
+  <strong>Acme</strong>
+  <nav><a href="/pricing">Pricing</a> <a href="/signup">Sign up</a> <a href="/old-features">Features</a> <a href="/de/">Deutsch</a></nav>
+</header>
+<main>
+  <section class="hero">
+    <h1>Welcome</h1>
+    <p class="sub">The platform that does many things for many teams in many ways.</p>
+    <a class="btn" href="/signup">Learn more</a>
+    <div class="fake-btn" onclick="location.href='/signup'">Book a demo</div>
+    <div class="icons" aria-label="Share">
+      <button>f</button><button>t</button><button>in</button>
+    </div>
+    <img src="/hero.svg" width="320" height="160">
+  </section>
+  <div class="partner-strip">Partners: Globex · Initech · Umbrella · Hooli · Vandelay Industries · Wonka</div>
+</main>
+<footer>© Acme</footer>
+<script>
+  // Seeded defect: uncaught exception during load.
+  window.addEventListener('load', function () { undefinedFunctionCall(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,178 @@
+// Site discovery for Website Mode: starts at the target, reads robots.txt and sitemap.xml, follows same-origin
+// links found in the rendered DOM and ranks pages by how likely they are part of a key user journey.
+import type { BrowserContext } from 'playwright-core';
+import { redactUrl } from '../core/redact.js';
+import { isCrawlable, normalizeForCrawl } from '../core/url-safety.js';
+import { isAllowed, parseRobots, type RobotsRules } from './robots.js';
+
+export const USER_AGENT_TOKEN = 'Jourilo';
+
+/** Path keywords that usually mark journey-critical pages, with a weight. */
+const IMPORTANT: [RegExp, number, string][] = [
+  [/pric|plans/i, 9, 'pricing'],
+  [/sign-?up|register|join|get-?started|trial|onboard/i, 9, 'signup'],
+  [/log-?in|sign-?in|auth/i, 7, 'login'],
+  [/checkout|cart|basket|order/i, 8, 'checkout'],
+  [/product|shop|store|catalog|collections?/i, 6, 'product'],
+  [/features?|solutions?|how-it-works/i, 5, 'features'],
+  [/search/i, 5, 'search'],
+  [/contact|support|help|faq/i, 4, 'support'],
+  [/dashboard|account|settings|profile/i, 4, 'app'],
+  [/about|customers|case-stud/i, 2, 'about'],
+  [/blog|news|press|legal|terms|privacy|cookie|careers|jobs/i, -3, 'secondary'],
+];
+
+export function pageRole(url: string): string {
+  const path = new URL(url).pathname;
+  if (path === '/' || path === '') return 'home';
+  for (const [re, , role] of IMPORTANT) if (re.test(path)) return role;
+  return 'page';
+}
+
+export function rankUrl(url: string, depth: number): number {
+  const path = new URL(url).pathname;
+  let score = path === '/' ? 100 : 10 - depth * 2 - path.split('/').filter(Boolean).length;
+  for (const [re, w] of IMPORTANT) if (re.test(path)) score += w;
+  return score;
+}
+
+export interface CrawlOptions {
+  maxPages: number;
+  maxDepth: number;
+  respectRobots: boolean;
+  timeoutMs: number;
+  /** Extra URLs the user wants included. */
+  include?: string[];
+}
+
+export interface CrawlResult {
+  pages: { url: string; depth: number; role: string; score: number }[];
+  skipped: { url: string; reason: string }[];
+  robots: RobotsRules | null;
+  sitemapUrls: number;
+}
+
+async function fetchText(url: string, timeoutMs: number): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(timeoutMs),
+      redirect: 'follow',
+      headers: { 'user-agent': `${USER_AGENT_TOKEN} (+https://github.com/cihantopac/jourilo)` },
+    });
+    if (!res.ok) return null;
+    // Refuse to follow a redirect off the origin for these helper files.
+    if (new URL(res.url).origin !== new URL(url).origin) return null;
+    const text = await res.text();
+    return text.slice(0, 2_000_000);
+  } catch {
+    return null;
+  }
+}
+
+export async function loadRobots(origin: string, timeoutMs = 8000): Promise<RobotsRules | null> {
+  const text = await fetchText(`${origin}/robots.txt`, timeoutMs);
+  return text === null ? null : parseRobots(text, USER_AGENT_TOKEN);
+}
+
+async function sitemapUrls(origin: string, robots: RobotsRules | null, timeoutMs: number): Promise<string[]> {
+  const candidates = [...(robots?.sitemaps ?? []), `${origin}/sitemap.xml`];
+  const urls: string[] = [];
+  for (const sm of candidates.slice(0, 3)) {
+    let smUrl: URL;
+    try {
+      smUrl = new URL(sm);
+    } catch {
+      continue;
+    }
+    if (smUrl.origin !== origin) continue;
+    const xml = await fetchText(smUrl.toString(), timeoutMs);
+    if (!xml) continue;
+    for (const m of xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)) {
+      urls.push(m[1]!.replace(/&amp;/g, '&'));
+      if (urls.length >= 500) break;
+    }
+    if (urls.length) break;
+  }
+  return urls;
+}
+
+/** Breadth-first crawl in a real browser so client-rendered links are found. */
+export async function crawl(ctx: BrowserContext, start: string, opts: CrawlOptions): Promise<CrawlResult> {
+  const origin = new URL(start).origin;
+  const robots = opts.respectRobots ? await loadRobots(origin) : null;
+  const skipped: CrawlResult['skipped'] = [];
+  const seen = new Map<string, number>();
+  const queue: { url: string; depth: number }[] = [];
+  const push = (raw: string, depth: number) => {
+    let n: string;
+    try {
+      n = normalizeForCrawl(raw);
+    } catch {
+      return;
+    }
+    if (seen.has(n) || !isCrawlable(n, origin)) return;
+    const u = new URL(n);
+    if (robots && !isAllowed(robots, `${u.pathname}${u.search}`)) {
+      skipped.push({ url: redactUrl(n), reason: 'robots.txt' });
+      seen.set(n, depth);
+      return;
+    }
+    seen.set(n, depth);
+    queue.push({ url: n, depth });
+  };
+  push(start, 0);
+  for (const extra of opts.include ?? []) push(new URL(extra, start).toString(), 0);
+  const fromSitemap = await sitemapUrls(origin, robots, opts.timeoutMs);
+  for (const u of fromSitemap) push(u, 1);
+
+  // Visit pages (best first) to find more links, until we have enough candidates.
+  const visited = new Set<string>();
+  const page = await ctx.newPage();
+  try {
+    while (visited.size < Math.max(opts.maxPages, 3) && visited.size < 30) {
+      const next = queue
+        .filter((q) => !visited.has(q.url) && q.depth < opts.maxDepth)
+        .sort((a, b) => rankUrl(b.url, b.depth) - rankUrl(a.url, a.depth))[0];
+      if (!next) break;
+      visited.add(next.url);
+      try {
+        await page.goto(next.url, { waitUntil: 'domcontentloaded', timeout: opts.timeoutMs });
+        await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => undefined);
+        const finalUrl = page.url();
+        if (new URL(finalUrl).origin !== origin) {
+          skipped.push({ url: redactUrl(next.url), reason: `redirects off-origin` });
+          continue;
+        }
+        const hrefs = (await page.evaluate(
+          'Array.from(document.querySelectorAll("a[href]")).map((a) => a.href).slice(0, 400)',
+        )) as string[];
+        for (const h of hrefs) push(h, next.depth + 1);
+      } catch (err) {
+        // Unreachable pages are still audited later so the failure is reported with evidence.
+        skipped.push({ url: redactUrl(next.url), reason: `crawl: ${(err as Error).message.split('\n')[0]}` });
+      }
+    }
+  } finally {
+    await page.close().catch(() => undefined);
+  }
+
+  const ranked = [...seen.entries()]
+    .filter(([u]) => !skipped.some((s) => s.url === redactUrl(u) && s.reason === 'robots.txt'))
+    .map(([url, depth]) => ({ url, depth, role: pageRole(url), score: rankUrl(url, depth) }))
+    .sort((a, b) => b.score - a.score);
+  // Diversity: prefer one page per role before taking a second page of the same role.
+  const picked: typeof ranked = [];
+  const roles = new Set<string>();
+  for (const p of ranked) {
+    if (picked.length >= opts.maxPages) break;
+    if (!roles.has(p.role) || p.role === 'home') {
+      picked.push(p);
+      roles.add(p.role);
+    }
+  }
+  for (const p of ranked) {
+    if (picked.length >= opts.maxPages) break;
+    if (!picked.includes(p)) picked.push(p);
+  }
+  return { pages: picked, skipped, robots, sitemapUrls: fromSitemap.length };
+}

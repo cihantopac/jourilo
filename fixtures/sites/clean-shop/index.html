@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fernleaf – Plant care subscriptions</title>
+<meta name="description" content="Monthly plant care kits delivered to your door.">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: #1f2937; background: #fff; }
+  a { color: #1d4ed8; }
+  a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid #1d4ed8; outline-offset: 2px; }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 12px 24px; border-bottom: 1px solid #e5e7eb; }
+  nav a { display: inline-block; padding: 12px 8px; }
+  main { max-width: 960px; margin: 0 auto; padding: 32px 16px; }
+  .btn { display: inline-block; padding: 12px 20px; border-radius: 6px; background: #166534; color: #fff; text-decoration: none; border: 0; font-size: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  label { display: block; font-weight: 600; margin-top: 12px; }
+  input { width: 100%; padding: 10px; font-size: 16px; border: 1px solid #6b7280; border-radius: 4px; }
+  footer { padding: 24px; border-top: 1px solid #e5e7eb; color: #374151; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/"><strong>Fernleaf</strong></a>
+  <nav aria-label="Main"><a href="/plans">Plans</a> <a href="/subscribe">Subscribe</a></nav>
+</header>
+<main>
+  <h1>Healthy houseplants without the guesswork</h1>
+  <p>Monthly care kits matched to your plants, delivered to your door. Cancel any time.</p>
+  <p><a class="btn" href="/subscribe">Start my plant plan</a></p>
+  <div class="grid">
+    <section><h2>Matched to your plants</h2><p>Tell us what you grow; we pick nutrients and tools.</p></section>
+    <section><h2>Rated 4.8 out of 5</h2><p>“My fiddle-leaf fig finally stopped dropping leaves.” — Sam, Leeds</p></section>
+    <section><h2>Secure checkout</h2><p>Payments are encrypted. We never store card numbers.</p></section>
+  </div>
+  <img src="/kit.svg" alt="A care kit with fertilizer, a mister and pruning shears" width="480" height="240" style="max-width:100%;height:auto">
+</main>
+<footer><a href="/privacy">Privacy policy</a></footer>
+</body>
+</html>

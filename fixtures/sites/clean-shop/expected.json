@@ -1,0 +1,6 @@
+{
+  "description": "Well-built control site. Any defect at moderate or above is a false positive.",
+  "mustFind": [],
+  "mustNotFind": [],
+  "maxDefects": { "minSeverity": "moderate", "count": 0 }
+}

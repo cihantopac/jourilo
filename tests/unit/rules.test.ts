@@ -1,0 +1,288 @@
+import { describe, expect, it } from 'vitest';
+import { mergeFindings } from '../../src/audit/finding.js';
+import {
+  axeFindings,
+  keyboardFindings,
+  measuredA11yFindings,
+  suggestAutocomplete,
+} from '../../src/audit/rules/accessibility.js';
+import {
+  performanceFindings,
+  reliabilityFindings,
+  responsiveFindings,
+} from '../../src/audit/rules/experience.js';
+import { wcag, wcagFromAxeTags } from '../../src/audit/standards.js';
+import { VIEWPORTS } from '../../src/browser/viewports.js';
+import { rate } from '../../src/browser/vitals.js';
+import { conversionFindings, isLandingPath } from '../../src/conversion/rules.js';
+import { obs, probe } from '../helpers.js';
+
+const rect = { x: 0, y: 0, width: 10, height: 10 };
+
+describe('standards', () => {
+  it('maps axe tags to WCAG 2.2 criteria with Understanding links', () => {
+    const refs = wcagFromAxeTags(['wcag2aa', 'wcag143', 'wcag258', 'best-practice']);
+    expect(refs.map((r) => r.id)).toEqual(['1.4.3', '2.5.8']);
+    expect(refs[1]!.title).toBe('Target Size (Minimum) (Level AA)');
+    expect(wcag('2.4.11').url).toBe(
+      'https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html',
+    );
+  });
+  it('rates metrics with web.dev thresholds', () => {
+    expect(rate('LCP', 2500)).toBe('good');
+    expect(rate('LCP', 2501)).toBe('needs-improvement');
+    expect(rate('LCP', 4001)).toBe('poor');
+    expect(rate('CLS', 0.1)).toBe('good');
+    expect(rate('INP', 600)).toBe('poor');
+  });
+});
+
+describe('accessibility rules', () => {
+  it('turns axe violations into measured defects and incomplete into review items', () => {
+    const f = axeFindings(
+      obs({
+        screenshot: 'screenshots/a.jpg',
+        axe: {
+          version: '4.14.0',
+          violations: [
+            {
+              id: 'color-contrast',
+              impact: 'serious',
+              help: 'Contrast',
+              helpUrl: 'https://x',
+              description: 'd',
+              tags: ['wcag2aa', 'wcag143'],
+              nodes: [
+                {
+                  target: '.sub',
+                  html: '<p class="sub">x</p>',
+                  summary: 'Fix',
+                  rect,
+                  data: { fgColor: '#b5b5b5', contrastRatio: 2.04 },
+                },
+              ],
+            },
+            {
+              id: 'region',
+              impact: 'moderate',
+              help: 'Region',
+              helpUrl: 'https://y',
+              description: 'd',
+              tags: ['best-practice'],
+              nodes: [{ target: 'div', html: '<div>', summary: '' }],
+            },
+          ],
+          incomplete: [
+            {
+              id: 'color-contrast',
+              impact: 'serious',
+              help: 'Contrast',
+              helpUrl: 'https://x',
+              description: 'd',
+              tags: ['wcag143'],
+              nodes: [{ target: '.bg', html: '', summary: '' }],
+            },
+            {
+              id: 'bp-only',
+              impact: 'minor',
+              help: 'BP',
+              helpUrl: 'https://z',
+              description: 'd',
+              tags: ['best-practice'],
+              nodes: [{ target: 'a', html: '', summary: '' }],
+            },
+          ],
+        },
+      }),
+    );
+    const contrast = f.find((x) => x.ruleId === 'axe/color-contrast')!;
+    expect(contrast.kind).toBe('defect');
+    expect(contrast.provenance).toBe('measured');
+    expect(contrast.standards[0]!.id).toBe('1.4.3');
+    expect(contrast.evidence[0]!.data).toMatchObject({ contrastRatio: 2.04 });
+    expect(f.find((x) => x.ruleId === 'axe/region')!.severity).toBe('moderate');
+    expect(f.filter((x) => x.kind === 'needs-review').map((x) => x.ruleId)).toEqual([
+      'axe-review/color-contrast',
+    ]);
+  });
+
+  it('reports invisible focus, obscured focus and traps from the keyboard walk', () => {
+    const stop = (i: number, changes: string[], obscured = false) => ({
+      index: i,
+      selector: `#b${i}`,
+      name: `B${i}`,
+      tag: 'button',
+      rect,
+      indicatorChanges: changes,
+      indicatorChecked: true,
+      obscured,
+      inModal: false,
+    });
+    const f = keyboardFindings(
+      obs({
+        viewport: VIEWPORTS.desktop!,
+        keyboard: {
+          stops: [stop(0, []), stop(1, ['outline:solid']), stop(2, ['x'], true)],
+          focusableCount: 3,
+          completedCycle: true,
+          trap: null,
+          pressed: 4,
+        },
+      }),
+    );
+    expect(f.map((x) => x.ruleId).sort()).toEqual(['jourilo/focus-obscured', 'jourilo/focus-visible']);
+    expect(f.find((x) => x.ruleId === 'jourilo/focus-visible')!.occurrences).toBe(1);
+    const trap = keyboardFindings(
+      obs({
+        keyboard: {
+          stops: [],
+          focusableCount: 20,
+          completedCycle: false,
+          trap: { selectors: ['#a', '#b'] },
+          pressed: 20,
+        },
+      }),
+    );
+    expect(trap[0]!.severity).toBe('critical');
+  });
+
+  it('flags personal-data fields without autocomplete and placeholder-only labels', () => {
+    const p = probe();
+    p.inventory.forms = [
+      {
+        selector: '#signup',
+        purpose: 'signup',
+        action: null,
+        method: 'post',
+        submitText: 'Submit',
+        fields: [
+          { selector: '#e', type: 'email', name: 'email', label: null, required: true, autocomplete: null },
+          {
+            selector: '#c',
+            type: 'checkbox',
+            name: 'terms',
+            label: 'I agree',
+            required: true,
+            autocomplete: null,
+          },
+          {
+            selector: '#n',
+            type: 'text',
+            name: 'nickname',
+            label: 'Nickname',
+            required: false,
+            autocomplete: 'nickname',
+          },
+        ],
+      },
+    ];
+    const f = measuredA11yFindings(obs({ probe: p }));
+    expect(f.find((x) => x.ruleId === 'jourilo/input-purpose')!.occurrences).toBe(1);
+    expect(f.find((x) => x.ruleId === 'jourilo/placeholder-label')!.occurrences).toBe(1);
+    expect(suggestAutocomplete('password', 'pw', null, 'signup')).toBe('new-password');
+    expect(suggestAutocomplete('text', 'last_name', null, 'other')).toBe('family-name');
+  });
+});
+
+describe('experience rules', () => {
+  it('measures horizontal overflow against the configured viewport', () => {
+    const f = responsiveFindings(
+      obs({
+        probe: probe({
+          overflow: {
+            docWidth: 680,
+            viewportWidth: 390,
+            offenders: [{ selector: '.strip', rect, right: 680, width: 640, tag: 'div' }],
+          },
+        }),
+      }),
+    );
+    expect(f[0]!.ruleId).toBe('jourilo/horizontal-overflow');
+    expect(f[0]!.severity).toBe('serious');
+    expect(f[0]!.description).toContain('290 px');
+  });
+  it('does not flag pages that fit', () => {
+    expect(responsiveFindings(obs())).toEqual([]);
+  });
+  it('separates first-party failures from third-party noise', () => {
+    const f = reliabilityFindings(
+      obs({
+        console: [{ type: 'pageerror', text: 'ReferenceError: x is not defined' }],
+        network: [
+          { url: 'https://example.test/app.js', status: 404, resourceType: 'script', firstParty: true },
+          {
+            url: 'https://cdn.other/pixel',
+            status: null,
+            resourceType: 'image',
+            failure: 'net::ERR_BLOCKED',
+            firstParty: false,
+          },
+        ],
+      }),
+    );
+    expect(f.map((x) => [x.ruleId, x.severity])).toEqual([
+      ['jourilo/console-errors', 'serious'],
+      ['jourilo/failed-requests', 'serious'],
+      ['jourilo/failed-third-party', 'minor'],
+    ]);
+  });
+  it('labels lab metrics and ignores good values', () => {
+    const vitals = {
+      lcp: 4300,
+      lcpElement: 'h1',
+      cls: 0.02,
+      clsEntries: [],
+      fcp: 4200,
+      ttfb: 30,
+      tbt: 0,
+      inp: null,
+      interactions: 0,
+      domContentLoaded: 4300,
+      load: 4400,
+      transferBytes: 1000,
+      requests: 3,
+      domNodes: 50,
+    };
+    const f = performanceFindings(obs({ vitals }));
+    expect(f.map((x) => x.ruleId).sort()).toEqual(['perf/fcp', 'perf/lcp']);
+    expect(f.find((x) => x.ruleId === 'perf/lcp')!.title).toContain('lab');
+  });
+});
+
+describe('conversion rules', () => {
+  it('treats findings as hypotheses, never defects', () => {
+    const p = probe();
+    p.inventory.h1 = ['Welcome'];
+    p.inventory.ctas = [
+      { text: 'Submit', selector: '#go', href: null, rect, aboveFold: true, emphasis: 'primary' },
+    ];
+    const f = conversionFindings(obs({ probe: p }));
+    expect(f.length).toBeGreaterThan(0);
+    expect(f.every((x) => x.kind === 'hypothesis' && x.category === 'conversion')).toBe(true);
+    expect(f.map((x) => x.ruleId)).toContain('conv/unclear-value-proposition');
+    expect(f.map((x) => x.ruleId)).toContain('conv/vague-cta-label');
+    expect(f[0]!.impact).toMatch(/^Hypothesis/);
+  });
+  it('detects landing paths', () => {
+    expect(isLandingPath('https://a.test/')).toBe(true);
+    expect(isLandingPath('https://a.test/de')).toBe(true);
+    expect(isLandingPath('https://a.test/pricing')).toBe(false);
+  });
+});
+
+describe('merge', () => {
+  it('folds the same defect seen in two viewports into one finding', () => {
+    const a = responsiveFindings(
+      obs({ probe: probe({ overflow: { docWidth: 500, viewportWidth: 390, offenders: [] } }) }),
+    );
+    const b = responsiveFindings(
+      obs({
+        viewport: VIEWPORTS.reflow!,
+        probe: probe({ overflow: { docWidth: 500, viewportWidth: 320, offenders: [] } }),
+      }),
+    );
+    const merged = mergeFindings([...a, ...b]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]!.viewport).toBe('mobile, reflow');
+  });
+});

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pricing – Acme</title>
+<link rel="stylesheet" href="/style.css">
+<!-- Seeded defect: render-blocking script served slowly (LCP/FCP). -->
+<script src="/pricing-config.js"></script>
+</head>
+<body>
+<header><strong>Acme</strong><nav><a href="/">Home</a> <a href="/signup">Sign up</a></nav></header>
+<main style="padding:24px">
+  <h1>Simple pricing</h1>
+  <img src="/slow-hero.svg" alt="Plans overview" style="width:100%;max-width:900px">
+  <div style="display:flex;gap:24px;flex-wrap:wrap">
+    <section><h2>Starter</h2><p>$19</p><a class="btn" href="/signup">Choose Starter</a></section>
+    <section><h2>Team</h2><p>$49</p><a class="btn" href="/signup">Choose Team</a></section>
+  </div>
+</main>
+</body>
+</html>

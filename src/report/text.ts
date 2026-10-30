@@ -1,0 +1,137 @@
+// Markdown summary (for PRs, issues and agents) and SARIF 2.1.0 (for GitHub code scanning).
+import { severityRank } from '../audit/finding.js';
+import type { Finding, Run } from '../core/types.js';
+import { VERSION } from '../core/version.js';
+import type { RunComparison } from './compare.js';
+
+function path(u: string): string {
+  try {
+    const x = new URL(u);
+    return `${x.pathname}${x.search}`;
+  } catch {
+    return u;
+  }
+}
+
+const md = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+
+export function renderMarkdown(run: Run, cmp?: RunComparison, limit = 25): string {
+  const s = run.summary;
+  const lines = [
+    `# Jourilo report — ${run.target}`,
+    '',
+    `Run \`${run.id}\` · ${run.mode} mode · ${run.browser.name} ${run.browser.version} · viewports: ${run.viewports.map((v) => v.name).join(', ')} · ${s.pages} page capture(s), ${s.journeys} journey(s)`,
+    '',
+    `**${s.byKind.defect} defects** (critical ${s.findings.critical}, serious ${s.findings.serious}, moderate ${s.findings.moderate}, minor ${s.findings.minor}) · **${s.byKind.hypothesis} conversion hypotheses** · **${s.byKind['needs-review']} need manual review**`,
+    '',
+  ];
+  if (cmp) {
+    lines.push(
+      `## Before / after (baseline \`${cmp.base.id}\`)`,
+      '',
+      `Fixed: **${cmp.fixed.length}** · New: **${cmp.introduced.length}** · Still present: **${cmp.persisting.length}** · ${cmp.regressionFree ? 'No new serious/critical defects.' : '⚠️ New serious or critical defects.'}`,
+      '',
+    );
+    for (const f of cmp.introduced.slice(0, 10))
+      lines.push(`- 🆕 ${f.severity}: ${md(f.title)} — \`${path(f.url)}\``);
+    for (const f of cmp.fixed.slice(0, 10)) lines.push(`- ✅ fixed: ${md(f.title)} — \`${path(f.url)}\``);
+    lines.push('');
+  }
+  const sorted = [...run.findings].sort(
+    (a, b) => severityRank(a.severity) - severityRank(b.severity) || b.occurrences - a.occurrences,
+  );
+  const section = (title: string, list: Finding[]) => {
+    if (!list.length) return;
+    lines.push(
+      `## ${title}`,
+      '',
+      '| Severity | Finding | Page | Viewport | Basis | Id |',
+      '|---|---|---|---|---|---|',
+    );
+    for (const f of list.slice(0, limit))
+      lines.push(
+        `| ${f.severity} | ${md(f.title)}${f.occurrences > 1 ? ` (×${f.occurrences})` : ''} | \`${md(path(f.url))}\` | ${f.viewport ?? ''} | ${f.provenance}/${f.confidence} | \`${f.fingerprint}\` |`,
+      );
+    if (list.length > limit) lines.push(`| | … ${list.length - limit} more in run.json | | | | |`);
+    lines.push('');
+  };
+  section(
+    'Defects',
+    sorted.filter((f) => f.kind === 'defect'),
+  );
+  section(
+    'Conversion hypotheses (untested)',
+    sorted.filter((f) => f.kind === 'hypothesis'),
+  );
+  section(
+    'Needs manual review',
+    sorted.filter((f) => f.kind === 'needs-review'),
+  );
+  if (run.journeys.length) {
+    lines.push('## Journeys', '');
+    for (const j of run.journeys)
+      lines.push(
+        `- ${j.status === 'passed' ? '✅' : j.status === 'blocked' ? '⛔' : '❌'} ${md(j.name)} (${j.viewport})`,
+      );
+    lines.push('');
+  }
+  lines.push('## Limitations', '', ...run.limitations.map((l) => `- ${md(l)}`), '');
+  return lines.join('\n');
+}
+
+export function renderSarif(run: Run): unknown {
+  const rules = new Map<string, Finding>();
+  for (const f of run.findings) if (!rules.has(f.ruleId)) rules.set(f.ruleId, f);
+  const level = (f: Finding) =>
+    f.kind !== 'defect'
+      ? 'note'
+      : f.severity === 'critical' || f.severity === 'serious'
+        ? 'error'
+        : f.severity === 'moderate'
+          ? 'warning'
+          : 'note';
+  return {
+    $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
+    version: '2.1.0',
+    runs: [
+      {
+        tool: {
+          driver: {
+            name: 'Jourilo',
+            version: VERSION,
+            informationUri: 'https://github.com/cihantopac/jourilo',
+            rules: [...rules.values()].map((f) => ({
+              id: f.ruleId,
+              name: f.ruleId.replace(/[^A-Za-z0-9]/g, '_'),
+              shortDescription: { text: f.title },
+              help: { text: f.recommendation },
+              ...(f.standards[0]?.url ? { helpUri: f.standards[0].url } : {}),
+              properties: { category: f.category, kind: f.kind },
+            })),
+          },
+        },
+        results: run.findings.map((f) => {
+          const src = f.sources?.[0];
+          return {
+            ruleId: f.ruleId,
+            level: level(f),
+            message: {
+              text: `${f.title}: ${f.description} (${f.url}${f.viewport ? `, ${f.viewport}` : ''})`,
+            },
+            partialFingerprints: { jourilo: f.fingerprint },
+            locations: [
+              src
+                ? {
+                    physicalLocation: {
+                      artifactLocation: { uri: src.file },
+                      region: { startLine: Math.max(1, src.line) },
+                    },
+                  }
+                : { physicalLocation: { artifactLocation: { uri: f.url } } },
+            ],
+          };
+        }),
+      },
+    ],
+  };
+}

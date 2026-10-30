@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign up – Acme</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header><strong>Acme</strong><nav><a href="/">Home</a> <a href="/pricing">Pricing</a></nav></header>
+<main style="max-width:420px;margin:40px auto;padding:0 16px">
+  <h1>Create your account</h1>
+  <form id="signup" action="/signup" method="post" novalidate>
+    <p><input name="first_name" placeholder="First name"></p>
+    <p><input name="last_name" placeholder="Last name"></p>
+    <p><input name="email" type="email" placeholder="Email"></p>
+    <p><input name="phone" type="tel" placeholder="Phone" required></p>
+    <p><input name="company" placeholder="Company"></p>
+    <p><input name="password" type="password" placeholder="Password"></p>
+    <p><input name="password_confirm" type="password" placeholder="Confirm password"></p>
+    <p><button class="btn" type="submit">Submit</button></p>
+  </form>
+</main>
+</body>
+</html>

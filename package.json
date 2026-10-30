@@ -1,0 +1,66 @@
+{
+  "name": "jourilo",
+  "version": "0.1.0",
+  "description": "AI-powered product experience & conversion engineering studio: real-browser journeys, UX, accessibility, performance and conversion audits with evidence, root causes and verified fixes.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "author": "Cihan Topaç (https://github.com/cihantopac)",
+  "homepage": "https://github.com/cihantopac/jourilo#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cihantopac/jourilo.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cihantopac/jourilo/issues"
+  },
+  "keywords": [
+    "ux",
+    "accessibility",
+    "wcag",
+    "playwright",
+    "conversion",
+    "core-web-vitals",
+    "user-journeys",
+    "claude-code",
+    "claude-code-plugin"
+  ],
+  "engines": {
+    "node": ">=20.10"
+  },
+  "bin": {
+    "jourilo": "plugin/dist/jourilo.mjs"
+  },
+  "files": [
+    "plugin",
+    "LICENSE",
+    "NOTICE",
+    "THIRD_PARTY_NOTICES.md",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node --import tsx src/cli/main.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:browser": "vitest run --project browser",
+    "bench": "node plugin/dist/jourilo.mjs bench fixtures --json",
+    "check:dist": "node scripts/check-dist.mjs",
+    "validate:plugin": "claude plugin validate . --strict && claude plugin validate plugin --strict",
+    "ci": "npm run lint && npm run typecheck && npm run build && npm test && npm run check:dist"
+  },
+  "dependencies": {
+    "playwright-core": "1.64.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "@types/node": "22.20.5",
+    "axe-core": "4.14.0",
+    "esbuild": "0.28.2",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}

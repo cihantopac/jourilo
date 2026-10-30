@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Subscribe – Fernleaf</title>
+<style>
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: #1f2937; }
+  a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid #1d4ed8; outline-offset: 2px; }
+  header, main, footer { max-width: 480px; margin: 0 auto; padding: 16px; }
+  label { display: block; font-weight: 600; margin-top: 12px; }
+  input { width: 100%; padding: 10px; font-size: 16px; border: 1px solid #6b7280; border-radius: 4px; box-sizing: border-box; }
+  .btn { margin-top: 16px; padding: 12px 20px; border-radius: 6px; background: #166534; color: #fff; border: 0; font-size: 16px; }
+</style>
+</head>
+<body>
+<header><a href="/">Fernleaf home</a></header>
+<main>
+  <h1>Create your plant plan</h1>
+  <p>Secure signup. Cancel any time. Read our <a href="/privacy">privacy policy</a>.</p>
+  <form action="/subscribe" method="post">
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" autocomplete="email" required>
+    <label for="pw">Password</label>
+    <input id="pw" name="password" type="password" autocomplete="new-password" required>
+    <button class="btn" type="submit">Create my plan</button>
+  </form>
+</main>
+</body>
+</html>

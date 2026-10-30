@@ -1,0 +1,1 @@
+window.PRICING = { currency: 'USD' };

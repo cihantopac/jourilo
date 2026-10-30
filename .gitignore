@@ -1,0 +1,13 @@
+node_modules/
+coverage/
+tests/.tmp/
+*.log
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example
+# Jourilo run data (screenshots, traces, reports, auth state) never belongs in git.
+/.jourilo/
+**/.jourilo/
+plugin/node_modules/

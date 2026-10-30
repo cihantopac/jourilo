@@ -1,0 +1,155 @@
+{
+  "description": "SaaS marketing site with seeded UX, accessibility, reliability, performance and conversion defects.",
+  "mustFind": [
+    {
+      "rule": "axe/color-contrast",
+      "path": "/",
+      "why": "hero subtitle #b5b5b5 on white"
+    },
+    {
+      "rule": "axe/image-alt",
+      "path": "/",
+      "why": "hero image without alt"
+    },
+    {
+      "rule": "axe/target-size",
+      "path": "/",
+      "why": "16px share buttons 2px apart"
+    },
+    {
+      "rule": "axe/html-has-lang",
+      "path": "/de",
+      "why": "German page without lang"
+    },
+    {
+      "rule": "jourilo/focus-visible",
+      "path": "/",
+      "why": "outline:none on links and buttons"
+    },
+    {
+      "rule": "jourilo/pointer-only-control",
+      "path": "/",
+      "why": "div with onclick 'Book a demo'"
+    },
+    {
+      "rule": "jourilo/horizontal-overflow",
+      "path": "/",
+      "viewport": "mobile",
+      "why": "640px partner strip"
+    },
+    {
+      "rule": "jourilo/console-errors",
+      "path": "/",
+      "why": "uncaught ReferenceError on load"
+    },
+    {
+      "rule": "jourilo/failed-requests",
+      "path": "/",
+      "why": "missing analytics script"
+    },
+    {
+      "rule": "jourilo/http-error-page",
+      "path": "/old-features",
+      "why": "nav links to a 404"
+    },
+    {
+      "rule": "jourilo/missing-viewport-meta",
+      "path": "/pricing",
+      "why": "no viewport meta"
+    },
+    {
+      "rule": "perf/lcp",
+      "path": "/pricing",
+      "why": "render-blocking script delayed 4.3s"
+    },
+    {
+      "rule": "jourilo/placeholder-label",
+      "path": "/signup",
+      "why": "placeholder-only fields"
+    },
+    {
+      "rule": "jourilo/input-purpose",
+      "path": "/signup",
+      "why": "no autocomplete on personal data"
+    },
+    {
+      "rule": "conv/signup-friction",
+      "path": "/signup",
+      "why": "7 fields, confirm password, required phone"
+    },
+    {
+      "rule": "conv/vague-cta-label",
+      "path": "/signup",
+      "why": "'Submit'"
+    },
+    {
+      "rule": "conv/unclear-value-proposition",
+      "path": "/",
+      "why": "h1 'Welcome'"
+    },
+    {
+      "rule": "conv/no-trust-signals",
+      "path": "/signup",
+      "why": "no reassurance near signup"
+    },
+    {
+      "rule": "conv/pricing-period-unclear",
+      "path": "/pricing",
+      "why": "$19 without /month"
+    }
+  ],
+  "mustNotFind": [
+    {
+      "rule": "axe/document-title",
+      "path": "/old-features",
+      "why": "404 page: report the broken link only"
+    },
+    {
+      "rule": "jourilo/console-errors",
+      "path": "/old-features",
+      "why": "404 document is not a console error"
+    }
+  ],
+  "sources": [
+    {
+      "rule": "jourilo/focus-visible",
+      "path": "/",
+      "file": "style.css"
+    },
+    {
+      "rule": "axe/color-contrast",
+      "path": "/",
+      "file": "style.css"
+    },
+    {
+      "rule": "axe/html-has-lang",
+      "path": "/de",
+      "file": "de/index.html"
+    },
+    {
+      "rule": "jourilo/missing-viewport-meta",
+      "path": "/pricing",
+      "file": "pricing.html"
+    },
+    {
+      "rule": "jourilo/horizontal-overflow",
+      "path": "/",
+      "file": "style.css"
+    },
+    {
+      "rule": "jourilo/pointer-only-control",
+      "path": "/",
+      "file": "index.html"
+    },
+    {
+      "rule": "axe/image-alt",
+      "path": "/",
+      "file": "index.html"
+    },
+    {
+      "rule": "jourilo/placeholder-label",
+      "path": "/signup",
+      "file": "signup.html"
+    }
+  ]
+}

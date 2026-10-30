@@ -1,0 +1,84 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  color: #222;
+  background: #fff;
+}
+/* Seeded defect: focus indicator removed everywhere (WCAG 2.4.7). */
+a:focus,
+button:focus,
+input:focus {
+  outline: none;
+}
+header {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 24px;
+  z-index: 10;
+}
+header nav a {
+  color: #222;
+  text-decoration: none;
+}
+.hero {
+  padding: 64px 24px;
+  text-align: center;
+}
+.hero p.sub {
+  color: #b5b5b5;
+  font-size: 18px;
+} /* Seeded defect: contrast ~2:1 */
+.btn {
+  display: inline-block;
+  padding: 12px 20px;
+  border-radius: 6px;
+  background: #4f46e5;
+  color: #fff;
+  text-decoration: none;
+  border: 0;
+  font-size: 16px;
+  cursor: pointer;
+}
+.fake-btn {
+  display: inline-block;
+  padding: 12px 20px;
+  border-radius: 6px;
+  background: #16a34a;
+  color: #fff;
+  cursor: pointer;
+  margin-left: 8px;
+}
+.icons {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  margin-top: 24px;
+}
+.icons button {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: #ddd;
+  font-size: 10px;
+}
+/* Seeded defect: fixed-width banner overflows on phones (WCAG 1.4.10). */
+.partner-strip {
+  width: 640px;
+  margin: 32px auto;
+  background: #f4f4f5;
+  padding: 16px;
+}
+footer {
+  padding: 24px;
+  font-size: 13px;
+  color: #555;
+}
