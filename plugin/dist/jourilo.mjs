@@ -39670,6 +39670,11 @@ var COUNT_FOCUSABLE = `(() => Array.from(document.querySelectorAll('a[href], but
 function inPage(src) {
   return new Function(`return (${src})(arguments[0])`);
 }
+var IS_LAST_TABBABLE = `(el) => {
+  const all = Array.from(document.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex]:not([tabindex="-1"]), [contenteditable="true"]'))
+    .filter((e) => !e.disabled && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden');
+  return all.length > 0 && all[all.length - 1] === el;
+}`;
 var ESCAPE_TRAP = `(sels) => {
   const trapped = sels.map((s) => document.querySelector(s)).filter(Boolean);
   if (!trapped.length) return false;
@@ -39709,13 +39714,32 @@ async function keyboardWalk(page, maxTabs = 60) {
     walk2.pressed++;
     const handle = await page.evaluateHandle("document.activeElement");
     const data = await handle.evaluate(inPage(FOCUS_INFO));
+    const prevSelector = sequence[sequence.length - 1];
+    const noMove = !!data && prevSelector === data.selector;
+    if (noMove) {
+      const isLast = await handle.evaluate(inPage(IS_LAST_TABBABLE)).catch(() => false);
+      if (isLast) {
+        await handle.evaluate(inPage("(el) => el.blur()")).catch(() => void 0);
+      } else if (!walk2.trap && !data.inModal) {
+        walk2.trap = { selectors: [data.selector] };
+      }
+    }
     if (prevHandle && prevFocused && stops.length) {
       const unfocused = await prevHandle.evaluate(inPage(FOCUS_STYLES)).catch(() => null);
       const last = stops[stops.length - 1];
       if (unfocused) {
         last.indicatorChanges = prevFocused.filter((s, k) => s !== unfocused[k]);
         last.indicatorChecked = true;
+        if (process.env.JOURILO_DEBUG?.includes("keyboard"))
+          process.stderr.write(
+            `[keyboard]   ${last.selector} changes=${JSON.stringify(last.indicatorChanges)}
+`
+          );
       }
+    }
+    if (noMove) {
+      if (!walk2.trap || walk2.trap.selectors[0] !== data.selector) walk2.completedCycle = true;
+      break;
     }
     prevFocused = null;
     if (!data) {
@@ -39727,6 +39751,11 @@ async function keyboardWalk(page, maxTabs = 60) {
       break;
     }
     sequence.push(data.selector);
+    if (process.env.JOURILO_DEBUG?.includes("keyboard"))
+      process.stderr.write(
+        `[keyboard] ${i} ${data.selector} name=${JSON.stringify(data.name)} modal=${data.inModal}
+`
+      );
     if (!walk2.trap && sequence.length >= 6) {
       const tail = sequence.slice(-6);
       const counts = /* @__PURE__ */ new Map();

@@ -87,6 +87,13 @@ function inPage(src: string): (el: unknown) => unknown {
   return new Function(`return (${src})(arguments[0])`) as (el: unknown) => unknown;
 }
 
+// Is this element the last tabbable element of the document (nothing focusable follows it)?
+const IS_LAST_TABBABLE = `(el) => {
+  const all = Array.from(document.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex]:not([tabindex="-1"]), [contenteditable="true"]'))
+    .filter((e) => !e.disabled && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden');
+  return all.length > 0 && all[all.length - 1] === el;
+}`;
+
 // Focuses the first focusable element after the trapped ones (in document order, outside their container).
 const ESCAPE_TRAP = `(sels) => {
   const trapped = sels.map((s) => document.querySelector(s)).filter(Boolean);
@@ -137,6 +144,19 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
       'index' | 'indicatorChanges' | 'indicatorChecked'
     > | null;
 
+    // Tab did not move focus. On the last tab stop this is the end of the order (Firefox keeps activeElement on it
+    // while focus goes to the browser UI); elsewhere a single element is holding focus.
+    const prevSelector = sequence[sequence.length - 1];
+    const noMove = !!data && prevSelector === data.selector;
+    if (noMove) {
+      const isLast = (await handle.evaluate(inPage(IS_LAST_TABBABLE)).catch(() => false)) as boolean;
+      if (isLast) {
+        await handle.evaluate(inPage('(el) => el.blur()')).catch(() => undefined);
+      } else if (!walk.trap && !data!.inModal) {
+        walk.trap = { selectors: [data!.selector] };
+      }
+    }
+
     // The previous stop is now unfocused: compare its styles to what we recorded while it had focus.
     if (prevHandle && prevFocused && stops.length) {
       const unfocused = (await prevHandle.evaluate(inPage(FOCUS_STYLES)).catch(() => null)) as
@@ -146,7 +166,15 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
       if (unfocused) {
         last.indicatorChanges = prevFocused.filter((s, k) => s !== unfocused[k]);
         last.indicatorChecked = true;
+        if (process.env.JOURILO_DEBUG?.includes('keyboard'))
+          process.stderr.write(
+            `[keyboard]   ${last.selector} changes=${JSON.stringify(last.indicatorChanges)}\n`,
+          );
       }
+    }
+    if (noMove) {
+      if (!walk.trap || walk.trap.selectors[0] !== data!.selector) walk.completedCycle = true;
+      break;
     }
     prevFocused = null;
 
@@ -160,6 +188,11 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
       break;
     }
     sequence.push(data.selector);
+    // JOURILO_DEBUG=keyboard prints every stop, to diagnose browser differences.
+    if (process.env.JOURILO_DEBUG?.includes('keyboard'))
+      process.stderr.write(
+        `[keyboard] ${i} ${data.selector} name=${JSON.stringify(data.name)} modal=${data.inModal}\n`,
+      );
 
     // Trap: Tab keeps cycling through a small set of elements outside a modal while the page has more.
     if (!walk.trap && sequence.length >= 6) {
