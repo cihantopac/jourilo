@@ -45,8 +45,11 @@ Options:
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
-  --no-forms           Do not submit forms (by default, forms on local hosts are submitted empty to test validation)
-  --allow-submit       Allow submitting forms on non-local hosts (authorized test environments only)
+  --no-forms           Skip the form validation probe
+                       (by default, on local hosts, an empty submission is simulated: nothing that sends data
+                       leaves the browser, so no database is written; server-side feedback is reported as untested)
+  --allow-submit       Really send empty submissions to test server-side validation, on local or other hosts
+                       (disposable/test environments you are authorized to use only; never to delete/payment URLs)
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
 ```
@@ -76,8 +79,11 @@ Options:
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
-  --no-forms           Do not submit forms (by default, forms on local hosts are submitted empty to test validation)
-  --allow-submit       Allow submitting forms on non-local hosts (authorized test environments only)
+  --no-forms           Skip the form validation probe
+                       (by default, on local hosts, an empty submission is simulated: nothing that sends data
+                       leaves the browser, so no database is written; server-side feedback is reported as untested)
+  --allow-submit       Really send empty submissions to test server-side validation, on local or other hosts
+                       (disposable/test environments you are authorized to use only; never to delete/payment URLs)
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
 ```
@@ -107,8 +113,11 @@ Options:
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
-  --no-forms           Do not submit forms (by default, forms on local hosts are submitted empty to test validation)
-  --allow-submit       Allow submitting forms on non-local hosts (authorized test environments only)
+  --no-forms           Skip the form validation probe
+                       (by default, on local hosts, an empty submission is simulated: nothing that sends data
+                       leaves the browser, so no database is written; server-side feedback is reported as untested)
+  --allow-submit       Really send empty submissions to test server-side validation, on local or other hosts
+                       (disposable/test environments you are authorized to use only; never to delete/payment URLs)
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
 ```
@@ -135,13 +144,17 @@ Run options:
   --var key=value        Test data for {{key}} placeholders (also JOURILO_VAR_KEY env vars)
   --allow-submit         Allow form submission on non-local hosts (authorized test environments only)
   --allow-destructive    Allow irreversible/payment actions — local hosts with sandbox data only
+  --allow-origin ORIGIN  Let the page navigate to another origin you are authorized to test (e.g. a test IdP)
   --trace                Record a Playwright trace per journey (contains typed values; keep private)
   --auth FILE            Playwright storage state for signed-in journeys
   --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission
-on non-local hosts needs --allow-submit. Blocked steps are reported, not skipped silently.
+on non-local hosts needs --allow-submit. The policy is checked twice: on the element about to be clicked or
+pressed (its name, link target, form action and identifiers — icon-only buttons included), and on every request
+the page then sends (form posts, DELETE, requests to delete/cancel/payment endpoints, navigation to other
+origins). Blocked steps are reported, not skipped silently.
 ```
 
 ## Experiment
@@ -176,7 +189,9 @@ jourilo optimize [run=latest] --repo <path> [--rule id ...] [--apply]
 ```
 Deterministic fixers (others are reported with source candidates for a person or agent to fix):
   axe/html-has-lang, jourilo/missing-viewport-meta, jourilo/input-purpose, jourilo/focus-visible, jourilo/paste-blocked
-Without --apply nothing is written. With --apply, a git checkpoint is created first (jourilo rollback undoes it).
+Without --apply nothing is written. With --apply, all files are written as one change: each file must be unchanged
+since the plan, writes are atomic, an interrupted apply is undone, and `jourilo rollback <id>` restores the files
+(git is not required).
 Afterwards run `jourilo verify <run>` to repeat the audit and compare.
 ```
 
@@ -198,10 +213,19 @@ jourilo checkpoint [--repo .] [--note text] | checkpoint diff [id=latest]
 
 ### `jourilo rollback`
 
-Restore tracked files to a checkpoint (requires --yes). Untracked files created since are listed, not deleted.
+Undo an applied fix (or restore a checkpoint) without overwriting later edits; requires --yes. The rollback can itself be undone.
 
 ```
-jourilo rollback <checkpoint-id|latest> --yes [--repo .]
+jourilo rollback <id|latest> --yes [--repo .] [--file path ...] [--force]
+```
+
+```
+For a change made by `optimize --apply` (or a previous rollback), a file is restored only while it still
+holds exactly what Jourilo wrote. A file edited afterwards is reported as a conflict and left alone; --force restores
+it anyway after saving the current bytes under .jourilo/checkpoints/<id>/conflicts/.
+For a checkpoint made with `jourilo checkpoint`, every tracked file changed since then is restored (everything you
+or an agent changed in the meantime); the current bytes are kept, and the printed id undoes the rollback.
+Untracked files created after a checkpoint are listed, never deleted.
 ```
 
 ## Results

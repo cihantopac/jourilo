@@ -82,15 +82,25 @@ var init_errors = __esm({
 // src/core/fs-safety.ts
 import { chmodSync, existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 function resolveInside(root, child) {
   if (child.includes("\0")) throw new JouriloError("UNSAFE_PATH", "Path contains a NUL byte.");
-  const base2 = existsSync(root) ? realpathSync(root) : resolve(root);
-  const target = resolve(base2, child);
-  const real = existsSync(target) ? realpathSync(target) : target;
+  const base2 = realpathDeep(resolve(root));
+  const real = realpathDeep(resolve(base2, child));
   const rel = relative(base2, real);
   if (rel === "" || !rel.startsWith(`..${sep}`) && rel !== ".." && !isAbsolute(rel)) return real;
   throw new JouriloError("UNSAFE_PATH", `Path escapes ${root}: ${child}`);
+}
+function realpathDeep(path2) {
+  let existing = path2;
+  const rest = [];
+  while (!existsSync(existing)) {
+    const parent = dirname(existing);
+    if (parent === existing) return path2;
+    rest.unshift(basename(existing));
+    existing = parent;
+  }
+  return join(realpathSync(existing), ...rest);
 }
 function writeFileSafe(path2, data, opts = {}) {
   mkdirSync(dirname(path2), { recursive: true });
@@ -129,7 +139,7 @@ __export(workspace_exports, {
   Workspace: () => Workspace
 });
 import { existsSync as existsSync2, mkdirSync as mkdirSync2, readdirSync, readFileSync, writeFileSync as writeFileSync2 } from "node:fs";
-import { dirname as dirname2, join, resolve as resolve2 } from "node:path";
+import { dirname as dirname2, join as join2, resolve as resolve2 } from "node:path";
 var Workspace;
 var init_workspace = __esm({
   "src/core/workspace.ts"() {
@@ -143,11 +153,11 @@ var init_workspace = __esm({
         this.root = resolve2(root ?? process.env.JOURILO_WORKSPACE ?? ".jourilo");
       }
       get runsDir() {
-        return join(this.root, "runs");
+        return join2(this.root, "runs");
       }
       ensure() {
         mkdirSync2(this.runsDir, { recursive: true });
-        const ignore = join(this.root, ".gitignore");
+        const ignore = join2(this.root, ".gitignore");
         if (!existsSync2(ignore)) writeFileSync2(ignore, "*\n");
       }
       runDir(id) {
@@ -156,12 +166,12 @@ var init_workspace = __esm({
       createRunDir(id) {
         this.ensure();
         const dir = this.runDir(id);
-        mkdirSync2(join(dir, "screenshots"), { recursive: true });
+        mkdirSync2(join2(dir, "screenshots"), { recursive: true });
         return dir;
       }
       saveRun(run) {
         const dir = this.createRunDir(run.id);
-        const file = join(dir, "run.json");
+        const file = join2(dir, "run.json");
         writeFileSync2(file, `${JSON.stringify(run, null, 2)}
 `);
         return file;
@@ -170,7 +180,7 @@ var init_workspace = __esm({
         if (!existsSync2(this.runsDir)) return [];
         const out = [];
         for (const id of readdirSync(this.runsDir).sort()) {
-          const file = join(this.runsDir, id, "run.json");
+          const file = join2(this.runsDir, id, "run.json");
           if (!existsSync2(file)) continue;
           try {
             const run = JSON.parse(readFileSync(file, "utf8"));
@@ -196,13 +206,13 @@ var init_workspace = __esm({
           const runs2 = this.listRuns();
           const pick = runs2[runs2.length - (ref === "latest" ? 1 : 2)];
           if (!pick) throw new JouriloError("NOT_FOUND", `No ${ref} run in ${this.runsDir}.`);
-          file = join(this.runsDir, pick.id, "run.json");
+          file = join2(this.runsDir, pick.id, "run.json");
         } else if (ref.endsWith(".json") && existsSync2(ref)) {
           file = resolve2(ref);
-        } else if (existsSync2(join(ref, "run.json"))) {
+        } else if (existsSync2(join2(ref, "run.json"))) {
           file = resolve2(ref, "run.json");
         } else {
-          file = join(this.runDir(ref), "run.json");
+          file = join2(this.runDir(ref), "run.json");
         }
         if (!existsSync2(file)) throw new JouriloError("NOT_FOUND", `Run not found: ${ref}`);
         const run = JSON.parse(readFileSync(file, "utf8"));
@@ -38884,7 +38894,7 @@ import { fileURLToPath } from "node:url";
 
 // src/agents/adapters.ts
 import { homedir as homedir2 } from "node:os";
-import { join as join2 } from "node:path";
+import { join as join3 } from "node:path";
 var MARK_START = "<!-- jourilo:start -->";
 var MARK_END = "<!-- jourilo:end -->";
 function instructions(cmd) {
@@ -38922,7 +38932,7 @@ var ADAPTERS = [
     id: "claude-skill",
     name: "Claude Code personal skill (adds a bare /jourilo command)",
     scope: "user",
-    path: () => join2(homedir2(), ".claude", "skills", "jourilo", "SKILL.md"),
+    path: () => join3(homedir2(), ".claude", "skills", "jourilo", "SKILL.md"),
     render: (cmd) => `---
 name: jourilo
 description: Jourilo product experience & conversion engineering \u2014 audit UX, accessibility, performance and conversion in a real browser, run user journeys, fix root causes and verify. Use for /jourilo.
@@ -38942,14 +38952,14 @@ ${instructions(cmd)}`
     name: "OpenAI Codex / AGENTS.md-compatible agents",
     scope: "project",
     section: true,
-    path: (root) => join2(root, "AGENTS.md"),
+    path: (root) => join3(root, "AGENTS.md"),
     render: (cmd) => instructions(cmd)
   },
   {
     id: "cursor",
     name: "Cursor project rule",
     scope: "project",
-    path: (root) => join2(root, ".cursor", "rules", "jourilo.mdc"),
+    path: (root) => join3(root, ".cursor", "rules", "jourilo.mdc"),
     render: (cmd) => `---
 description: Jourilo product experience & conversion engineering (UX, accessibility, journeys, verified fixes)
 alwaysApply: false
@@ -39028,7 +39038,7 @@ import { resolve as resolve5 } from "node:path";
 // src/browser/capture.ts
 var import_axe_core = __toESM(require_axe(), 1);
 init_fs_safety();
-import { join as join3 } from "node:path";
+import { join as join5 } from "node:path";
 
 // src/core/hash.ts
 import { createHash, randomBytes } from "node:crypto";
@@ -39504,6 +39514,246 @@ function excerpt(input, max = 240) {
   if (!input) return "";
   const clean = redactText(input.replace(/\s+/g, " ").trim());
   return clean.length > max ? `${clean.slice(0, max - 1)}\u2026` : clean;
+}
+
+// src/journeys/safety.ts
+var DESTRUCTIVE = lexicon("destructive");
+var FINANCIAL = lexicon("financial");
+function signalWords(raw) {
+  return raw.replace(new RegExp("([\\p{Ll}\\p{N}])(\\p{Lu})", "gu"), "$1 $2").replace(/[^\p{L}\p{N}]+/gu, " ").trim().toLowerCase();
+}
+var DESTRUCTIVE_WORDS = new RegExp(
+  `(?<![\\p{L}\\p{N}])(${[
+    "delete",
+    "destroy",
+    "remove",
+    "erase",
+    "purge",
+    "wipe",
+    "trash",
+    "cancel",
+    "unsubscribe",
+    "deactivate",
+    "terminate",
+    "revoke",
+    "close account",
+    "sil",
+    "silme",
+    "kaldir",
+    "kald\u0131r",
+    "iptal",
+    "loeschen",
+    "l\xF6schen",
+    "entfernen",
+    "kuendigen",
+    "k\xFCndigen",
+    "eliminar",
+    "borrar",
+    "cancelar",
+    "dar de baja",
+    "supprimer",
+    "effacer",
+    "resilier",
+    "r\xE9silier",
+    "annuler",
+    "desabonner",
+    "d\xE9sabonner"
+  ].join("|")})(?![\\p{L}\\p{N}])`,
+  "iu"
+);
+var FINANCIAL_WORDS = new RegExp(
+  `(?<![\\p{L}\\p{N}])(${[
+    "pay",
+    "payment",
+    "payments",
+    "checkout",
+    "purchase",
+    "charge",
+    "charges",
+    "order",
+    "orders",
+    "billing",
+    "subscription",
+    "transfer",
+    "withdraw",
+    "withdrawal",
+    "donate",
+    "payout",
+    "odeme",
+    "\xF6deme",
+    "satin al",
+    "sat\u0131n al",
+    "siparis",
+    "sipari\u015F",
+    "zahlung",
+    "bezahlen",
+    "kaufen",
+    "bestellung",
+    "pago",
+    "pagar",
+    "comprar",
+    "pedido",
+    "paiement",
+    "payer",
+    "acheter",
+    "commande"
+  ].join("|")})(?![\\p{L}\\p{N}])`,
+  "iu"
+);
+var DIALOG_WORDS = /^(cancel|cancelar|annuler|iptal)$/i;
+function classifyAction(name, signals = "", targets = "") {
+  const attrWords = signalWords(signals).split(" ").filter((w) => !DIALOG_WORDS.test(w)).join(" ");
+  const urlWords = signalWords(targets);
+  if (DESTRUCTIVE.test(name) || attrWords && DESTRUCTIVE_WORDS.test(attrWords) || urlWords && DESTRUCTIVE_WORDS.test(urlWords))
+    return "destructive";
+  if (FINANCIAL.test(name)) return "financial";
+  return null;
+}
+function checkAction(ctx, policy) {
+  const safeHost = policy.hostClass === "local";
+  const label = ctx.name || signalWords(`${ctx.signals ?? ""} ${ctx.targets ?? ""}`).slice(0, 60) || "this control";
+  const risky = classifyAction(ctx.name, ctx.signals, ctx.targets) ?? (ctx.paymentForm ? "financial" : null);
+  if (risky) {
+    if (!safeHost)
+      return {
+        allowed: false,
+        reason: `"${label}" looks ${risky === "financial" ? "like a payment/purchase" : "irreversible"}; Jourilo never performs it on a non-local host.`
+      };
+    if (!policy.allowDestructive)
+      return {
+        allowed: false,
+        reason: `"${label}" looks ${risky === "financial" ? "like a payment/purchase" : "irreversible"}; rerun with --allow-destructive on a local/test environment with sandbox data to include it.`
+      };
+  }
+  if (ctx.submitsForm && !safeHost && !policy.allowSubmit) {
+    return {
+      allowed: false,
+      reason: "Submitting a form on a non-local host is blocked; use --allow-submit only on an environment you are authorized to test, with test accounts."
+    };
+  }
+  return { allowed: true };
+}
+var SAFE_METHODS = /* @__PURE__ */ new Set(["GET", "HEAD", "OPTIONS"]);
+function isGraphqlRead(body) {
+  if (!body) return false;
+  try {
+    const q = JSON.parse(body).query;
+    return typeof q === "string" && /^\s*(query\b|\{)/.test(q) && !/\bmutation\b/.test(q);
+  } catch {
+    return false;
+  }
+}
+function checkRequest(r, policy) {
+  let u;
+  try {
+    u = new URL(r.url);
+  } catch {
+    return { allowed: true };
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return { allowed: true };
+  const method = r.method.toUpperCase();
+  const firstParty = u.origin === policy.origin;
+  const safeHost = policy.hostClass === "local";
+  if (r.isNavigation && r.mainFrame && !firstParty && !(policy.allowOrigins ?? []).includes(u.origin))
+    return {
+      allowed: false,
+      kind: "off-origin",
+      reason: `Navigation to ${u.origin} leaves the target origin ${policy.origin}; Jourilo does not act on other sites (allow it with --allow-origin ${u.origin}).`
+    };
+  const words = signalWords(`${u.pathname} ${u.search}`);
+  const mutating = !SAFE_METHODS.has(method);
+  const risky = method === "DELETE" || r.isNavigation && !mutating && DESTRUCTIVE_WORDS.test(words) ? "destructive" : mutating && DESTRUCTIVE_WORDS.test(words) ? "destructive" : mutating && FINANCIAL_WORDS.test(words) ? "financial" : null;
+  const what = `${method} ${u.pathname}`;
+  if (risky && (policy.mode === "read-only" || !safeHost || !policy.allowDestructive))
+    return {
+      allowed: false,
+      kind: risky,
+      reason: `${what} looks ${risky === "financial" ? "like a payment/purchase" : "irreversible"}; ${policy.mode === "read-only" ? "audits never send it" : safeHost ? "rerun with --allow-destructive on a local/test environment with sandbox data to include it" : "Jourilo never sends it to a non-local host"}.`
+    };
+  if (!mutating || isGraphqlRead(r.body)) return { allowed: true };
+  if (policy.mode === "read-only")
+    return {
+      allowed: false,
+      kind: "submit",
+      reason: `${what} would send data; audits only observe (form probes simulate the submission instead).`
+    };
+  if (!safeHost && !policy.allowSubmit && (firstParty || r.isNavigation))
+    return {
+      allowed: false,
+      kind: "submit",
+      reason: `${what} sends data to a non-local host; use --allow-submit only on an environment you are authorized to test, with test accounts.`
+    };
+  return { allowed: true };
+}
+function testData(runId, vars = {}) {
+  const tag = runId.replace(/[^a-z0-9]/gi, "").slice(-10).toLowerCase();
+  const base2 = {
+    email: `jourilo+${tag}@example.test`,
+    password: `Jr-${tag}-Q7!x`,
+    name: "Jordan Test",
+    firstName: "Jordan",
+    lastName: "Test",
+    phone: "+1 555 0100",
+    company: "Example Test Co",
+    search: "test",
+    zip: "10001",
+    // Published test card from Stripe's docs; only useful in a provider's test mode.
+    testCard: "4242 4242 4242 4242"
+  };
+  return { ...base2, ...vars };
+}
+function interpolate(value, data) {
+  return value.replace(/\{\{\s*([A-Za-z][\w]*)\s*\}\}/g, (m, k) => data[k] ?? m);
+}
+function isSecretValue(raw) {
+  return /\{\{\s*(password|testCard|secret|token)\s*\}\}/i.test(raw);
+}
+
+// src/journeys/request-guard.ts
+async function installRequestGuard(target, policy) {
+  const blocked = [];
+  const urls = /* @__PURE__ */ new Set();
+  const handler = async (route) => {
+    const req = route.request();
+    let mainFrame = req.isNavigationRequest();
+    try {
+      const frame = req.frame();
+      mainFrame = frame.parentFrame() === null;
+    } catch {
+    }
+    const verdict = checkRequest(
+      {
+        url: req.url(),
+        method: req.method(),
+        isNavigation: req.isNavigationRequest(),
+        mainFrame,
+        body: req.postData()
+      },
+      policy
+    );
+    if (!verdict.allowed) {
+      if (blocked.length < 200)
+        blocked.push({
+          url: redactUrl(req.url()),
+          method: req.method(),
+          reason: verdict.reason,
+          kind: verdict.kind ?? "submit",
+          navigation: req.isNavigationRequest(),
+          at: Date.now()
+        });
+      urls.add(req.url());
+      await route.abort("blockedbyclient").catch(() => void 0);
+      return;
+    }
+    await route.fallback().catch(() => void 0);
+  };
+  await target.route("**/*", handler);
+  return {
+    blocked,
+    isBlocked: (u) => urls.has(u) || urls.has(u.split("#")[0]),
+    since: (t) => blocked.filter((b) => b.at >= t),
+    detach: () => target.unroute("**/*", handler).catch(() => void 0)
+  };
 }
 
 // raw:src/browser/inpage/probe.js
@@ -40313,6 +40563,606 @@ async function keyboardWalk(page, maxTabs = 60) {
   return walk2;
 }
 
+// src/core/net-guard.ts
+import { lookup as dnsLookup } from "node:dns";
+import http from "node:http";
+import https from "node:https";
+import net, { isIP as isIP2 } from "node:net";
+
+// src/core/url-safety.ts
+init_errors();
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
+var LOCAL_SUFFIXES = [".localhost", ".test"];
+function isLocalHostname(host) {
+  const h = host.replace(/^\[|\]$/g, "").toLowerCase();
+  return h === "localhost" || h === "::1" || /^127\.\d+\.\d+\.\d+$/.test(h) || h === "0.0.0.0" || LOCAL_SUFFIXES.some((s) => h.endsWith(s));
+}
+var METADATA_V4 = /* @__PURE__ */ new Set(["169.254.169.254", "169.254.170.2", "169.254.169.123", "100.100.100.200"]);
+function classifyV4(v) {
+  const [a, b, c, d] = v.split(".").map(Number);
+  if (METADATA_V4.has(`${a}.${b}.${c}.${d}`)) return "metadata";
+  if (a === 0) return b === 0 && c === 0 && d === 0 ? "loopback" : "reserved";
+  if (a === 127) return "loopback";
+  if (a === 10 || a === 172 && b >= 16 && b <= 31 || a === 192 && b === 168) return "private";
+  if (a === 100 && b >= 64 && b <= 127) return "private";
+  if (a === 169 && b === 254) return "link-local";
+  if (a === 192 && b === 0 && (c === 0 || c === 2)) return "reserved";
+  if (a === 192 && b === 88 && c === 99) return "reserved";
+  if (a === 198 && (b === 18 || b === 19)) return "reserved";
+  if (a === 198 && b === 51 && c === 100) return "reserved";
+  if (a === 203 && b === 0 && c === 113) return "reserved";
+  if (a >= 224) return "reserved";
+  return "public";
+}
+function v6Groups(v) {
+  let s = v.split("%")[0];
+  const tail = s.match(/(\d+\.\d+\.\d+\.\d+)$/);
+  if (tail) {
+    const p = tail[1].split(".").map(Number);
+    s = `${s.slice(0, -tail[1].length)}${(p[0] << 8 | p[1]).toString(16)}:${(p[2] << 8 | p[3]).toString(16)}`;
+  }
+  const halves = s.split("::");
+  if (halves.length > 2) return null;
+  const parse2 = (h) => h ? h.split(":").map((g) => Number.parseInt(g, 16)) : [];
+  const head = parse2(halves[0]);
+  const rest = halves.length === 2 ? parse2(halves[1]) : [];
+  const fill = 8 - head.length - rest.length;
+  if (fill < 0 || halves.length === 1 && fill !== 0) return null;
+  const groups = [...head, ...Array(fill).fill(0), ...rest];
+  return groups.every((g) => Number.isInteger(g) && g >= 0 && g <= 65535) ? groups : null;
+}
+var v4From = (hi, lo) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
+function classifyV6(v) {
+  const g = v6Groups(v);
+  if (!g) return "reserved";
+  const [g0, g1, g2, g3, g4, g5, g6, g7] = g;
+  const zeroTo = (n) => g.slice(0, n).every((x) => x === 0);
+  if (zeroTo(8)) return "loopback";
+  if (zeroTo(7) && g7 === 1) return "loopback";
+  if (zeroTo(5) && g5 === 65535) return classifyV4(v4From(g6, g7));
+  if (zeroTo(6)) return classifyV4(v4From(g6, g7));
+  if (g0 === 100 && g1 === 65435 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0)
+    return classifyV4(v4From(g6, g7));
+  if (g0 === 100 && g1 === 65435 && g2 === 1) return "private";
+  if (g0 === 8194) return classifyV4(v4From(g1, g2));
+  if (g0 === 8193 && g1 === 0) return "reserved";
+  if (g0 === 8193 && g1 === 3512) return "reserved";
+  if (g0 === 256 && g1 === 0 && g2 === 0 && g3 === 0) return "reserved";
+  if (g0 === 64768 && g1 === 3778 && g2 + g3 + g4 + g5 + g6 === 0 && g7 === 596) return "metadata";
+  if ((g0 & 65024) === 64512) return "private";
+  if ((g0 & 65472) === 65152) return "link-local";
+  if ((g0 & 65472) === 65216) return "private";
+  if ((g0 & 65280) === 65280) return "reserved";
+  return "public";
+}
+function classifyIp(ip) {
+  const v = ip.replace(/^\[|\]$/g, "").toLowerCase();
+  const family = isIP(v.split("%")[0]);
+  if (family === 4) return classifyV4(v);
+  if (family === 6) return classifyV6(v);
+  return "reserved";
+}
+function addressVerdict(ip, policy) {
+  const cls = classifyIp(ip);
+  switch (cls) {
+    case "public":
+      return { ok: true };
+    case "metadata":
+      return {
+        ok: false,
+        reason: `${ip} is a cloud instance-metadata endpoint; Jourilo never connects to it.`
+      };
+    case "reserved":
+      return { ok: false, reason: `${ip} is a reserved or special-purpose address.` };
+    case "loopback":
+      return policy.target === "local" || policy.allowPrivate ? { ok: true } : { ok: false, reason: `${ip} is this machine (loopback); a public target may not reach it.` };
+    default:
+      return policy.allowPrivate ? { ok: true } : {
+        ok: false,
+        reason: `${ip} is a ${cls} network address; pass --allow-private if you are authorized.`
+      };
+  }
+}
+function parseTargetUrl(raw) {
+  let url;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
+  } catch {
+    throw new JouriloError("INVALID_INPUT", `Not a valid URL: ${raw}`);
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new JouriloError("UNSAFE_URL", `Only http and https URLs are supported (got ${url.protocol}).`);
+  }
+  url.hash = "";
+  return url;
+}
+var systemResolver = (host) => lookup(host, { all: true, verbatim: true });
+var PRIVATE_HINT = "Pass --allow-private if you are authorized to test this host.";
+async function checkTarget(url, opts = {}) {
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  const literal = isIP(host) !== 0;
+  if (literal) {
+    const cls = classifyIp(host);
+    if (cls === "metadata" || cls === "reserved" && host !== "0.0.0.0")
+      throw new JouriloError("UNSAFE_URL", `${host} is a ${cls} address; Jourilo does not audit it.`);
+    if (cls === "loopback") return "local";
+    if (cls === "public") return "public";
+    if (!opts.allowPrivate)
+      throw new JouriloError("UNSAFE_URL", `${host} is a private network address.`, PRIVATE_HINT);
+    return "private";
+  }
+  if (isLocalHostname(host)) return "local";
+  if (opts.resolveDns === false) return "public";
+  let addrs;
+  try {
+    addrs = await (opts.resolver ?? systemResolver)(host);
+  } catch {
+    return "public";
+  }
+  const classes = addrs.map((a) => ({ address: a.address, cls: classifyIp(a.address) }));
+  const forbidden = classes.find((c) => c.cls === "metadata" || c.cls === "reserved");
+  if (forbidden)
+    throw new JouriloError(
+      "UNSAFE_URL",
+      `${host} resolves to ${forbidden.address}, a ${forbidden.cls} address; Jourilo does not audit it.`
+    );
+  const nonPublic = classes.filter((c) => c.cls !== "public");
+  if (!nonPublic.length) return "public";
+  if (!opts.allowPrivate) {
+    const mixed = nonPublic.length < classes.length;
+    throw new JouriloError(
+      "UNSAFE_URL",
+      mixed ? `${host} resolves to both public and private addresses (${nonPublic.map((c) => c.address).join(", ")}); this is refused because the browser could connect to either (DNS rebinding).` : `${host} resolves to a private network address (${nonPublic[0].address}).`,
+      PRIVATE_HINT
+    );
+  }
+  return "private";
+}
+function isCrawlable(candidate, origin) {
+  let u;
+  try {
+    u = new URL(candidate);
+  } catch {
+    return false;
+  }
+  if (u.origin !== origin) return false;
+  if (/\/(log-?out|sign-?out|logoff|delete|destroy|remove|unsubscribe|cancel)(\/|$|\?)/i.test(u.pathname))
+    return false;
+  if (/\.(pdf|zip|gz|dmg|exe|msi|png|jpe?g|gif|webp|svg|mp4|mp3|woff2?|ttf|ico|xml|json|txt|csv)$/i.test(
+    u.pathname
+  ))
+    return false;
+  return true;
+}
+function normalizeForCrawl(raw) {
+  const u = new URL(raw);
+  u.hash = "";
+  for (const k of [...u.searchParams.keys()])
+    if (/^utm_|^(fbclid|gclid|ref)$/i.test(k)) u.searchParams.delete(k);
+  if (u.pathname !== "/" && u.pathname.endsWith("/")) u.pathname = u.pathname.replace(/\/+$/, "");
+  return u.toString();
+}
+
+// src/core/net-guard.ts
+var GuardBlockedError = class extends Error {
+  code = "EJOURILOBLOCKED";
+};
+var systemResolve = (host) => new Promise(
+  (resolve10, reject) => dnsLookup(host, { all: true, verbatim: true }, (err, addrs) => err ? reject(err) : resolve10(addrs))
+);
+async function resolveAllowed(host, port, policy, deps = {}) {
+  const h = host.replace(/^\[|\]$/g, "");
+  const verdict = deps.verdict ?? ((ip) => addressVerdict(ip, policy));
+  let addrs;
+  if (isIP2(h)) addrs = [{ address: h, family: isIP2(h) }];
+  else {
+    try {
+      addrs = await (deps.resolve ?? systemResolve)(h);
+    } catch (err) {
+      throw Object.assign(new Error(`DNS lookup failed for ${h}`), { cause: err });
+    }
+  }
+  let reason = "";
+  for (const a of addrs) {
+    const v = verdict(a.address, port);
+    if (v.ok) return { address: a.address, family: a.family };
+    reason ||= v.reason;
+  }
+  return { blocked: reason || `${h} did not resolve to an allowed address.` };
+}
+function guardedLookup(policy, port, deps = {}) {
+  return (hostname, options, callback) => {
+    const wantAll = typeof options === "object" && options?.all === true;
+    resolveAllowed(hostname, port, policy, deps).then(
+      (r) => {
+        if ("blocked" in r) return callback(new GuardBlockedError(r.blocked), wantAll ? [] : "", 0);
+        if (wantAll) return callback(null, [{ address: r.address, family: r.family }]);
+        callback(null, r.address, r.family);
+      },
+      (err) => callback(err, wantAll ? [] : "", 0)
+    );
+  };
+}
+function splitHostPort(authority, defaultPort) {
+  const m = authority.match(/^(\[[^\]]+\]|[^:]+)(?::(\d+))?$/);
+  if (!m) return null;
+  const port = m[2] ? Number(m[2]) : defaultPort;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+  return { host: m[1].replace(/^\[|\]$/g, ""), port };
+}
+var HOP_BY_HOP = /* @__PURE__ */ new Set([
+  "proxy-connection",
+  "proxy-authorization",
+  "proxy-authenticate",
+  "connection",
+  "keep-alive",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade"
+]);
+function isLoopbackName(host) {
+  const h = host.replace(/^\[|\]$/g, "").toLowerCase();
+  return h === "localhost" || h.endsWith(".localhost") || isIP2(h) !== 0 && classifyIp(h) === "loopback";
+}
+function loopbackRedirectVerdict(location, from, policy) {
+  let to;
+  try {
+    to = new URL(location, from);
+  } catch {
+    return null;
+  }
+  if (!isLoopbackName(to.hostname)) return null;
+  if (policy.target === "local" || policy.allowPrivate) return null;
+  return `redirect from ${from.host} to ${to.host} (this machine) refused.`;
+}
+function redirectEscape(url, redirectedFrom, policy) {
+  if (!redirectedFrom) return null;
+  try {
+    return loopbackRedirectVerdict(url, new URL(redirectedFrom), policy);
+  } catch {
+    return null;
+  }
+}
+async function startNetGuard(policy, deps = {}) {
+  const blocked = [];
+  const seen = /* @__PURE__ */ new Set();
+  const record = (host, port2, reason) => {
+    const key = `${host}:${port2}`;
+    if (seen.has(key) || blocked.length >= 200) return;
+    seen.add(key);
+    blocked.push({ host, port: port2, reason });
+  };
+  const sockets = /* @__PURE__ */ new Set();
+  const track = (s) => {
+    sockets.add(s);
+    s.on("close", () => sockets.delete(s));
+    return s;
+  };
+  const connectUpstream = (host, port2, onReady, onFail) => {
+    resolveAllowed(host, port2, policy, deps).then(
+      (r) => {
+        if ("blocked" in r) {
+          record(host, port2, r.blocked);
+          return onFail(403, r.blocked);
+        }
+        const upstream = track(net.connect({ host: r.address, port: port2 }));
+        upstream.once("connect", () => onReady(upstream));
+        upstream.once("error", (err) => onFail(502, err.message));
+      },
+      (err) => onFail(502, err.message)
+    );
+  };
+  const pipeBoth = (client, upstream, head) => {
+    if (head.length) upstream.write(head);
+    upstream.pipe(client);
+    client.pipe(upstream);
+    upstream.on("error", () => client.destroy());
+    client.on("error", () => upstream.destroy());
+    client.on("close", () => upstream.destroy());
+    upstream.on("close", () => client.destroy());
+  };
+  const server = http.createServer((req, res) => {
+    let target;
+    try {
+      target = new URL(req.url ?? "");
+      if (target.protocol !== "http:") throw new Error("not http");
+    } catch {
+      res.writeHead(400).end("Jourilo network guard: absolute http:// URL expected.");
+      return;
+    }
+    const host = target.hostname.replace(/^\[|\]$/g, "");
+    const port2 = Number(target.port || 80);
+    const headers = {};
+    for (const [k, v] of Object.entries(req.headers))
+      if (v !== void 0 && !HOP_BY_HOP.has(k.toLowerCase())) headers[k] = v;
+    const fail = (status, reason) => {
+      if (res.headersSent) return void res.destroy();
+      res.writeHead(status, { "content-type": "text/plain" }).end(status === 403 ? `Blocked by Jourilo network guard: ${reason}` : "Bad gateway");
+    };
+    resolveAllowed(host, port2, policy, deps).then(
+      (r) => {
+        if ("blocked" in r) {
+          record(host, port2, r.blocked);
+          req.resume();
+          return fail(403, r.blocked);
+        }
+        const upstream = http.request({
+          host: r.address,
+          port: port2,
+          method: req.method,
+          path: `${target.pathname}${target.search}`,
+          headers,
+          setHost: false
+        });
+        upstream.on("response", (up) => {
+          const loc = (up.statusCode ?? 0) >= 300 && (up.statusCode ?? 0) < 400 ? up.headers.location : void 0;
+          const refused = loc ? loopbackRedirectVerdict(loc, target, policy) : null;
+          if (refused) {
+            up.resume();
+            record(host, port2, refused);
+            return fail(403, refused);
+          }
+          const out = {};
+          for (const [k, v] of Object.entries(up.headers))
+            if (v !== void 0 && !HOP_BY_HOP.has(k.toLowerCase())) out[k] = v;
+          res.writeHead(up.statusCode ?? 502, up.statusMessage, out);
+          up.pipe(res);
+        });
+        upstream.on("error", (err) => fail(502, err.message));
+        req.pipe(upstream);
+      },
+      (err) => fail(502, err.message)
+    );
+  });
+  server.on("connect", (req, client, head) => {
+    track(client);
+    client.on("error", () => void 0);
+    const hp = splitHostPort(req.url ?? "", 443);
+    if (!hp) {
+      client.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+      return;
+    }
+    connectUpstream(
+      hp.host,
+      hp.port,
+      (upstream) => {
+        client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+        pipeBoth(client, upstream, head);
+      },
+      (status, reason) => client.end(
+        `HTTP/1.1 ${status} ${status === 403 ? "Forbidden" : "Bad Gateway"}\r
+content-type: text/plain\r
+\r
+${status === 403 ? `Blocked by Jourilo network guard: ${reason}` : ""}`
+      )
+    );
+  });
+  server.on("upgrade", (req, client, head) => {
+    track(client);
+    client.on("error", () => void 0);
+    let target;
+    try {
+      target = new URL(req.url ?? "");
+    } catch {
+      client.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+      return;
+    }
+    connectUpstream(
+      target.hostname,
+      Number(target.port || 80),
+      (upstream) => {
+        const lines = [`${req.method} ${target.pathname}${target.search} HTTP/1.1`];
+        for (let i = 0; i < req.rawHeaders.length; i += 2) {
+          const k = req.rawHeaders[i];
+          if (/^proxy-/i.test(k)) continue;
+          lines.push(`${k}: ${req.rawHeaders[i + 1]}`);
+        }
+        upstream.write(`${lines.join("\r\n")}\r
+\r
+`);
+        pipeBoth(client, upstream, head);
+      },
+      (status) => client.end(`HTTP/1.1 ${status} ${status === 403 ? "Forbidden" : "Bad Gateway"}\r
+\r
+`)
+    );
+  });
+  server.on("connection", (s) => track(s));
+  server.on("clientError", (_err, socket) => socket.destroy());
+  await new Promise((resolve10, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => resolve10());
+  });
+  const { port } = server.address();
+  return {
+    url: `http://127.0.0.1:${port}`,
+    policy,
+    blocked,
+    close: () => new Promise((resolve10) => {
+      for (const s of sockets) s.destroy();
+      server.close(() => resolve10());
+    })
+  };
+}
+async function guardedFetchText(url, policy, opts) {
+  const origin = new URL(url).origin;
+  let current = new URL(url);
+  for (let hop = 0; hop < 6; hop++) {
+    if (current.origin !== origin) return null;
+    const port = Number(current.port || (current.protocol === "https:" ? 443 : 80));
+    const pre = await resolveAllowed(current.hostname, port, policy, opts.deps).catch(() => null);
+    if (!pre || "blocked" in pre) return null;
+    const res = await new Promise((resolve10) => {
+      const mod = current.protocol === "https:" ? https : http;
+      const req = mod.get(
+        current,
+        {
+          headers: { "user-agent": opts.userAgent, accept: "text/plain, application/xml, text/xml, */*" },
+          lookup: guardedLookup(policy, port, opts.deps),
+          timeout: opts.timeoutMs,
+          agent: false
+        },
+        (r) => {
+          const status = r.statusCode ?? 0;
+          if (status >= 300 && status < 400 && r.headers.location) {
+            r.resume();
+            return resolve10({ status, location: r.headers.location });
+          }
+          if (status < 200 || status >= 300) {
+            r.resume();
+            return resolve10({ status });
+          }
+          const max = opts.maxBytes ?? 2e6;
+          let size = 0;
+          const chunks = [];
+          r.on("data", (c) => {
+            size += c.length;
+            if (size <= max) chunks.push(c);
+            else r.destroy();
+          });
+          const done = () => resolve10({ status, body: Buffer.concat(chunks).toString("utf8") });
+          r.on("end", done);
+          r.on("close", done);
+          r.on("error", () => resolve10(null));
+        }
+      );
+      req.on("timeout", () => req.destroy());
+      req.on("error", () => resolve10(null));
+    });
+    if (!res) return null;
+    if (res.location) {
+      try {
+        current = new URL(res.location, current);
+      } catch {
+        return null;
+      }
+      continue;
+    }
+    return res.body ?? null;
+  }
+  return null;
+}
+
+// src/browser/runtime.ts
+init_errors();
+import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
+import { dirname as dirname4, join as join4 } from "node:path";
+var cached;
+async function loadPlaywright() {
+  if (cached) return cached;
+  try {
+    cached = await import("playwright-core");
+    return cached;
+  } catch {
+    throw new JouriloError(
+      "BROWSER_UNAVAILABLE",
+      "playwright-core is not installed.",
+      "Run `npm install` in the Jourilo directory (or `npx jourilo setup`)."
+    );
+  }
+}
+async function launchBrowser(name = "chromium", headed = false, guard) {
+  const pw = await loadPlaywright();
+  const type = name === "firefox" ? pw.firefox : name === "webkit" ? pw.webkit : pw.chromium;
+  const opts = { headless: !headed };
+  if (name === "chrome" || name === "msedge") opts.channel = name;
+  if (guard) {
+    if (name === "firefox") {
+      opts.proxy = { server: guard.url };
+      opts.firefoxUserPrefs = {
+        "network.proxy.allow_hijacking_localhost": true,
+        "network.proxy.no_proxies_on": "",
+        "media.peerconnection.enabled": false,
+        "network.dns.disablePrefetch": true
+      };
+    } else if (name === "webkit") {
+      opts.proxy = { server: guard.url };
+    } else {
+      opts.proxy = { server: guard.url, bypass: "<-loopback>" };
+      opts.args = [
+        "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+        "--webrtc-ip-handling-policy=disable_non_proxied_udp",
+        "--disable-quic"
+      ];
+    }
+  }
+  try {
+    return await type.launch(opts);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/Executable doesn't exist|browserType\.launch: .*not found|install/i.test(msg)) {
+      throw new JouriloError(
+        "BROWSER_UNAVAILABLE",
+        `The ${name} browser is not installed for Playwright.`,
+        name === "chrome" || name === "msedge" ? `Install ${name === "chrome" ? "Google Chrome" : "Microsoft Edge"}, or use --browser chromium.` : `Run \`jourilo setup --browser ${name}\` (downloads the browser build Playwright needs), or use --browser chrome to drive an installed Google Chrome.`
+      );
+    }
+    throw new JouriloError("BROWSER_UNAVAILABLE", `Could not launch ${name}: ${msg.split("\n")[0]}`);
+  }
+}
+function installBrowser(name) {
+  const require2 = createRequire(import.meta.url);
+  let cli;
+  try {
+    cli = join4(dirname4(require2.resolve("playwright-core/package.json")), "cli.js");
+  } catch {
+    throw new JouriloError(
+      "BROWSER_UNAVAILABLE",
+      "playwright-core is not installed; cannot install browsers."
+    );
+  }
+  const res = spawnSync(process.execPath, [cli, "install", name], { encoding: "utf8" });
+  return { ok: res.status === 0, output: `${res.stdout ?? ""}${res.stderr ?? ""}`.trim() };
+}
+
+// src/browser/session.ts
+var sessions = /* @__PURE__ */ new WeakMap();
+async function openGuardedBrowser(name, headed, policy) {
+  const guard = await startNetGuard(policy);
+  let browser;
+  try {
+    browser = await launchBrowser(name, headed, guard);
+  } catch (err) {
+    await guard.close();
+    throw err;
+  }
+  const escaped = [];
+  sessions.set(browser, { policy, escaped });
+  return {
+    browser,
+    guard,
+    report: () => ({ blocked: [...guard.blocked], escaped: [...escaped] }),
+    close: async () => {
+      await browser.close().catch(() => void 0);
+      await guard.close();
+    }
+  };
+}
+function watchContext(browser, ctx) {
+  const s = sessions.get(browser);
+  if (!s) return;
+  ctx.on("request", (req) => {
+    const from = req.redirectedFrom()?.url() ?? null;
+    const reason = redirectEscape(req.url(), from, s.policy);
+    if (reason && s.escaped.length < 50) s.escaped.push({ url: redactUrl(req.url()), reason });
+  });
+}
+function networkLimitations(r) {
+  const out = [];
+  if (r.blocked.length)
+    out.push(
+      `The network guard refused ${r.blocked.length} connection(s) to non-public addresses (${r.blocked.slice(0, 3).map((b) => `${b.host}:${b.port}`).join(", ")}${r.blocked.length > 3 ? ", \u2026" : ""}); content that depends on them was not loaded.`
+    );
+  if (r.escaped.length)
+    out.push(
+      `SECURITY: ${r.escaped.length} redirect(s) from the target reached this machine outside the network guard (${r.escaped[0].url}). This browser follows HTTPS redirects to loopback addresses directly; use Chromium or Firefox for untrusted sites.`
+    );
+  return out;
+}
+
 // src/browser/vitals.ts
 var VITALS_INIT_SCRIPT = `(() => {
   if (window.__jourilo) return;
@@ -40426,56 +41276,6 @@ function toMetrics(v, spread, runs2 = 1) {
   add("Requests", v.requests, "count");
   add("DOM nodes", v.domNodes, "count");
   return out;
-}
-
-// src/journeys/safety.ts
-var DESTRUCTIVE = lexicon("destructive");
-var FINANCIAL = lexicon("financial");
-function checkAction(ctx, policy) {
-  const safeHost = policy.hostClass === "local";
-  const risky = DESTRUCTIVE.test(ctx.name) ? "destructive" : FINANCIAL.test(ctx.name) || ctx.paymentForm ? "financial" : null;
-  if (risky) {
-    if (!safeHost)
-      return {
-        allowed: false,
-        reason: `"${ctx.name}" looks ${risky === "financial" ? "like a payment/purchase" : "irreversible"}; Jourilo never performs it on a non-local host.`
-      };
-    if (!policy.allowDestructive)
-      return {
-        allowed: false,
-        reason: `"${ctx.name}" looks ${risky === "financial" ? "like a payment/purchase" : "irreversible"}; rerun with --allow-destructive on a local/test environment with sandbox data to include it.`
-      };
-  }
-  if (ctx.submitsForm && !safeHost && !policy.allowSubmit) {
-    return {
-      allowed: false,
-      reason: "Submitting a form on a non-local host is blocked; use --allow-submit only on an environment you are authorized to test, with test accounts."
-    };
-  }
-  return { allowed: true };
-}
-function testData(runId, vars = {}) {
-  const tag = runId.replace(/[^a-z0-9]/gi, "").slice(-10).toLowerCase();
-  const base2 = {
-    email: `jourilo+${tag}@example.test`,
-    password: `Jr-${tag}-Q7!x`,
-    name: "Jordan Test",
-    firstName: "Jordan",
-    lastName: "Test",
-    phone: "+1 555 0100",
-    company: "Example Test Co",
-    search: "test",
-    zip: "10001",
-    // Published test card from Stripe's docs; only useful in a provider's test mode.
-    testCard: "4242 4242 4242 4242"
-  };
-  return { ...base2, ...vars };
-}
-function interpolate(value, data) {
-  return value.replace(/\{\{\s*([A-Za-z][\w]*)\s*\}\}/g, (m, k) => data[k] ?? m);
-}
-function isSecretValue(raw) {
-  return /\{\{\s*(password|testCard|secret|token)\s*\}\}/i.test(raw);
 }
 
 // src/browser/widgets.ts
@@ -40645,6 +41445,7 @@ async function newContext(browser, vp, opts) {
     serviceWorkers: "block",
     ...opts.storageState ? { storageState: opts.storageState } : {}
   });
+  watchContext(browser, ctx);
   await ctx.addInitScript({ content: NAME_SHIM });
   await ctx.addInitScript({ content: VITALS_INIT_SCRIPT });
   return ctx;
@@ -40652,6 +41453,7 @@ async function newContext(browser, vp, opts) {
 function observe(page, origin) {
   const consoleEntries = [];
   const network = [];
+  let ignored = () => false;
   page.on("console", (msg) => {
     const t = msg.type();
     if (t !== "error" && t !== "warning") return;
@@ -40674,6 +41476,7 @@ function observe(page, origin) {
     }
   };
   page.on("requestfailed", (req) => {
+    if (ignored(req.url())) return;
     const failure = req.failure()?.errorText ?? "failed";
     if (/ERR_ABORTED|NS_BINDING_ABORTED|cancelled/i.test(failure)) return;
     if (network.length >= 100) return;
@@ -40695,7 +41498,13 @@ function observe(page, origin) {
       firstParty: firstParty(res.url())
     });
   });
-  return { console: consoleEntries, network };
+  return {
+    console: consoleEntries,
+    network,
+    ignore: (fn) => {
+      ignored = fn;
+    }
+  };
 }
 async function settle(page, timeoutMs) {
   await page.waitForLoadState("networkidle", { timeout: Math.min(timeoutMs, 5e3) }).catch(() => void 0);
@@ -40832,12 +41641,12 @@ async function capturePage(ctx, url, vp, opts) {
     if (opts.screenshots !== false) {
       const base2 = `${slug(new URL(url).pathname.replace(/^\/$/, "home"), 40)}-${shortHash(url).slice(0, 6)}-${vp.name}`;
       const mask = [...DEFAULT_MASK, ...opts.mask ?? []].map((s) => page.locator(s));
-      const full = join3("screenshots", `${base2}.jpg`);
-      const fold = join3("screenshots", `${base2}-fold.jpg`);
+      const full = join5("screenshots", `${base2}.jpg`);
+      const fold = join5("screenshots", `${base2}-fold.jpg`);
       try {
         const height = Math.min(obs.probe?.scroll.height ?? vp.height, 12e3);
         await page.screenshot({
-          path: join3(opts.runDir, full),
+          path: join5(opts.runDir, full),
           type: "jpeg",
           quality: 80,
           fullPage: true,
@@ -40849,7 +41658,7 @@ async function capturePage(ctx, url, vp, opts) {
         });
         obs.screenshot = toPosix(full);
         await page.screenshot({
-          path: join3(opts.runDir, fold),
+          path: join5(opts.runDir, fold),
           type: "jpeg",
           quality: 80,
           animations: "disabled",
@@ -40863,6 +41672,15 @@ async function capturePage(ctx, url, vp, opts) {
       }
     }
     if (opts.keyboard !== false) {
+      const guard = await installRequestGuard(page, {
+        origin,
+        hostClass: "public",
+        allowSubmit: false,
+        allowDestructive: false,
+        mode: "read-only"
+      });
+      live.ignore(guard.isBlocked);
+      obs.blockedActions = guard.blocked;
       obs.keyboard = await keyboardWalk(page).catch((e) => {
         obs.errors.push(`keyboard: ${e.message.split("\n")[0]}`);
         return null;
@@ -40931,59 +41749,6 @@ function sanitizeInventory(inv) {
     f.action = f.action ? redactUrl(f.action) : null;
     f.fields = f.fields.map((x) => ({ ...x, label: x.label ? excerpt(x.label, 120) : null }));
   }
-}
-
-// src/browser/runtime.ts
-init_errors();
-import { spawnSync } from "node:child_process";
-import { createRequire } from "node:module";
-import { dirname as dirname4, join as join4 } from "node:path";
-var cached;
-async function loadPlaywright() {
-  if (cached) return cached;
-  try {
-    cached = await import("playwright-core");
-    return cached;
-  } catch {
-    throw new JouriloError(
-      "BROWSER_UNAVAILABLE",
-      "playwright-core is not installed.",
-      "Run `npm install` in the Jourilo directory (or `npx jourilo setup`)."
-    );
-  }
-}
-async function launchBrowser(name = "chromium", headed = false) {
-  const pw = await loadPlaywright();
-  const type = name === "firefox" ? pw.firefox : name === "webkit" ? pw.webkit : pw.chromium;
-  const opts = { headless: !headed };
-  if (name === "chrome" || name === "msedge") opts.channel = name;
-  try {
-    return await type.launch(opts);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (/Executable doesn't exist|browserType\.launch: .*not found|install/i.test(msg)) {
-      throw new JouriloError(
-        "BROWSER_UNAVAILABLE",
-        `The ${name} browser is not installed for Playwright.`,
-        name === "chrome" || name === "msedge" ? `Install ${name === "chrome" ? "Google Chrome" : "Microsoft Edge"}, or use --browser chromium.` : `Run \`jourilo setup --browser ${name}\` (downloads the browser build Playwright needs), or use --browser chrome to drive an installed Google Chrome.`
-      );
-    }
-    throw new JouriloError("BROWSER_UNAVAILABLE", `Could not launch ${name}: ${msg.split("\n")[0]}`);
-  }
-}
-function installBrowser(name) {
-  const require2 = createRequire(import.meta.url);
-  let cli;
-  try {
-    cli = join4(dirname4(require2.resolve("playwright-core/package.json")), "cli.js");
-  } catch {
-    throw new JouriloError(
-      "BROWSER_UNAVAILABLE",
-      "playwright-core is not installed; cannot install browsers."
-    );
-  }
-  const res = spawnSync(process.execPath, [cli, "install", name], { encoding: "utf8" });
-  return { ok: res.status === 0, output: `${res.stdout ?? ""}${res.stderr ?? ""}`.trim() };
 }
 
 // src/audit/finding.ts
@@ -41399,97 +42164,6 @@ function formFriction(obs, form) {
 init_errors();
 init_types();
 
-// src/core/url-safety.ts
-init_errors();
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
-var LOCAL_SUFFIXES = [".localhost", ".test"];
-function isLocalHostname(host) {
-  const h = host.replace(/^\[|\]$/g, "").toLowerCase();
-  return h === "localhost" || h === "::1" || /^127\.\d+\.\d+\.\d+$/.test(h) || h === "0.0.0.0" || LOCAL_SUFFIXES.some((s) => h.endsWith(s));
-}
-function isPrivateIp(ip) {
-  const v = ip.replace(/^\[|\]$/g, "").toLowerCase();
-  if (isIP(v) === 4) {
-    const [a, b] = v.split(".").map(Number);
-    return a === 10 || a === 127 || a === 0 || a === 169 && b === 254 || a === 172 && b >= 16 && b <= 31 || a === 192 && b === 168 || a === 100 && b >= 64 && b <= 127;
-  }
-  if (isIP(v) === 6) {
-    if (v === "::1" || v === "::") return true;
-    if (v.startsWith("fc") || v.startsWith("fd") || v.startsWith("fe80")) return true;
-    const mapped = v.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    return mapped ? isPrivateIp(mapped[1]) : false;
-  }
-  return false;
-}
-function parseTargetUrl(raw) {
-  let url;
-  try {
-    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
-  } catch {
-    throw new JouriloError("INVALID_INPUT", `Not a valid URL: ${raw}`);
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new JouriloError("UNSAFE_URL", `Only http and https URLs are supported (got ${url.protocol}).`);
-  }
-  url.hash = "";
-  return url;
-}
-async function checkTarget(url, opts = {}) {
-  const host = url.hostname;
-  if (isLocalHostname(host)) return "local";
-  if (isPrivateIp(host)) {
-    if (!opts.allowPrivate) {
-      throw new JouriloError(
-        "UNSAFE_URL",
-        `${host} is a private network address.`,
-        "Pass --allow-private if you are authorized to test this host."
-      );
-    }
-    return "private";
-  }
-  if (opts.resolveDns !== false && isIP(host) === 0) {
-    try {
-      const addrs = await lookup(host, { all: true });
-      if (addrs.length && addrs.every((a) => isPrivateIp(a.address)) && !opts.allowPrivate) {
-        throw new JouriloError(
-          "UNSAFE_URL",
-          `${host} resolves to a private network address.`,
-          "Pass --allow-private if you are authorized to test this host."
-        );
-      }
-      if (addrs.some((a) => isPrivateIp(a.address))) return "private";
-    } catch (err) {
-      if (err instanceof JouriloError) throw err;
-    }
-  }
-  return "public";
-}
-function isCrawlable(candidate, origin) {
-  let u;
-  try {
-    u = new URL(candidate);
-  } catch {
-    return false;
-  }
-  if (u.origin !== origin) return false;
-  if (/\/(log-?out|sign-?out|logoff|delete|destroy|remove|unsubscribe|cancel)(\/|$|\?)/i.test(u.pathname))
-    return false;
-  if (/\.(pdf|zip|gz|dmg|exe|msi|png|jpe?g|gif|webp|svg|mp4|mp3|woff2?|ttf|ico|xml|json|txt|csv)$/i.test(
-    u.pathname
-  ))
-    return false;
-  return true;
-}
-function normalizeForCrawl(raw) {
-  const u = new URL(raw);
-  u.hash = "";
-  for (const k of [...u.searchParams.keys()])
-    if (/^utm_|^(fbclid|gclid|ref)$/i.test(k)) u.searchParams.delete(k);
-  if (u.pathname !== "/" && u.pathname.endsWith("/")) u.pathname = u.pathname.replace(/\/+$/, "");
-  return u.toString();
-}
-
 // src/discovery/robots.ts
 function parseRobots(text, agent2 = "jourilo") {
   const groups = [];
@@ -41569,26 +42243,17 @@ function rankUrl(url, depth) {
   for (const [re, w] of IMPORTANT) if (re.test(path2)) score += w;
   return score;
 }
-async function fetchText(url, timeoutMs) {
-  try {
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(timeoutMs),
-      redirect: "follow",
-      headers: { "user-agent": `${USER_AGENT_TOKEN} (+https://github.com/cihantopac/jourilo)` }
-    });
-    if (!res.ok) return null;
-    if (new URL(res.url).origin !== new URL(url).origin) return null;
-    const text = await res.text();
-    return text.slice(0, 2e6);
-  } catch {
-    return null;
-  }
+async function fetchText(url, timeoutMs, policy) {
+  return guardedFetchText(url, policy, {
+    timeoutMs,
+    userAgent: `${USER_AGENT_TOKEN} (+https://github.com/cihantopac/jourilo)`
+  }).catch(() => null);
 }
-async function loadRobots(origin, timeoutMs = 8e3) {
-  const text = await fetchText(`${origin}/robots.txt`, timeoutMs);
+async function loadRobots(origin, policy, timeoutMs = 8e3) {
+  const text = await fetchText(`${origin}/robots.txt`, timeoutMs, policy);
   return text === null ? null : parseRobots(text, USER_AGENT_TOKEN);
 }
-async function sitemapUrls(origin, robots, timeoutMs) {
+async function sitemapUrls(origin, robots, timeoutMs, policy) {
   const candidates = [...robots?.sitemaps ?? [], `${origin}/sitemap.xml`];
   const urls = [];
   for (const sm of candidates.slice(0, 3)) {
@@ -41599,7 +42264,7 @@ async function sitemapUrls(origin, robots, timeoutMs) {
       continue;
     }
     if (smUrl.origin !== origin) continue;
-    const xml = await fetchText(smUrl.toString(), timeoutMs);
+    const xml = await fetchText(smUrl.toString(), timeoutMs, policy);
     if (!xml) continue;
     for (const m of xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)) {
       urls.push(m[1].replace(/&amp;/g, "&"));
@@ -41611,7 +42276,7 @@ async function sitemapUrls(origin, robots, timeoutMs) {
 }
 async function crawl(ctx, start, opts) {
   const origin = new URL(start).origin;
-  const robots = opts.respectRobots ? await loadRobots(origin) : null;
+  const robots = opts.respectRobots ? await loadRobots(origin, opts.policy) : null;
   const skipped = [];
   const seen = /* @__PURE__ */ new Map();
   const queue = [];
@@ -41634,7 +42299,7 @@ async function crawl(ctx, start, opts) {
   };
   push(start, 0);
   for (const extra of opts.include ?? []) push(new URL(extra, start).toString(), 0);
-  const fromSitemap = await sitemapUrls(origin, robots, opts.timeoutMs);
+  const fromSitemap = await sitemapUrls(origin, robots, opts.timeoutMs, opts.policy);
   for (const u of fromSitemap) push(u, 1);
   const visited = /* @__PURE__ */ new Set();
   const page = await ctx.newPage();
@@ -41682,7 +42347,7 @@ async function crawl(ctx, start, opts) {
 // src/integrations/context.ts
 init_fs_safety();
 import { existsSync as existsSync4, readdirSync as readdirSync2, readFileSync as readFileSync3, statSync } from "node:fs";
-import { join as join5, relative as relative2 } from "node:path";
+import { join as join6, relative as relative2 } from "node:path";
 var CONTEXT_SCHEMA = "jourilo.context/v1";
 function readJson(file) {
   try {
@@ -41716,11 +42381,11 @@ function flattenTokens(tokens) {
 }
 function readMarkilo(root, brandSlug) {
   for (const dir of ["branding", "brand"]) {
-    const manifestFile = join5(root, dir, "markilo.json");
+    const manifestFile = join6(root, dir, "markilo.json");
     const manifest = readJson(manifestFile);
     if (!manifest?.brands?.length) continue;
     const brand = manifest.brands.find((b) => b.slug === brandSlug) ?? manifest.brands.find((b) => b.role === "master") ?? manifest.brands[0];
-    const tokensFile = join5(root, dir, "brands", brand.slug, "exports", "tokens", "tokens.json");
+    const tokensFile = join6(root, dir, "brands", brand.slug, "exports", "tokens", "tokens.json");
     if (!existsSync4(tokensFile)) continue;
     const { colors, fonts } = flattenTokens(readJson(tokensFile));
     return {
@@ -41735,13 +42400,13 @@ function readMarkilo(root, brandSlug) {
   return null;
 }
 function readSearvex(root) {
-  const runs2 = join5(root, ".searvex", "runs");
+  const runs2 = join6(root, ".searvex", "runs");
   if (!existsSync4(runs2)) return null;
-  const dirs = readdirSync2(runs2).filter((d) => existsSync4(join5(runs2, d, "report.json"))).sort(
-    (a, b) => statSync(join5(runs2, b, "report.json")).mtimeMs - statSync(join5(runs2, a, "report.json")).mtimeMs
+  const dirs = readdirSync2(runs2).filter((d) => existsSync4(join6(runs2, d, "report.json"))).sort(
+    (a, b) => statSync(join6(runs2, b, "report.json")).mtimeMs - statSync(join6(runs2, a, "report.json")).mtimeMs
   );
   if (!dirs.length) return null;
-  const file = join5(runs2, dirs[0], "report.json");
+  const file = join6(runs2, dirs[0], "report.json");
   const report2 = readJson(file);
   if (!report2?.findings) return null;
   return {
@@ -41757,7 +42422,7 @@ function readSearvex(root) {
   };
 }
 function readExplicit(root) {
-  const file = join5(root, "jourilo.context.json");
+  const file = join6(root, "jourilo.context.json");
   const data = readJson(file);
   if (!data) return null;
   if (data.schema !== CONTEXT_SCHEMA)
@@ -41946,6 +42611,12 @@ var AFTER = `([sel, beforeText]) => {
 }`;
 async function probeFormValidation(ctx, url, form, vp, policy, runDir) {
   const page = await ctx.newPage();
+  const guard = await installRequestGuard(page, {
+    ...policy,
+    allowDestructive: false,
+    origin: new URL(url).origin,
+    mode: policy.allowSubmit ? "journey" : "read-only"
+  });
   const base2 = {
     url: redactUrl(url),
     form: form.selector,
@@ -41978,10 +42649,12 @@ async function probeFormValidation(ctx, url, form, vp, policy, runDir) {
     );
     const startUrl = page.url();
     const submit = page.locator(form.selector).locator('button[type="submit"], button:not([type]), input[type="submit"]').first();
+    const submittedAt = Date.now();
     if (await submit.count()) await submit.click({ timeout: 1e4 });
     else await page.locator(form.selector).locator("input").first().press("Enter");
     await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
     await page.waitForTimeout(600);
+    const intercepted = guard.since(submittedAt);
     const shotFile = toPosix(`screenshots/form-${shortHash(url, form.selector).slice(0, 8)}-${vp.name}.jpg`);
     await page.screenshot({
       path: `${runDir}/${shotFile}`,
@@ -42000,6 +42673,16 @@ async function probeFormValidation(ctx, url, form, vp, policy, runDir) {
     const evidence = [
       { type: "screenshot", file: shotFile, note: "After submitting the empty form" }
     ];
+    if (after && !after.errorish.length && !after.ariaInvalid && intercepted.length) {
+      return {
+        result: {
+          ...base2,
+          outcome: "simulated",
+          detail: `No client-side validation; the empty submission (${intercepted[0].method} ${intercepted[0].url}) was intercepted, so server-side feedback was not tested.`
+        },
+        findings
+      };
+    }
     if (!after || !after.errorish.length && !after.ariaInvalid) {
       const accepted = navigated && after !== null;
       findings.push(
@@ -42093,6 +42776,7 @@ async function probeFormValidation(ctx, url, form, vp, policy, runDir) {
   } catch (err) {
     return { result: { ...base2, outcome: "error", detail: excerpt(err.message, 200) }, findings };
   } finally {
+    await guard.detach();
     await page.close().catch(() => void 0);
   }
 }
@@ -43029,9 +43713,13 @@ async function runAudit(ws, opts) {
   const runDir = ws.createRunDir(id);
   const startedAt = (/* @__PURE__ */ new Date()).toISOString();
   const limitations = [];
-  let browser;
+  let session;
   try {
-    browser = await launchBrowser(opts.browser, opts.headed);
+    session = await openGuardedBrowser(opts.browser, opts.headed, {
+      target: hostClass,
+      allowPrivate: opts.allowPrivate
+    });
+    const browser = session.browser;
     const browserVersion = browser.version();
     let urls;
     if (opts.urls?.length) {
@@ -43056,6 +43744,7 @@ async function runAudit(ws, opts) {
         maxDepth: opts.maxDepth,
         respectRobots: opts.respectRobots,
         timeoutMs: opts.timeoutMs,
+        policy: session.guard.policy,
         ...opts.include ? { include: opts.include } : {}
       });
       await ctx.close();
@@ -43117,6 +43806,7 @@ async function runAudit(ws, opts) {
       }
     }
     const formFindings = [];
+    const simulated = [];
     const formsAllowed = hostClass === "local" || opts.allowSubmit === true;
     if (opts.forms !== false && !opts.inventoryOnly && formsAllowed) {
       const vp = opts.viewports.find((v) => !v.hasTouch) ?? opts.viewports[0];
@@ -43142,11 +43832,16 @@ async function runAudit(ws, opts) {
             formFindings.push(...r.findings);
             if (r.result.outcome === "blocked")
               limitations.push(`Form ${form.selector} on ${o.url} was not submitted: ${r.result.detail}`);
+            if (r.result.outcome === "simulated") simulated.push(`${form.selector} on ${o.url}`);
           }
         }
       } finally {
         await ctx.close().catch(() => void 0);
       }
+      if (simulated.length)
+        limitations.push(
+          `Form validation was simulated: empty submissions were intercepted before reaching the server, so nothing was written. ${simulated.length} form(s) rely on the server for validation feedback (${simulated.slice(0, 3).join("; ")}${simulated.length > 3 ? "; \u2026" : ""}); that feedback was not tested. Rerun with --allow-submit on a disposable environment to test it.`
+        );
     } else if (opts.forms !== false && observations.some((o) => o.probe?.inventory.forms.length)) {
       limitations.push(
         "Form validation was not tested: submitting forms on a public host requires --allow-submit (authorized test environments only)."
@@ -43188,6 +43883,13 @@ async function runAudit(ws, opts) {
         "Throttling simulated a mid-range mobile network and 4\xD7 CPU slowdown (Chromium only)."
       );
     else limitations.push("Measured without network/CPU throttling: real mobile devices are usually slower.");
+    const network = session.report();
+    limitations.push(...networkLimitations(network));
+    const stopped = observations.flatMap((o) => o.blockedActions ?? []);
+    if (stopped.length)
+      limitations.push(
+        `While keys were pressed and widgets operated, ${stopped.length} request(s) that would have changed data or left the site were stopped (e.g. ${stopped[0].method} ${stopped[0].url}); audits only observe.`
+      );
     const pages = observations.map((o) => ({
       url: o.url,
       finalUrl: o.finalUrl,
@@ -43228,12 +43930,13 @@ async function runAudit(ws, opts) {
       findings,
       summary: summarize(findings, pages.length, 0),
       limitations: [...new Set(limitations)],
-      ...opts.context && (opts.context.brand || opts.context.search) ? { context: opts.context } : {}
+      ...opts.context && (opts.context.brand || opts.context.search) ? { context: opts.context } : {},
+      ...network.blocked.length || network.escaped.length ? { network } : {}
     };
     ws.saveRun(run);
     return { run, runDir, observations };
   } finally {
-    await browser?.close().catch(() => void 0);
+    await session?.close();
   }
 }
 function summarize(findings, pages, journeys2) {
@@ -43323,7 +44026,7 @@ init_errors();
 init_fs_safety();
 import { existsSync as existsSync5, readdirSync as readdirSync3, readFileSync as readFileSync4, statSync as statSync2 } from "node:fs";
 import { createServer } from "node:http";
-import { extname, join as join6, resolve as resolve4 } from "node:path";
+import { extname, join as join7, resolve as resolve4 } from "node:path";
 var TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -43356,24 +44059,34 @@ function stablePort(root) {
 async function serveStatic(root, port = 0, opts = {}) {
   if (!existsSync5(root) || !statSync2(root).isDirectory())
     throw new JouriloError("NOT_FOUND", `Not a directory: ${root}`);
-  const cfgFile = join6(root, "jourilo-fixture.json");
+  const cfgFile = join7(root, "jourilo-fixture.json");
   const cfg = existsSync5(cfgFile) ? JSON.parse(readFileSync4(cfgFile, "utf8")) : {};
   const spa = opts.spa ?? cfg.spa ?? looksLikeSpa(root);
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
-    let pathname2 = decodeURIComponent(url.pathname);
+    let pathname2;
+    try {
+      pathname2 = decodeURIComponent(url.pathname);
+    } catch {
+      res.writeHead(400).end("Bad request");
+      return;
+    }
+    if (pathname2.split("/").some((seg) => seg.startsWith(".") && seg !== ".well-known")) {
+      res.writeHead(404, { "content-type": "text/plain" }).end("Not found");
+      return;
+    }
     const delay = cfg.delays?.[pathname2] ?? 0;
     const send = () => {
       try {
         let file = resolveInside(root, `.${pathname2}`);
-        if (existsSync5(file) && statSync2(file).isDirectory()) file = join6(file, "index.html");
+        if (existsSync5(file) && statSync2(file).isDirectory()) file = join7(file, "index.html");
         if (!existsSync5(file) && !extname(pathname2)) {
           const html = resolveInside(root, `.${pathname2}.html`);
           if (existsSync5(html)) file = html;
         }
-        if (!existsSync5(file) && spa && !extname(pathname2)) file = join6(root, "index.html");
+        if (!existsSync5(file) && spa && !extname(pathname2)) file = join7(root, "index.html");
         if (!existsSync5(file)) {
-          const notFound = join6(root, "404.html");
+          const notFound = join7(root, "404.html");
           res.writeHead(404, { "content-type": TYPES[".html"] });
           res.end(existsSync5(notFound) ? readFileSync4(notFound) : "Not found");
           return;
@@ -43419,7 +44132,7 @@ async function serveStatic(root, port = 0, opts = {}) {
 // src/repair/locate.ts
 init_fs_safety();
 import { readdirSync as readdirSync4, readFileSync as readFileSync5, statSync as statSync3 } from "node:fs";
-import { extname as extname2, join as join7, relative as relative3 } from "node:path";
+import { extname as extname2, join as join8, relative as relative3 } from "node:path";
 var SOURCE_EXT = /* @__PURE__ */ new Set([
   ".html",
   ".htm",
@@ -43478,7 +44191,7 @@ function indexRepository(root, maxFiles = 6e3) {
     for (const name of entries) {
       if (out.length >= maxFiles) return;
       if (name.startsWith(".") && name !== ".vitepress") continue;
-      const full = join7(dir, name);
+      const full = join8(dir, name);
       let st;
       try {
         st = statSync3(full);
@@ -43761,7 +44474,7 @@ function locateFindings(run, repoRoot) {
 
 // src/report/index.ts
 import { writeFileSync as writeFileSync4 } from "node:fs";
-import { join as join8 } from "node:path";
+import { join as join9 } from "node:path";
 
 // src/report/html.ts
 function esc(s) {
@@ -44203,13 +44916,13 @@ function renderSarif(run) {
 
 // src/report/index.ts
 function writeReports(dir, run, cmp, opts = {}) {
-  const html = join8(dir, "report.html");
-  const markdown = join8(dir, "report.md");
+  const html = join9(dir, "report.html");
+  const markdown = join9(dir, "report.md");
   writeFileSync4(html, renderHtml(run, cmp, opts.history));
   writeFileSync4(markdown, renderMarkdown(run, cmp));
   const out = { html, markdown };
   if (opts.sarif) {
-    out.sarif = join8(dir, "report.sarif");
+    out.sarif = join9(dir, "report.sarif");
     writeFileSync4(out.sarif, `${JSON.stringify(renderSarif(run), null, 2)}
 `);
   }
@@ -44367,8 +45080,11 @@ var audit = {
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
-  --no-forms           Do not submit forms (by default, forms on local hosts are submitted empty to test validation)
-  --allow-submit       Allow submitting forms on non-local hosts (authorized test environments only)
+  --no-forms           Skip the form validation probe
+                       (by default, on local hosts, an empty submission is simulated: nothing that sends data
+                       leaves the browser, so no database is written; server-side feedback is reported as untested)
+  --allow-submit       Really send empty submissions to test server-side validation, on local or other hosts
+                       (disposable/test environments you are authorized to use only; never to delete/payment URLs)
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)`,
   run: (ctx) => auditCommand(ctx, audit.usage)
@@ -44390,11 +45106,11 @@ var conversion = {
 
 // src/cli/commands/bench.ts
 import { existsSync as existsSync7, readdirSync as readdirSync5, readFileSync as readFileSync6, writeFileSync as writeFileSync5 } from "node:fs";
-import { join as join9, resolve as resolve6 } from "node:path";
+import { join as join10, resolve as resolve6 } from "node:path";
 init_errors();
 var matches = (f, e) => f.ruleId === e.rule && pathOf(f.url).split("?")[0].replace(/\/$/, "") === e.path.replace(/\/$/, "") && (!e.viewport || (f.viewport ?? "").split(", ").includes(e.viewport));
 async function benchFixture(dir, wsRoot) {
-  const expected = JSON.parse(readFileSync6(join9(dir, "expected.json"), "utf8"));
+  const expected = JSON.parse(readFileSync6(join10(dir, "expected.json"), "utf8"));
   const server = await serveStatic(dir);
   const t0 = Date.now();
   try {
@@ -44409,6 +45125,7 @@ async function benchFixture(dir, wsRoot) {
       headed: false,
       respectRobots: true,
       allowPrivate: false,
+      allowSubmit: expected.audit?.allowSubmit === true,
       keyboard: true,
       throttle: false,
       timeoutMs: 3e4,
@@ -44464,12 +45181,12 @@ var bench = {
     const root = resolve6(ctx.positionals[0] ?? "fixtures/sites");
     if (!existsSync7(root)) throw new JouriloError("NOT_FOUND", `No fixtures at ${root}`);
     const only = str(ctx, "only");
-    const dirs = readdirSync5(root).filter((d) => existsSync7(join9(root, d, "expected.json"))).filter((d) => !only || d === only);
+    const dirs = readdirSync5(root).filter((d) => existsSync7(join10(root, d, "expected.json"))).filter((d) => !only || d === only);
     if (!dirs.length) throw new JouriloError("NOT_FOUND", `No fixtures with expected.json in ${root}`);
     const results = [];
     for (const d of dirs) {
       ctx.log(`bench: ${d}`);
-      results.push(await benchFixture(join9(root, d), join9(ctx.ws.root, "bench")));
+      results.push(await benchFixture(join10(root, d), join10(ctx.ws.root, "bench")));
     }
     const found = results.reduce((a, r) => a + r.found, 0);
     const expected = results.reduce((a, r) => a + r.expected, 0);
@@ -44519,13 +45236,230 @@ var bench = {
 };
 
 // src/cli/commands/discover.ts
-import { existsSync as existsSync9, statSync as statSync6, writeFileSync as writeFileSync6 } from "node:fs";
-import { join as join11, resolve as resolve7 } from "node:path";
+import { existsSync as existsSync10, statSync as statSync7, writeFileSync as writeFileSync6 } from "node:fs";
+import { join as join13, resolve as resolve7 } from "node:path";
 
 // src/discovery/repo.ts
 init_fs_safety();
+import { existsSync as existsSync9, readdirSync as readdirSync7, readFileSync as readFileSync8, statSync as statSync6 } from "node:fs";
+import { basename as basename3, dirname as dirname6, join as join12, relative as relative5 } from "node:path";
+
+// src/discovery/laravel.ts
+init_fs_safety();
 import { existsSync as existsSync8, readdirSync as readdirSync6, readFileSync as readFileSync7, statSync as statSync5 } from "node:fs";
-import { basename, dirname as dirname5, join as join10, relative as relative4 } from "node:path";
+import { basename as basename2, dirname as dirname5, join as join11, relative as relative4 } from "node:path";
+function read(file) {
+  try {
+    return statSync5(file).size > 4e5 ? "" : readFileSync7(file, "utf8");
+  } catch {
+    return "";
+  }
+}
+function stripComments(php) {
+  return php.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " ")).replace(/(^|[^:'"\\])\/\/[^\n]*/g, (m, p) => p + " ".repeat(m.length - p.length));
+}
+function argValue(arg) {
+  const lit = arg.match(/^\s*(['"])(.*?)\1\s*$/);
+  if (lit) return lit[2];
+  const ternary = arg.match(/\?\s*(['"])(.*?)\1\s*:\s*(['"])(.*?)\3/);
+  if (ternary) return ternary[2] || ternary[4] || "";
+  return null;
+}
+function joinPath(prefix, path2) {
+  const p = `/${[prefix, path2].map((s) => s.replace(/^\/+|\/+$/g, "")).filter(Boolean).join("/")}`;
+  return p.replace(/\{(\w+)\??\}/g, ":$1");
+}
+var AUTH_MW = /^(auth(:[\w,]+)?|verified|password\.confirm|can:.+|[\w.]*\.auth|[\w.]*\bauthenticated)$/;
+function middlewares(chain) {
+  const out = [];
+  for (const m of chain.matchAll(/middleware\(\s*(\[[^\]]*\]|['"][^'"]+['"])/g))
+    for (const s of m[1].matchAll(/['"]([^'"]+)['"]/g)) out.push(s[1]);
+  return out;
+}
+function entryFiles(appRoot) {
+  const out = /* @__PURE__ */ new Set();
+  const add = (rel) => {
+    const abs = join11(appRoot, rel);
+    if (existsSync8(abs)) out.add(toPosix(relative4(appRoot, abs)));
+  };
+  add("routes/web.php");
+  for (const f of ["bootstrap/app.php", "app/Providers/RouteServiceProvider.php"]) {
+    const t = read(join11(appRoot, f));
+    for (const m of t.matchAll(/web\s*:\s*__DIR__\s*\.\s*['"]([^'"]+)['"]/g)) add(join11(dirname5(f), m[1]));
+    for (const m of t.matchAll(/base_path\(\s*['"](routes\/[^'"]+\.php)['"]\s*\)/g))
+      if (!/routes\/(api|console|channels)\.php$/.test(m[1])) add(m[1]);
+  }
+  return [...out];
+}
+function scanFile(appRoot, rel, inherited, routes, seen) {
+  if (seen.has(rel)) return;
+  seen.add(rel);
+  const text = stripComments(read(join11(appRoot, rel)));
+  if (!text) return;
+  const stack = [{ prefix: inherited.prefix, auth: inherited.auth, depth: -1 }];
+  let depth = 0;
+  let stmtStart = 0;
+  let pendingGroup = null;
+  const top = () => stack[stack.length - 1];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === "'" || ch === '"') {
+      const q = ch;
+      for (i++; i < text.length && text[i] !== q; i++) if (text[i] === "\\") i++;
+      continue;
+    }
+    if (ch === "{") {
+      depth++;
+      if (pendingGroup) {
+        stack.push({ ...pendingGroup, depth });
+        pendingGroup = null;
+      }
+      stmtStart = i + 1;
+      continue;
+    }
+    if (ch === "}") {
+      if (top().depth === depth && stack.length > 1) stack.pop();
+      depth--;
+      stmtStart = i + 1;
+      continue;
+    }
+    if (ch === ";") {
+      const stmt = text.slice(stmtStart, i);
+      stmtStart = i + 1;
+      handleStatement(stmt);
+      continue;
+    }
+    if (text.startsWith("group(", i) && /->|::/.test(text.slice(Math.max(0, i - 2), i))) {
+      const chain = text.slice(stmtStart, i);
+      const rest = text.slice(i, i + 200);
+      const included = rest.match(
+        /^group\(\s*(?:__DIR__\s*\.\s*['"]([^'"]+)['"]|base_path\(\s*['"]([^'"]+)['"]\s*\))/
+      );
+      const g = groupOf(chain);
+      if (included) {
+        const target = included[1] ? join11(dirname5(rel), included[1]) : included[2];
+        scanFile(appRoot, toPosix(target), g, routes, seen);
+      } else if (/^group\(\s*(?:static\s+)?function/.test(rest)) pendingGroup = g;
+    }
+  }
+  function groupOf(chain) {
+    const pre = chain.match(/prefix\(([^)]*\)?)\)/);
+    const value = pre ? argValue(pre[1]) : null;
+    const auth = middlewares(chain).filter((m) => AUTH_MW.test(m));
+    return {
+      prefix: joinPath(top().prefix, value ?? "").replace(/^\/$/, ""),
+      auth: [...top().auth, ...auth]
+    };
+  }
+  function handleStatement(stmt) {
+    const req = stmt.match(/^\s*(?:require|include)(?:_once)?\s*\(?\s*__DIR__\s*\.\s*['"]([^'"]+\.php)['"]/);
+    if (req) {
+      scanFile(appRoot, toPosix(join11(dirname5(rel), req[1])), top(), routes, seen);
+      return;
+    }
+    const m = stmt.match(
+      /\b(?:Route|Volt)::(get|view|any|match|livewire|inertia|redirect|permanentRedirect|route)\(\s*(?:\[[^\]]*\]\s*,\s*)?(['"])([^'"]*)\2/
+    );
+    if (!m) return;
+    const verb = m[1];
+    if (verb === "match" && !/['"]get['"]/i.test(stmt)) return;
+    const via = verb === "livewire" ? "Livewire" : verb === "route" && /Volt::/.test(stmt) ? "Volt" : verb === "inertia" ? "Inertia" : verb === "redirect" || verb === "permanentRedirect" ? "redirect" : "Laravel";
+    if (via === "redirect") return;
+    const path2 = joinPath(top().prefix, m[3]);
+    const own = middlewares(stmt).filter((x) => AUTH_MW.test(x));
+    routes.push({ path: path2, file: rel, via, dynamic: /[:{]/.test(path2), auth: [...top().auth, ...own] });
+  }
+}
+function kebab(name) {
+  return name.replace(/([a-z0-9])([A-Z])/g, "$1-$2").replace(/([A-Z])([A-Z][a-z])/g, "$1-$2").toLowerCase();
+}
+function plural(word) {
+  if (/(s|x|z|ch|sh)$/.test(word)) return `${word}es`;
+  if (/[^aeiou]y$/.test(word)) return `${word.slice(0, -1)}ies`;
+  return `${word}s`;
+}
+function phpFiles(dir, depth) {
+  if (!existsSync8(dir)) return [];
+  const out = [];
+  for (const e of readdirSync6(dir, { withFileTypes: true })) {
+    const full = join11(dir, e.name);
+    if (e.isDirectory() && depth > 1) out.push(...phpFiles(full, depth - 1));
+    else if (e.isFile() && e.name.endsWith(".php")) out.push(full);
+  }
+  return out.sort();
+}
+function filamentPanels(appRoot, routes) {
+  const dir = join11(appRoot, "app/Providers/Filament");
+  const files = existsSync8(dir) ? readdirSync6(dir).filter((f) => f.endsWith("PanelProvider.php")) : [];
+  const panels = [];
+  for (const f of files) {
+    const rel = `app/Providers/Filament/${f}`;
+    const t = stripComments(read(join11(appRoot, rel)));
+    const id = t.match(/->id\(\s*['"]([^'"]+)['"]/)?.[1] ?? kebab(f.replace(/PanelProvider\.php$/, ""));
+    const pathArg = t.match(/->path\(([^)]*\)?)\)/)?.[1];
+    const path2 = joinPath("", (pathArg !== void 0 ? argValue(pathArg) : null) ?? id);
+    const login = /->login\(/.test(t);
+    panels.push({ id, path: path2, login, file: rel });
+    const auth = ["filament"];
+    routes.push({ path: path2, file: rel, via: "Filament", dynamic: false, auth });
+    if (login)
+      routes.push({ path: joinPath(path2, "login"), file: rel, via: "Filament", dynamic: false, auth: [] });
+    for (const [sub, isResource] of [
+      ["app/Filament/Resources", true],
+      ["app/Filament/Pages", false]
+    ]) {
+      for (const file of phpFiles(join11(appRoot, sub), 2)) {
+        const name = basename2(file, ".php");
+        if (isResource ? !name.endsWith("Resource") : name === "Dashboard") continue;
+        const relFile = toPosix(join11(sub, relative4(join11(appRoot, sub), file)));
+        if (!isResource && /\/(Concerns|Widgets)\//.test(relFile)) continue;
+        const own = read(file).match(/static\s+(?:\?string\s+)?\$slug\s*=\s*['"]([^'"]+)['"]/)?.[1];
+        const slug2 = own ?? (isResource ? plural(kebab(name.replace(/Resource$/, ""))) : kebab(name));
+        routes.push({ path: joinPath(path2, slug2), file: relFile, via: "Filament", dynamic: false, auth });
+      }
+    }
+  }
+  return panels;
+}
+function topLevelKeys(php, name) {
+  const start = php.search(new RegExp(`['"]${name}['"]\\s*=>\\s*\\[`));
+  if (start < 0) return [];
+  const open = php.indexOf("[", start);
+  const keys = [];
+  let depth = 0;
+  for (let i = open; i < php.length; i++) {
+    const ch = php[i];
+    if (ch === "'" || ch === '"') {
+      let j = i + 1;
+      while (j < php.length && php[j] !== ch) j += php[j] === "\\" ? 2 : 1;
+      if (depth === 1 && /^\s*=>/.test(php.slice(j + 1, j + 8))) keys.push(php.slice(i + 1, j));
+      i = j;
+      continue;
+    }
+    if (ch === "[") depth++;
+    else if (ch === "]" && --depth === 0) break;
+  }
+  return keys;
+}
+function laravelProfile(appRoot) {
+  const routes = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const f of entryFiles(appRoot)) scanFile(appRoot, f, { prefix: "", auth: [] }, routes, seen);
+  const routesDir = join11(appRoot, "routes");
+  if (existsSync8(routesDir)) {
+    for (const f of readdirSync6(routesDir))
+      if (f.endsWith(".php") && !/^(api|console|channels)\.php$/.test(f))
+        scanFile(appRoot, `routes/${f}`, { prefix: "", auth: [] }, routes, seen);
+  }
+  const panels = filamentPanels(appRoot, routes);
+  const authConfig = stripComments(read(join11(appRoot, "config/auth.php")));
+  const guards = topLevelKeys(authConfig, "guards");
+  const unique = /* @__PURE__ */ new Map();
+  for (const r of routes) if (!unique.has(r.path)) unique.set(r.path, r);
+  return { routes: [...unique.values()], guards, panels };
+}
+
+// src/discovery/repo.ts
 var SKIP = /* @__PURE__ */ new Set([
   "node_modules",
   ".git",
@@ -44550,21 +45484,21 @@ function walk(root, max = 2e4) {
     if (out.length >= max || depth > 14) return;
     let entries;
     try {
-      entries = readdirSync6(dir);
+      entries = readdirSync7(dir);
     } catch {
       return;
     }
     for (const n of entries) {
       if (SKIP.has(n) || n.startsWith(".") && n !== ".github") continue;
-      const full = join10(dir, n);
+      const full = join12(dir, n);
       let st;
       try {
-        st = statSync5(full);
+        st = statSync6(full);
       } catch {
         continue;
       }
       if (st.isDirectory()) rec(full, depth + 1);
-      else out.push(toPosix(relative4(root, full)));
+      else out.push(toPosix(relative5(root, full)));
     }
   };
   rec(root, 0);
@@ -44572,16 +45506,16 @@ function walk(root, max = 2e4) {
 }
 function readJson2(file) {
   try {
-    return JSON.parse(readFileSync7(file, "utf8"));
+    return JSON.parse(readFileSync8(file, "utf8"));
   } catch {
     return null;
   }
 }
-function read(file, max = 4e5) {
+function read2(file, max = 4e5) {
   try {
-    const st = statSync5(file);
+    const st = statSync6(file);
     if (st.size > max) return "";
-    return readFileSync7(file, "utf8");
+    return readFileSync8(file, "utf8");
   } catch {
     return "";
   }
@@ -44689,7 +45623,7 @@ function fileRoutes(appRoot, files, frameworks) {
     [
       "Next.js",
       /^(?:src\/)?pages\/(.+)\.(tsx|jsx|ts|js|mdx|md)$/,
-      (m) => /^_(app|document|error)/.test(basename(m[1])) ? null : { segs: m[1].split("/"), kind: m[1].startsWith("api/") ? "api" : "page" }
+      (m) => /^_(app|document|error)/.test(basename3(m[1])) ? null : { segs: m[1].split("/"), kind: m[1].startsWith("api/") ? "api" : "page" }
     ],
     ["Nuxt", /^(?:app\/)?pages\/(.+)\.vue$/, (m) => ({ segs: m[1].split("/"), kind: "page" })],
     [
@@ -44737,7 +45671,6 @@ function fileRoutes(appRoot, files, frameworks) {
   const codeRoute = [
     [/\.(t|j)sx?$/, /<Route\s[^>]*path=["'`]([^"'`]+)["'`]/g, "React Router"],
     [/\.(t|j)sx?$|\.vue$/, /\bpath:\s*["'`](\/[^"'`]*)["'`]/g, "Router config"],
-    [/routes\/web\.php$/, /Route::(?:get|view|match|any)\(\s*['"]([^'"]+)['"]/g, "Laravel"],
     [
       /\.dart$/,
       /GoRoute\(\s*(?:name:\s*['"][^'"]*['"]\s*,\s*)?path:\s*['"]([^'"]+)['"]/g,
@@ -44748,7 +45681,7 @@ function fileRoutes(appRoot, files, frameworks) {
   for (const f of files) {
     for (const [fileRe, re, label] of codeRoute) {
       if (!fileRe.test(f)) continue;
-      const text = read(join10(appRoot, f));
+      const text = read2(join12(appRoot, f));
       if (!text) continue;
       for (const m of text.matchAll(re)) {
         const raw = m[1].trim();
@@ -44759,6 +45692,9 @@ function fileRoutes(appRoot, files, frameworks) {
       }
     }
   }
+  if (has("Laravel"))
+    for (const r of laravelProfile(appRoot).routes)
+      add(r.path, r.file, "page", r.via === "Laravel" ? "Laravel" : `Laravel (${r.via})`, r.dynamic);
   return routes.sort((a, b) => a.path.localeCompare(b.path));
 }
 function devCommand(appRoot, pkg, frameworks, rel) {
@@ -44780,7 +45716,7 @@ function devCommand(appRoot, pkg, frameworks, rel) {
   };
   const def = frameworks.map((f) => defaults[f]).find(Boolean) ?? null;
   if (script) {
-    const lock = existsSync8(join10(appRoot, "pnpm-lock.yaml")) ? "pnpm" : existsSync8(join10(appRoot, "yarn.lock")) ? "yarn" : existsSync8(join10(appRoot, "bun.lockb")) || existsSync8(join10(appRoot, "bun.lock")) ? "bun" : "npm";
+    const lock = existsSync9(join12(appRoot, "pnpm-lock.yaml")) ? "pnpm" : existsSync9(join12(appRoot, "yarn.lock")) ? "yarn" : existsSync9(join12(appRoot, "bun.lockb")) || existsSync9(join12(appRoot, "bun.lock")) ? "bun" : "npm";
     return {
       command: lock,
       args: ["run", script],
@@ -44788,9 +45724,9 @@ function devCommand(appRoot, pkg, frameworks, rel) {
       source: `${rel || "."}/package.json`
     };
   }
-  if (existsSync8(join10(appRoot, "artisan")))
+  if (existsSync9(join12(appRoot, "artisan")))
     return { command: "php", args: ["artisan", "serve"], port: 8e3, source: `${rel || "."}/artisan` };
-  if (existsSync8(join10(appRoot, "pubspec.yaml")) && existsSync8(join10(appRoot, "web")))
+  if (existsSync9(join12(appRoot, "pubspec.yaml")) && existsSync9(join12(appRoot, "web")))
     return {
       command: "flutter",
       args: ["run", "-d", "web-server", "--web-port", "8080"],
@@ -44800,9 +45736,9 @@ function devCommand(appRoot, pkg, frameworks, rel) {
   return null;
 }
 function profileApp(repoRoot, appRoot, files) {
-  const rel = toPosix(relative4(repoRoot, appRoot));
-  const pkgFile = join10(appRoot, "package.json");
-  const pkg = existsSync8(pkgFile) ? readJson2(pkgFile) : null;
+  const rel = toPosix(relative5(repoRoot, appRoot));
+  const pkgFile = join12(appRoot, "package.json");
+  const pkg = existsSync9(pkgFile) ? readJson2(pkgFile) : null;
   const deps = {
     ...pkg?.dependencies ?? {},
     ...pkg?.devDependencies ?? {}
@@ -44813,14 +45749,14 @@ function profileApp(repoRoot, appRoot, files) {
       if (s.group === "framework" && s.dep.test(d) && !frameworks.some((f) => f.value === s.label))
         frameworks.push(fact(s.label, `${rel || "."}/package.json`));
   }
-  const composer = existsSync8(join10(appRoot, "composer.json")) ? readJson2(join10(appRoot, "composer.json")) : null;
+  const composer = existsSync9(join12(appRoot, "composer.json")) ? readJson2(join12(appRoot, "composer.json")) : null;
   if (composer && JSON.stringify(composer.require ?? {}).includes("laravel/framework"))
     frameworks.push(fact("Laravel", `${rel || "."}/composer.json`));
-  const pubspec = read(join10(appRoot, "pubspec.yaml"));
+  const pubspec = read2(join12(appRoot, "pubspec.yaml"));
   if (/\bflutter:\s*\n\s+sdk:\s*flutter/.test(pubspec))
     frameworks.push(
       fact(
-        existsSync8(join10(appRoot, "web")) ? "Flutter (web enabled)" : "Flutter",
+        existsSync9(join12(appRoot, "web")) ? "Flutter (web enabled)" : "Flutter",
         `${rel || "."}/pubspec.yaml`
       )
     );
@@ -44836,48 +45772,49 @@ function profileApp(repoRoot, appRoot, files) {
   );
   return {
     root: rel || ".",
-    name: pkg?.name ?? basename(appRoot),
+    name: pkg?.name ?? basename3(appRoot),
     frameworks,
     routes,
     devCommand: devCommand(appRoot, pkg, names, rel),
     components: {
       count: componentFiles.length,
-      dirs: [...new Set(componentFiles.map((f) => dirname5(f)))].slice(0, 12)
+      dirs: [...new Set(componentFiles.map((f) => dirname6(f)))].slice(0, 12)
     }
   };
 }
 function discoverRepository(root) {
   const files = walk(root);
   const gaps = [];
-  const rootPkg = existsSync8(join10(root, "package.json")) ? readJson2(join10(root, "package.json")) : null;
+  const rootPkg = existsSync9(join12(root, "package.json")) ? readJson2(join12(root, "package.json")) : null;
   let monorepo = null;
   const appRoots = [];
   const ws = rootPkg?.workspaces;
   const wsGlobs = Array.isArray(ws) ? ws : Array.isArray(ws?.packages) ? ws.packages : [];
-  const pnpm = read(join10(root, "pnpm-workspace.yaml"));
+  const pnpm = read2(join12(root, "pnpm-workspace.yaml"));
   for (const m of pnpm.matchAll(/^\s*-\s*['"]?([^'"\n]+)['"]?\s*$/gm)) wsGlobs.push(m[1]);
   if (wsGlobs.length)
     monorepo = fact(
       `workspaces: ${wsGlobs.join(", ")}`,
-      existsSync8(join10(root, "pnpm-workspace.yaml")) ? "pnpm-workspace.yaml" : "package.json"
+      existsSync9(join12(root, "pnpm-workspace.yaml")) ? "pnpm-workspace.yaml" : "package.json"
     );
   for (const g of wsGlobs) {
     const base2 = g.replace(/\/\*\*?$/, "");
     if (g.endsWith("*")) {
-      const dir = join10(root, base2);
-      if (!existsSync8(dir)) continue;
-      for (const n of readdirSync6(dir))
-        if (existsSync8(join10(dir, n, "package.json"))) appRoots.push(join10(dir, n));
-    } else if (existsSync8(join10(root, base2, "package.json"))) appRoots.push(join10(root, base2));
+      const dir = join12(root, base2);
+      if (!existsSync9(dir)) continue;
+      for (const n of readdirSync7(dir))
+        if (existsSync9(join12(dir, n, "package.json"))) appRoots.push(join12(dir, n));
+    } else if (existsSync9(join12(root, base2, "package.json"))) appRoots.push(join12(root, base2));
   }
   const apps = (appRoots.length ? appRoots : [root]).map((r) => profileApp(root, r, files)).filter(
     (a, _, all) => all.length === 1 || a.routes.length > 0 || a.frameworks.some((f) => !["React", "Vue", "Svelte", "Vite"].includes(f.value))
   );
   if (!apps.length) apps.push(profileApp(root, root, files));
+  const laravelRoles = [];
   const allPkgs = files.filter((f) => f.endsWith("package.json")).slice(0, 60);
   const signals = /* @__PURE__ */ new Map();
   for (const p of allPkgs) {
-    const j = readJson2(join10(root, p));
+    const j = readJson2(join12(root, p));
     const deps = Object.keys({
       ...j?.dependencies ?? {},
       ...j?.devDependencies ?? {}
@@ -44890,11 +45827,31 @@ function discoverRepository(root) {
         signals.set(s.group, list2);
       }
   }
-  const composer = existsSync8(join10(root, "composer.json")) ? JSON.stringify(readJson2(join10(root, "composer.json"))?.require ?? {}) : "";
+  const composer = existsSync9(join12(root, "composer.json")) ? JSON.stringify(readJson2(join12(root, "composer.json"))?.require ?? {}) : "";
   if (/laravel\/(breeze|fortify|jetstream|sanctum)/.test(composer))
     (signals.get("auth") ?? signals.set("auth", []).get("auth")).push(
       fact(composer.match(/laravel\/(breeze|fortify|jetstream|sanctum)/)[0], "composer.json")
     );
+  for (const app of apps.filter((a) => a.frameworks.some((f) => f.value === "Laravel"))) {
+    const lp = laravelProfile(join12(root, app.root));
+    const at = (f) => app.root === "." ? f : `${app.root}/${f}`;
+    const authList = signals.get("auth") ?? signals.set("auth", []).get("auth");
+    if (lp.guards.length)
+      authList.push(fact(`Laravel guards: ${lp.guards.join(", ")}`, at("config/auth.php")));
+    for (const p of lp.panels.filter((x) => x.login))
+      authList.push(fact(`Filament panel "${p.id}" with login at ${p.path}/login`, at(p.file)));
+    const protectedRoutes = lp.routes.filter((r) => r.auth.length && r.via !== "Filament");
+    if (protectedRoutes.length)
+      authList.push(
+        fact(
+          `${protectedRoutes.length} route(s) behind ${[...new Set(protectedRoutes.flatMap((r) => r.auth))].join(", ")}`,
+          at(protectedRoutes[0].file)
+        )
+      );
+    for (const g of lp.guards.filter((x) => !["web", "api", "sanctum"].includes(x)))
+      laravelRoles.push(fact(g, at("config/auth.php")));
+    for (const p of lp.panels) laravelRoles.push(fact(`${p.id} panel user`, at(p.file)));
+  }
   if (/laravel\/cashier/.test(composer))
     (signals.get("payments") ?? signals.set("payments", []).get("payments")).push(
       fact("laravel/cashier", "composer.json")
@@ -44904,9 +45861,9 @@ function discoverRepository(root) {
   let cssVariables = 0;
   for (const f of files) {
     if (/(^|\/)(tokens?|design-tokens|theme)\.(json|ts|js|css)$/i.test(f) || /\.tokens\.json$/.test(f))
-      tokens.push(fact(basename(f), f));
+      tokens.push(fact(basename3(f), f));
     if (/\.(css|scss)$/.test(f)) {
-      const t = read(join10(root, f), 3e5);
+      const t = read2(join12(root, f), 3e5);
       cssVariables += (t.match(/--[a-z0-9-]+\s*:/gi) ?? []).length;
       for (const m of t.matchAll(/font-family\s*:\s*["']?([A-Za-z][\w -]+?)["']?\s*[,;]/g)) {
         const name = m[1].trim();
@@ -44915,7 +45872,7 @@ function discoverRepository(root) {
       }
     }
     if (/\.(tsx|jsx|ts|js)$/.test(f) && /layout|_app|_document/.test(f)) {
-      const t = read(join10(root, f));
+      const t = read2(join12(root, f));
       for (const m of t.matchAll(/import\s*\{\s*([A-Z][\w,\s]+)\}\s*from\s*['"]next\/font\/google['"]/g))
         for (const n of m[1].split(",").map((s) => s.trim()).filter(Boolean))
           if (!fonts.some((x) => x.value === n)) fonts.push(fact(n.replace(/_/g, " "), f));
@@ -44939,8 +45896,9 @@ function discoverRepository(root) {
       fact("signed-in user", allRoutes.find((r) => r.role === "dashboard" || r.role === "settings").file)
     );
   roles.unshift(fact("visitor", "public routes"));
+  for (const r of laravelRoles) if (!roles.some((x) => x.value === r.value)) roles.push(r);
   for (const f of files.filter((x) => /\.(ts|tsx|js|php|dart|rb|py)$/.test(x)).slice(0, 3e3)) {
-    const t = read(join10(root, f), 12e4);
+    const t = read2(join12(root, f), 12e4);
     for (const m of t.matchAll(
       /\brole\s*(?:===?|==|:)\s*['"](owner|admin|editor|viewer|member|manager|customer|seller|vendor|teacher|student)['"]/gi
     )) {
@@ -44972,7 +45930,7 @@ function discoverRepository(root) {
   let readmeSummary = null;
   const readmeFile = files.find((f) => /^readme\.md$/i.test(f));
   if (readmeFile) {
-    const para = read(join10(root, readmeFile)).split(/\n\s*\n/).map((p) => p.replace(/<[^>]+>|!\[[^\]]*\]\([^)]*\)|\[!\[[^\]]*\]\([^)]*\)\]\([^)]*\)/g, "").trim()).find((p) => p.length > 60 && !p.startsWith("#") && !p.startsWith("```") && !p.startsWith("|"));
+    const para = read2(join12(root, readmeFile)).split(/\n\s*\n/).map((p) => p.replace(/<[^>]+>|!\[[^\]]*\]\([^)]*\)|\[!\[[^\]]*\]\([^)]*\)\]\([^)]*\)/g, "").trim()).find((p) => p.length > 60 && !p.startsWith("#") && !p.startsWith("```") && !p.startsWith("|"));
     if (para) readmeSummary = fact(para.replace(/\s+/g, " ").slice(0, 400), readmeFile);
   }
   const description = typeof rootPkg?.description === "string" ? fact(rootPkg.description, "package.json") : null;
@@ -44996,7 +45954,7 @@ function discoverRepository(root) {
     schemaVersion: 1,
     kind: "repository",
     root,
-    name: rootPkg?.name ?? basename(root),
+    name: rootPkg?.name ?? basename3(root),
     description,
     readmeSummary,
     monorepo,
@@ -45169,9 +46127,9 @@ var discover = {
   async run(ctx) {
     const target = requirePositional(ctx, 0, "path|url", discover.usage);
     ctx.ws.ensure();
-    if (!target.includes("://") && existsSync9(target) && statSync6(target).isDirectory()) {
+    if (!target.includes("://") && existsSync10(target) && statSync7(target).isDirectory()) {
       const profile2 = discoverRepository(resolve7(target));
-      const file2 = join11(ctx.ws.root, "product.json");
+      const file2 = join13(ctx.ws.root, "product.json");
       writeFileSync6(file2, `${JSON.stringify(profile2, null, 2)}
 `);
       return { data: { file: file2, profile: profile2 }, text: `${repoText(profile2)}
@@ -45196,7 +46154,7 @@ var discover = {
       onProgress: ctx.log
     });
     const profile = buildSiteProfile(run, observations);
-    const file = join11(ctx.ws.root, "site.json");
+    const file = join13(ctx.ws.root, "site.json");
     writeFileSync6(file, `${JSON.stringify(profile, null, 2)}
 `);
     return { data: { file, profile }, text: `${siteText(profile)}
@@ -45207,8 +46165,8 @@ var discover = {
 
 // src/cli/commands/experiment.ts
 init_errors();
-import { existsSync as existsSync10, mkdirSync as mkdirSync4, readFileSync as readFileSync8, writeFileSync as writeFileSync7 } from "node:fs";
-import { join as join12 } from "node:path";
+import { existsSync as existsSync11, mkdirSync as mkdirSync4, readFileSync as readFileSync9, writeFileSync as writeFileSync7 } from "node:fs";
+import { join as join14 } from "node:path";
 
 // src/experiment/stats.ts
 function normCdf(z) {
@@ -45630,19 +46588,19 @@ Jourilo never invents traffic, conversions or effects: every number comes from y
       if (!f) throw new JouriloError("NOT_FOUND", `Finding ${fp} is not in run ${run.id}.`);
       if (f.kind !== "hypothesis")
         ctx.log(`Note: ${f.ruleId} is a ${f.kind}; defects should usually be fixed, not A/B tested.`);
-      const productFile = join12(ctx.ws.root, "product.json");
-      const product = existsSync10(productFile) ? JSON.parse(readFileSync8(productFile, "utf8")) : null;
+      const productFile = join14(ctx.ws.root, "product.json");
+      const product = existsSync11(productFile) ? JSON.parse(readFileSync9(productFile, "utf8")) : null;
       const plan = planExperiment(run.id, f, {
         ...numOpt(ctx, "baseline") !== void 0 ? { baseline: numOpt(ctx, "baseline") } : {},
         ...numOpt(ctx, "mde") !== void 0 ? { mde: numOpt(ctx, "mde") } : {},
         ...numOpt(ctx, "daily-traffic") !== void 0 ? { dailyTraffic: numOpt(ctx, "daily-traffic") } : {},
         product
       });
-      const outDir = join12(ctx.ws.root, "experiments");
+      const outDir = join14(ctx.ws.root, "experiments");
       mkdirSync4(outDir, { recursive: true });
-      const md2 = join12(outDir, `${plan.id}.md`);
+      const md2 = join14(outDir, `${plan.id}.md`);
       writeFileSync7(md2, planMarkdown(plan));
-      writeFileSync7(join12(outDir, `${plan.id}.json`), `${JSON.stringify(plan, null, 2)}
+      writeFileSync7(join14(outDir, `${plan.id}.json`), `${JSON.stringify(plan, null, 2)}
 `);
       return { data: { plan, file: md2 }, text: `${planMarkdown(plan)}
 Saved: ${md2}` };
@@ -45665,8 +46623,8 @@ Saved: ${md2}` };
 };
 
 // src/cli/commands/finding.ts
-import { existsSync as existsSync11 } from "node:fs";
-import { join as join13 } from "node:path";
+import { existsSync as existsSync12 } from "node:fs";
+import { join as join15 } from "node:path";
 init_errors();
 init_fs_safety();
 var CATEGORIES = [
@@ -45724,7 +46682,7 @@ var finding = {
         "At least one --evidence file from the run (e.g. screenshots/home-\u2026-desktop.jpg) is required: judgments must point at what they judge."
       );
     for (const e of evidenceFiles)
-      if (!existsSync11(resolveInside(dir, e)))
+      if (!existsSync12(resolveInside(dir, e)))
         throw new JouriloError("NOT_FOUND", `Evidence ${e} is not in run ${run.id}.`);
     const url = str(ctx, "url") ?? run.pages[0]?.url ?? run.target;
     const f = makeFinding({
@@ -45761,20 +46719,20 @@ var finding = {
     writeReports(dir, run, void 0, { history: ctx.ws.listRuns() });
     return {
       data: f,
-      text: `Added ${f.provenance} finding ${f.fingerprint} to run ${run.id} (${join13(dir, "report.html")}).`
+      text: `Added ${f.provenance} finding ${f.fingerprint} to run ${run.id} (${join15(dir, "report.html")}).`
     };
   }
 };
 
 // src/cli/commands/journeys.ts
-import { existsSync as existsSync12, mkdirSync as mkdirSync5, readdirSync as readdirSync7, readFileSync as readFileSync9, writeFileSync as writeFileSync8 } from "node:fs";
-import { basename as basename2, join as join15, resolve as resolve8 } from "node:path";
+import { existsSync as existsSync15, mkdirSync as mkdirSync7, readdirSync as readdirSync10, readFileSync as readFileSync12, writeFileSync as writeFileSync9 } from "node:fs";
+import { basename as basename5, join as join19, resolve as resolve8 } from "node:path";
 init_errors();
 init_fs_safety();
 init_types();
 
 // src/journeys/runner.ts
-import { join as join14 } from "node:path";
+import { join as join16 } from "node:path";
 init_fs_safety();
 
 // src/journeys/schema.ts
@@ -45887,15 +46845,61 @@ function locatorFor(page, t) {
   return page.locator(t.css);
 }
 var ELEMENT_FACTS = `(el) => {
-  const form = el.form || el.closest('form');
-  const tag = el.tagName;
-  const type = (el.getAttribute('type') || '').toLowerCase();
+  if (!el || el === document.body || el === document.documentElement) return null;
+  const act = el.closest('a[href],button,input,select,textarea,summary,[role=button],[role=link],[role=menuitem],[role=tab],[role=option],[role=checkbox],[role=switch]') || el;
+  const form = act.form || act.closest('form');
+  const tag = act.tagName;
+  const type = (act.getAttribute('type') || '').toLowerCase();
+  const role = (act.getAttribute('role') || '').toLowerCase();
   const submits = !!form && ((tag === 'BUTTON' && (type === '' || type === 'submit')) || (tag === 'INPUT' && (type === 'submit' || type === 'image')));
-  const inField = !!form && (tag === 'INPUT' || tag === 'SELECT');
-  const payment = !!form && !!form.querySelector('input[autocomplete^="cc-"], input[name*="card" i], input[name*="cvc" i], input[name*="cvv" i]');
-  const name = (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('title') || '').replace(/\\s+/g, ' ').trim().slice(0, 120);
-  return { submits, inField, payment, name };
+  const inField = !!form && ((tag === 'INPUT' && !['button','submit','reset','checkbox','radio','image','file','range','color'].includes(type)) || tag === 'SELECT');
+  const textarea = tag === 'TEXTAREA' || act.isContentEditable;
+  const buttonLike = tag === 'BUTTON' || tag === 'SUMMARY' || (tag === 'INPUT' && ['button','submit','reset','image'].includes(type)) || ['button','menuitem','tab','option','switch','checkbox'].includes(role);
+  const linkLike = (tag === 'A' && act.hasAttribute('href')) || role === 'link';
+  const payment = !!form && !!form.querySelector('input[autocomplete^="cc-"], input[name*="card" i], input[name*="cvc" i], input[name*="cvv" i], input[data-stripe], iframe[src*="stripe"], iframe[name*="card" i], iframe[title*="card" i]');
+  const byIds = (attr) => (act.getAttribute(attr) || '').split(/\\s+/).map((id) => id && document.getElementById(id)).filter(Boolean).map((n) => n.innerText || n.textContent || '').join(' ');
+  const inner = Array.from(act.querySelectorAll('img[alt], [aria-label], svg title')).map((n) => n.getAttribute('alt') || n.getAttribute('aria-label') || n.textContent || '').join(' ');
+  const name = (act.getAttribute('aria-label') || byIds('aria-labelledby') || act.innerText || act.value || act.getAttribute('title') || act.getAttribute('alt') || inner || '').replace(/\\s+/g, ' ').trim().slice(0, 120);
+  const attrs = [];
+  for (const n of [act, ...Array.from(act.querySelectorAll('*')).slice(0, 20)])
+    for (const a of Array.from(n.attributes))
+      if (/^(id|class|name|title|data-[\\w-]+)$/.test(a.name) || ((a.name === 'href' || a.name === 'xlink:href') && n.tagName.toLowerCase() === 'use'))
+        attrs.push(a.value);
+  const targets = [];
+  if (linkLike && act.getAttribute('href')) targets.push(act.href || act.getAttribute('href'));
+  if (act.getAttribute('formaction')) targets.push(act.formAction || act.getAttribute('formaction'));
+  if (form && (submits || inField)) targets.push(form.getAttribute('action') || '');
+  return { submits, inField, textarea, buttonLike, linkLike, payment, name, signals: attrs.join(' ').slice(0, 1500), targets: targets.join(' ') };
 }`;
+function keyEffect(key, f) {
+  if (!f) return "none";
+  const k = key.split("+").pop();
+  const mods = key.includes("+");
+  const enter = k === "Enter" || k === "NumpadEnter";
+  const space = k === " " || k === "Space";
+  if (enter) {
+    if (f.textarea) return mods ? "submit" : "none";
+    if (f.inField) return "submit";
+    if (f.buttonLike || f.linkLike) return f.submits ? "submit" : "activate";
+    return "activate";
+  }
+  if (space && f.buttonLike) return f.submits ? "submit" : "activate";
+  return "none";
+}
+function verdictFor(f, effect, action, policy) {
+  const submitsForm = effect === "submit" || f.submits;
+  return checkAction(
+    {
+      action,
+      name: f.name,
+      signals: f.signals,
+      targets: f.targets,
+      submitsForm,
+      paymentForm: f.payment && submitsForm
+    },
+    policy
+  );
+}
 var facts = (src) => new Function(`return (${src})(arguments[0])`);
 function matchesUrl(actual, expected) {
   if (expected.startsWith("re:")) {
@@ -45925,34 +46929,31 @@ async function act(page, step, opts) {
   switch (step.action) {
     case "goto": {
       const url = new URL(value(step.url), opts.base);
-      if (url.origin !== opts.base.origin)
-        throw new Error(`goto ${url.origin} leaves the target origin ${opts.base.origin}`);
+      if (url.origin !== opts.base.origin && !(opts.allowOrigins ?? []).includes(url.origin))
+        throw new Blocked(`goto ${url.origin} leaves the target origin ${opts.base.origin}`);
       await page.goto(url.toString(), { waitUntil: "load", timeout: t * 3 });
       await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
       return;
     }
     case "click":
     case "press": {
-      const loc = step.action === "click" ? locatorFor(page, step.target).first() : step.target ? locatorFor(page, step.target).first() : null;
+      const loc = step.target ? locatorFor(page, step.target).first() : null;
+      let handle = null;
       if (loc) {
         await loc.waitFor({ state: "visible", timeout: t });
-        const f = await loc.evaluate(facts(ELEMENT_FACTS));
-        const submitsForm = step.action === "click" ? f.submits : step.key === "Enter" && f.inField;
-        const verdict = checkAction(
-          {
-            action: step.action,
-            name: step.action === "click" ? f.name : "",
-            submitsForm,
-            paymentForm: f.payment && submitsForm
-          },
-          opts.policy
-        );
-        if (!verdict.allowed) throw new Blocked(verdict.reason);
-        if (step.action === "click") await loc.click({ timeout: t });
-        else await loc.press(step.key, { timeout: t });
-      } else if (step.action === "press") {
-        await page.keyboard.press(step.key);
+        handle = await loc.elementHandle({ timeout: t });
+      } else {
+        handle = (await page.evaluateHandle("document.activeElement")).asElement();
       }
+      const f = handle ? await handle.evaluate(facts(ELEMENT_FACTS)) : null;
+      const effect = step.action === "click" ? f?.submits ? "submit" : "activate" : keyEffect(step.key, f);
+      if (f && effect !== "none") {
+        const verdict = verdictFor(f, effect, step.action, opts.policy);
+        if (!verdict.allowed) throw new Blocked(verdict.reason);
+      }
+      if (step.action === "click") await handle.click({ timeout: t });
+      else if (loc && handle) await handle.press(step.key, { timeout: t });
+      else await page.keyboard.press(step.key);
       await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
       return;
     }
@@ -46004,10 +47005,17 @@ async function runJourney(browser, spec, opts) {
     runDir: opts.runDir,
     ...opts.storageState ? { storageState: opts.storageState } : {}
   });
-  const tracePath = opts.trace ? join14("traces", `${spec.id}-${vp.name}.zip`) : void 0;
+  const tracePath = opts.trace ? join16("traces", `${spec.id}-${vp.name}.zip`) : void 0;
   if (tracePath) await ctx.tracing.start({ screenshots: true, snapshots: true, title: spec.name });
+  const guard = await installRequestGuard(ctx, {
+    ...opts.policy,
+    origin: opts.base.origin,
+    ...opts.allowOrigins ? { allowOrigins: opts.allowOrigins } : {},
+    mode: "journey"
+  });
   const page = await ctx.newPage();
   const live = observe(page, opts.base.origin);
+  live.ignore(guard.isBlocked);
   const steps = [];
   const findings = [];
   const t0 = Date.now();
@@ -46015,10 +47023,10 @@ async function runJourney(browser, spec, opts) {
   const startUrl = new URL(interpolate(spec.start, opts.data), opts.base);
   const allSteps = [{ action: "goto", url: startUrl.toString() }, ...spec.steps];
   const shot = async (i) => {
-    const file = join14("screenshots", `journey-${spec.id}-${vp.name}-${String(i).padStart(2, "0")}.jpg`);
+    const file = join16("screenshots", `journey-${spec.id}-${vp.name}-${String(i).padStart(2, "0")}.jpg`);
     try {
       await page.screenshot({
-        path: join14(opts.runDir, file),
+        path: join16(opts.runDir, file),
         type: "jpeg",
         quality: 70,
         animations: "disabled",
@@ -46056,6 +47064,14 @@ async function runJourney(browser, spec, opts) {
       } catch (err) {
         res.status = err instanceof Blocked ? "blocked" : "failed";
         res.error = excerpt(err.message.split("\n")[0], 300);
+      }
+      const stopped = guard.since(s0).filter((b) => b.navigation || b.kind !== "submit");
+      if (stopped.length && res.status !== "blocked") {
+        res.status = "blocked";
+        res.error = excerpt(
+          `${stopped[0].reason}${stopped.length > 1 ? ` (+${stopped.length - 1} more)` : ""}`,
+          300
+        );
       }
       res.durationMs = Date.now() - s0;
       res.url = redactUrl(page.url());
@@ -46115,7 +47131,7 @@ async function runJourney(browser, spec, opts) {
     const vitals = await page.evaluate(READ_VITALS_SCRIPT).catch(() => null);
     const durationMs = Date.now() - t0;
     if (tracePath) {
-      await ctx.tracing.stop({ path: join14(opts.runDir, tracePath) });
+      await ctx.tracing.stop({ path: join16(opts.runDir, tracePath) });
     }
     if (opts.saveAuth && status === "passed") {
       writeFileSafe(opts.saveAuth, JSON.stringify(await ctx.storageState(), null, 2), { private: true });
@@ -46128,8 +47144,10 @@ async function runJourney(browser, spec, opts) {
       steps,
       successCriteria: criteria,
       durationMs,
-      ...tracePath ? { trace: toPosix(tracePath) } : {}
+      ...tracePath ? { trace: toPosix(tracePath) } : {},
+      ...guard.blocked.length ? { blockedRequests: guard.blocked.map(({ method, url: url2, reason }) => ({ method, url: url2, reason })) } : {}
     };
+    const blockedNote = guard.blocked.length ? ` The safety policy stopped ${guard.blocked.length} request(s) during this journey (e.g. ${guard.blocked[0].method} ${guard.blocked[0].url}), which may be why.` : "";
     const reproduction = steps.filter((s) => s.status !== "skipped").map((s) => s.description);
     const failedStep = steps.find((s) => s.status === "failed");
     const blockedStep = steps.find((s) => s.status === "blocked");
@@ -46149,7 +47167,9 @@ async function runJourney(browser, spec, opts) {
           provenance: "observed",
           url,
           viewport: vp.name,
-          description: failedStep ? `Step ${failedStep.index + 1} (${failedStep.description}) failed: ${failedStep.error}` : `All steps ran, but ${unmet.length} success criterion/criteria were not met: ${unmet.map((c) => `${c.description}${c.detail ? ` (${c.detail})` : ""}`).join("; ")}.`,
+          description: `${failedStep ? `Step ${failedStep.index + 1} (${failedStep.description}) failed: ${failedStep.error}` : `All steps ran, but ${unmet.length} success criterion/criteria were not met: ${unmet.map((c) => `${c.description}${c.detail ? ` (${c.detail})` : ""}`).join("; ")}.`}${blockedNote}`,
+          // A goal missed because Jourilo itself stopped a request is not evidence that the site is broken.
+          ...blockedNote ? { confidence: "low" } : {},
           impact: spec.goal ? `People trying to ${spec.goal} cannot complete it.` : "People cannot complete this task.",
           recommendation: spec.source === "suggested" ? "Check whether the journey definition matches the intended flow (it was generated); if it does, fix the step that failed." : "Fix the step that failed, then rerun the journey.",
           standards: [nielsen(9)],
@@ -46402,33 +47422,382 @@ function suggestJourneys(run) {
   return out;
 }
 
+// src/repair/git.ts
+init_errors();
+init_fs_safety();
+import { spawnSync as spawnSync2 } from "node:child_process";
+import { existsSync as existsSync14, mkdirSync as mkdirSync6, readdirSync as readdirSync9, readFileSync as readFileSync11, writeFileSync as writeFileSync8 } from "node:fs";
+import { dirname as dirname8, join as join18 } from "node:path";
+
+// src/repair/transaction.ts
+init_errors();
+init_fs_safety();
+import { createHash as createHash2, randomBytes as randomBytes2 } from "node:crypto";
+import {
+  closeSync,
+  existsSync as existsSync13,
+  fsyncSync,
+  lstatSync,
+  mkdirSync as mkdirSync5,
+  openSync,
+  readdirSync as readdirSync8,
+  readFileSync as readFileSync10,
+  renameSync,
+  rmSync,
+  statSync as statSync8,
+  unlinkSync,
+  writeSync
+} from "node:fs";
+import { basename as basename4, dirname as dirname7, join as join17 } from "node:path";
+var sha256 = (b) => createHash2("sha256").update(b).digest("hex");
+var recordsDir = (wsRoot) => join17(wsRoot, "checkpoints");
+var txDir = (wsRoot, id) => join17(recordsDir(wsRoot), id);
+function atomicWrite(path2, data, mode) {
+  mkdirSync5(dirname7(path2), { recursive: true });
+  const tmp = join17(dirname7(path2), `.${basename4(path2)}.jourilo-${randomBytes2(4).toString("hex")}.tmp`);
+  const fd = openSync(tmp, "wx", mode ?? 420);
+  try {
+    let off = 0;
+    while (off < data.length) off += writeSync(fd, data, off, data.length - off);
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  for (let attempt = 0; ; attempt++) {
+    try {
+      renameSync(tmp, path2);
+      return;
+    } catch (err) {
+      if (attempt >= 5 || !["EPERM", "EBUSY", "EACCES"].includes(err.code ?? "")) {
+        rmSync(tmp, { force: true });
+        throw err;
+      }
+      const until = Date.now() + 50 * (attempt + 1);
+      while (Date.now() < until) ;
+    }
+  }
+}
+function saveRecord(wsRoot, tx) {
+  mkdirSync5(recordsDir(wsRoot), { recursive: true });
+  atomicWrite(join17(recordsDir(wsRoot), `${tx.id}.json`), Buffer.from(`${JSON.stringify(tx, null, 2)}
+`));
+}
+function writablePath(root, file) {
+  const abs = resolveInside(root, file);
+  const lexical = join17(root, file);
+  if (existsSync13(lexical) && lstatSync(lexical).isSymbolicLink())
+    throw new JouriloError(
+      "UNSAFE_PATH",
+      `${file} is a symbolic link; Jourilo does not write through links. Make this change by hand.`
+    );
+  return abs;
+}
+function readOrNull(path2) {
+  return existsSync13(path2) ? readFileSync10(path2) : null;
+}
+function applyTransaction(root, wsRoot, edits, opts = {}) {
+  const pending = activeTransactions(wsRoot).filter((t) => t.state === "pending");
+  if (pending.length)
+    throw new JouriloError(
+      "INVALID_INPUT",
+      `An earlier change (${pending[0].id}) was interrupted before it finished.`,
+      `Run \`jourilo rollback ${pending[0].id} --yes\` to restore those files first.`
+    );
+  const names = edits.map((e) => e.file);
+  const dup = names.find((n, i) => names.indexOf(n) !== i);
+  if (dup) throw new JouriloError("INTERNAL", `${dup} appears twice in one change; combine its edits first.`);
+  const prepared = edits.map((e) => {
+    const abs = writablePath(root, e.file);
+    const current = readOrNull(abs);
+    const same = e.before === null ? current === null : current?.equals(e.before);
+    if (!same)
+      throw new JouriloError(
+        "INVALID_INPUT",
+        `${e.file} changed after the fix was planned; nothing was written.`,
+        "Run the command again so the plan is computed from the current file."
+      );
+    return { ...e, abs, mode: current ? statSync8(abs).mode & 511 : null };
+  });
+  const tx = {
+    kind: "fix-transaction",
+    id: newRunId(),
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    root,
+    note: opts.note ?? "",
+    ...opts.undoes ? { undoes: opts.undoes } : {},
+    state: "pending",
+    files: prepared.map((p) => ({
+      file: p.file,
+      beforeSha: p.before ? sha256(p.before) : null,
+      afterSha: p.after ? sha256(p.after) : null,
+      mode: p.mode,
+      state: "pending"
+    }))
+  };
+  for (const p of prepared)
+    if (p.before) atomicWrite(resolveInside(join17(txDir(wsRoot, tx.id), "before"), p.file), p.before);
+  saveRecord(wsRoot, tx);
+  try {
+    prepared.forEach((p, i) => {
+      opts.beforeWrite?.(p.file, i);
+      if (p.after) atomicWrite(p.abs, p.after, p.mode);
+      else if (existsSync13(p.abs)) unlinkSync(p.abs);
+      tx.files[i].state = "written";
+      saveRecord(wsRoot, tx);
+    });
+  } catch (err) {
+    const undo = rollbackTransaction(wsRoot, tx, { force: false });
+    tx.state = "failed";
+    saveRecord(wsRoot, tx);
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new JouriloError(
+      "INTERNAL",
+      `Writing the changes failed (${msg}); ${undo.restored.length} file(s) already written were restored.${undo.conflicts.length ? ` Not restored: ${undo.conflicts.map((c) => c.file).join(", ")}.` : ""}`
+    );
+  }
+  tx.state = "applied";
+  saveRecord(wsRoot, tx);
+  return tx;
+}
+function rollbackTransaction(wsRoot, tx, opts = {}) {
+  const result = { restored: [], alreadyRestored: [], conflicts: [] };
+  const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
+  for (const f of tx.files) {
+    if (opts.files?.length && !opts.files.includes(f.file)) continue;
+    if (f.state === "restored") {
+      result.alreadyRestored.push(f.file);
+      continue;
+    }
+    const abs = writablePath(tx.root, f.file);
+    const current = readOrNull(abs);
+    const currentSha = current ? sha256(current) : null;
+    if (currentSha === f.beforeSha) {
+      f.state = "restored";
+      delete f.conflict;
+      result.alreadyRestored.push(f.file);
+      continue;
+    }
+    if (currentSha !== f.afterSha) {
+      const reason = current === null ? "deleted after the change was applied" : "modified after the change was applied (not by Jourilo)";
+      if (!opts.force) {
+        f.state = "conflict";
+        f.conflict = reason;
+        result.conflicts.push({ file: f.file, reason });
+        continue;
+      }
+      let savedCopy;
+      if (current) {
+        savedCopy = resolveInside(join17(txDir(wsRoot, tx.id), "conflicts", stamp), f.file);
+        atomicWrite(savedCopy, current);
+      }
+      result.conflicts.push({ file: f.file, reason, ...savedCopy ? { savedCopy } : {} });
+    }
+    if (f.beforeSha === null) {
+      if (existsSync13(abs)) unlinkSync(abs);
+    } else {
+      const backup = resolveInside(join17(txDir(wsRoot, tx.id), "before"), f.file);
+      if (!existsSync13(backup)) {
+        f.state = "conflict";
+        f.conflict = "backup missing";
+        result.conflicts.push({ file: f.file, reason: "backup missing; cannot restore" });
+        continue;
+      }
+      const bytes = readFileSync10(backup);
+      if (sha256(bytes) !== f.beforeSha) {
+        result.conflicts.push({ file: f.file, reason: "backup does not match its recorded hash" });
+        continue;
+      }
+      atomicWrite(abs, bytes, f.mode);
+    }
+    f.state = "restored";
+    delete f.conflict;
+    result.restored.push(f.file);
+  }
+  const allBack = tx.files.every((f) => f.state === "restored");
+  if (tx.state !== "pending" || allBack) tx.state = allBack ? "rolled-back" : "partially-rolled-back";
+  saveRecord(wsRoot, tx);
+  return result;
+}
+function isTransaction(x) {
+  return !!x && typeof x === "object" && x.kind === "fix-transaction";
+}
+function activeTransactions(wsRoot) {
+  const dir = recordsDir(wsRoot);
+  if (!existsSync13(dir)) return [];
+  const out = [];
+  for (const f of readdirSync8(dir).filter((n) => n.endsWith(".json")).sort()) {
+    try {
+      const rec = JSON.parse(readFileSync10(join17(dir, f), "utf8"));
+      if (isTransaction(rec) && ["pending", "applied", "partially-rolled-back"].includes(rec.state))
+        out.push(rec);
+    } catch {
+    }
+  }
+  return out;
+}
+function previewRollback(tx) {
+  return tx.files.map((f) => {
+    if (f.state === "restored") return { file: f.file, action: "unchanged" };
+    const abs = writablePath(tx.root, f.file);
+    const current = readOrNull(abs);
+    const sha = current ? sha256(current) : null;
+    if (sha === f.beforeSha) return { file: f.file, action: "unchanged" };
+    if (sha === f.afterSha) return { file: f.file, action: "restore" };
+    return {
+      file: f.file,
+      action: "conflict",
+      reason: current === null ? "deleted after the change" : "modified after the change"
+    };
+  });
+}
+
+// src/repair/git.ts
+function git(cwd, args) {
+  const r = spawnSync2("git", args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  return { ok: r.status === 0, out: (r.stdout ?? "").trim(), err: (r.stderr ?? "").trim() };
+}
+function isGitRepo(root) {
+  return git(root, ["rev-parse", "--is-inside-work-tree"]).out === "true";
+}
+function untrackedFiles(root) {
+  return git(root, ["ls-files", "--others", "--exclude-standard"]).out.split("\n").filter(Boolean);
+}
+function createCheckpoint(root, wsRoot, note = "") {
+  if (!isGitRepo(root))
+    throw new JouriloError(
+      "INVALID_INPUT",
+      `${root} is not a git repository; checkpoints need git.`,
+      "Run `git init` and commit, or keep your own backup before applying fixes."
+    );
+  const head = git(root, ["rev-parse", "HEAD"]);
+  if (!head.ok)
+    throw new JouriloError(
+      "INVALID_INPUT",
+      "The repository has no commits yet; commit once before using checkpoints."
+    );
+  const stash = git(root, ["stash", "create", `jourilo checkpoint ${note}`.trim()]);
+  const cp = {
+    id: newRunId(),
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    head: head.out,
+    snapshot: stash.out || head.out,
+    untracked: untrackedFiles(root),
+    note
+  };
+  git(root, ["update-ref", `refs/jourilo/checkpoints/${cp.id}`, cp.snapshot]);
+  const dir = join18(wsRoot, "checkpoints");
+  mkdirSync6(dir, { recursive: true });
+  writeFileSync8(join18(dir, `${cp.id}.json`), `${JSON.stringify(cp, null, 2)}
+`);
+  return cp;
+}
+function loadCheckpoint(wsRoot, id) {
+  const dir = join18(wsRoot, "checkpoints");
+  const read3 = (name) => JSON.parse(readFileSync11(join18(dir, `${name}.json`), "utf8"));
+  let pick = id;
+  if (id === "latest") {
+    const names = existsSync14(dir) ? readdirSync9(dir).filter((f) => f.endsWith(".json")).map((f) => f.replace(/\.json$/, "")).sort().reverse() : [];
+    pick = names.find((n) => {
+      try {
+        const rec = read3(n);
+        if (!isTransaction(rec)) return !rec.rolledBack;
+        return !rec.undoes && ["applied", "pending", "partially-rolled-back"].includes(rec.state);
+      } catch {
+        return false;
+      }
+    });
+  }
+  if (!pick || !/^[\w-]+$/.test(pick) || !existsSync14(join18(dir, `${pick}.json`)))
+    throw new JouriloError("NOT_FOUND", `Checkpoint not found: ${id}`);
+  return read3(pick);
+}
+function diffSince(root, cp) {
+  const stat = git(root, ["diff", "--stat", cp.snapshot]).out;
+  const patch = git(root, ["diff", cp.snapshot]).out;
+  const newFiles = untrackedFiles(root).filter((f) => !cp.untracked.includes(f));
+  return { stat, patch, newFiles };
+}
+function backupDir(wsRoot, cp) {
+  return join18(wsRoot, "checkpoints", cp.id);
+}
+function blob(root, rev, file) {
+  const r = spawnSync2("git", ["cat-file", "blob", `${rev}:${file}`], {
+    cwd: root,
+    maxBuffer: 64 * 1024 * 1024
+  });
+  return r.status === 0 ? r.stdout : null;
+}
+function rollbackCheckpoint(root, cp, wsRoot, opts = {}) {
+  const changed = git(root, ["diff", "--name-only", "--no-renames", cp.snapshot]).out.split("\n").filter(Boolean).filter((f) => !opts.files?.length || opts.files.includes(f));
+  const edits = [];
+  const notRestorable = [];
+  for (const f of changed) {
+    const target = resolveInside(root, f);
+    const current = existsSync14(target) ? readFileSync11(target) : null;
+    const saved = resolveInside(backupDir(wsRoot, cp), f);
+    let wanted = existsSync14(saved) ? readFileSync11(saved) : null;
+    if (!wanted) {
+      const content = blob(root, cp.snapshot, f);
+      if (!content) {
+        notRestorable.push(f);
+        continue;
+      }
+      wanted = current?.includes("\r\n") && !content.includes("\r\n") ? Buffer.from(content.toString("utf8").replace(/\n/g, "\r\n"), "utf8") : content;
+    }
+    if (current?.equals(wanted)) continue;
+    edits.push({ file: f, before: current, after: wanted });
+  }
+  const transaction = edits.length ? applyTransaction(root, wsRoot, edits, { note: `rollback to checkpoint ${cp.id}`, undoes: cp.id }) : null;
+  return {
+    transaction,
+    restored: edits.map((e) => e.file),
+    // Files that did not exist at checkpoint time are listed, never deleted.
+    leftUntracked: [
+      ...notRestorable,
+      ...untrackedFiles(root).filter((f) => !cp.untracked.includes(f) && !notRestorable.includes(f))
+    ]
+  };
+}
+function markRolledBack(wsRoot, cp, transactionId) {
+  const file = join18(wsRoot, "checkpoints", `${cp.id}.json`);
+  writeFileSync8(file, `${JSON.stringify({ ...cp, rolledBack: transactionId }, null, 2)}
+`);
+}
+function wouldBeCommitted(file) {
+  let dir = dirname8(file);
+  while (!existsSync14(dir) && dirname8(dir) !== dir) dir = dirname8(dir);
+  if (!isGitRepo(dir)) return false;
+  const r = spawnSync2("git", ["check-ignore", "-q", "--no-index", file], { cwd: dir });
+  return r.status === 1;
+}
+
 // src/cli/commands/journeys.ts
 function journeysDir(ws) {
-  return join15(ws.root, "journeys");
+  return join19(ws.root, "journeys");
 }
 function loadJourneys(ws, refs) {
   const dir = journeysDir(ws);
   const files = [];
   if (!refs.length) {
-    if (!existsSync12(dir)) return [];
+    if (!existsSync15(dir)) return [];
     files.push(
-      ...readdirSync7(dir).filter((f) => f.endsWith(".json")).sort().map((f) => join15(dir, f))
+      ...readdirSync10(dir).filter((f) => f.endsWith(".json")).sort().map((f) => join19(dir, f))
     );
   } else {
     for (const r of refs) {
-      if (r.endsWith(".json") && existsSync12(r)) files.push(resolve8(r));
-      else if (existsSync12(join15(dir, `${r}.json`))) files.push(join15(dir, `${r}.json`));
+      if (r.endsWith(".json") && existsSync15(r)) files.push(resolve8(r));
+      else if (existsSync15(join19(dir, `${r}.json`))) files.push(join19(dir, `${r}.json`));
       else throw new JouriloError("NOT_FOUND", `Journey not found: ${r} (looked in ${dir})`);
     }
   }
   return files.map((f) => {
     let raw;
     try {
-      raw = JSON.parse(readFileSync9(f, "utf8"));
+      raw = JSON.parse(readFileSync12(f, "utf8"));
     } catch (err) {
-      throw new JouriloError("INVALID_INPUT", `${basename2(f)} is not valid JSON: ${err.message}`);
+      throw new JouriloError("INVALID_INPUT", `${basename5(f)} is not valid JSON: ${err.message}`);
     }
-    return validateJourney(raw, basename2(f));
+    return validateJourney(raw, basename5(f));
   });
 }
 function parseVars(ctx) {
@@ -46448,7 +47817,7 @@ async function suggest(ctx) {
   if (!target || ctx.ws.listRuns().some((r) => r.id === target) || target === "latest") {
     run = ctx.ws.loadRun(target ?? "latest").run;
   } else {
-    const isDir = existsSync12(target) && !target.includes("://");
+    const isDir = existsSync15(target) && !target.includes("://");
     const server = isDir ? await serveStatic(resolve8(target)) : void 0;
     try {
       ctx.log("Discovering pages to derive journeys (no audit rules applied) \u2026");
@@ -46475,16 +47844,16 @@ async function suggest(ctx) {
   }
   const specs = suggestJourneys(run);
   const dir = journeysDir(ctx.ws);
-  mkdirSync5(dir, { recursive: true });
+  mkdirSync7(dir, { recursive: true });
   const written = [];
   const kept = [];
   for (const s of specs) {
-    const file = join15(dir, `${s.id}.json`);
-    if (existsSync12(file) && !flag(ctx, "force")) {
+    const file = join19(dir, `${s.id}.json`);
+    if (existsSync15(file) && !flag(ctx, "force")) {
       kept.push(s.id);
       continue;
     }
-    writeFileSync8(file, `${JSON.stringify(s, null, 2)}
+    writeFileSync9(file, `${JSON.stringify(s, null, 2)}
 `);
     written.push(file);
   }
@@ -46511,7 +47880,7 @@ async function runCmd(ctx) {
       "No journeys to run.",
       "Create some with `jourilo journeys suggest <url>`."
     );
-  const isDir = existsSync12(baseArg) && !baseArg.includes("://");
+  const isDir = existsSync15(baseArg) && !baseArg.includes("://");
   const server = isDir ? await serveStatic(resolve8(baseArg)) : void 0;
   try {
     const base2 = parseTargetUrl(server?.url ?? baseArg);
@@ -46519,7 +47888,12 @@ async function runCmd(ctx) {
     const id = newRunId();
     const runDir = ctx.ws.createRunDir(id);
     const browserName = str(ctx, "browser") ?? "chromium";
-    const browser = await launchBrowser(browserName, flag(ctx, "headed"));
+    const session = await openGuardedBrowser(browserName, flag(ctx, "headed"), {
+      target: hostClass,
+      allowPrivate: flag(ctx, "allow-private")
+    });
+    const browser = session.browser;
+    const browserVersion = browser.version();
     const startedAt = (/* @__PURE__ */ new Date()).toISOString();
     const journeys2 = [];
     let findings = [];
@@ -46534,16 +47908,26 @@ async function runCmd(ctx) {
       limitations.push(
         "--allow-destructive is ignored on non-local hosts: irreversible and payment actions were blocked."
       );
+    const allowOrigins = list(ctx, "allow-origin").map((o) => {
+      const u = parseTargetUrl(o);
+      return u.origin;
+    });
     const saveAuthArg = str(ctx, "save-auth");
     if (saveAuthArg && specs.length !== 1)
       throw new JouriloError("USAGE", "--save-auth needs exactly one journey (the sign-in journey).");
     const saveAuth = saveAuthArg ? resolve8(saveAuthArg) : void 0;
-    if (saveAuth)
+    if (saveAuth) {
       limitations.push(
         `Signed-in state saved to ${displayPath(saveAuth)} (owner-only permissions). Treat it like a password; it is a test-account session.`
       );
+      if (wouldBeCommitted(saveAuth)) {
+        const warning = `WARNING: ${displayPath(saveAuth)} is inside a git repository and not ignored, so it could be committed with its session cookies. Add it to .gitignore or save it under .jourilo/.`;
+        limitations.push(warning);
+        ctx.log(warning);
+      }
+    }
     if (flag(ctx, "trace")) {
-      mkdirSync5(join15(runDir, "traces"), { recursive: true });
+      mkdirSync7(join19(runDir, "traces"), { recursive: true });
       limitations.push(
         "Playwright traces contain DOM snapshots and typed values: keep them private (they are excluded from git)."
       );
@@ -46564,6 +47948,7 @@ async function runCmd(ctx) {
             ...vp ? { viewportOverride: vp } : {},
             ...str(ctx, "auth") ? { storageState: str(ctx, "auth") } : {},
             ...saveAuth ? { saveAuth } : {},
+            ...allowOrigins.length ? { allowOrigins } : {},
             log: ctx.log
           });
           ctx.log(`  \u2192 ${result.status} (${(result.durationMs / 1e3).toFixed(1)} s)`);
@@ -46572,8 +47957,10 @@ async function runCmd(ctx) {
         }
       }
     } finally {
-      await browser.close().catch(() => void 0);
+      await session.close();
     }
+    const network = session.report();
+    limitations.push(...networkLimitations(network));
     findings = mergeFindings(findings);
     const run = {
       schemaVersion: RUN_SCHEMA_VERSION,
@@ -46583,7 +47970,7 @@ async function runCmd(ctx) {
       target: server ? `${displayPath(resolve8(baseArg))} (served at ${server.url})` : base2.toString(),
       startedAt,
       finishedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      browser: { name: browserName, version: "" },
+      browser: { name: browserName, version: browserVersion },
       viewports: parseViewports([...new Set(journeys2.map((j) => j.viewport))].join(",") || "desktop"),
       settings: {
         journeys: specs.map((s) => s.id),
@@ -46598,7 +47985,8 @@ async function runCmd(ctx) {
       limitations: [
         ...limitations,
         "Journeys prove that a scripted path works (or not) in one browser; they do not measure how real people choose paths."
-      ]
+      ],
+      ...network.blocked.length || network.escaped.length ? { network } : {}
     };
     const repo = str(ctx, "repo") ?? (isDir ? resolve8(baseArg) : void 0);
     if (repo) locateFindings(run, repo);
@@ -46634,6 +48022,7 @@ var journeys = {
     "allow-submit": { type: "boolean" },
     "allow-destructive": { type: "boolean" },
     "allow-private": { type: "boolean" },
+    "allow-origin": { type: "string", multiple: true },
     "fail-on-failure": { type: "boolean" },
     browser: { type: "string" },
     headed: { type: "boolean" },
@@ -46655,13 +48044,17 @@ Run options:
   --var key=value        Test data for {{key}} placeholders (also JOURILO_VAR_KEY env vars)
   --allow-submit         Allow form submission on non-local hosts (authorized test environments only)
   --allow-destructive    Allow irreversible/payment actions \u2014 local hosts with sandbox data only
+  --allow-origin ORIGIN  Let the page navigate to another origin you are authorized to test (e.g. a test IdP)
   --trace                Record a Playwright trace per journey (contains typed values; keep private)
   --auth FILE            Playwright storage state for signed-in journeys
   --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission
-on non-local hosts needs --allow-submit. Blocked steps are reported, not skipped silently.`,
+on non-local hosts needs --allow-submit. The policy is checked twice: on the element about to be clicked or
+pressed (its name, link target, form action and identifiers \u2014 icon-only buttons included), and on every request
+the page then sends (form posts, DELETE, requests to delete/cancel/payment endpoints, navigation to other
+origins). Blocked steps are reported, not skipped silently.`,
   async run(ctx) {
     const sub = ctx.positionals[0] ?? "list";
     if (sub === "suggest") return suggest(ctx);
@@ -46679,8 +48072,8 @@ ${specs.map((s) => `  ${s.id.padEnd(32)} ${s.steps.length} steps, ${s.success.le
 };
 
 // src/cli/commands/optimize.ts
-import { existsSync as existsSync15, mkdirSync as mkdirSync7, writeFileSync as writeFileSync10 } from "node:fs";
-import { join as join17, resolve as resolve9 } from "node:path";
+import { existsSync as existsSync17, mkdirSync as mkdirSync8, writeFileSync as writeFileSync10 } from "node:fs";
+import { join as join20, resolve as resolve9 } from "node:path";
 init_errors();
 init_fs_safety();
 
@@ -46751,17 +48144,17 @@ function unifiedDiff(file, before, after, context = 3) {
 }
 
 // src/repair/fixes.ts
-import { existsSync as existsSync13, readFileSync as readFileSync10 } from "node:fs";
+import { existsSync as existsSync16, readFileSync as readFileSync13 } from "node:fs";
 import { extname as extname3 } from "node:path";
 init_fs_safety();
 function base(f, title, explanation, expectedEffect) {
   return { fingerprint: f.fingerprint, ruleId: f.ruleId, title, explanation, expectedEffect };
 }
 var isJsx = (file) => /\.(jsx|tsx)$/.test(file);
-var htmlLang = (f, _root, read2) => {
+var htmlLang = (f, _root, read3) => {
   const src = f.sources?.find((s) => s.reason.includes("<html>"));
   if (!src) return null;
-  const text = read2(src.file);
+  const text = read3(src.file);
   if (!text) return null;
   const path2 = (() => {
     try {
@@ -46787,10 +48180,10 @@ var htmlLang = (f, _root, read2) => {
     ]
   };
 };
-var viewportMeta = (f, _root, read2) => {
+var viewportMeta = (f, _root, read3) => {
   const src = f.sources?.find((s) => /\.html?$/.test(s.file) && s.reason.includes("viewport"));
   if (!src) return null;
-  const text = read2(src.file);
+  const text = read3(src.file);
   if (!text || /name=["']viewport["']/i.test(text)) return null;
   const anchor = /<meta\s+charset=[^>]*>/i.test(text) ? /(<meta\s+charset=[^>]*>)(\r?\n?)(\s*)/i : /(<head\b[^>]*>)(\r?\n?)(\s*)/i;
   const after = text.replace(
@@ -46812,7 +48205,7 @@ ${indent}`
     ]
   };
 };
-var autocomplete = (f, root, read2) => {
+var autocomplete = (f, root, read3) => {
   const edits = /* @__PURE__ */ new Map();
   const tokens = [];
   for (const e of f.evidence) {
@@ -46824,7 +48217,7 @@ var autocomplete = (f, root, read2) => {
     const token = suggestAutocomplete(type, name, label === "\u2205" ? null : label, purpose);
     if (token.startsWith("on (")) continue;
     for (const s of f.sources ?? []) {
-      const cur = edits.get(s.file)?.after ?? read2(s.file);
+      const cur = edits.get(s.file)?.after ?? read3(s.file);
       if (!cur) continue;
       const attr = isJsx(s.file) ? "autoComplete" : "autocomplete";
       const re = new RegExp(
@@ -46832,7 +48225,7 @@ var autocomplete = (f, root, read2) => {
       );
       const next = cur.replace(re, `$1 ${attr}="${token}"$2`);
       if (next !== cur) {
-        edits.set(s.file, { before: edits.get(s.file)?.before ?? read2(s.file), after: next });
+        edits.set(s.file, { before: edits.get(s.file)?.before ?? read3(s.file), after: next });
         tokens.push(`${name} \u2192 ${token}`);
         break;
       }
@@ -46853,10 +48246,10 @@ var autocomplete = (f, root, read2) => {
     ]
   };
 };
-var focusVisible = (f, _root, read2) => {
+var focusVisible = (f, _root, read3) => {
   const src = f.sources?.find((s) => /\.(css|scss|less)$/.test(s.file) && s.reason.includes("focus outline"));
   if (!src) return null;
-  const text = read2(src.file);
+  const text = read3(src.file);
   if (!text) return null;
   const lines = text.split("\n");
   let start = src.line - 1;
@@ -46886,10 +48279,10 @@ ${sels.join(",\n")} {
     ]
   };
 };
-var pasteAllowed = (f, _root, read2) => {
+var pasteAllowed = (f, _root, read3) => {
   const src = f.sources?.find((s) => s.reason.includes("paste"));
   if (!src) return null;
-  const text = read2(src.file);
+  const text = read3(src.file);
   if (!text) return null;
   const after = text.replace(/(<input\b[^>]*?)\s+on[pP]aste=(?:"[^"]*"|'[^']*'|\{[^}]*\})([^>]*>)/g, "$1$2");
   if (after === text) return null;
@@ -46907,7 +48300,7 @@ var pasteAllowed = (f, _root, read2) => {
   };
 };
 var escRe = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-var imageDimensions = (f, _root, read2) => {
+var imageDimensions = (f, _root, read3) => {
   const edits = /* @__PURE__ */ new Map();
   const done = [];
   const notes = [];
@@ -46917,7 +48310,7 @@ var imageDimensions = (f, _root, read2) => {
     const h = Number(e.data?.naturalHeight);
     if (!src || !(w > 0 && h > 0)) continue;
     for (const s of f.sources ?? []) {
-      const cur = edits.get(s.file)?.after ?? read2(s.file);
+      const cur = edits.get(s.file)?.after ?? read3(s.file);
       if (!cur) continue;
       const re = new RegExp(
         `<img\\b(?=[^>]*\\bsrc=["'{]?["']?${escRe(src)}["'])(?![^>]*\\bwidth=)(?![^>]*\\bheight=)[^>]*?(\\s*/?>)`
@@ -46935,7 +48328,7 @@ var imageDimensions = (f, _root, read2) => {
       }
       tag = tag.replace(/(\s*\/?>)$/, ` width="${w}" height="${h}"$1`);
       edits.set(s.file, {
-        before: edits.get(s.file)?.before ?? read2(s.file),
+        before: edits.get(s.file)?.before ?? read3(s.file),
         after: cur.replace(m[0], tag)
       });
       done.push(`${src} \u2192 ${w}\xD7${h}`);
@@ -46957,14 +48350,14 @@ var imageDimensions = (f, _root, read2) => {
     ]
   };
 };
-var placeholderLabel = (f, _root, read2) => {
+var placeholderLabel = (f, _root, read3) => {
   const edits = /* @__PURE__ */ new Map();
   const done = [];
   for (const e of f.evidence) {
     const name = e.snippet?.match(/name=(\S+)/)?.[1];
     if (!name || name === "\u2205") continue;
     for (const s of f.sources ?? []) {
-      const cur = edits.get(s.file)?.after ?? read2(s.file);
+      const cur = edits.get(s.file)?.after ?? read3(s.file);
       if (!cur) continue;
       const jsx = isJsx(s.file);
       const re = new RegExp(`<(input|textarea|select)\\b(?=[^>]*\\bname=["']${escRe(name)}["'])[^>]*>`);
@@ -46982,7 +48375,7 @@ var placeholderLabel = (f, _root, read2) => {
       }
       const label = `<label ${jsx ? "htmlFor" : "for"}="${id}">${placeholder}</label> `;
       edits.set(s.file, {
-        before: edits.get(s.file)?.before ?? read2(s.file),
+        before: edits.get(s.file)?.before ?? read3(s.file),
         after: cur.replace(tag, `${label}${newTag}`)
       });
       done.push(`${name} \u2192 "${placeholder}"`);
@@ -47012,15 +48405,28 @@ var FIXERS = {
   "jourilo/unsized-images": imageDimensions,
   "jourilo/placeholder-label": placeholderLabel
 };
+function utf8OrNull(buf) {
+  const text = buf.toString("utf8");
+  return Buffer.from(text, "utf8").equals(buf) ? text : null;
+}
+function composeEdits(plans) {
+  const byFile = /* @__PURE__ */ new Map();
+  for (const p of plans)
+    for (const e of p.edits) {
+      const prev = byFile.get(e.file);
+      byFile.set(e.file, { file: e.file, before: prev?.before ?? e.before, after: e.after });
+    }
+  return [...byFile.values()];
+}
 function planFixes(findings, root) {
   const cache = /* @__PURE__ */ new Map();
-  const read2 = (file) => {
+  const read3 = (file) => {
     if (!cache.has(file)) {
       try {
         const abs = resolveInside(root, file);
         cache.set(
           file,
-          existsSync13(abs) && [
+          existsSync16(abs) && [
             ".html",
             ".htm",
             ".css",
@@ -47034,7 +48440,7 @@ function planFixes(findings, root) {
             ".svelte",
             ".astro",
             ".php"
-          ].includes(extname3(abs).toLowerCase()) ? readFileSync10(abs, "utf8") : null
+          ].includes(extname3(abs).toLowerCase()) ? utf8OrNull(readFileSync13(abs)) : null
         );
       } catch {
         cache.set(file, null);
@@ -47047,10 +48453,10 @@ function planFixes(findings, root) {
   for (const f of findings) {
     const fixer = FIXERS[f.ruleId];
     if (!fixer || !f.sources?.length) continue;
-    const plan = fixer(f, root, (file) => touched.get(file) ?? read2(file));
+    const plan = fixer(f, root, (file) => touched.get(file) ?? read3(file));
     if (!plan) continue;
     for (const e of plan.edits) {
-      e.before = touched.get(e.file) ?? read2(e.file) ?? e.before;
+      e.before = touched.get(e.file) ?? read3(e.file) ?? e.before;
       touched.set(e.file, e.after);
     }
     if (plans.some(
@@ -47060,118 +48466,6 @@ function planFixes(findings, root) {
     plans.push(plan);
   }
   return plans;
-}
-
-// src/repair/git.ts
-init_errors();
-init_fs_safety();
-import { spawnSync as spawnSync2 } from "node:child_process";
-import { existsSync as existsSync14, mkdirSync as mkdirSync6, readdirSync as readdirSync8, readFileSync as readFileSync11, writeFileSync as writeFileSync9 } from "node:fs";
-import { dirname as dirname6, join as join16 } from "node:path";
-function git(cwd, args) {
-  const r = spawnSync2("git", args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-  return { ok: r.status === 0, out: (r.stdout ?? "").trim(), err: (r.stderr ?? "").trim() };
-}
-function isGitRepo(root) {
-  return git(root, ["rev-parse", "--is-inside-work-tree"]).out === "true";
-}
-function untrackedFiles(root) {
-  return git(root, ["ls-files", "--others", "--exclude-standard"]).out.split("\n").filter(Boolean);
-}
-function createCheckpoint(root, wsRoot, note = "") {
-  if (!isGitRepo(root))
-    throw new JouriloError(
-      "INVALID_INPUT",
-      `${root} is not a git repository; checkpoints need git.`,
-      "Run `git init` and commit, or keep your own backup before applying fixes."
-    );
-  const head = git(root, ["rev-parse", "HEAD"]);
-  if (!head.ok)
-    throw new JouriloError(
-      "INVALID_INPUT",
-      "The repository has no commits yet; commit once before using checkpoints."
-    );
-  const stash = git(root, ["stash", "create", `jourilo checkpoint ${note}`.trim()]);
-  const cp = {
-    id: newRunId(),
-    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-    head: head.out,
-    snapshot: stash.out || head.out,
-    untracked: untrackedFiles(root),
-    note
-  };
-  git(root, ["update-ref", `refs/jourilo/checkpoints/${cp.id}`, cp.snapshot]);
-  const dir = join16(wsRoot, "checkpoints");
-  mkdirSync6(dir, { recursive: true });
-  writeFileSync9(join16(dir, `${cp.id}.json`), `${JSON.stringify(cp, null, 2)}
-`);
-  return cp;
-}
-function loadCheckpoint(wsRoot, id) {
-  const dir = join16(wsRoot, "checkpoints");
-  const pick = id === "latest" ? existsSync14(dir) ? readdirSync8(dir).filter((f) => f.endsWith(".json")).sort().pop()?.replace(/\.json$/, "") : void 0 : id;
-  if (!pick || !/^[\w-]+$/.test(pick) || !existsSync14(join16(dir, `${pick}.json`)))
-    throw new JouriloError("NOT_FOUND", `Checkpoint not found: ${id}`);
-  return JSON.parse(readFileSync11(join16(dir, `${pick}.json`), "utf8"));
-}
-function diffSince(root, cp) {
-  const stat = git(root, ["diff", "--stat", cp.snapshot]).out;
-  const patch = git(root, ["diff", cp.snapshot]).out;
-  const newFiles = untrackedFiles(root).filter((f) => !cp.untracked.includes(f));
-  return { stat, patch, newFiles };
-}
-function backupDir(wsRoot, cp) {
-  return join16(wsRoot, "checkpoints", cp.id);
-}
-function backupFiles(root, wsRoot, cp, files) {
-  for (const f of files) {
-    const src = resolveInside(root, f);
-    if (!existsSync14(src)) continue;
-    const dest = resolveInside(backupDir(wsRoot, cp), f);
-    mkdirSync6(dirname6(dest), { recursive: true });
-    writeFileSync9(dest, readFileSync11(src));
-  }
-}
-function blob(root, rev, file) {
-  const r = spawnSync2("git", ["cat-file", "blob", `${rev}:${file}`], {
-    cwd: root,
-    maxBuffer: 64 * 1024 * 1024
-  });
-  return r.status === 0 ? r.stdout : null;
-}
-function rollback(root, cp, wsRoot) {
-  const changed = git(root, ["diff", "--name-only", cp.snapshot]).out.split("\n").filter(Boolean);
-  const restored = [];
-  const notRestorable = [];
-  for (const f of changed) {
-    const target = resolveInside(root, f);
-    const saved = wsRoot ? resolveInside(backupDir(wsRoot, cp), f) : null;
-    if (saved && existsSync14(saved)) {
-      writeFileSync9(target, readFileSync11(saved));
-      restored.push(f);
-      continue;
-    }
-    const content = blob(root, cp.snapshot, f);
-    if (!content) {
-      notRestorable.push(f);
-      continue;
-    }
-    let out = content;
-    const current = existsSync14(target) ? readFileSync11(target) : null;
-    if (current?.includes("\r\n") && !content.includes("\r\n"))
-      out = Buffer.from(content.toString("utf8").replace(/\n/g, "\r\n"), "utf8");
-    mkdirSync6(dirname6(target), { recursive: true });
-    writeFileSync9(target, out);
-    restored.push(f);
-  }
-  return {
-    restored,
-    // Files that did not exist at checkpoint time are listed, never deleted.
-    leftUntracked: [
-      ...notRestorable,
-      ...untrackedFiles(root).filter((f) => !cp.untracked.includes(f) && !notRestorable.includes(f))
-    ]
-  };
 }
 
 // src/report/compare.ts
@@ -47222,12 +48516,14 @@ var optimize = {
   },
   details: `Deterministic fixers (others are reported with source candidates for a person or agent to fix):
   axe/html-has-lang, jourilo/missing-viewport-meta, jourilo/input-purpose, jourilo/focus-visible, jourilo/paste-blocked
-Without --apply nothing is written. With --apply, a git checkpoint is created first (jourilo rollback undoes it).
+Without --apply nothing is written. With --apply, all files are written as one change: each file must be unchanged
+since the plan, writes are atomic, an interrupted apply is undone, and \`jourilo rollback <id>\` restores the files
+(git is not required).
 Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
   async run(ctx) {
     const { run, dir } = ctx.ws.loadRun(ctx.positionals[0] ?? "latest");
     const repo = resolve9(str(ctx, "repo") ?? run.settings.repo ?? ".");
-    if (!existsSync15(repo)) throw new JouriloError("NOT_FOUND", `Repository not found: ${repo}`);
+    if (!existsSync17(repo)) throw new JouriloError("NOT_FOUND", `Repository not found: ${repo}`);
     if (run.findings.every((f) => !f.sources)) locateFindings(run, repo);
     const rules = list(ctx, "rule");
     const only = list(ctx, "finding");
@@ -47254,23 +48550,29 @@ Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
       );
     let checkpoint2 = null;
     if (flag(ctx, "apply") && plans.length) {
-      const finalContent = /* @__PURE__ */ new Map();
-      for (const p of plans) for (const e of p.edits) finalContent.set(e.file, e.after);
-      if (isGitRepo(repo)) {
-        const cp = createCheckpoint(repo, ctx.ws.root, `before optimize of run ${run.id}`);
-        backupFiles(repo, ctx.ws.root, cp, [...finalContent.keys()]);
-        checkpoint2 = cp.id;
-      } else ctx.log("Warning: not a git repository, so no checkpoint/rollback is available.");
-      for (const [file, content] of finalContent) writeFileSync10(resolveInside(repo, file), content);
-      const outDir = join17(ctx.ws.root, "fixes");
-      mkdirSync7(outDir, { recursive: true });
+      const edits = composeEdits(plans);
+      const tx = applyTransaction(
+        repo,
+        ctx.ws.root,
+        edits.map((e) => ({
+          file: e.file,
+          before: Buffer.from(e.before, "utf8"),
+          after: Buffer.from(e.after, "utf8")
+        })),
+        {
+          note: `optimize run ${run.id}`
+        }
+      );
+      checkpoint2 = tx.id;
+      const outDir = join20(ctx.ws.root, "fixes");
+      mkdirSync8(outDir, { recursive: true });
       writeFileSync10(
-        join17(outDir, `${run.id}.json`),
+        join20(outDir, `${run.id}.json`),
         `${JSON.stringify({ run: run.id, checkpoint: checkpoint2, applied: plans.map((p) => ({ fingerprint: p.fingerprint, ruleId: p.ruleId, title: p.title, files: p.edits.map((e) => e.file) })) }, null, 2)}
 `
       );
       lines.push(
-        `Applied ${plans.length} fix(es) to ${finalContent.size} file(s).${checkpoint2 ? ` Checkpoint ${checkpoint2} (jourilo rollback ${checkpoint2}).` : ""}`,
+        `Applied ${plans.length} fix(es) to ${edits.length} file(s) as change ${checkpoint2} (undo: jourilo rollback ${checkpoint2} --yes).`,
         `Next: jourilo verify ${run.id}`
       );
     } else if (plans.length) {
@@ -47278,7 +48580,7 @@ Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
     }
     lines.push(
       "",
-      `${manual.length} other defect(s) need a person or agent; source candidates are in the report (${join17(dir, "report.html")}).`
+      `${manual.length} other defect(s) need a person or agent; source candidates are in the report (${join20(dir, "report.html")}).`
     );
     return {
       data: {
@@ -47316,7 +48618,7 @@ var verify = {
         "INVALID_INPUT",
         `Run ${base2.id} has no recorded scope (created by an older version or by journeys).`
       );
-    const servedDir = (str(ctx, "target") && existsSync15(str(ctx, "target")) ? resolve9(str(ctx, "target")) : void 0) ?? base2.settings.servedDir;
+    const servedDir = (str(ctx, "target") && existsSync17(str(ctx, "target")) ? resolve9(str(ctx, "target")) : void 0) ?? base2.settings.servedDir;
     const server = servedDir ? await serveStatic(servedDir) : void 0;
     try {
       const origin = server?.url ?? new URL(str(ctx, "target") ?? scope.urls[0]).origin;
@@ -47391,6 +48693,11 @@ var checkpoint = {
     const repo = resolve9(str(ctx, "repo") ?? ".");
     if (ctx.positionals[0] === "diff") {
       const cp2 = loadCheckpoint(ctx.ws.root, ctx.positionals[1] ?? "latest");
+      if (isTransaction(cp2))
+        return {
+          data: { transaction: cp2, files: previewRollback(cp2) },
+          text: previewRollback(cp2).map((f) => `${f.action.padEnd(9)} ${f.file}${f.reason ? ` (${f.reason})` : ""}`).join("\n")
+        };
       const d = diffSince(repo, cp2);
       return {
         data: { checkpoint: cp2, ...d },
@@ -47409,26 +48716,78 @@ ${d.patch}`
 };
 var rollbackCmd = {
   name: "rollback",
-  summary: "Restore tracked files to a checkpoint (requires --yes). Untracked files created since are listed, not deleted.",
-  usage: "jourilo rollback <checkpoint-id|latest> --yes [--repo .]",
-  options: { repo: { type: "string" }, yes: { type: "boolean" } },
+  summary: "Undo an applied fix (or restore a checkpoint) without overwriting later edits; requires --yes. The rollback can itself be undone.",
+  usage: "jourilo rollback <id|latest> --yes [--repo .] [--file path ...] [--force]",
+  options: {
+    repo: { type: "string" },
+    yes: { type: "boolean" },
+    file: { type: "string", multiple: true },
+    force: { type: "boolean" }
+  },
+  details: `For a change made by \`optimize --apply\` (or a previous rollback), a file is restored only while it still
+holds exactly what Jourilo wrote. A file edited afterwards is reported as a conflict and left alone; --force restores
+it anyway after saving the current bytes under .jourilo/checkpoints/<id>/conflicts/.
+For a checkpoint made with \`jourilo checkpoint\`, every tracked file changed since then is restored (everything you
+or an agent changed in the meantime); the current bytes are kept, and the printed id undoes the rollback.
+Untracked files created after a checkpoint are listed, never deleted.`,
   async run(ctx) {
+    const rec = loadCheckpoint(ctx.ws.root, ctx.positionals[0] ?? "latest");
+    const files = list(ctx, "file");
+    if (isTransaction(rec)) {
+      const preview = previewRollback(rec).filter((f) => !files.length || files.includes(f.file));
+      if (!flag(ctx, "yes"))
+        return {
+          data: { transaction: rec.id, preview },
+          text: [
+            `Change ${rec.id} (${rec.note || "no note"}), ${rec.state}:`,
+            ...preview.map((f) => `  ${f.action.padEnd(9)} ${f.file}${f.reason ? ` \u2014 ${f.reason}` : ""}`),
+            preview.some((f) => f.action === "conflict") ? "Conflicting files are left alone unless you add --force (their current bytes are saved first)." : "",
+            "Re-run with --yes to roll back."
+          ].filter(Boolean).join("\n")
+        };
+      const r2 = rollbackTransaction(ctx.ws.root, rec, {
+        force: flag(ctx, "force"),
+        ...files.length ? { files } : {}
+      });
+      const conflicted = r2.conflicts.filter((c) => !c.savedCopy && !flag(ctx, "force"));
+      return {
+        data: { transaction: rec.id, ...r2 },
+        text: [
+          `Restored ${r2.restored.length} file(s) from change ${rec.id}.`,
+          ...r2.alreadyRestored.map((f) => `  unchanged ${f} (already original)`),
+          ...r2.conflicts.map(
+            (c) => `  ${c.savedCopy ? "forced   " : "conflict "} ${c.file} \u2014 ${c.reason}${c.savedCopy ? ` (your version saved to ${displayPath(c.savedCopy)})` : ""}`
+          ),
+          conflicted.length ? "Conflicting files were not touched. Use --force to restore them anyway." : ""
+        ].filter(Boolean).join("\n"),
+        exitCode: conflicted.length ? 1 : 0
+      };
+    }
+    const cp = rec;
     const repo = resolve9(str(ctx, "repo") ?? ".");
-    const cp = loadCheckpoint(ctx.ws.root, ctx.positionals[0] ?? "latest");
     const d = diffSince(repo, cp);
     if (!flag(ctx, "yes"))
       return {
         data: { checkpoint: cp, wouldRestore: d.stat, newFiles: d.newFiles },
-        text: `Would restore:
+        text: `Would restore (every change since the checkpoint, including your own edits):
 ${d.stat || "(nothing)"}
-Re-run with --yes to roll back.`,
+The current versions are kept and the rollback can be undone. Re-run with --yes to roll back.`,
         exitCode: 0
       };
-    const r = rollback(repo, cp, ctx.ws.root);
+    const r = rollbackCheckpoint(repo, cp, ctx.ws.root, files.length ? { files } : {});
+    if (r.transaction && !files.length) markRolledBack(ctx.ws.root, cp, r.transaction.id);
     return {
-      data: r,
-      text: `Restored ${r.restored.length} file(s) to checkpoint ${cp.id}.${r.leftUntracked.length ? `
-Not removed (created after the checkpoint): ${r.leftUntracked.join(", ")}` : ""}`
+      data: {
+        checkpoint: cp.id,
+        transaction: r.transaction?.id ?? null,
+        restored: r.restored,
+        leftUntracked: r.leftUntracked
+      },
+      text: [
+        `Restored ${r.restored.length} file(s) to checkpoint ${cp.id}.`,
+        r.transaction ? `Undo this rollback with: jourilo rollback ${r.transaction.id} --yes` : "",
+        r.leftUntracked.length ? `Not removed (created after the checkpoint): ${r.leftUntracked.join(", ")}` : ""
+      ].filter(Boolean).join("\n")
     };
   }
 };

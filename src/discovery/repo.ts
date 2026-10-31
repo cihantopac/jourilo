@@ -4,6 +4,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { toPosix } from '../core/fs-safety.js';
+import { laravelProfile } from './laravel.js';
 
 export interface Fact {
   value: string;
@@ -299,7 +300,6 @@ function fileRoutes(appRoot: string, files: string[], frameworks: string[]): Rou
   const codeRoute: [RegExp, RegExp, string][] = [
     [/\.(t|j)sx?$/, /<Route\s[^>]*path=["'`]([^"'`]+)["'`]/g, 'React Router'],
     [/\.(t|j)sx?$|\.vue$/, /\bpath:\s*["'`](\/[^"'`]*)["'`]/g, 'Router config'],
-    [/routes\/web\.php$/, /Route::(?:get|view|match|any)\(\s*['"]([^'"]+)['"]/g, 'Laravel'],
     [
       /\.dart$/,
       /GoRoute\(\s*(?:name:\s*['"][^'"]*['"]\s*,\s*)?path:\s*['"]([^'"]+)['"]/g,
@@ -321,6 +321,10 @@ function fileRoutes(appRoot: string, files: string[], frameworks: string[]): Rou
       }
     }
   }
+  // Laravel: included route files, groups, Livewire/Volt/Inertia pages and Filament panels.
+  if (has('Laravel'))
+    for (const r of laravelProfile(appRoot).routes)
+      add(r.path, r.file, 'page', r.via === 'Laravel' ? 'Laravel' : `Laravel (${r.via})`, r.dynamic);
   return routes.sort((a, b) => a.path.localeCompare(b.path));
 }
 
@@ -467,6 +471,7 @@ export function discoverRepository(root: string): ProductProfile {
     );
   if (!apps.length) apps.push(profileApp(root, root, files));
 
+  const laravelRoles: Fact[] = [];
   // Dependency-based signals across the whole repository.
   const allPkgs = files.filter((f) => f.endsWith('package.json')).slice(0, 60);
   const signals = new Map<string, Fact[]>();
@@ -491,6 +496,27 @@ export function discoverRepository(root: string): ProductProfile {
     (signals.get('auth') ?? signals.set('auth', []).get('auth')!).push(
       fact(composer.match(/laravel\/(breeze|fortify|jetstream|sanctum)/)![0], 'composer.json'),
     );
+  // Laravel apps (also inside monorepos): guards, panel logins and auth-protected route groups.
+  for (const app of apps.filter((a) => a.frameworks.some((f) => f.value === 'Laravel'))) {
+    const lp = laravelProfile(join(root, app.root));
+    const at = (f: string) => (app.root === '.' ? f : `${app.root}/${f}`);
+    const authList = signals.get('auth') ?? signals.set('auth', []).get('auth')!;
+    if (lp.guards.length)
+      authList.push(fact(`Laravel guards: ${lp.guards.join(', ')}`, at('config/auth.php')));
+    for (const p of lp.panels.filter((x) => x.login))
+      authList.push(fact(`Filament panel "${p.id}" with login at ${p.path}/login`, at(p.file)));
+    const protectedRoutes = lp.routes.filter((r) => r.auth.length && r.via !== 'Filament');
+    if (protectedRoutes.length)
+      authList.push(
+        fact(
+          `${protectedRoutes.length} route(s) behind ${[...new Set(protectedRoutes.flatMap((r) => r.auth))].join(', ')}`,
+          at(protectedRoutes[0]!.file),
+        ),
+      );
+    for (const g of lp.guards.filter((x) => !['web', 'api', 'sanctum'].includes(x)))
+      laravelRoles.push(fact(g, at('config/auth.php')));
+    for (const p of lp.panels) laravelRoles.push(fact(`${p.id} panel user`, at(p.file)));
+  }
   if (/laravel\/cashier/.test(composer))
     (signals.get('payments') ?? signals.set('payments', []).get('payments')!).push(
       fact('laravel/cashier', 'composer.json'),
@@ -550,6 +576,7 @@ export function discoverRepository(root: string): ProductProfile {
       fact('signed-in user', allRoutes.find((r) => r.role === 'dashboard' || r.role === 'settings')!.file),
     );
   roles.unshift(fact('visitor', 'public routes'));
+  for (const r of laravelRoles) if (!roles.some((x) => x.value === r.value)) roles.push(r);
   for (const f of files.filter((x) => /\.(ts|tsx|js|php|dart|rb|py)$/.test(x)).slice(0, 3000)) {
     const t = read(join(root, f), 120_000);
     for (const m of t.matchAll(
