@@ -223,6 +223,8 @@ export interface JourneyResult {
   successCriteria: { description: string; met: boolean; detail?: string }[];
   durationMs: number;
   trace?: string;
+  /** Requests the safety policy stopped during the journey. */
+  blockedRequests?: { method: string; url: string; reason: string }[];
 }
 
 export type RunMode = 'website' | 'repository';
@@ -257,4 +259,6 @@ export interface Run {
   product?: unknown;
   /** Brand/search context (jourilo.context/v1) used by this run, when present. */
   context?: import('../integrations/context.js').ExperienceContext;
+  /** What the network guard refused or detected during the run. */
+  network?: import('../browser/session.js').NetworkReport;
 }

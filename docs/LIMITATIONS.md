@@ -39,8 +39,14 @@ Stated so nobody mistakes silence for a pass.
   CAPTCHA or e-mail verification support. Signed-in flows need a test account: run a sign-in journey with
   `--save-auth`, or provide a Playwright storage state.
 - The keyboard walk steps past the first trap it finds; a second trap on the same page ends the walk.
-- Form validation probing submits empty forms on local hosts by default; servers that accept empty submissions will
-  create records in local/test databases.
+- Form validation is probed on local hosts by simulating an empty submission: requests that would send data are
+  intercepted, so validation that only the server performs is reported as not tested. `--allow-submit` sends the
+  submission for real (disposable environments only).
+- The journey safety policy recognizes destructive and payment actions from names, identifiers and URLs in five
+  languages and from HTTP methods. A neutrally named endpoint that deletes data (`POST /api/x`) is not recognized;
+  journeys that submit should use disposable data.
+- Without `--allow-submit`, journeys on non-local hosts cannot send first-party POST requests (including some
+  telemetry); the journey result lists what was stopped.
 
 ## Conversion and experiments
 
@@ -56,6 +62,14 @@ Stated so nobody mistakes silence for a pass.
   missed. Website discovery crawls up to 30 pages, same origin only, sitemaps on other origins are ignored.
 - Source location is lexical and can be wrong; each candidate states its reason and confidence. Five fix types are
   automated; everything else is done by a person or an agent and then verified.
+
+## Network safety
+
+- Every browser request goes through Jourilo's local network guard, which refuses loopback, LAN and cloud-metadata
+  addresses for public targets. WebKit on macOS follows HTTPS redirects to `127.0.0.1`/`localhost` outside the
+  guard: such a request is detected and reported as a security event, but not prevented. Use Chromium (default) or
+  Firefox for untrusted sites. See [SECURITY-REVIEW.md](SECURITY-REVIEW.md).
+- Lab timings include one local proxy hop per connection.
 
 ## Reports
 

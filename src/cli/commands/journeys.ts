@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { basename, join, resolve } from 'node:path';
 import { runAudit, summarize } from '../../audit/engine.js';
 import { mergeFindings } from '../../audit/finding.js';
-import { type BrowserName, launchBrowser } from '../../browser/runtime.js';
+import type { BrowserName } from '../../browser/runtime.js';
+import { networkLimitations, openGuardedBrowser } from '../../browser/session.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { JouriloError } from '../../core/errors.js';
 import { displayPath } from '../../core/fs-safety.js';
@@ -17,6 +18,7 @@ import { runJourney } from '../../journeys/runner.js';
 import { testData } from '../../journeys/safety.js';
 import { type JourneySpec, validateJourney } from '../../journeys/schema.js';
 import { suggestJourneys } from '../../journeys/suggest.js';
+import { wouldBeCommitted } from '../../repair/git.js';
 import { locateFindings } from '../../repair/locate.js';
 import { writeReports } from '../../report/index.js';
 import { type Command, type Context, flag, list, num, str } from '../framework.js';
@@ -149,7 +151,12 @@ async function runCmd(ctx: Context) {
     const id = newRunId();
     const runDir = ctx.ws.createRunDir(id);
     const browserName = (str(ctx, 'browser') ?? 'chromium') as BrowserName;
-    const browser = await launchBrowser(browserName, flag(ctx, 'headed'));
+    const session = await openGuardedBrowser(browserName, flag(ctx, 'headed'), {
+      target: hostClass,
+      allowPrivate: flag(ctx, 'allow-private'),
+    });
+    const browser = session.browser;
+    const browserVersion = browser.version();
     const startedAt = new Date().toISOString();
     const journeys: JourneyResult[] = [];
     let findings: Finding[] = [];
@@ -164,14 +171,24 @@ async function runCmd(ctx: Context) {
       limitations.push(
         '--allow-destructive is ignored on non-local hosts: irreversible and payment actions were blocked.',
       );
+    const allowOrigins = list(ctx, 'allow-origin').map((o) => {
+      const u = parseTargetUrl(o);
+      return u.origin;
+    });
     const saveAuthArg = str(ctx, 'save-auth');
     if (saveAuthArg && specs.length !== 1)
       throw new JouriloError('USAGE', '--save-auth needs exactly one journey (the sign-in journey).');
     const saveAuth = saveAuthArg ? resolve(saveAuthArg) : undefined;
-    if (saveAuth)
+    if (saveAuth) {
       limitations.push(
         `Signed-in state saved to ${displayPath(saveAuth)} (owner-only permissions). Treat it like a password; it is a test-account session.`,
       );
+      if (wouldBeCommitted(saveAuth)) {
+        const warning = `WARNING: ${displayPath(saveAuth)} is inside a git repository and not ignored, so it could be committed with its session cookies. Add it to .gitignore or save it under .jourilo/.`;
+        limitations.push(warning);
+        ctx.log(warning);
+      }
+    }
     if (flag(ctx, 'trace')) {
       mkdirSync(join(runDir, 'traces'), { recursive: true });
       limitations.push(
@@ -194,6 +211,7 @@ async function runCmd(ctx: Context) {
             ...(vp ? { viewportOverride: vp } : {}),
             ...(str(ctx, 'auth') ? { storageState: str(ctx, 'auth')! } : {}),
             ...(saveAuth ? { saveAuth } : {}),
+            ...(allowOrigins.length ? { allowOrigins } : {}),
             log: ctx.log,
           });
           ctx.log(`  → ${result.status} (${(result.durationMs / 1000).toFixed(1)} s)`);
@@ -202,8 +220,10 @@ async function runCmd(ctx: Context) {
         }
       }
     } finally {
-      await browser.close().catch(() => undefined);
+      await session.close();
     }
+    const network = session.report();
+    limitations.push(...networkLimitations(network));
     findings = mergeFindings(findings);
     const run: Run = {
       schemaVersion: RUN_SCHEMA_VERSION,
@@ -213,7 +233,7 @@ async function runCmd(ctx: Context) {
       target: server ? `${displayPath(resolve(baseArg))} (served at ${server.url})` : base.toString(),
       startedAt,
       finishedAt: new Date().toISOString(),
-      browser: { name: browserName, version: '' },
+      browser: { name: browserName, version: browserVersion },
       viewports: parseViewports([...new Set(journeys.map((j) => j.viewport))].join(',') || 'desktop'),
       settings: {
         journeys: specs.map((s) => s.id),
@@ -229,6 +249,7 @@ async function runCmd(ctx: Context) {
         ...limitations,
         'Journeys prove that a scripted path works (or not) in one browser; they do not measure how real people choose paths.',
       ],
+      ...(network.blocked.length || network.escaped.length ? { network } : {}),
     };
     const repo = str(ctx, 'repo') ?? (isDir ? resolve(baseArg) : undefined);
     if (repo) locateFindings(run, repo);
@@ -277,6 +298,7 @@ export const journeys: Command = {
     'allow-submit': { type: 'boolean' },
     'allow-destructive': { type: 'boolean' },
     'allow-private': { type: 'boolean' },
+    'allow-origin': { type: 'string', multiple: true },
     'fail-on-failure': { type: 'boolean' },
     browser: { type: 'string' },
     headed: { type: 'boolean' },
@@ -298,13 +320,17 @@ Run options:
   --var key=value        Test data for {{key}} placeholders (also JOURILO_VAR_KEY env vars)
   --allow-submit         Allow form submission on non-local hosts (authorized test environments only)
   --allow-destructive    Allow irreversible/payment actions — local hosts with sandbox data only
+  --allow-origin ORIGIN  Let the page navigate to another origin you are authorized to test (e.g. a test IdP)
   --trace                Record a Playwright trace per journey (contains typed values; keep private)
   --auth FILE            Playwright storage state for signed-in journeys
   --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission
-on non-local hosts needs --allow-submit. Blocked steps are reported, not skipped silently.`,
+on non-local hosts needs --allow-submit. The policy is checked twice: on the element about to be clicked or
+pressed (its name, link target, form action and identifiers — icon-only buttons included), and on every request
+the page then sends (form posts, DELETE, requests to delete/cancel/payment endpoints, navigation to other
+origins). Blocked steps are reported, not skipped silently.`,
   async run(ctx) {
     const sub = ctx.positionals[0] ?? 'list';
     if (sub === 'suggest') return suggest(ctx);

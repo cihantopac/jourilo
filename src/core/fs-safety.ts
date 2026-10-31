@@ -1,18 +1,34 @@
 // Path handling for anything derived from user input, page content or run data.
 import { chmodSync, existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { JouriloError } from './errors.js';
 
-/** Resolves `child` inside `root` and refuses anything that escapes it (../, absolute paths, symlinks). */
+/**
+ * Resolves `child` inside `root` and refuses anything that escapes it (../, absolute paths, symlinks). For a path
+ * that does not exist yet, the deepest existing ancestor is resolved, so a symlinked parent directory cannot lead
+ * outside the root either.
+ */
 export function resolveInside(root: string, child: string): string {
   if (child.includes('\0')) throw new JouriloError('UNSAFE_PATH', 'Path contains a NUL byte.');
-  const base = existsSync(root) ? realpathSync(root) : resolve(root);
-  const target = resolve(base, child);
-  const real = existsSync(target) ? realpathSync(target) : target;
+  const base = realpathDeep(resolve(root));
+  const real = realpathDeep(resolve(base, child));
   const rel = relative(base, real);
   if (rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel))) return real;
   throw new JouriloError('UNSAFE_PATH', `Path escapes ${root}: ${child}`);
+}
+
+/** realpath of the deepest existing ancestor, with the not-yet-existing rest appended. */
+function realpathDeep(path: string): string {
+  let existing = path;
+  const rest: string[] = [];
+  while (!existsSync(existing)) {
+    const parent = dirname(existing);
+    if (parent === existing) return path;
+    rest.unshift(basename(existing));
+    existing = parent;
+  }
+  return join(realpathSync(existing), ...rest);
 }
 
 export function writeFileSafe(

@@ -8,8 +8,10 @@ import { shortHash, slug } from '../core/hash.js';
 import { lexiconSources } from '../core/lexicon.js';
 import { excerpt, redactText, redactUrl } from '../core/redact.js';
 import type { PageInventory, Rect, Viewport } from '../core/types.js';
+import { type BlockedRequest, installRequestGuard } from '../journeys/request-guard.js';
 import PROBE_SOURCE from './inpage/probe.js?raw';
 import { type KeyboardWalk, keyboardWalk } from './keyboard.js';
+import { watchContext } from './session.js';
 import { type RawVitals, READ_VITALS_SCRIPT, VITALS_INIT_SCRIPT } from './vitals.js';
 import { checkWidgets, type WidgetCheck } from './widgets.js';
 
@@ -124,6 +126,8 @@ export interface PageObservation {
   axe: { violations: AxeIssue[]; incomplete: AxeIssue[]; version: string } | null;
   keyboard: KeyboardWalk | null;
   widgets?: WidgetCheck | null;
+  /** Requests the read-only guard aborted while keys were pressed and widgets operated. */
+  blockedActions?: BlockedRequest[];
   /** Steps that could not run, with the reason; becomes run limitations. */
   errors: string[];
 }
@@ -157,15 +161,21 @@ export async function newContext(
     serviceWorkers: 'block',
     ...(opts.storageState ? { storageState: opts.storageState } : {}),
   });
+  watchContext(browser, ctx);
   await ctx.addInitScript({ content: NAME_SHIM });
   await ctx.addInitScript({ content: VITALS_INIT_SCRIPT });
   return ctx;
 }
 
 /** Attaches console/network listeners; returns live arrays filled while the page runs. */
-export function observe(page: Page, origin: string): { console: ConsoleEntry[]; network: NetworkFailure[] } {
+export function observe(
+  page: Page,
+  origin: string,
+): { console: ConsoleEntry[]; network: NetworkFailure[]; ignore(fn: (url: string) => boolean): void } {
   const consoleEntries: ConsoleEntry[] = [];
   const network: NetworkFailure[] = [];
+  // Requests Jourilo itself aborted (safety guard) are not failures of the site.
+  let ignored: (url: string) => boolean = () => false;
   page.on('console', (msg) => {
     const t = msg.type();
     if (t !== 'error' && t !== 'warning') return;
@@ -189,6 +199,7 @@ export function observe(page: Page, origin: string): { console: ConsoleEntry[]; 
     }
   };
   page.on('requestfailed', (req) => {
+    if (ignored(req.url())) return;
     const failure = req.failure()?.errorText ?? 'failed';
     // Aborted requests are usually navigations away or cancelled prefetches, not defects.
     if (/ERR_ABORTED|NS_BINDING_ABORTED|cancelled/i.test(failure)) return;
@@ -212,7 +223,13 @@ export function observe(page: Page, origin: string): { console: ConsoleEntry[]; 
       firstParty: firstParty(res.url()),
     });
   });
-  return { console: consoleEntries, network };
+  return {
+    console: consoleEntries,
+    network,
+    ignore: (fn) => {
+      ignored = fn;
+    },
+  };
 }
 
 async function settle(page: Page, timeoutMs: number): Promise<void> {
@@ -421,6 +438,16 @@ export async function capturePage(
     }
 
     if (opts.keyboard !== false) {
+      // Keys and widget operation must not change data or leave the site: from here on the page is read-only.
+      const guard = await installRequestGuard(page, {
+        origin,
+        hostClass: 'public',
+        allowSubmit: false,
+        allowDestructive: false,
+        mode: 'read-only',
+      });
+      live.ignore(guard.isBlocked);
+      obs.blockedActions = guard.blocked;
       obs.keyboard = await keyboardWalk(page).catch((e: Error) => {
         obs.errors.push(`keyboard: ${e.message.split('\n')[0]}`);
         return null;

@@ -19,7 +19,7 @@ Local-first · evidence-driven · no paid services required · works as a CLI an
 | **Audit in a real browser** | Playwright + axe-core 4.14 (WCAG 2.0–2.2 A/AA), a keyboard-only walk (focus visible, focus obscured, traps), target size, reflow at 320 px, horizontal overflow, input purpose, paste blocking, form error feedback, lab Web Vitals (LCP, CLS, FCP, TTFB, TBT; INP during journeys), JavaScript errors and failed requests — on desktop and mobile. |
 | **Journeys**                | Reusable JSON scenarios with explicit success criteria, suggested from what the site actually contains, run with a screenshot per step. A safety policy never pays, deletes or cancels on non-local hosts.                                                                                                                                          |
 | **Conversion**              | CTA prominence and clarity, value proposition, trust signals, signup/checkout friction, pricing clarity — always reported as **hypotheses**, never as predicted lifts, with experiment plans and the statistics to read real results.                                                                                                               |
-| **Fix and verify**          | Findings point to likely source lines. `optimize` previews minimal fixes as diffs and applies them only with `--apply` after a git checkpoint. `verify` repeats the exact scope and reports fixed, new and persisting problems.                                                                                                                     |
+| **Fix and verify**          | Findings point to likely source lines. `optimize` previews minimal fixes as diffs and applies them only with `--apply`, as one reversible change (atomic writes; rollback never overwrites later edits). `verify` repeats the exact scope and reports fixed, new and persisting problems.                                                           |
 | **Report**                  | A self-contained HTML _Experience Observatory_ (screenshots with highlighted elements, reproduction steps, standards, sources, journeys, before/after), plus Markdown for PRs and SARIF for code scanning.                                                                                                                                          |
 
 What Jourilo does **not** do: invent observations, give a single "UX score", claim WCAG compliance from an automated
@@ -79,7 +79,7 @@ jourilo audit http://localhost:3000 --repo .        # evidence + likely source l
 jourilo journeys suggest latest                     # edit .jourilo/journeys/*.json
 jourilo journeys run --base http://localhost:3000   # step screenshots, success criteria
 jourilo optimize latest --repo .                    # preview minimal diffs (dry run)
-jourilo optimize latest --repo . --apply            # git checkpoint, then write
+jourilo optimize latest --repo . --apply            # write as one reversible change
 jourilo verify <baseline-run>                       # same scope again: fixed / new / persisting
 jourilo rollback latest --yes                       # undo if needed
 ```

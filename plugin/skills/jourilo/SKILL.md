@@ -73,11 +73,11 @@ Tell the user which stage you are in. If they asked for one thing (e.g. "just ac
 6. **Prioritize** — Group by root cause, not by symptom. Order: blocked journeys and critical/serious defects on key
    journeys → serious accessibility defects → performance on key pages → conversion hypotheses.
 7. **Fix (repository mode, with permission)** — `jourilo optimize <run> --repo <path>` previews deterministic fixes
-   as diffs; apply with `--apply` after the user agrees (a git checkpoint is created). For other defects, use each
+   as diffs; apply with `--apply` after the user agrees (one reversible change; its id is printed). For other defects, use each
    finding's `sources` candidates, read the code, make the minimal edit yourself, and explain it with a diff.
    Run the project's own lint/tests after editing.
 8. **Verify** — `jourilo verify <baseline-run>`; rerun journeys. Report fixed / new / persisting with evidence. If
-   something regressed, fix it or `jourilo rollback <checkpoint> --yes` (with permission).
+   something regressed, fix it or `jourilo rollback <id> --yes` (with permission; it never overwrites later edits).
 9. **Report** — Give the report path (`.jourilo/runs/<id>/report.html`), a short prioritized summary, the
    limitations of the run, and next steps. Offer `jourilo experiment plan --finding <id>` for hypotheses.
 

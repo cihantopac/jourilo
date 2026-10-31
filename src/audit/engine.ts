@@ -9,7 +9,8 @@ import {
   newContext,
   type PageObservation,
 } from '../browser/capture.js';
-import { type BrowserName, launchBrowser } from '../browser/runtime.js';
+import type { BrowserName } from '../browser/runtime.js';
+import { type GuardedSession, networkLimitations, openGuardedBrowser } from '../browser/session.js';
 import { toMetrics } from '../browser/vitals.js';
 import { conversionFindings } from '../conversion/rules.js';
 import { JouriloError } from '../core/errors.js';
@@ -105,9 +106,13 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
   const startedAt = new Date().toISOString();
   const limitations: string[] = [];
 
-  let browser: Browser | undefined;
+  let session: GuardedSession | undefined;
   try {
-    browser = await launchBrowser(opts.browser, opts.headed);
+    session = await openGuardedBrowser(opts.browser, opts.headed, {
+      target: hostClass,
+      allowPrivate: opts.allowPrivate,
+    });
+    const browser: Browser = session.browser;
     const browserVersion = browser.version();
 
     // 1. Discover pages.
@@ -134,6 +139,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         maxDepth: opts.maxDepth,
         respectRobots: opts.respectRobots,
         timeoutMs: opts.timeoutMs,
+        policy: session.guard.policy,
         ...(opts.include ? { include: opts.include } : {}),
       });
       await ctx.close();
@@ -204,6 +210,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
 
     // 3. Form validation probes (interactive, so gated by the safety policy).
     const formFindings: Finding[] = [];
+    const simulated: string[] = [];
     const formsAllowed = hostClass === 'local' || opts.allowSubmit === true;
     if (opts.forms !== false && !opts.inventoryOnly && formsAllowed) {
       const vp = opts.viewports.find((v) => !v.hasTouch) ?? opts.viewports[0]!;
@@ -231,11 +238,16 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
             formFindings.push(...r.findings);
             if (r.result.outcome === 'blocked')
               limitations.push(`Form ${form.selector} on ${o.url} was not submitted: ${r.result.detail}`);
+            if (r.result.outcome === 'simulated') simulated.push(`${form.selector} on ${o.url}`);
           }
         }
       } finally {
         await ctx.close().catch(() => undefined);
       }
+      if (simulated.length)
+        limitations.push(
+          `Form validation was simulated: empty submissions were intercepted before reaching the server, so nothing was written. ${simulated.length} form(s) rely on the server for validation feedback (${simulated.slice(0, 3).join('; ')}${simulated.length > 3 ? '; …' : ''}); that feedback was not tested. Rerun with --allow-submit on a disposable environment to test it.`,
+        );
     } else if (opts.forms !== false && observations.some((o) => o.probe?.inventory.forms.length)) {
       limitations.push(
         'Form validation was not tested: submitting forms on a public host requires --allow-submit (authorized test environments only).',
@@ -285,6 +297,14 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       );
     else limitations.push('Measured without network/CPU throttling: real mobile devices are usually slower.');
 
+    const network = session.report();
+    limitations.push(...networkLimitations(network));
+    const stopped = observations.flatMap((o) => o.blockedActions ?? []);
+    if (stopped.length)
+      limitations.push(
+        `While keys were pressed and widgets operated, ${stopped.length} request(s) that would have changed data or left the site were stopped (e.g. ${stopped[0]!.method} ${stopped[0]!.url}); audits only observe.`,
+      );
+
     const pages: PageCapture[] = observations.map((o) => ({
       url: o.url,
       finalUrl: o.finalUrl,
@@ -327,11 +347,12 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       summary: summarize(findings, pages.length, 0),
       limitations: [...new Set(limitations)],
       ...(opts.context && (opts.context.brand || opts.context.search) ? { context: opts.context } : {}),
+      ...(network.blocked.length || network.escaped.length ? { network } : {}),
     };
     ws.saveRun(run);
     return { run, runDir, observations };
   } finally {
-    await browser?.close().catch(() => undefined);
+    await session?.close();
   }
 }
 

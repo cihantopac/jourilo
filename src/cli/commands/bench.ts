@@ -31,6 +31,8 @@ interface Expected {
   recommendations?: { rule: string; path: string; includes: string }[];
   /** Expected source file for a rule (root-cause location accuracy). */
   sources?: { rule: string; path: string; file: string }[];
+  /** Audit settings for this fixture (a static fixture is disposable, so real submissions are allowed). */
+  audit?: { allowSubmit?: boolean };
 }
 
 export interface FixtureResult {
@@ -68,6 +70,7 @@ export async function benchFixture(dir: string, wsRoot: string): Promise<Fixture
       headed: false,
       respectRobots: true,
       allowPrivate: false,
+      allowSubmit: expected.audit?.allowSubmit === true,
       keyboard: true,
       throttle: false,
       timeoutMs: 30_000,

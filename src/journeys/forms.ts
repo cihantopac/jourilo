@@ -1,6 +1,10 @@
 // Form validation probe: submits a form with its fields left empty and measures what a person would experience.
 // Does the form say what is wrong (WCAG 3.3.1)? Is the message tied to the field or announced (1.3.1, 4.1.3)?
-// Does focus move to the problem? Only runs where the safety policy allows form submission.
+// Does focus move to the problem?
+// By default the submission is simulated: the page runs its own submit handlers and native validation, but every
+// request that would send data (form post, fetch/XHR with a body) is intercepted before it leaves the browser, so a
+// local database is never written. Feedback that needs the server's answer is then reported as not tested. Only
+// with --allow-submit (a disposable environment) is the empty submission really sent.
 import type { BrowserContext } from 'playwright-core';
 import { makeFinding } from '../audit/finding.js';
 import { nielsen, wcag } from '../audit/standards.js';
@@ -10,6 +14,7 @@ import { shortHash } from '../core/hash.js';
 import { lexiconSource } from '../core/lexicon.js';
 import { excerpt, redactUrl } from '../core/redact.js';
 import type { Finding, FormInfo, Viewport } from '../core/types.js';
+import { installRequestGuard } from './request-guard.js';
 import { checkAction, type SafetyPolicy } from './safety.js';
 
 const BEFORE = `(sel) => {
@@ -49,7 +54,7 @@ export interface FormProbeResult {
   url: string;
   form: string;
   purpose: string;
-  outcome: 'native-validation' | 'feedback' | 'no-feedback' | 'navigated' | 'blocked' | 'error';
+  outcome: 'native-validation' | 'feedback' | 'no-feedback' | 'navigated' | 'blocked' | 'simulated' | 'error';
   detail: string;
 }
 
@@ -62,6 +67,14 @@ export async function probeFormValidation(
   runDir: string,
 ): Promise<{ result: FormProbeResult; findings: Finding[] }> {
   const page = await ctx.newPage();
+  // Simulated by default (nothing that sends data leaves the browser); a real submission only with --allow-submit,
+  // and even then never to delete or payment endpoints.
+  const guard = await installRequestGuard(page, {
+    ...policy,
+    allowDestructive: false,
+    origin: new URL(url).origin,
+    mode: policy.allowSubmit ? 'journey' : 'read-only',
+  });
   const base: Omit<FormProbeResult, 'outcome' | 'detail'> = {
     url: redactUrl(url),
     form: form.selector,
@@ -103,10 +116,12 @@ export async function probeFormValidation(
       .locator(form.selector)
       .locator('button[type="submit"], button:not([type]), input[type="submit"]')
       .first();
+    const submittedAt = Date.now();
     if (await submit.count()) await submit.click({ timeout: 10_000 });
     else await page.locator(form.selector).locator('input').first().press('Enter');
     await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => undefined);
     await page.waitForTimeout(600);
+    const intercepted = guard.since(submittedAt);
     const shotFile = toPosix(`screenshots/form-${shortHash(url, form.selector).slice(0, 8)}-${vp.name}.jpg`);
     await page
       .screenshot({
@@ -138,6 +153,17 @@ export async function probeFormValidation(
       { type: 'screenshot' as const, file: shotFile, note: 'After submitting the empty form' },
     ];
 
+    if (after && !after.errorish.length && !after.ariaInvalid && intercepted.length) {
+      // The page sent the empty form to the server and Jourilo stopped it: what the server would answer is unknown.
+      return {
+        result: {
+          ...base,
+          outcome: 'simulated',
+          detail: `No client-side validation; the empty submission (${intercepted[0]!.method} ${intercepted[0]!.url}) was intercepted, so server-side feedback was not tested.`,
+        },
+        findings,
+      };
+    }
     if (!after || (!after.errorish.length && !after.ariaInvalid)) {
       const accepted = navigated && after !== null;
       findings.push(
@@ -244,6 +270,7 @@ export async function probeFormValidation(
   } catch (err) {
     return { result: { ...base, outcome: 'error', detail: excerpt((err as Error).message, 200) }, findings };
   } finally {
+    await guard.detach();
     await page.close().catch(() => undefined);
   }
 }

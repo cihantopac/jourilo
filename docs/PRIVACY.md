@@ -1,7 +1,9 @@
 # Privacy and permissions
 
 Jourilo runs on your machine. It sends nothing to Jourilo maintainers or any service of its own. Network traffic is
-the browser loading the pages you asked it to audit, plus `robots.txt` and `sitemap.xml` from that origin.
+the browser loading the pages you asked it to audit, plus `robots.txt` and `sitemap.xml` from that origin. All of it
+passes through a local network guard that refuses connections to this machine, the local network and cloud-metadata
+services unless the target is local or you passed `--allow-private` (metadata services are refused always).
 
 ## What is stored
 
@@ -32,11 +34,11 @@ Everything lives in `.jourilo/` in the working directory (or `--workspace`), wit
 | Read-only audit of a public site                           | allowed, robots.txt respected | —                                               | the user, for sites they may test           |
 | Ignore robots.txt                                          | off                           | `--ignore-robots`                               | site owner only                             |
 | Private-network targets (10.x, 192.168.x, cloud metadata…) | refused                       | `--allow-private`                               | authorized testers                          |
-| Submit forms on non-local hosts                            | blocked                       | `--allow-submit`                                | authorized test environments, test accounts |
+| Submit forms (audits: any host; journeys: non-local hosts) | simulated / blocked           | `--allow-submit`                                | authorized test environments, test accounts |
 | Payments, deletions, cancellations                         | blocked everywhere            | `--allow-destructive` (local hosts only)        | sandbox data only                           |
 | Signed-in pages                                            | off                           | `--auth <storage-state.json>` of a test account | the account owner                           |
 | Write source files                                         | off                           | `optimize --apply`, agent edits after consent   | repository owner                            |
-| Roll back files                                            | off                           | `rollback --yes`                                | repository owner                            |
+| Roll back files (never overwrites later edits)             | off                           | `rollback --yes` (`--force` for conflicts)      | repository owner                            |
 | Download browsers                                          | off                           | `jourilo setup`                                 | the user                                    |
 
 The Claude Code plugin's skills require Claude to ask the user before each of these.

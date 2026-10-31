@@ -3,20 +3,26 @@ import { join, resolve } from 'node:path';
 import { runAudit } from '../../audit/engine.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { JouriloError } from '../../core/errors.js';
-import { displayPath, resolveInside } from '../../core/fs-safety.js';
+import { displayPath } from '../../core/fs-safety.js';
 import { serveStatic } from '../../core/static-server.js';
 import { loadContext } from '../../integrations/context.js';
 import { unifiedDiff } from '../../repair/diff.js';
-import { planFixes } from '../../repair/fixes.js';
+import { composeEdits, planFixes } from '../../repair/fixes.js';
 import {
-  backupFiles,
+  type Checkpoint,
   createCheckpoint,
   diffSince,
-  isGitRepo,
   loadCheckpoint,
-  rollback,
+  markRolledBack,
+  rollbackCheckpoint,
 } from '../../repair/git.js';
 import { locateFindings } from '../../repair/locate.js';
+import {
+  applyTransaction,
+  isTransaction,
+  previewRollback,
+  rollbackTransaction,
+} from '../../repair/transaction.js';
 import { compareRuns } from '../../report/compare.js';
 import { writeReports } from '../../report/index.js';
 import { type Command, flag, list, str } from '../framework.js';
@@ -34,7 +40,9 @@ export const optimize: Command = {
   },
   details: `Deterministic fixers (others are reported with source candidates for a person or agent to fix):
   axe/html-has-lang, jourilo/missing-viewport-meta, jourilo/input-purpose, jourilo/focus-visible, jourilo/paste-blocked
-Without --apply nothing is written. With --apply, a git checkpoint is created first (jourilo rollback undoes it).
+Without --apply nothing is written. With --apply, all files are written as one change: each file must be unchanged
+since the plan, writes are atomic, an interrupted apply is undone, and \`jourilo rollback <id>\` restores the files
+(git is not required).
 Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
   async run(ctx) {
     const { run, dir } = ctx.ws.loadRun(ctx.positionals[0] ?? 'latest');
@@ -66,14 +74,20 @@ Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
       );
     let checkpoint: string | null = null;
     if (flag(ctx, 'apply') && plans.length) {
-      const finalContent = new Map<string, string>();
-      for (const p of plans) for (const e of p.edits) finalContent.set(e.file, e.after);
-      if (isGitRepo(repo)) {
-        const cp = createCheckpoint(repo, ctx.ws.root, `before optimize of run ${run.id}`);
-        backupFiles(repo, ctx.ws.root, cp, [...finalContent.keys()]);
-        checkpoint = cp.id;
-      } else ctx.log('Warning: not a git repository, so no checkpoint/rollback is available.');
-      for (const [file, content] of finalContent) writeFileSync(resolveInside(repo, file), content);
+      const edits = composeEdits(plans);
+      const tx = applyTransaction(
+        repo,
+        ctx.ws.root,
+        edits.map((e) => ({
+          file: e.file,
+          before: Buffer.from(e.before, 'utf8'),
+          after: Buffer.from(e.after, 'utf8'),
+        })),
+        {
+          note: `optimize run ${run.id}`,
+        },
+      );
+      checkpoint = tx.id;
       const outDir = join(ctx.ws.root, 'fixes');
       mkdirSync(outDir, { recursive: true });
       writeFileSync(
@@ -81,7 +95,7 @@ Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
         `${JSON.stringify({ run: run.id, checkpoint, applied: plans.map((p) => ({ fingerprint: p.fingerprint, ruleId: p.ruleId, title: p.title, files: p.edits.map((e) => e.file) })) }, null, 2)}\n`,
       );
       lines.push(
-        `Applied ${plans.length} fix(es) to ${finalContent.size} file(s).${checkpoint ? ` Checkpoint ${checkpoint} (jourilo rollback ${checkpoint}).` : ''}`,
+        `Applied ${plans.length} fix(es) to ${edits.length} file(s) as change ${checkpoint} (undo: jourilo rollback ${checkpoint} --yes).`,
         `Next: jourilo verify ${run.id}`,
       );
     } else if (plans.length) {
@@ -209,6 +223,13 @@ export const checkpoint: Command = {
     const repo = resolve(str(ctx, 'repo') ?? '.');
     if (ctx.positionals[0] === 'diff') {
       const cp = loadCheckpoint(ctx.ws.root, ctx.positionals[1] ?? 'latest');
+      if (isTransaction(cp))
+        return {
+          data: { transaction: cp, files: previewRollback(cp) },
+          text: previewRollback(cp)
+            .map((f) => `${f.action.padEnd(9)} ${f.file}${f.reason ? ` (${f.reason})` : ''}`)
+            .join('\n'),
+        };
       const d = diffSince(repo, cp);
       return {
         data: { checkpoint: cp, ...d },
@@ -226,23 +247,87 @@ export const checkpoint: Command = {
 export const rollbackCmd: Command = {
   name: 'rollback',
   summary:
-    'Restore tracked files to a checkpoint (requires --yes). Untracked files created since are listed, not deleted.',
-  usage: 'jourilo rollback <checkpoint-id|latest> --yes [--repo .]',
-  options: { repo: { type: 'string' }, yes: { type: 'boolean' } },
+    'Undo an applied fix (or restore a checkpoint) without overwriting later edits; requires --yes. The rollback can itself be undone.',
+  usage: 'jourilo rollback <id|latest> --yes [--repo .] [--file path ...] [--force]',
+  options: {
+    repo: { type: 'string' },
+    yes: { type: 'boolean' },
+    file: { type: 'string', multiple: true },
+    force: { type: 'boolean' },
+  },
+  details: `For a change made by \`optimize --apply\` (or a previous rollback), a file is restored only while it still
+holds exactly what Jourilo wrote. A file edited afterwards is reported as a conflict and left alone; --force restores
+it anyway after saving the current bytes under .jourilo/checkpoints/<id>/conflicts/.
+For a checkpoint made with \`jourilo checkpoint\`, every tracked file changed since then is restored (everything you
+or an agent changed in the meantime); the current bytes are kept, and the printed id undoes the rollback.
+Untracked files created after a checkpoint are listed, never deleted.`,
   async run(ctx) {
+    const rec = loadCheckpoint(ctx.ws.root, ctx.positionals[0] ?? 'latest');
+    const files = list(ctx, 'file');
+    if (isTransaction(rec)) {
+      const preview = previewRollback(rec).filter((f) => !files.length || files.includes(f.file));
+      if (!flag(ctx, 'yes'))
+        return {
+          data: { transaction: rec.id, preview },
+          text: [
+            `Change ${rec.id} (${rec.note || 'no note'}), ${rec.state}:`,
+            ...preview.map((f) => `  ${f.action.padEnd(9)} ${f.file}${f.reason ? ` — ${f.reason}` : ''}`),
+            preview.some((f) => f.action === 'conflict')
+              ? 'Conflicting files are left alone unless you add --force (their current bytes are saved first).'
+              : '',
+            'Re-run with --yes to roll back.',
+          ]
+            .filter(Boolean)
+            .join('\n'),
+        };
+      const r = rollbackTransaction(ctx.ws.root, rec, {
+        force: flag(ctx, 'force'),
+        ...(files.length ? { files } : {}),
+      });
+      const conflicted = r.conflicts.filter((c) => !c.savedCopy && !flag(ctx, 'force'));
+      return {
+        data: { transaction: rec.id, ...r },
+        text: [
+          `Restored ${r.restored.length} file(s) from change ${rec.id}.`,
+          ...r.alreadyRestored.map((f) => `  unchanged ${f} (already original)`),
+          ...r.conflicts.map(
+            (c) =>
+              `  ${c.savedCopy ? 'forced   ' : 'conflict '} ${c.file} — ${c.reason}${c.savedCopy ? ` (your version saved to ${displayPath(c.savedCopy)})` : ''}`,
+          ),
+          conflicted.length ? 'Conflicting files were not touched. Use --force to restore them anyway.' : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
+        exitCode: conflicted.length ? 1 : 0,
+      };
+    }
+    const cp: Checkpoint = rec;
     const repo = resolve(str(ctx, 'repo') ?? '.');
-    const cp = loadCheckpoint(ctx.ws.root, ctx.positionals[0] ?? 'latest');
     const d = diffSince(repo, cp);
     if (!flag(ctx, 'yes'))
       return {
         data: { checkpoint: cp, wouldRestore: d.stat, newFiles: d.newFiles },
-        text: `Would restore:\n${d.stat || '(nothing)'}\nRe-run with --yes to roll back.`,
+        text: `Would restore (every change since the checkpoint, including your own edits):\n${d.stat || '(nothing)'}\nThe current versions are kept and the rollback can be undone. Re-run with --yes to roll back.`,
         exitCode: 0,
       };
-    const r = rollback(repo, cp, ctx.ws.root);
+    const r = rollbackCheckpoint(repo, cp, ctx.ws.root, files.length ? { files } : {});
+    if (r.transaction && !files.length) markRolledBack(ctx.ws.root, cp, r.transaction.id);
     return {
-      data: r,
-      text: `Restored ${r.restored.length} file(s) to checkpoint ${cp.id}.${r.leftUntracked.length ? `\nNot removed (created after the checkpoint): ${r.leftUntracked.join(', ')}` : ''}`,
+      data: {
+        checkpoint: cp.id,
+        transaction: r.transaction?.id ?? null,
+        restored: r.restored,
+        leftUntracked: r.leftUntracked,
+      },
+      text: [
+        `Restored ${r.restored.length} file(s) to checkpoint ${cp.id}.`,
+        r.transaction ? `Undo this rollback with: jourilo rollback ${r.transaction.id} --yes` : '',
+        r.leftUntracked.length
+          ? `Not removed (created after the checkpoint): ${r.leftUntracked.join(', ')}`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n'),
     };
   },
 };

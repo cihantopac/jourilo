@@ -9,6 +9,7 @@ const root = join(import.meta.dirname, '..', '..');
 const cli = join(root, 'plugin', 'dist', 'jourilo.mjs');
 const expected = JSON.parse(readFileSync(join(root, 'fixtures/sites/acme-saas/expected.json'), 'utf8')) as {
   mustFind: { rule: string; path: string }[];
+  audit?: { allowSubmit?: boolean };
 };
 
 describe.each(['firefox', 'webkit'])('%s', (browser) => {
@@ -27,6 +28,8 @@ describe.each(['firefox', 'webkit'])('%s', (browser) => {
         join(root, 'tests/.tmp', `xb-${browser}`),
         '--json',
         '-q',
+        // Same settings as the benchmark: the static fixture may receive real empty submissions.
+        ...(expected.audit?.allowSubmit ? ['--allow-submit'] : []),
       ],
       { encoding: 'utf8', cwd: root },
     );
@@ -102,6 +105,8 @@ describe.each(['firefox', 'webkit'])('%s', (browser) => {
         '/signup',
         '--viewports',
         'desktop',
+        // The fixture is static and disposable, so the server round trip of /signup may really be sent.
+        '--allow-submit',
       ).stdout,
     ) as { findings: { ruleId: string; url: string }[] };
     const formRules = forms.findings

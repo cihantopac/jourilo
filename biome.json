@@ -9,7 +9,9 @@
       "!tests/.tmp",
       "!**/*.png",
       "!fixtures",
-      "!docs/evaluation"
+      "!docs/evaluation",
+      "!branding",
+      "!benchmarks/act/.cache"
     ]
   },
   "formatter": {

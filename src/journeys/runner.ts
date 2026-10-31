@@ -2,7 +2,7 @@
 // failures, optional Playwright trace. Deterministic: fixed viewport, generated test data, no randomness in
 // selectors, one controlled retry for transient element states.
 import { join } from 'node:path';
-import type { Browser, Locator, Page } from 'playwright-core';
+import type { Browser, ElementHandle, Locator, Page } from 'playwright-core';
 import { makeFinding } from '../audit/finding.js';
 import { CWV, nielsen } from '../audit/standards.js';
 import { DEFAULT_MASK, newContext, observe } from '../browser/capture.js';
@@ -12,6 +12,7 @@ import { toPosix, writeFileSafe } from '../core/fs-safety.js';
 import { excerpt, redactUrl } from '../core/redact.js';
 import type { Finding, JourneyResult, JourneyStepResult } from '../core/types.js';
 import type { HostClass } from '../core/url-safety.js';
+import { installRequestGuard } from './request-guard.js';
 import { checkAction, interpolate, isSecretValue, type SafetyPolicy } from './safety.js';
 import { describeStep, describeTarget, type JourneySpec, type Step, type Target } from './schema.js';
 
@@ -27,6 +28,8 @@ export interface JourneyRunOptions {
   viewportOverride?: string;
   /** Save the browser's storage state (cookies, localStorage) after the journey, for signed-in audits. */
   saveAuth?: string;
+  /** Other origins main-frame navigations may reach (e.g. a test identity provider). */
+  allowOrigins?: string[];
   log?: (msg: string) => void;
 }
 
@@ -43,17 +46,89 @@ export function locatorFor(page: Page, t: Target): Locator {
   return page.locator(t.css);
 }
 
-/** Facts about the element about to be activated, for the safety policy. */
+/**
+ * Facts about the element about to be activated, for the safety policy. The element that receives the activation is
+ * the nearest interactive ancestor (clicking the icon inside a button activates the button). Besides its name, the
+ * policy sees its link target, form action/formaction and identifiers, so icon-only and mislabelled controls are
+ * judged by what they do.
+ */
 const ELEMENT_FACTS = `(el) => {
-  const form = el.form || el.closest('form');
-  const tag = el.tagName;
-  const type = (el.getAttribute('type') || '').toLowerCase();
+  if (!el || el === document.body || el === document.documentElement) return null;
+  const act = el.closest('a[href],button,input,select,textarea,summary,[role=button],[role=link],[role=menuitem],[role=tab],[role=option],[role=checkbox],[role=switch]') || el;
+  const form = act.form || act.closest('form');
+  const tag = act.tagName;
+  const type = (act.getAttribute('type') || '').toLowerCase();
+  const role = (act.getAttribute('role') || '').toLowerCase();
   const submits = !!form && ((tag === 'BUTTON' && (type === '' || type === 'submit')) || (tag === 'INPUT' && (type === 'submit' || type === 'image')));
-  const inField = !!form && (tag === 'INPUT' || tag === 'SELECT');
-  const payment = !!form && !!form.querySelector('input[autocomplete^="cc-"], input[name*="card" i], input[name*="cvc" i], input[name*="cvv" i]');
-  const name = (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('title') || '').replace(/\\s+/g, ' ').trim().slice(0, 120);
-  return { submits, inField, payment, name };
+  const inField = !!form && ((tag === 'INPUT' && !['button','submit','reset','checkbox','radio','image','file','range','color'].includes(type)) || tag === 'SELECT');
+  const textarea = tag === 'TEXTAREA' || act.isContentEditable;
+  const buttonLike = tag === 'BUTTON' || tag === 'SUMMARY' || (tag === 'INPUT' && ['button','submit','reset','image'].includes(type)) || ['button','menuitem','tab','option','switch','checkbox'].includes(role);
+  const linkLike = (tag === 'A' && act.hasAttribute('href')) || role === 'link';
+  const payment = !!form && !!form.querySelector('input[autocomplete^="cc-"], input[name*="card" i], input[name*="cvc" i], input[name*="cvv" i], input[data-stripe], iframe[src*="stripe"], iframe[name*="card" i], iframe[title*="card" i]');
+  const byIds = (attr) => (act.getAttribute(attr) || '').split(/\\s+/).map((id) => id && document.getElementById(id)).filter(Boolean).map((n) => n.innerText || n.textContent || '').join(' ');
+  const inner = Array.from(act.querySelectorAll('img[alt], [aria-label], svg title')).map((n) => n.getAttribute('alt') || n.getAttribute('aria-label') || n.textContent || '').join(' ');
+  const name = (act.getAttribute('aria-label') || byIds('aria-labelledby') || act.innerText || act.value || act.getAttribute('title') || act.getAttribute('alt') || inner || '').replace(/\\s+/g, ' ').trim().slice(0, 120);
+  const attrs = [];
+  for (const n of [act, ...Array.from(act.querySelectorAll('*')).slice(0, 20)])
+    for (const a of Array.from(n.attributes))
+      if (/^(id|class|name|title|data-[\\w-]+)$/.test(a.name) || ((a.name === 'href' || a.name === 'xlink:href') && n.tagName.toLowerCase() === 'use'))
+        attrs.push(a.value);
+  const targets = [];
+  if (linkLike && act.getAttribute('href')) targets.push(act.href || act.getAttribute('href'));
+  if (act.getAttribute('formaction')) targets.push(act.formAction || act.getAttribute('formaction'));
+  if (form && (submits || inField)) targets.push(form.getAttribute('action') || '');
+  return { submits, inField, textarea, buttonLike, linkLike, payment, name, signals: attrs.join(' ').slice(0, 1500), targets: targets.join(' ') };
 }`;
+
+interface ElementFacts {
+  submits: boolean;
+  inField: boolean;
+  textarea: boolean;
+  buttonLike: boolean;
+  linkLike: boolean;
+  payment: boolean;
+  name: string;
+  signals: string;
+  targets: string;
+}
+
+/** What a key press does to the focused element: nothing risky, an activation (like a click), or a submission. */
+export function keyEffect(key: string, f: ElementFacts | null): 'none' | 'activate' | 'submit' {
+  if (!f) return 'none';
+  const k = key.split('+').pop()!;
+  const mods = key.includes('+');
+  const enter = k === 'Enter' || k === 'NumpadEnter';
+  const space = k === ' ' || k === 'Space';
+  if (enter) {
+    if (f.textarea) return mods ? 'submit' : 'none';
+    if (f.inField) return 'submit';
+    if (f.buttonLike || f.linkLike) return f.submits ? 'submit' : 'activate';
+    return 'activate';
+  }
+  if (space && f.buttonLike) return f.submits ? 'submit' : 'activate';
+  return 'none';
+}
+
+/** Applies the safety policy to activating an element (click, or a key that activates or submits). */
+function verdictFor(
+  f: ElementFacts,
+  effect: 'activate' | 'submit',
+  action: 'click' | 'press',
+  policy: SafetyPolicy,
+) {
+  const submitsForm = effect === 'submit' || f.submits;
+  return checkAction(
+    {
+      action,
+      name: f.name,
+      signals: f.signals,
+      targets: f.targets,
+      submitsForm,
+      paymentForm: f.payment && submitsForm,
+    },
+    policy,
+  );
+}
 
 const facts = (src: string) => new Function(`return (${src})(arguments[0])`) as (el: unknown) => unknown;
 
@@ -90,44 +165,33 @@ async function act(page: Page, step: Step, opts: JourneyRunOptions): Promise<voi
   switch (step.action) {
     case 'goto': {
       const url = new URL(value(step.url), opts.base);
-      if (url.origin !== opts.base.origin)
-        throw new Error(`goto ${url.origin} leaves the target origin ${opts.base.origin}`);
+      if (url.origin !== opts.base.origin && !(opts.allowOrigins ?? []).includes(url.origin))
+        throw new Blocked(`goto ${url.origin} leaves the target origin ${opts.base.origin}`);
       await page.goto(url.toString(), { waitUntil: 'load', timeout: t * 3 });
       await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => undefined);
       return;
     }
     case 'click':
     case 'press': {
-      const loc =
-        step.action === 'click'
-          ? locatorFor(page, step.target).first()
-          : step.target
-            ? locatorFor(page, step.target).first()
-            : null;
+      // One element handle for the check and the action, so a re-render cannot swap the element in between.
+      const loc = step.target ? locatorFor(page, step.target).first() : null;
+      let handle: ElementHandle | null = null;
       if (loc) {
         await loc.waitFor({ state: 'visible', timeout: t });
-        const f = (await loc.evaluate(facts(ELEMENT_FACTS))) as {
-          submits: boolean;
-          inField: boolean;
-          payment: boolean;
-          name: string;
-        };
-        const submitsForm = step.action === 'click' ? f.submits : step.key === 'Enter' && f.inField;
-        const verdict = checkAction(
-          {
-            action: step.action,
-            name: step.action === 'click' ? f.name : '',
-            submitsForm,
-            paymentForm: f.payment && submitsForm,
-          },
-          opts.policy,
-        );
-        if (!verdict.allowed) throw new Blocked(verdict.reason);
-        if (step.action === 'click') await loc.click({ timeout: t });
-        else await loc.press(step.key, { timeout: t });
-      } else if (step.action === 'press') {
-        await page.keyboard.press(step.key);
+        handle = await loc.elementHandle({ timeout: t });
+      } else {
+        // A key press without a target goes to whatever has focus: judge that element.
+        handle = (await page.evaluateHandle('document.activeElement')).asElement();
       }
+      const f = handle ? ((await handle.evaluate(facts(ELEMENT_FACTS))) as ElementFacts | null) : null;
+      const effect = step.action === 'click' ? (f?.submits ? 'submit' : 'activate') : keyEffect(step.key, f);
+      if (f && effect !== 'none') {
+        const verdict = verdictFor(f, effect, step.action, opts.policy);
+        if (!verdict.allowed) throw new Blocked(verdict.reason);
+      }
+      if (step.action === 'click') await handle!.click({ timeout: t });
+      else if (loc && handle) await handle.press(step.key, { timeout: t });
+      else await page.keyboard.press(step.key);
       await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => undefined);
       return;
     }
@@ -189,8 +253,16 @@ export async function runJourney(
   });
   const tracePath = opts.trace ? join('traces', `${spec.id}-${vp.name}.zip`) : undefined;
   if (tracePath) await ctx.tracing.start({ screenshots: true, snapshots: true, title: spec.name });
+  // Network backstop: whatever a step triggers, requests that the policy forbids never leave the browser.
+  const guard = await installRequestGuard(ctx, {
+    ...opts.policy,
+    origin: opts.base.origin,
+    ...(opts.allowOrigins ? { allowOrigins: opts.allowOrigins } : {}),
+    mode: 'journey',
+  });
   const page = await ctx.newPage();
   const live = observe(page, opts.base.origin);
+  live.ignore(guard.isBlocked);
   const steps: JourneyStepResult[] = [];
   const findings: Finding[] = [];
   const t0 = Date.now();
@@ -242,6 +314,16 @@ export async function runJourney(
       } catch (err) {
         res.status = err instanceof Blocked ? 'blocked' : 'failed';
         res.error = excerpt((err as Error).message.split('\n')[0], 300);
+      }
+      // A navigation or an irreversible/payment request the step caused was stopped: the step did not do what it
+      // would have done. (Background data requests that were stopped are reported with the journey, not here.)
+      const stopped = guard.since(s0).filter((b) => b.navigation || b.kind !== 'submit');
+      if (stopped.length && res.status !== 'blocked') {
+        res.status = 'blocked';
+        res.error = excerpt(
+          `${stopped[0]!.reason}${stopped.length > 1 ? ` (+${stopped.length - 1} more)` : ''}`,
+          300,
+        );
       }
       res.durationMs = Date.now() - s0;
       res.url = redactUrl(page.url());
@@ -322,7 +404,13 @@ export async function runJourney(
       successCriteria: criteria,
       durationMs,
       ...(tracePath ? { trace: toPosix(tracePath) } : {}),
+      ...(guard.blocked.length
+        ? { blockedRequests: guard.blocked.map(({ method, url, reason }) => ({ method, url, reason })) }
+        : {}),
     };
+    const blockedNote = guard.blocked.length
+      ? ` The safety policy stopped ${guard.blocked.length} request(s) during this journey (e.g. ${guard.blocked[0]!.method} ${guard.blocked[0]!.url}), which may be why.`
+      : '';
 
     const reproduction = steps.filter((s) => s.status !== 'skipped').map((s) => s.description);
     const failedStep = steps.find((s) => s.status === 'failed');
@@ -343,9 +431,13 @@ export async function runJourney(
           provenance: 'observed',
           url,
           viewport: vp.name,
-          description: failedStep
-            ? `Step ${failedStep.index + 1} (${failedStep.description}) failed: ${failedStep.error}`
-            : `All steps ran, but ${unmet.length} success criterion/criteria were not met: ${unmet.map((c) => `${c.description}${c.detail ? ` (${c.detail})` : ''}`).join('; ')}.`,
+          description: `${
+            failedStep
+              ? `Step ${failedStep.index + 1} (${failedStep.description}) failed: ${failedStep.error}`
+              : `All steps ran, but ${unmet.length} success criterion/criteria were not met: ${unmet.map((c) => `${c.description}${c.detail ? ` (${c.detail})` : ''}`).join('; ')}.`
+          }${blockedNote}`,
+          // A goal missed because Jourilo itself stopped a request is not evidence that the site is broken.
+          ...(blockedNote ? { confidence: 'low' as const } : {}),
           impact: spec.goal
             ? `People trying to ${spec.goal} cannot complete it.`
             : 'People cannot complete this task.',
