@@ -37,13 +37,55 @@
       "rule": "jourilo/dialog-focus-return",
       "path": "/accessible",
       "why": "focus returns to the opener"
+    },
+    {
+      "rule": "jourilo/dialog-focus",
+      "path": "/anchors",
+      "why": "in-page anchors scroll the page; no dialog opens (real-site false positive, 2026-10-31)"
+    },
+    {
+      "rule": "jourilo/dialog-role",
+      "path": "/anchors",
+      "why": "in-page anchors scroll the page; no dialog opens (real-site false positive, 2026-10-31)"
+    },
+    {
+      "rule": "jourilo/dialog-escape",
+      "path": "/anchors",
+      "why": "in-page anchors scroll the page; no dialog opens (real-site false positive, 2026-10-31)"
+    },
+    {
+      "rule": "jourilo/dialog-focus-return",
+      "path": "/anchors",
+      "why": "in-page anchors scroll the page; no dialog opens (real-site false positive, 2026-10-31)"
+    },
+    {
+      "rule": "jourilo/dialog-escape",
+      "path": "/launcher",
+      "why": "a layer added on open stays after the dialog closes; the dialog itself closes on Escape (real-site false positive, 2026-10-31)"
+    },
+    {
+      "rule": "jourilo/dialog-focus",
+      "path": "/launcher",
+      "why": "a layer added on open stays after the dialog closes; the dialog itself closes on Escape (real-site false positive, 2026-10-31)"
+    },
+    {
+      "rule": "jourilo/dialog-focus-return",
+      "path": "/launcher",
+      "why": "a layer added on open stays after the dialog closes; the dialog itself closes on Escape (real-site false positive, 2026-10-31)"
+    },
+    {
+      "rule": "jourilo/dialog-role",
+      "path": "/launcher",
+      "why": "a layer added on open stays after the dialog closes; the dialog itself closes on Escape (real-site false positive, 2026-10-31)"
     }
   ],
   "maxDefects": {
     "minSeverity": "moderate",
     "count": 0,
     "paths": [
-      "/accessible"
+      "/accessible",
+      "/anchors",
+      "/launcher"
     ]
   }
 }

@@ -117,6 +117,22 @@ viewports, 13 s:
   production).
 - 6 "needs review" items (axe `incomplete`: text over images/gradients, video captions) were left for a person.
 
+## 3b. Real applications for 1.0 (2026-10-31, authorized, read-only)
+
+Three of the maintainer's own projects, audited from local builds or read as source; nothing was modified and the
+run data stayed outside this repository. Each engine defect found became a fixture that fails on the old code and
+passes on the new one.
+
+| Application                                                  | What ran                               | Engine defects found                                                                                                                                                                                                                                                                                                                     | Fix and regression fixture                                                                                                                                                                                  |
+| ------------------------------------------------------------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Portfolio (Next.js static export)                            | audit, 8 pages × 2 viewports, `--repo` | 9 false "dialog" defects (serious): a skip link with a Turkish target (`#icerik`) and numbered section anchors were operated as lightbox triggers; scrolling moved absolutely positioned decorations, which then looked like a new overlay.                                                                                              | Anchors whose target is on screen are navigation, not triggers; overlay signatures use page coordinates. `widgets-lab/anchors`                                                                              |
+| Product site (static HTML, Turkish and English, no `/` page) | audit, `--pages 8`                     | (1) only 2 pages found: the sitemap lists production URLs, which were ignored as another origin; (2) `/` reported as a broken page although the build has none (production redirects it); (3) 6 false "Escape does not close the dialog" defects: the dialog closed, but a hint layer it added stayed and was taken for an open overlay. | (1) production sitemap paths are mapped onto a local target; (2) a missing local start page is a limitation; (3) the close check looks at the dialog that opened. `multilang-build`, `widgets-lab/launcher` |
+| Laravel 12 + Livewire + Filament 4 back office               | discover                               | 6 of 50 routes found; no auth, roles or admin panel (see the evidence log in RELEASE-1.0.md).                                                                                                                                                                                                                                            | Laravel route files, groups, Livewire/Inertia/Volt, Filament panels and guards. `repos/laravel-portal`                                                                                                      |
+
+After the fixes, the portfolio's remaining defects are the three confirmed in section 3 (text contrast, a
+scrollable region without keyboard access, content outside landmarks); the product site has no defects on its seven pages (18 axe "needs review" items and 2 conversion
+hypotheses are listed separately, as designed); the Laravel profile matches the routes by hand count.
+
 ## 4. Claude Code plugin (headless)
 
 `claude -p "/jourilo:discover fixtures/repos/next-saas" --plugin-dir ./plugin` loaded the plugin, ran the real

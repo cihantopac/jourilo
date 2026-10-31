@@ -53,6 +53,8 @@ export interface CrawlResult {
   skipped: { url: string; reason: string }[];
   robots: RobotsRules | null;
   sitemapUrls: number;
+  /** The sitemap's own origin when its URLs were mapped onto a local target. */
+  sitemapRebasedFrom: string | null;
 }
 
 async function fetchText(url: string, timeoutMs: number, policy: AddressPolicy): Promise<string | null> {
@@ -77,26 +79,38 @@ async function sitemapUrls(
   robots: RobotsRules | null,
   timeoutMs: number,
   policy: AddressPolicy,
-): Promise<string[]> {
+): Promise<{ urls: string[]; rebasedFrom: string | null }> {
+  // A local build usually carries its production sitemap (https://example.com/...): on a local target, its paths are
+  // mapped onto the local server, because they describe the same build.
+  const local = policy.target === 'local';
+  const rebase = (raw: string): string | null => {
+    try {
+      const u = new URL(raw, origin);
+      if (u.origin === origin) return u.toString();
+      return local ? new URL(`${u.pathname}${u.search}`, origin).toString() : null;
+    } catch {
+      return null;
+    }
+  };
   const candidates = [...(robots?.sitemaps ?? []), `${origin}/sitemap.xml`];
   const urls: string[] = [];
+  let rebasedFrom: string | null = null;
   for (const sm of candidates.slice(0, 3)) {
-    let smUrl: URL;
-    try {
-      smUrl = new URL(sm);
-    } catch {
-      continue;
-    }
-    if (smUrl.origin !== origin) continue;
-    const xml = await fetchText(smUrl.toString(), timeoutMs, policy);
+    const smUrl = rebase(sm);
+    if (!smUrl) continue;
+    const xml = await fetchText(smUrl, timeoutMs, policy);
     if (!xml) continue;
     for (const m of xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)) {
-      urls.push(m[1]!.replace(/&amp;/g, '&'));
+      const loc = m[1]!.replace(/&amp;/g, '&');
+      const mapped = rebase(loc);
+      if (!mapped) continue;
+      if (mapped !== loc) rebasedFrom ??= new URL(loc).origin;
+      urls.push(mapped);
       if (urls.length >= 500) break;
     }
     if (urls.length) break;
   }
-  return urls;
+  return { urls, rebasedFrom };
 }
 
 /** Breadth-first crawl in a real browser so client-rendered links are found. */
@@ -126,7 +140,7 @@ export async function crawl(ctx: BrowserContext, start: string, opts: CrawlOptio
   push(start, 0);
   for (const extra of opts.include ?? []) push(new URL(extra, start).toString(), 0);
   const fromSitemap = await sitemapUrls(origin, robots, opts.timeoutMs, opts.policy);
-  for (const u of fromSitemap) push(u, 1);
+  for (const u of fromSitemap.urls) push(u, 1);
 
   // Visit pages (best first) to find more links, until we have enough candidates.
   const visited = new Set<string>();
@@ -177,5 +191,11 @@ export async function crawl(ctx: BrowserContext, start: string, opts: CrawlOptio
     if (picked.length >= opts.maxPages) break;
     if (!picked.includes(p)) picked.push(p);
   }
-  return { pages: picked, skipped, robots, sitemapUrls: fromSitemap.length };
+  return {
+    pages: picked,
+    skipped,
+    robots,
+    sitemapUrls: fromSitemap.urls.length,
+    sitemapRebasedFrom: fromSitemap.rebasedFrom,
+  };
 }

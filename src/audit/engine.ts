@@ -147,6 +147,10 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       const robotsSkips = found.skipped.filter((s) => s.reason === 'robots.txt').length;
       if (robotsSkips)
         limitations.push(`${robotsSkips} URL(s) were skipped because robots.txt disallows them.`);
+      if (found.sitemapRebasedFrom)
+        limitations.push(
+          `The sitemap lists ${found.sitemapRebasedFrom} URLs; their paths were audited on the local server instead.`,
+        );
       if (!found.robots && opts.respectRobots && hostClass === 'public')
         limitations.push('No robots.txt was found; crawling stayed on the target origin.');
       if (!urls.length) urls = [{ url: target.toString() }];
@@ -182,6 +186,19 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         }
       } finally {
         await ctx.close().catch(() => undefined);
+      }
+    }
+
+    // A local build often has no page at "/" (the production server redirects it, e.g. to /en/). When other pages
+    // were found, that is stated rather than reported as a broken page of the site.
+    if (hostClass === 'local' && !opts.urls?.length) {
+      const startPath = target.pathname;
+      const missing = observations.filter((o) => o.status === 404 && new URL(o.url).pathname === startPath);
+      if (missing.length && observations.some((o) => (o.status ?? 200) < 400)) {
+        for (const m of missing) observations.splice(observations.indexOf(m), 1);
+        limitations.push(
+          `${startPath} returned 404 on this local server (no start page in the build); it was not audited. The other pages were found through the sitemap and links.`,
+        );
       }
     }
 

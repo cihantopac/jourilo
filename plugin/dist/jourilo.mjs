@@ -41294,6 +41294,16 @@ var TRIGGERS = `(() => {
   };
   return Array.from(document.querySelectorAll('[aria-haspopup]:not([aria-haspopup="false"]), [aria-expanded], [aria-controls], a[href="#"], a[href^="#"]:not([href="#main"]):not([href^="#content"]), a[href^="javascript:"]'))
     .filter((e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden' && !e.disabled && /^(BUTTON|A|SUMMARY)$|^button$/i.test(e.tagName === 'DIV' || e.tagName === 'SPAN' ? (e.getAttribute('role') || '') : e.tagName))
+    // A link to a section that is already on screen is in-page navigation (skip links, table of contents), not a
+    // popup trigger; following it only scrolls.
+    .filter((e) => {
+      const href = e.tagName === 'A' ? e.getAttribute('href') || '' : '';
+      if (!/^#./.test(href) || e.hasAttribute('aria-haspopup') || e.hasAttribute('aria-expanded') || e.hasAttribute('aria-controls')) return true;
+      let id = href.slice(1);
+      try { id = decodeURIComponent(id); } catch {}
+      const target = document.getElementById(id) || document.getElementsByName(id)[0];
+      return !(target && target.getClientRects().length > 0 && getComputedStyle(target).visibility !== 'hidden');
+    })
     .slice(0, 8)
     .map((e) => {
       const r = e.getBoundingClientRect();
@@ -41315,11 +41325,17 @@ var SNAPSHOT_LAYERS = `(() => {
     return (cs.position === 'fixed' || cs.position === 'absolute') && e.getClientRects().length > 0 && cs.visibility !== 'hidden' && big(e);
   });
   // Signatures, not node identity: frameworks that re-render replace nodes without anything new appearing.
-  const sig = (e) => { const r = e.getBoundingClientRect(); return e.tagName + '.' + String(e.className) + '|' + Math.round(r.left) + ',' + Math.round(r.top) + ',' + Math.round(r.width) + ',' + Math.round(r.height); };
+  // Page coordinates for absolutely positioned layers, so scrolling does not make an existing layer look new.
+  const sig = (e) => { const r = e.getBoundingClientRect(); const fixed = getComputedStyle(e).position === 'fixed'; return e.tagName + '.' + String(e.className) + '|' + Math.round(r.left + (fixed ? 0 : scrollX)) + ',' + Math.round(r.top + (fixed ? 0 : scrollY)) + ',' + Math.round(r.width) + ',' + Math.round(r.height); };
   window.__jouriloLayers = new Set(layers.map(sig));
 })()`;
-var STATE = `(controls) => {
-  const visible = (e) => !!e && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+var STATE = `(controls, mode) => {
+  const visible = (e) => !!e && e.isConnected && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+  if (mode === 'same') {
+    const d = window.__jouriloDialog;
+    const ae = document.activeElement;
+    return { dialogOpen: visible(d) && (d.tagName !== 'DIALOG' || d.open), unlabelled: false, focusInDialog: !!d && !!ae && d.contains(ae), focusables: 0, controlledVisible: null, activeSelector: ae && ae !== document.body ? (ae.id ? '#' + ae.id : ae.tagName.toLowerCase()) : null };
+  }
   const dialogs = Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"], dialog[open], [aria-modal="true"]')).filter(visible);
   let d = dialogs[dialogs.length - 1] || null;
   let unlabelled = false;
@@ -41328,12 +41344,14 @@ var STATE = `(controls) => {
     const fresh = Array.from(document.querySelectorAll('body *')).filter((e) => {
       const cs = getComputedStyle(e);
       const r = e.getBoundingClientRect();
-      const sig = e.tagName + '.' + String(e.className) + '|' + Math.round(r.left) + ',' + Math.round(r.top) + ',' + Math.round(r.width) + ',' + Math.round(r.height);
+      const fixed = cs.position === 'fixed';
+      const sig = e.tagName + '.' + String(e.className) + '|' + Math.round(r.left + (fixed ? 0 : scrollX)) + ',' + Math.round(r.top + (fixed ? 0 : scrollY)) + ',' + Math.round(r.width) + ',' + Math.round(r.height);
       return (cs.position === 'fixed' || cs.position === 'absolute') && visible(e) && big(e) && !window.__jouriloLayers.has(sig);
     });
     const outer = fresh.filter((e) => !fresh.some((o) => o !== e && o.contains(e)));
     if (outer.length) { d = outer[outer.length - 1]; unlabelled = true; }
   }
+  window.__jouriloDialog = d;
   const ae = document.activeElement;
   const controlled = controls ? controls.split(/\\s+/).map((id) => document.getElementById(id)).filter(Boolean) : [];
   const focusables = d ? Array.from(d.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])')).filter(visible).length : 0;
@@ -41349,7 +41367,7 @@ var STATE = `(controls) => {
 async function checkWidgets(page) {
   const triggers = await page.evaluate(TRIGGERS);
   const out = { triggers: triggers.length, dialogs: 0, disclosures: 0, issues: [] };
-  const state = (controls) => page.evaluate(`(${STATE})(${JSON.stringify(controls)})`);
+  const state = (controls, mode = "open") => page.evaluate(`(${STATE})(${JSON.stringify(controls)}, ${JSON.stringify(mode)})`);
   for (const t of triggers) {
     if (DESTRUCTIVE.test(t.name) || FINANCIAL.test(t.name) || AVOID.test(t.name)) continue;
     const loc = page.locator(t.selector).first();
@@ -41380,7 +41398,7 @@ async function checkWidgets(page) {
         );
       } else {
         for (let k = 0; k <= after.focusables; k++) await page.keyboard.press("Tab");
-        const tabbed = await state(t.controls);
+        const tabbed = await state(t.controls, "same");
         if (tabbed.dialogOpen && !tabbed.focusInDialog)
           issue(
             "dialog-focus-escapes",
@@ -41389,7 +41407,7 @@ async function checkWidgets(page) {
       }
       await page.keyboard.press("Escape");
       await page.waitForTimeout(300);
-      const closed = await state(t.controls);
+      const closed = await state(t.controls, "same");
       if (closed.dialogOpen) {
         issue("dialog-escape", "Pressing Escape did not close the dialog.");
         await page.reload({ waitUntil: "load" }).catch(() => void 0);
@@ -42254,25 +42272,35 @@ async function loadRobots(origin, policy, timeoutMs = 8e3) {
   return text === null ? null : parseRobots(text, USER_AGENT_TOKEN);
 }
 async function sitemapUrls(origin, robots, timeoutMs, policy) {
+  const local = policy.target === "local";
+  const rebase = (raw) => {
+    try {
+      const u = new URL(raw, origin);
+      if (u.origin === origin) return u.toString();
+      return local ? new URL(`${u.pathname}${u.search}`, origin).toString() : null;
+    } catch {
+      return null;
+    }
+  };
   const candidates = [...robots?.sitemaps ?? [], `${origin}/sitemap.xml`];
   const urls = [];
+  let rebasedFrom = null;
   for (const sm of candidates.slice(0, 3)) {
-    let smUrl;
-    try {
-      smUrl = new URL(sm);
-    } catch {
-      continue;
-    }
-    if (smUrl.origin !== origin) continue;
-    const xml = await fetchText(smUrl.toString(), timeoutMs, policy);
+    const smUrl = rebase(sm);
+    if (!smUrl) continue;
+    const xml = await fetchText(smUrl, timeoutMs, policy);
     if (!xml) continue;
     for (const m of xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)) {
-      urls.push(m[1].replace(/&amp;/g, "&"));
+      const loc = m[1].replace(/&amp;/g, "&");
+      const mapped = rebase(loc);
+      if (!mapped) continue;
+      if (mapped !== loc) rebasedFrom ??= new URL(loc).origin;
+      urls.push(mapped);
       if (urls.length >= 500) break;
     }
     if (urls.length) break;
   }
-  return urls;
+  return { urls, rebasedFrom };
 }
 async function crawl(ctx, start, opts) {
   const origin = new URL(start).origin;
@@ -42300,7 +42328,7 @@ async function crawl(ctx, start, opts) {
   push(start, 0);
   for (const extra of opts.include ?? []) push(new URL(extra, start).toString(), 0);
   const fromSitemap = await sitemapUrls(origin, robots, opts.timeoutMs, opts.policy);
-  for (const u of fromSitemap) push(u, 1);
+  for (const u of fromSitemap.urls) push(u, 1);
   const visited = /* @__PURE__ */ new Set();
   const page = await ctx.newPage();
   try {
@@ -42341,7 +42369,13 @@ async function crawl(ctx, start, opts) {
     if (picked.length >= opts.maxPages) break;
     if (!picked.includes(p)) picked.push(p);
   }
-  return { pages: picked, skipped, robots, sitemapUrls: fromSitemap.length };
+  return {
+    pages: picked,
+    skipped,
+    robots,
+    sitemapUrls: fromSitemap.urls.length,
+    sitemapRebasedFrom: fromSitemap.rebasedFrom
+  };
 }
 
 // src/integrations/context.ts
@@ -43752,6 +43786,10 @@ async function runAudit(ws, opts) {
       const robotsSkips = found.skipped.filter((s) => s.reason === "robots.txt").length;
       if (robotsSkips)
         limitations.push(`${robotsSkips} URL(s) were skipped because robots.txt disallows them.`);
+      if (found.sitemapRebasedFrom)
+        limitations.push(
+          `The sitemap lists ${found.sitemapRebasedFrom} URLs; their paths were audited on the local server instead.`
+        );
       if (!found.robots && opts.respectRobots && hostClass === "public")
         limitations.push("No robots.txt was found; crawling stayed on the target origin.");
       if (!urls.length) urls = [{ url: target.toString() }];
@@ -43782,6 +43820,16 @@ async function runAudit(ws, opts) {
         }
       } finally {
         await ctx.close().catch(() => void 0);
+      }
+    }
+    if (hostClass === "local" && !opts.urls?.length) {
+      const startPath = target.pathname;
+      const missing = observations.filter((o) => o.status === 404 && new URL(o.url).pathname === startPath);
+      if (missing.length && observations.some((o) => (o.status ?? 200) < 400)) {
+        for (const m of missing) observations.splice(observations.indexOf(m), 1);
+        limitations.push(
+          `${startPath} returned 404 on this local server (no start page in the build); it was not audited. The other pages were found through the sitemap and links.`
+        );
       }
     }
     const runs2 = Math.max(1, Math.min(9, Math.round(opts.runs ?? 1)));

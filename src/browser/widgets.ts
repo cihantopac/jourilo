@@ -46,6 +46,16 @@ const TRIGGERS = `(() => {
   };
   return Array.from(document.querySelectorAll('[aria-haspopup]:not([aria-haspopup="false"]), [aria-expanded], [aria-controls], a[href="#"], a[href^="#"]:not([href="#main"]):not([href^="#content"]), a[href^="javascript:"]'))
     .filter((e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden' && !e.disabled && /^(BUTTON|A|SUMMARY)$|^button$/i.test(e.tagName === 'DIV' || e.tagName === 'SPAN' ? (e.getAttribute('role') || '') : e.tagName))
+    // A link to a section that is already on screen is in-page navigation (skip links, table of contents), not a
+    // popup trigger; following it only scrolls.
+    .filter((e) => {
+      const href = e.tagName === 'A' ? e.getAttribute('href') || '' : '';
+      if (!/^#./.test(href) || e.hasAttribute('aria-haspopup') || e.hasAttribute('aria-expanded') || e.hasAttribute('aria-controls')) return true;
+      let id = href.slice(1);
+      try { id = decodeURIComponent(id); } catch {}
+      const target = document.getElementById(id) || document.getElementsByName(id)[0];
+      return !(target && target.getClientRects().length > 0 && getComputedStyle(target).visibility !== 'hidden');
+    })
     .slice(0, 8)
     .map((e) => {
       const r = e.getBoundingClientRect();
@@ -70,12 +80,20 @@ const SNAPSHOT_LAYERS = `(() => {
     return (cs.position === 'fixed' || cs.position === 'absolute') && e.getClientRects().length > 0 && cs.visibility !== 'hidden' && big(e);
   });
   // Signatures, not node identity: frameworks that re-render replace nodes without anything new appearing.
-  const sig = (e) => { const r = e.getBoundingClientRect(); return e.tagName + '.' + String(e.className) + '|' + Math.round(r.left) + ',' + Math.round(r.top) + ',' + Math.round(r.width) + ',' + Math.round(r.height); };
+  // Page coordinates for absolutely positioned layers, so scrolling does not make an existing layer look new.
+  const sig = (e) => { const r = e.getBoundingClientRect(); const fixed = getComputedStyle(e).position === 'fixed'; return e.tagName + '.' + String(e.className) + '|' + Math.round(r.left + (fixed ? 0 : scrollX)) + ',' + Math.round(r.top + (fixed ? 0 : scrollY)) + ',' + Math.round(r.width) + ',' + Math.round(r.height); };
   window.__jouriloLayers = new Set(layers.map(sig));
 })()`;
 
-const STATE = `(controls) => {
-  const visible = (e) => !!e && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+// mode "open": find a dialog that opened (a real one, else a new overlay layer); "same": is the dialog found by the
+// last "open" call still shown? Checking only that element keeps other layers (toasts, launchers) from looking open.
+const STATE = `(controls, mode) => {
+  const visible = (e) => !!e && e.isConnected && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+  if (mode === 'same') {
+    const d = window.__jouriloDialog;
+    const ae = document.activeElement;
+    return { dialogOpen: visible(d) && (d.tagName !== 'DIALOG' || d.open), unlabelled: false, focusInDialog: !!d && !!ae && d.contains(ae), focusables: 0, controlledVisible: null, activeSelector: ae && ae !== document.body ? (ae.id ? '#' + ae.id : ae.tagName.toLowerCase()) : null };
+  }
   const dialogs = Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"], dialog[open], [aria-modal="true"]')).filter(visible);
   let d = dialogs[dialogs.length - 1] || null;
   let unlabelled = false;
@@ -84,12 +102,14 @@ const STATE = `(controls) => {
     const fresh = Array.from(document.querySelectorAll('body *')).filter((e) => {
       const cs = getComputedStyle(e);
       const r = e.getBoundingClientRect();
-      const sig = e.tagName + '.' + String(e.className) + '|' + Math.round(r.left) + ',' + Math.round(r.top) + ',' + Math.round(r.width) + ',' + Math.round(r.height);
+      const fixed = cs.position === 'fixed';
+      const sig = e.tagName + '.' + String(e.className) + '|' + Math.round(r.left + (fixed ? 0 : scrollX)) + ',' + Math.round(r.top + (fixed ? 0 : scrollY)) + ',' + Math.round(r.width) + ',' + Math.round(r.height);
       return (cs.position === 'fixed' || cs.position === 'absolute') && visible(e) && big(e) && !window.__jouriloLayers.has(sig);
     });
     const outer = fresh.filter((e) => !fresh.some((o) => o !== e && o.contains(e)));
     if (outer.length) { d = outer[outer.length - 1]; unlabelled = true; }
   }
+  window.__jouriloDialog = d;
   const ae = document.activeElement;
   const controlled = controls ? controls.split(/\\s+/).map((id) => document.getElementById(id)).filter(Boolean) : [];
   const focusables = d ? Array.from(d.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])')).filter(visible).length : 0;
@@ -123,8 +143,8 @@ export async function checkWidgets(page: Page): Promise<WidgetCheck> {
     rect: Rect;
   }[];
   const out: WidgetCheck = { triggers: triggers.length, dialogs: 0, disclosures: 0, issues: [] };
-  const state = (controls: string | null) =>
-    page.evaluate(`(${STATE})(${JSON.stringify(controls)})`) as Promise<State>;
+  const state = (controls: string | null, mode: 'open' | 'same' = 'open') =>
+    page.evaluate(`(${STATE})(${JSON.stringify(controls)}, ${JSON.stringify(mode)})`) as Promise<State>;
   for (const t of triggers) {
     if (DESTRUCTIVE.test(t.name) || FINANCIAL.test(t.name) || AVOID.test(t.name)) continue;
     const loc = page.locator(t.selector).first();
@@ -158,7 +178,7 @@ export async function checkWidgets(page: Page): Promise<WidgetCheck> {
       } else {
         // A modal layer must keep Tab inside it while it is open.
         for (let k = 0; k <= after.focusables; k++) await page.keyboard.press('Tab');
-        const tabbed = await state(t.controls);
+        const tabbed = await state(t.controls, 'same');
         if (tabbed.dialogOpen && !tabbed.focusInDialog)
           issue(
             'dialog-focus-escapes',
@@ -167,7 +187,7 @@ export async function checkWidgets(page: Page): Promise<WidgetCheck> {
       }
       await page.keyboard.press('Escape');
       await page.waitForTimeout(300);
-      const closed = await state(t.controls);
+      const closed = await state(t.controls, 'same');
       if (closed.dialogOpen) {
         issue('dialog-escape', 'Pressing Escape did not close the dialog.');
         // Leave the page as we found it so later checks are not affected.
