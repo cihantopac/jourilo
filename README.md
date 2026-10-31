@@ -28,29 +28,30 @@ _user input_.
 
 ## Quick start
 
-Requires Node.js ≥ 20.10. Jourilo is not on npm yet; install from the repository.
+Requires Node.js ≥ 20.10.
 
 ```bash
-git clone https://github.com/cihantopac/jourilo && cd jourilo && npm install
+npm install -g jourilo
 ```
 
 ```bash
-node plugin/dist/jourilo.mjs setup
+jourilo setup
 ```
 
 `setup` downloads Playwright's Chromium (one time, ~150 MB). Alternatively use an installed Chrome with
-`--browser chrome`.
+`--browser chrome`. To run without a global install, use `npx jourilo <command>`; from a clone of this repository,
+`node plugin/dist/jourilo.mjs <command>`.
 
 Audit a local static build (served on 127.0.0.1) and map findings to its source:
 
 ```bash
-node plugin/dist/jourilo.mjs audit ./dist --repo .
+jourilo audit ./dist --repo .
 ```
 
 Audit a running app or a website (read-only, respects robots.txt):
 
 ```bash
-node plugin/dist/jourilo.mjs audit http://localhost:3000 --viewports desktop,mobile,reflow
+jourilo audit http://localhost:3000 --viewports desktop,mobile,reflow
 ```
 
 The report is written to `.jourilo/runs/<run-id>/report.html` (git-ignored). Add `--json` to any command for

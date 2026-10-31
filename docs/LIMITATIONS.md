@@ -66,4 +66,3 @@ Stated so nobody mistakes silence for a pass.
 ## Other
 
 - No icon/brand identity yet for the plugin listing.
-- Not yet published to npm; no tagged release yet.

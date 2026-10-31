@@ -2,10 +2,10 @@
 
 Use this file to resume work in a new session: read it, then `docs/ROADMAP.md` and `docs/LIMITATIONS.md`.
 
-## State on 2026-10-30 (v0.1.0, unreleased)
+## State on 2026-10-31 (v0.1.0 released)
 
-Repository: https://github.com/cihantopac/jourilo (public), branch `main`. No tagged release, not on npm.
-Build: `npm run ci` green on macOS.
+Repository: https://github.com/cihantopac/jourilo (public), branch `main`. Tag `v0.1.0`, GitHub release and npm
+package `jourilo@0.1.0` published on 2026-10-31. CI green on Linux, macOS and Windows (Node 20 and 22).
 
 ### Done (each with tests and a real run)
 
