@@ -286,3 +286,58 @@ describe('test data and URLs', () => {
     expect(valueFor(f('checkbox', 'terms'))).toBeNull();
   });
 });
+
+describe('journey stability (--repeat)', () => {
+  const spec = {
+    version: 1 as const,
+    id: 'checkout',
+    name: 'Checkout',
+    start: '/',
+    steps: [],
+    success: [{ description: 'x', noPageErrors: true }],
+  };
+  const attempt = (status: 'passed' | 'failed', ms = 100) => ({
+    result: {
+      id: 'checkout',
+      name: 'Checkout',
+      viewport: 'desktop',
+      status,
+      steps: [
+        {
+          index: 0,
+          action: 'click',
+          description: 'Click "Pay"',
+          status,
+          durationMs: ms,
+          url: 'http://127.0.0.1:3000/cart',
+          ...(status === 'failed' ? { error: 'timeout' } : {}),
+        },
+      ],
+      successCriteria: [],
+      durationMs: ms,
+    },
+    findings: [],
+  });
+  it('reports mixed outcomes as flaky, with a review item', async () => {
+    const { summarizeAttempts } = await import('../../src/cli/commands/journeys.js');
+    const r = summarizeAttempts(spec, [attempt('passed'), attempt('failed'), attempt('passed')] as never);
+    expect(r.result.stability).toBe('flaky');
+    expect(r.result.status).toBe('failed');
+    expect(r.result.attempts!.map((a) => a.status)).toEqual(['passed', 'failed', 'passed']);
+    expect(r.findings.map((f) => [f.ruleId, f.kind, f.title])).toEqual([
+      ['journey/flaky', 'needs-review', 'Journey "Checkout" passed 2 of 3 times'],
+    ]);
+  });
+  it('keeps consistent outcomes as they are', async () => {
+    const { summarizeAttempts } = await import('../../src/cli/commands/journeys.js');
+    expect(summarizeAttempts(spec, [attempt('passed'), attempt('passed')] as never).result.stability).toBe(
+      'stable',
+    );
+    const failed = summarizeAttempts(spec, [attempt('failed'), attempt('failed')] as never);
+    expect([failed.result.status, failed.result.stability, failed.findings.length]).toEqual([
+      'failed',
+      'stable',
+      0,
+    ]);
+  });
+});

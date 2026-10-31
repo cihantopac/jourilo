@@ -23,7 +23,7 @@ import {
   previewRollback,
   rollbackTransaction,
 } from '../../repair/transaction.js';
-import { compareRuns } from '../../report/compare.js';
+import { compareRuns, type MetricDelta } from '../../report/compare.js';
 import { writeReports } from '../../report/index.js';
 import { type Command, flag, list, str } from '../framework.js';
 
@@ -125,6 +125,23 @@ Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
   },
 };
 
+function metricSummary(metrics: MetricDelta[]): string[] {
+  if (!metrics.length) return [];
+  const n = (v: MetricDelta['verdict']) => metrics.filter((m) => m.verdict === v);
+  const lines = [
+    `  lab metrics: ${n('improved').length} improved · ${n('regressed').length} regressed · ${n('noise').length} within noise · ${n('unconfirmed').length} unconfirmed`,
+    ...[...n('improved'), ...n('regressed')].map(
+      (m) =>
+        `    ${m.verdict === 'improved' ? '↓' : '↑'} ${m.name} ${new URL(m.url).pathname} (${m.viewport}): ${m.before} → ${m.after}`,
+    ),
+  ];
+  if (n('unconfirmed').length)
+    lines.push(
+      '    Unconfirmed changes come from single visits; repeat with `jourilo audit … --runs 5` to confirm.',
+    );
+  return lines;
+}
+
 export const verify: Command = {
   name: 'verify',
   summary:
@@ -166,6 +183,8 @@ export const verify: Command = {
         allowPrivate: base.settings.hostClass === 'private',
         keyboard: base.settings.keyboard !== false,
         throttle: base.settings.throttle === true,
+        // Same number of visits as the baseline, so medians are compared with medians.
+        runs: typeof base.settings.runs === 'number' ? base.settings.runs : 1,
         timeoutMs: 30_000,
         mask: [],
         mode: base.mode,
@@ -201,6 +220,7 @@ export const verify: Command = {
           `  fixed ${cmp.fixed.length} · new ${cmp.introduced.length} · still present ${cmp.persisting.length}`,
           ...cmp.fixed.map((f) => `  ✓ fixed  ${f.title} (${new URL(f.url).pathname})`),
           ...cmp.introduced.map((f) => `  ✗ new    ${f.severity} ${f.title} (${new URL(f.url).pathname})`),
+          ...metricSummary(cmp.metrics),
           cmp.regressionFree
             ? '  No new serious/critical defects.'
             : '  ⚠ Regression: new serious/critical defects.',

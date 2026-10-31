@@ -112,3 +112,71 @@ describe('text formats', () => {
     expect(sarif.runs[0]!.results[1]!.level).toBe('note');
   });
 });
+
+describe('metric verdicts', () => {
+  it('separates real changes from noise', async () => {
+    const { metricVerdict } = await import('../../src/report/compare.js');
+    const m = (value: number, range?: [number, number]) => ({
+      name: 'LCP',
+      value,
+      unit: 'ms' as const,
+      source: 'lab' as const,
+      ...(range ? { runs: 5, range } : {}),
+    });
+    expect(metricVerdict('LCP', m(2400, [2300, 2600]), m(1200, [1100, 1300]))).toBe('improved');
+    expect(metricVerdict('LCP', m(1200, [1100, 1300]), m(2400, [2300, 2600]))).toBe('regressed');
+    expect(metricVerdict('LCP', m(2400, [2000, 2900]), m(2200, [1900, 2500]))).toBe('noise');
+    expect(metricVerdict('LCP', m(2400), m(2350))).toBe('noise');
+    expect(metricVerdict('LCP', m(2400), m(1200))).toBe('unconfirmed');
+    expect(
+      metricVerdict(
+        'Transfer',
+        { ...m(100_000), name: 'Transfer', unit: 'bytes' },
+        { ...m(60_000), name: 'Transfer', unit: 'bytes' },
+      ),
+    ).toBe('improved');
+  });
+});
+
+describe('report sections for safety and stability', () => {
+  const r = run([], {
+    network: {
+      blocked: [{ host: '<img src=x onerror=alert(1)>', port: 6379, reason: 'loopback refused' }],
+      escaped: [{ url: 'http://127.0.0.1/admin', reason: 'redirect refused' }],
+    },
+    journeys: [
+      {
+        id: 'pay',
+        name: 'Pay',
+        viewport: 'desktop',
+        status: 'failed',
+        steps: [],
+        successCriteria: [],
+        durationMs: 10,
+        stability: 'flaky',
+        attempts: [
+          { status: 'passed', durationMs: 5 },
+          { status: 'failed', durationMs: 5 },
+        ],
+        blockedRequests: [
+          { method: 'DELETE', url: 'https://example.test/api/x', reason: '<b>irreversible</b>' },
+        ],
+      },
+    ],
+  });
+  it('shows guard activity, flaky journeys and the manual review list, escaped', () => {
+    const html = renderHtml(r);
+    expect(html).toContain('Network safety');
+    expect(html).toContain('Security event');
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(html).not.toContain('<img src=x onerror');
+    expect(html).toContain('>flaky<');
+    expect(html).toContain('2 attempts: passed, failed');
+    expect(html).toContain('&lt;b&gt;irreversible&lt;/b&gt;');
+    expect(html).toContain('Still needs a person');
+    const md = renderMarkdown(r);
+    expect(md).toContain('## Network safety');
+    expect(md).toContain('## Still needs a person');
+    expect(md).toContain('2.5.7 Dragging movements');
+  });
+});

@@ -15,6 +15,11 @@
       "rule": "jourilo/dialog-escape",
       "path": "/broken",
       "why": "Escape does nothing"
+    },
+    {
+      "rule": "jourilo/composite-keyboard",
+      "path": "/composite-broken",
+      "why": "roving tab list and radio group without arrow keys"
     }
   ],
   "mustNotFind": [
@@ -77,6 +82,11 @@
       "rule": "jourilo/dialog-role",
       "path": "/launcher",
       "why": "a layer added on open stays after the dialog closes; the dialog itself closes on Escape (real-site false positive, 2026-10-31)"
+    },
+    {
+      "rule": "jourilo/composite-keyboard",
+      "path": "/composite-ok",
+      "why": "arrow-key tabs, aria-activedescendant list box, all-tabbable tabs"
     }
   ],
   "maxDefects": {
@@ -85,7 +95,8 @@
     "paths": [
       "/accessible",
       "/anchors",
-      "/launcher"
+      "/launcher",
+      "/composite-ok"
     ]
   }
 }

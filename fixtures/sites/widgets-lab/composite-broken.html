@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Plans (broken composites) – Widgets lab</title><link rel="stylesheet" href="/style.css">
+<style>[role="tab"][aria-selected="true"]{font-weight:700} [role="radio"]{display:inline-block;padding:6px 10px;border:1px solid #555;margin-right:4px}</style></head>
+<body>
+<!-- Roving tabindex without the arrow keys: only the current tab and the checked radio are in the Tab order, and
+     nothing handles ArrowLeft/ArrowRight, so the other items cannot be reached with a keyboard. -->
+<main><h1>Plans</h1><p><a href="/">Back to the lab</a></p>
+<div role="tablist" aria-label="Billing period">
+  <button role="tab" id="t1" aria-selected="true" aria-controls="p1" tabindex="0">Monthly</button>
+  <button role="tab" id="t2" aria-selected="false" aria-controls="p2" tabindex="-1">Yearly</button>
+  <button role="tab" id="t3" aria-selected="false" aria-controls="p3" tabindex="-1">Lifetime</button>
+</div>
+<div role="tabpanel" id="p1" aria-labelledby="t1"><p>$19 per month.</p></div>
+<div role="tabpanel" id="p2" aria-labelledby="t2" hidden><p>$190 per year.</p></div>
+<div role="tabpanel" id="p3" aria-labelledby="t3" hidden><p>$490 once.</p></div>
+<p id="size-label">Team size</p>
+<div role="radiogroup" aria-labelledby="size-label">
+  <span role="radio" aria-checked="true" tabindex="0">1–5</span>
+  <span role="radio" aria-checked="false" tabindex="-1">6–20</span>
+  <span role="radio" aria-checked="false" tabindex="-1">21+</span>
+</div>
+</main>
+<script>
+  // Mouse only.
+  document.querySelectorAll('[role="tab"]').forEach(function (t) {
+    t.addEventListener('click', function () {
+      document.querySelectorAll('[role="tab"]').forEach(function (o) { o.setAttribute('aria-selected', String(o === t)); o.tabIndex = o === t ? 0 : -1; document.getElementById(o.getAttribute('aria-controls')).hidden = o !== t; });
+    });
+  });
+  document.querySelectorAll('[role="radio"]').forEach(function (r) {
+    r.addEventListener('click', function () { document.querySelectorAll('[role="radio"]').forEach(function (o) { o.setAttribute('aria-checked', String(o === r)); o.tabIndex = o === r ? 0 : -1; }); });
+  });
+</script>
+</body>
+</html>

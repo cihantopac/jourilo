@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { runAudit, summarize } from '../../audit/engine.js';
-import { mergeFindings } from '../../audit/finding.js';
+import { makeFinding, mergeFindings } from '../../audit/finding.js';
 import type { BrowserName } from '../../browser/runtime.js';
 import { networkLimitations, openGuardedBrowser } from '../../browser/session.js';
 import { parseViewports } from '../../browser/viewports.js';
@@ -132,6 +132,51 @@ async function suggest(ctx: Context) {
   };
 }
 
+/**
+ * One result for several attempts of the same journey. All passed → passed; all failed → the first failure; mixed →
+ * failed and marked flaky, with a review item that says how often it passed.
+ */
+export function summarizeAttempts(
+  spec: JourneySpec,
+  attempts: { result: JourneyResult; findings: Finding[] }[],
+): { result: JourneyResult; findings: Finding[] } {
+  if (attempts.length === 1) return attempts[0]!;
+  const passed = attempts.filter((a) => a.result.status === 'passed').length;
+  const rep = attempts.find((a) => a.result.status !== 'passed') ?? attempts[0]!;
+  const result: JourneyResult = {
+    ...rep.result,
+    attempts: attempts.map((a) => ({ status: a.result.status, durationMs: a.result.durationMs })),
+    stability: passed === 0 || passed === attempts.length ? 'stable' : 'flaky',
+  };
+  if (result.stability === 'stable') return { result, findings: rep.findings };
+  const findings = [
+    ...rep.findings.map((f) => ({ ...f, confidence: 'low' as const })),
+    makeFinding({
+      ruleId: 'journey/flaky',
+      key: spec.id,
+      journey: spec.id,
+      title: `Journey "${spec.name}" passed ${passed} of ${attempts.length} times`,
+      category: 'reliability',
+      kind: 'needs-review',
+      severity: 'moderate',
+      confidence: 'high',
+      provenance: 'observed',
+      url: rep.result.steps.at(-1)?.url || spec.start,
+      viewport: rep.result.viewport,
+      description: `The same steps gave different outcomes across ${attempts.length} runs (${attempts.map((a) => a.result.status).join(', ')}). Either the product behaves inconsistently (race conditions, timing, data dependence) or the journey depends on timing; the failing run's evidence is attached to the journey.`,
+      impact: 'Intermittent failures reach real users and make before/after comparisons unreliable.',
+      recommendation:
+        'Compare the failing attempt with a passing one: look for requests that finish in a different order, elements that render late, or data created by an earlier run. Fix the product if it is a race; otherwise make the journey wait for the right state.',
+      standards: [],
+      evidence: [{ type: 'step', snippet: rep.result.steps.find((s) => s.status !== 'passed')?.error ?? '' }],
+      reproduction: [
+        `Run the journey ${attempts.length} times: jourilo journeys run ${spec.id} --repeat ${attempts.length}`,
+      ],
+    }),
+  ];
+  return { result, findings };
+}
+
 async function runCmd(ctx: Context) {
   const baseArg = str(ctx, 'base');
   if (!baseArg)
@@ -175,7 +220,10 @@ async function runCmd(ctx: Context) {
       const u = parseTargetUrl(o);
       return u.origin;
     });
+    const repeat = Math.max(1, Math.min(10, num(ctx, 'repeat', 1)));
     const saveAuthArg = str(ctx, 'save-auth');
+    if (saveAuthArg && repeat > 1)
+      throw new JouriloError('USAGE', '--save-auth cannot be combined with --repeat.');
     if (saveAuthArg && specs.length !== 1)
       throw new JouriloError('USAGE', '--save-auth needs exactly one journey (the sign-in journey).');
     const saveAuth = saveAuthArg ? resolve(saveAuthArg) : undefined;
@@ -200,21 +248,31 @@ async function runCmd(ctx: Context) {
       for (const spec of specs) {
         for (const vp of viewports) {
           ctx.log(`journey ${spec.id}${vp ? ` (${vp})` : ''}`);
-          const { result, findings: jf } = await runJourney(browser, spec, {
-            base,
-            runDir,
-            hostClass,
-            policy,
-            data,
-            trace: flag(ctx, 'trace'),
-            stepTimeoutMs: num(ctx, 'timeout', 10) * 1000,
-            ...(vp ? { viewportOverride: vp } : {}),
-            ...(str(ctx, 'auth') ? { storageState: str(ctx, 'auth')! } : {}),
-            ...(saveAuth ? { saveAuth } : {}),
-            ...(allowOrigins.length ? { allowOrigins } : {}),
-            log: ctx.log,
-          });
-          ctx.log(`  → ${result.status} (${(result.durationMs / 1000).toFixed(1)} s)`);
+          // With --repeat, the same journey runs several times (fresh context and fresh test data each time) and
+          // mixed outcomes are reported as flaky instead of trusting one lucky or unlucky run.
+          const attempts: { result: JourneyResult; findings: Finding[] }[] = [];
+          for (let k = 0; k < repeat; k++) {
+            const r = await runJourney(browser, spec, {
+              base,
+              runDir,
+              hostClass,
+              policy,
+              data: repeat > 1 ? testData(`${id}${k}`, parseVars(ctx)) : data,
+              trace: flag(ctx, 'trace') && k === 0,
+              stepTimeoutMs: num(ctx, 'timeout', 10) * 1000,
+              ...(vp ? { viewportOverride: vp } : {}),
+              ...(str(ctx, 'auth') ? { storageState: str(ctx, 'auth')! } : {}),
+              ...(saveAuth ? { saveAuth } : {}),
+              ...(allowOrigins.length ? { allowOrigins } : {}),
+              log: k === 0 ? ctx.log : undefined,
+            });
+            if (repeat > 1) ctx.log(`  attempt ${k + 1}/${repeat}: ${r.result.status}`);
+            attempts.push(r);
+          }
+          const { result, findings: jf } = summarizeAttempts(spec, attempts);
+          ctx.log(
+            `  → ${result.status}${result.stability ? ` (${result.stability})` : ''} (${(result.durationMs / 1000).toFixed(1)} s)`,
+          );
           journeys.push(result);
           findings.push(...jf);
         }
@@ -308,6 +366,7 @@ export const journeys: Command = {
     pages: { type: 'string' },
     force: { type: 'boolean' },
     'save-auth': { type: 'string' },
+    repeat: { type: 'string' },
   },
   details: `Subcommands:
   suggest [url|dir|run]  Derive journeys from a site (or an existing run) into .jourilo/journeys/*.json
@@ -324,6 +383,7 @@ Run options:
   --trace                Record a Playwright trace per journey (contains typed values; keep private)
   --auth FILE            Playwright storage state for signed-in journeys
   --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
+  --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission

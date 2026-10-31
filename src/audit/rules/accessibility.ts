@@ -490,6 +490,24 @@ const WIDGET_RULES: Record<
       },
     ],
   },
+  'composite-unreachable': {
+    ruleId: 'jourilo/composite-keyboard',
+    title: 'Items of a tab list, radio group, list box or menu bar cannot be reached with the keyboard',
+    severity: 'serious',
+    impact:
+      'Keyboard and screen-reader users can reach only the current item; the other tabs, options or choices are out of reach.',
+    recommendation:
+      'Implement the arrow-key pattern for this widget (move focus or aria-activedescendant to the next item with the arrow keys), or put every item in the Tab order.',
+    standards: [
+      wcag('2.1.1'),
+      {
+        standard: 'WAI-ARIA APG',
+        id: 'keyboard-interface',
+        title: 'Developing a Keyboard Interface',
+        url: 'https://www.w3.org/WAI/ARIA/apg/practices/keyboard-interface/',
+      },
+    ],
+  },
   'dialog-escape': {
     ruleId: 'jourilo/dialog-escape',
     title: 'Escape does not close the dialog',
@@ -585,8 +603,7 @@ export function widgetFindings(obs: PageObservation): Finding[] {
       occurrences: issues.length,
       reproduction: [
         `Open ${obs.url} at the ${obs.viewport.name} viewport.`,
-        `Focus "${issues[0]!.name}" with Tab and press Enter.`,
-        issues[0]!.detail,
+        ...(issues[0]!.steps ?? [`Focus "${issues[0]!.name}" with Tab and press Enter.`, issues[0]!.detail]),
       ],
     });
   });

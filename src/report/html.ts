@@ -1,6 +1,7 @@
 // Experience Observatory: a self-contained HTML report for one run (optionally with a comparison to a baseline).
 // Every string that came from a page is escaped: page content is untrusted and must never execute in the report.
 import { severityRank } from '../audit/finding.js';
+import { MANUAL_REVIEW } from '../audit/standards.js';
 import type { Evidence, Finding, JourneyResult, PageCapture, Run, Viewport } from '../core/types.js';
 import type { RunListing } from '../core/workspace.js';
 import type { RunComparison } from './compare.js';
@@ -164,7 +165,9 @@ function journeysHtml(journeys: JourneyResult[]): string {
     .map(
       (
         j,
-      ) => `<section class="journey ${j.status}"><h3>${esc(j.name)} <span class="pill st-${j.status}">${j.status}</span> <span class="muted">${esc(j.viewport)} · ${(j.durationMs / 1000).toFixed(1)} s</span></h3>
+      ) => `<section class="journey ${j.status}"><h3>${esc(j.name)} <span class="pill st-${j.status}">${j.status}</span>${j.stability ? ` <span class="pill ${j.stability === 'flaky' ? 'st-failed' : 'st-passed'}">${j.stability}</span>` : ''} <span class="muted">${esc(j.viewport)} · ${(j.durationMs / 1000).toFixed(1)} s</span></h3>
+${j.attempts ? `<p class="muted">${j.attempts.length} attempts: ${j.attempts.map((a) => esc(a.status)).join(', ')}${j.stability === 'flaky' ? ' — the steps below are from a failing attempt.' : ''}</p>` : ''}
+${j.blockedRequests?.length ? `<details><summary>${j.blockedRequests.length} request(s) stopped by the safety policy</summary><ul>${j.blockedRequests.map((b) => `<li><code>${esc(b.method)} ${esc(b.url)}</code> — ${esc(b.reason)}</li>`).join('')}</ul></details>` : ''}
 <ol class="steps">${j.steps
         .map(
           (s) =>
@@ -177,12 +180,20 @@ ${j.trace ? `<p>Trace: <code>${esc(j.trace)}</code> (open with <code>npx playwri
     .join('');
 }
 
+function networkHtml(run: Run): string {
+  const n = run.network;
+  if (!n || (!n.blocked.length && !n.escaped.length)) return '';
+  return `<h2>Network safety</h2>
+${n.escaped.length ? `<p class="poor"><strong>Security event:</strong> ${n.escaped.length} redirect(s) reached this machine outside the network guard. Rerun untrusted sites in Chromium or Firefox.</p><ul>${n.escaped.map((e) => `<li><code>${esc(e.url)}</code> — ${esc(e.reason)}</li>`).join('')}</ul>` : ''}
+${n.blocked.length ? `<p class="muted">Connections the page tried to open and the guard refused (content depending on them did not load):</p><table><thead><tr><th>Host</th><th>Port</th><th>Reason</th></tr></thead><tbody>${n.blocked.map((b) => `<tr><td><code>${esc(b.host)}</code></td><td>${b.port}</td><td>${esc(b.reason)}</td></tr>`).join('')}</tbody></table>` : ''}`;
+}
+
 function compareHtml(cmp: RunComparison): string {
   const row = (label: string, n: number, cls: string) =>
     `<div class="card ${cls}"><div class="num">${n}</div><div>${label}</div></div>`;
   return `<div class="cards">${row('Fixed', cmp.fixed.length, 'good')}${row('New', cmp.introduced.length, 'poor')}${row('Still present', cmp.persisting.length, '')}${row('Changed severity', cmp.changed.length, '')}</div>
 <p class="muted">Baseline run <code>${esc(cmp.base.id)}</code> (${esc(cmp.base.startedAt)}) vs <code>${esc(cmp.head.id)}</code> (${esc(cmp.head.startedAt)}).</p>
-${cmp.metrics.length ? `<table><thead><tr><th>Page</th><th>Viewport</th><th>Metric</th><th>Before</th><th>After</th><th>Δ</th></tr></thead><tbody>${cmp.metrics.map((m) => `<tr><td>${esc(pathname(m.url))}</td><td>${esc(m.viewport)}</td><td>${esc(m.name)}</td><td>${m.before}</td><td>${m.after}</td><td class="${m.delta < 0 ? 'good' : m.delta > 0 ? 'poor' : ''}">${m.delta > 0 ? '+' : ''}${m.delta}</td></tr>`).join('')}</tbody></table><p class="muted">Lab deltas from single visits can be noise; repeat runs before drawing conclusions.</p>` : ''}`;
+${cmp.metrics.length ? `<table><thead><tr><th>Page</th><th>Viewport</th><th>Metric</th><th>Before</th><th>After</th><th>Δ</th><th>Verdict</th></tr></thead><tbody>${cmp.metrics.map((m) => `<tr><td>${esc(pathname(m.url))}</td><td>${esc(m.viewport)}</td><td>${esc(m.name)}</td><td>${m.before}</td><td>${m.after}</td><td class="${m.verdict === 'improved' ? 'good' : m.verdict === 'regressed' ? 'poor' : ''}">${m.delta > 0 ? '+' : ''}${m.delta}</td><td>${esc(m.verdict)}</td></tr>`).join('')}</tbody></table><p class="muted">Lab metrics. "Improved"/"regressed" need repeated visits whose ranges do not overlap (<code>--runs 5</code>); "unconfirmed" is a large change seen in single visits; "noise" is within measurement variation.</p>` : ''}`;
 }
 
 function contextHtml(run: Run): string {
@@ -327,6 +338,8 @@ ${roadmapHtml(findings)}
 ${historyHtml(run, history)}
 ${contextHtml(run)}
 <h2>Limitations of this run</h2><ul class="limits">${run.limitations.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
+${networkHtml(run)}
+<h2>Still needs a person</h2><p class="muted">Automated checks cannot judge these WCAG 2.2 criteria; no run, including this one, shows conformance.</p><ul class="limits">${MANUAL_REVIEW.map((m) => `<li>${esc(m)}</li>`).join('')}</ul>
 </section>
 <section id="findings" class="panel" hidden>
 <div class="filters">

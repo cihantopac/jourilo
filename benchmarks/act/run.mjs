@@ -90,7 +90,8 @@ const TYPES = {
 function serve() {
   const server = createServer((req, res) => {
     const p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-    const file = join(cache, p);
+    let file = join(cache, p.endsWith('/') ? `${p}index.html` : p);
+    if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html');
     if (!file.startsWith(cache) || !existsSync(file) || statSync(file).isDirectory()) {
       res.writeHead(404).end();
       return;
@@ -108,7 +109,7 @@ const fromAxeTag = (tag) => {
 };
 
 // ---- Jourilo ----
-function runJourilo(base) {
+function runJourilo() {
   if (args.reuse) return JSON.parse(readFileSync(args.reuse, 'utf8'));
   const ws = join(root, 'tests', '.tmp', 'bench-act');
   const t0 = Date.now();
@@ -117,7 +118,9 @@ function runJourilo(base) {
     [
       join(root, 'plugin', 'dist', 'jourilo.mjs'),
       'audit',
-      base,
+      // Jourilo serves the mirrored directory itself (a server in this process could not answer while spawnSync
+      // blocks it).
+      cache,
       ...cases.flatMap((c) => ['--url', c.path]),
       '--viewports',
       'desktop',
@@ -229,7 +232,7 @@ function score(byPage) {
 const server = await serve();
 const base = `http://127.0.0.1:${server.address().port}`;
 try {
-  const run = runJourilo(base);
+  const run = runJourilo();
   const jourilo = score(jouriloFlags(run));
   const axe = args['skip-axe'] ? null : await runAxe(base);
   const axeScore = axe ? score(axe.byPage) : null;

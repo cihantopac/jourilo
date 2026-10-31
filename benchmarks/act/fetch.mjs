@@ -5,7 +5,7 @@
 // Polite: one request at a time with a pause, Retry-After honoured on 429, identified user agent, each file once.
 //
 // Usage: node benchmarks/act/fetch.mjs
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,7 +15,12 @@ const ORIGIN = 'https://www.w3.org';
 const INDEX = `${ORIGIN}/WAI/content-assets/wcag-act-rules/testcases.json`;
 const UA = 'Jourilo-benchmark (+https://github.com/cihantopac/jourilo)';
 
-const fileFor = (url) => join(cache, decodeURIComponent(new URL(url).pathname));
+// Directory URLs ("…/sub-dir/") are stored as their index.html, as a static server would serve them.
+const fileFor = (url) => {
+  const p = decodeURIComponent(new URL(url).pathname);
+  const f = join(cache, p.endsWith('/') ? `${p}index.html` : p);
+  return existsSync(f) && statSync(f).isDirectory() ? join(f, 'index.html') : f;
+};
 
 let rateLimitWaits = 0;
 async function get(url) {

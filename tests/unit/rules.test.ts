@@ -187,7 +187,10 @@ describe('accessibility rules', () => {
 
 describe('widget rules', () => {
   it('maps keyboard widget issues to WCAG findings, one per kind', () => {
-    const issue = (kind: 'dialog-focus-not-moved' | 'expanded-state-mismatch', name: string) => ({
+    const issue = (
+      kind: 'dialog-focus-not-moved' | 'expanded-state-mismatch' | 'composite-unreachable',
+      name: string,
+    ) => ({
       kind,
       trigger: `#${name}`,
       name,
@@ -200,10 +203,12 @@ describe('widget rules', () => {
           triggers: 3,
           dialogs: 1,
           disclosures: 2,
+          composites: 1,
           issues: [
             issue('dialog-focus-not-moved', 'a'),
             issue('expanded-state-mismatch', 'b'),
             issue('expanded-state-mismatch', 'c'),
+            { ...issue('composite-unreachable', 'd'), steps: ['Press Tab.', 'Press ArrowRight.'] },
           ],
         },
       }),
@@ -211,10 +216,14 @@ describe('widget rules', () => {
     expect(f.map((x) => [x.ruleId, x.occurrences, x.standards[0]!.id])).toEqual([
       ['jourilo/dialog-focus', 1, '2.4.3'],
       ['jourilo/expanded-state', 2, '4.1.2'],
+      ['jourilo/composite-keyboard', 1, '2.1.1'],
     ]);
-    expect(widgetFindings(obs({ widgets: { triggers: 0, dialogs: 0, disclosures: 0, issues: [] } }))).toEqual(
-      [],
-    );
+    expect(f[2]!.reproduction.slice(1)).toEqual(['Press Tab.', 'Press ArrowRight.']);
+    expect(
+      widgetFindings(
+        obs({ widgets: { triggers: 0, dialogs: 0, disclosures: 0, composites: 0, issues: [] } }),
+      ),
+    ).toEqual([]);
   });
 });
 
