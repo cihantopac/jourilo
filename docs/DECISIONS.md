@@ -80,6 +80,15 @@ Local hosts often have persistent databases. Audits now intercept every request 
 pressed, widgets operated and forms probed; the form probe simulates the empty submission and reports server-side
 feedback as untested. A real submission needs `--allow-submit`.
 
+## D16 · Brand identity "Daybook" (2026-11-01)
+
+The identity was made with Markilo after two rounds of symbol-led concepts failed the critic's gate. It is
+wordmark-led: "Jourilo" in a book serif (Newsreader 500, outlined) whose J hangs below the line like a dateline
+entry; the J alone is the symbol and the plugin icon. Ink `#1c1a17`, paper `#f4efe4`, brass accent `#a8762b` (the
+report uses the darker `#875802` for text, which keeps 4.5:1). The report inlines the outlined paths so it stays one
+file with no font. Originality: low visual similarity to the collected competitor marks (highest 38 %), but no
+trademark-register search was done; the maintainer accepted that risk. This is not trademark clearance.
+
 ## D11 · Integration contract `jourilo.context/v1` (2026-10-30)
 
 Markilo and Searvex are read through adapters into a neutral shape (brand: colors, fonts, locked; search: findings by

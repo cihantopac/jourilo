@@ -15,12 +15,12 @@ Priorities follow the rule: correctness and evidence before breadth. Items here 
 - Keyboard reachability of composite widgets (tabs, radio groups, list boxes, menu bars, trees).
 - Laravel route discovery (included route files, groups, Livewire/Inertia/Volt, Filament panels, guards).
 
-## Excluded from 1.0
+## Done in 1.0.1
 
-- **Plugin icon.** Two design rounds in Markilo (seven directions) produced no mark that passed the independent
-  critic's gate, and the project's rule is to ship only Markilo-made assets. The icon is used only by the plugin
-  directory listing; the plugin works without it. A third round needs the maintainer's steer (the critic suggests a
-  wordmark-led identity with one constructed, measurable detail).
+- **Brand identity and plugin icon.** 1.0.0 shipped without an icon (no concept from two Markilo rounds passed the
+  critic's gate). A third, wordmark-led round produced the approved "Daybook" identity: wordmark, J symbol and plugin
+  icon ([DECISIONS.md](DECISIONS.md) D16). Submitting the plugin to the Claude Code directory is a maintainer
+  decision.
 
 ## Next (1.x)
 

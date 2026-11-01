@@ -4,6 +4,7 @@ import { severityRank } from '../audit/finding.js';
 import { MANUAL_REVIEW } from '../audit/standards.js';
 import type { Evidence, Finding, JourneyResult, PageCapture, Run, Viewport } from '../core/types.js';
 import type { RunListing } from '../core/workspace.js';
+import { FAVICON_URL, wordmarkSvg } from './brand.js';
 import type { RunComparison } from './compare.js';
 
 export function esc(s: unknown): string {
@@ -312,9 +313,10 @@ export function renderHtml(run: Run, cmp?: RunComparison, history: RunListing[] 
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <title>Jourilo report · ${esc(run.target)}</title>
+<link rel="icon" href="${FAVICON_URL}">
 <style>${CSS}</style></head>
 <body>
-<header class="top"><div class="brand">Jourilo <span class="muted">Experience Observatory</span></div>
+<header class="top"><div class="brand">${wordmarkSvg(34)}<span class="muted">Experience Observatory</span></div>
 <div class="meta"><b>${esc(run.target)}</b><br><span class="muted">${esc(run.mode)} mode · ${esc(new Date(run.startedAt).toUTCString())} · ${esc(run.browser.name)} ${esc(run.browser.version)} · ${run.viewports.map((v) => `${esc(v.name)} ${v.width}×${v.height}`).join(', ')} · Jourilo ${esc(run.tool.version)}</span></div></header>
 <nav class="tabs" role="tablist">
 <button role="tab" aria-selected="true" data-tab="overview">Overview</button>
@@ -361,12 +363,12 @@ ${cmp ? `<section id="compare" class="panel" hidden>${compareHtml(cmp)}</section
 }
 
 const CSS = `
-:root{--bg:#f7f7f8;--fg:#18181b;--muted:#6b6b76;--card:#fff;--line:#e4e4e7;--accent:#4338ca;--crit:#b91c1c;--ser:#c2410c;--mod:#a16207;--min:#4b5563;--good:#15803d;--poor:#b91c1c;--ni:#a16207}
-@media (prefers-color-scheme:dark){:root{--bg:#0f0f12;--fg:#ececf1;--muted:#a1a1aa;--card:#18181d;--line:#2e2e35;--accent:#a5b4fc;--crit:#f87171;--ser:#fb923c;--mod:#facc15;--min:#cbd5e1;--good:#4ade80;--poor:#f87171;--ni:#facc15}}
+:root{--bg:#f4efe4;--fg:#1c1a17;--muted:#65635f;--card:#fffdf8;--line:#e2d9c7;--accent:#875802;--crit:#b91c1c;--ser:#c2410c;--mod:#955d05;--min:#4b5563;--good:#14713a;--poor:#b91c1c;--ni:#955d05}
+@media (prefers-color-scheme:dark){:root{--bg:#100d08;--fg:#f4efe4;--muted:#b9b7b4;--card:#1c1a17;--line:#393835;--accent:#d9af79;--crit:#f87171;--ser:#fb923c;--mod:#facc15;--min:#cbd5e1;--good:#4ade80;--poor:#f87171;--ni:#facc15}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
 a{color:var(--accent)}code,pre{font:12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}pre{white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--line);padding:6px 8px;border-radius:6px;margin:4px 0}
 .top{display:flex;gap:24px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:16px 24px;border-bottom:1px solid var(--line);background:var(--card)}
-.brand{font-weight:700;font-size:18px}.muted{color:var(--muted)}.meta{text-align:right;font-size:13px;overflow-wrap:anywhere}
+.brand{display:flex;align-items:center;gap:20px;font-size:15px}.brand svg{display:block;flex:none}.muted{color:var(--muted)}.meta{text-align:right;font-size:13px;overflow-wrap:anywhere}
 .tabs{display:flex;gap:4px;padding:0 24px;background:var(--card);border-bottom:1px solid var(--line);overflow-x:auto}
 .tabs button{font:inherit;background:none;border:0;border-bottom:3px solid transparent;padding:12px 12px;color:var(--muted);cursor:pointer;white-space:nowrap}
 .tabs button[aria-selected=true]{color:var(--fg);border-color:var(--accent);font-weight:600}.tabs button:focus-visible{outline:2px solid var(--accent)}

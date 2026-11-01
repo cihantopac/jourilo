@@ -4,6 +4,19 @@ All notable changes are documented here. The project follows [Semantic Versionin
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-01
+
+### Added
+
+- Brand identity "Daybook", made with Markilo: the Jourilo wordmark in the README and the report header, the J
+  symbol as the report favicon, and a plugin icon (`plugin/.claude-plugin/icon.png`) for the Claude Code plugin
+  directory. Masters are in `docs/assets/brand/`; the README credits Markilo.
+
+### Changed
+
+- The HTML report uses the brand palette (paper, ink and brass, with a matching dark theme); every text color keeps
+  at least 4.5:1 contrast on its background.
+
 ## [1.0.0] - 2026-11-01
 
 ### Security
