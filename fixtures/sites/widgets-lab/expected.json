@@ -87,6 +87,11 @@
       "rule": "jourilo/composite-keyboard",
       "path": "/composite-ok",
       "why": "arrow-key tabs, aria-activedescendant list box, all-tabbable tabs"
+    },
+    {
+      "rule": "jourilo/focus-visible",
+      "path": "/focus-sibling",
+      "why": "the indicator is drawn by a sibling element (ACT oj04fd passed examples)"
     }
   ],
   "maxDefects": {
@@ -96,7 +101,8 @@
       "/accessible",
       "/anchors",
       "/launcher",
-      "/composite-ok"
+      "/composite-ok",
+      "/focus-sibling"
     ]
   }
 }

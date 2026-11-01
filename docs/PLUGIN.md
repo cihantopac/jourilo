@@ -29,7 +29,9 @@ Claude Code namespaces plugin skills as `/<plugin>:<skill>`:
 | `/jourilo:report`        | HTML / Markdown / SARIF / JSON reports                                                          |
 | `/jourilo:experiment`    | Sample size, experiment plans, analysis of real results                                         |
 
-A bare `/jourilo` is not available for marketplace plugins. To get it, install the personal skill:
+`/jourilo:jourilo` is the reliable form. Claude Code may also resolve a bare `/jourilo` to the plugin's skill when no
+other command already uses that name, but this is not guaranteed for plugin skills. For a bare `/jourilo` that always
+works, install the personal skill:
 
 ```bash
 jourilo agent install claude-skill --write

@@ -22,7 +22,19 @@ function usage(): string {
   return lines.join('\n');
 }
 
+/** Node.js versions Jourilo supports (package.json `engines`). */
+export function nodeSupported(version: string): boolean {
+  const [major = 0, minor = 0] = version.replace(/^v/, '').split('.').map(Number);
+  return major > 20 || (major === 20 && minor >= 10);
+}
+
 export async function main(argv: string[]): Promise<number> {
+  if (!nodeSupported(process.versions.node)) {
+    process.stderr.write(
+      `Jourilo needs Node.js 20.10 or newer (this is ${process.versions.node}). Install a current LTS from https://nodejs.org.\n`,
+    );
+    return 2;
+  }
   const [name, ...rest] = argv;
   if (!name || name === '--help' || name === '-h' || name === 'help') {
     process.stdout.write(`${usage()}\n`);

@@ -236,3 +236,11 @@ describe('static server and secrets', () => {
     }
   });
 });
+
+describe('environment', () => {
+  it('refuses unsupported Node.js versions', async () => {
+    const { nodeSupported } = await import('../../src/cli/main.js');
+    expect(['18.20.4', '20.9.0', 'v19.0.0'].map(nodeSupported)).toEqual([false, false, false]);
+    expect(['20.10.0', '22.23.2', '24.1.0'].map(nodeSupported)).toEqual([true, true, true]);
+  });
+});

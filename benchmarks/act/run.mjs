@@ -159,30 +159,45 @@ async function runAxe(base) {
   const { chromium } = await import('playwright-core');
   const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
   const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
-  const browser = await chromium.launch();
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  // A test page can spin its renderer forever; then even closing the page hangs. Such a page is abandoned by
+  // restarting the browser, with a hard time limit on every step.
+  let browser = await chromium.launch();
+  let ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const limit = (p, ms) =>
+    Promise.race([p, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
   const byPage = new Map();
+  const timeouts = [];
+  let done = 0;
   const t0 = Date.now();
   for (const c of cases) {
-    const page = await ctx.newPage();
+    let page;
     try {
+      page = await limit(ctx.newPage(), 10_000);
       await page.goto(base + c.path, { waitUntil: 'load', timeout: 30_000 });
-      await page.addScriptTag({ content: axeSource });
-      const res = await page.evaluate(
-        `axe.run(document, { runOnly: { type: 'tag', values: ${JSON.stringify(TAGS)} }, resultTypes: ['violations'], rules: { 'target-size': { enabled: true } } })`,
+      await limit(page.addScriptTag({ content: axeSource }), 10_000);
+      const res = await limit(
+        page.evaluate(
+          `axe.run(document, { runOnly: { type: 'tag', values: ${JSON.stringify(TAGS)} }, resultTypes: ['violations'], rules: { 'target-size': { enabled: true } } })`,
+        ),
+        30_000,
       );
       byPage.set(
         c.path,
         res.violations.map((v) => ({ rule: v.id, sc: v.tags.map(fromAxeTag).filter(Boolean) })),
       );
-    } catch (err) {
+      await limit(page.close(), 5_000).catch(() => undefined);
+    } catch {
       byPage.set(c.path, []);
-    } finally {
-      await page.close();
+      timeouts.push(c.path);
+      await limit(browser.close(), 5_000).catch(() => undefined);
+      browser = await chromium.launch();
+      ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     }
+    if (++done % 100 === 0) console.log(`axe: ${done}/${cases.length}`);
   }
-  await browser.close();
-  return { byPage, seconds: Math.round((Date.now() - t0) / 1000) };
+  await limit(browser.close(), 5_000).catch(() => undefined);
+  if (timeouts.length) console.log(`axe: ${timeouts.length} page(s) did not finish and count as no findings`);
+  return { byPage, seconds: Math.round((Date.now() - t0) / 1000), timeouts };
 }
 
 function score(byPage) {

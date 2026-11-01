@@ -18,6 +18,8 @@ interface Expectation {
   rule: string;
   path: string;
   viewport?: string;
+  /** Only a finding of this kind matches (e.g. a defect must not be reported where review is right). */
+  kind?: Finding['kind'];
   why?: string;
 }
 
@@ -51,6 +53,7 @@ export interface FixtureResult {
 
 const matches = (f: Finding, e: Expectation) =>
   f.ruleId === e.rule &&
+  (!e.kind || f.kind === e.kind) &&
   pathOf(f.url).split('?')[0]!.replace(/\/$/, '') === e.path.replace(/\/$/, '') &&
   (!e.viewport || (f.viewport ?? '').split(', ').includes(e.viewport));
 

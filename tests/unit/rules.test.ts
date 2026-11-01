@@ -380,3 +380,13 @@ describe('structure rules', () => {
     expect(structureFindings(obs())).toEqual([]);
   });
 });
+
+describe('keyboard trap advice', () => {
+  it('turns "Press Ctrl+M to exit" into a key to try', async () => {
+    const { adviceKey } = await import('../../src/browser/keyboard.js');
+    expect(adviceKey('Press Ctrl+M to Exit')).toBe('Control+M');
+    expect(adviceKey('press Esc to leave the editor')).toBe('Escape');
+    expect(adviceKey('Use Ctrl+Shift+F6 to move on')).toBe('Control+Shift+F6');
+    expect(adviceKey('How to go the next element')).toBeNull();
+  });
+});

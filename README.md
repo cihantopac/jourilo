@@ -8,8 +8,8 @@ Local-first · evidence-driven · no paid services required · works as a CLI an
 
 ![Jourilo report overview: defects by severity, conversion hypotheses kept separate, fixes grouped by root cause](docs/assets/report-overview.png)
 
-> Status: **0.1.0, pre-release.** Tested on macOS (Apple Silicon) with Chromium. See [Limitations](docs/LIMITATIONS.md)
-> for what is not covered yet.
+> Status: **1.0.0.** Tested in CI on Linux, macOS and Windows (Node 20 and 22) with Chromium, Firefox and WebKit. An
+> automated run never proves WCAG conformance: see [Limitations](docs/LIMITATIONS.md) for what is not covered.
 
 ## What it does
 
@@ -66,8 +66,9 @@ machine-readable output.
 
 Then use `/jourilo:jourilo <url or path>` for the full workflow, or `/jourilo:discover`, `/jourilo:audit`,
 `/jourilo:journeys`, `/jourilo:accessibility`, `/jourilo:conversion`, `/jourilo:optimize`, `/jourilo:compare`,
-`/jourilo:report`, `/jourilo:experiment`. Claude Code namespaces plugin commands, so a bare `/jourilo` is available
-by installing the personal skill: `jourilo agent install claude-skill --write`. See [docs/PLUGIN.md](docs/PLUGIN.md).
+`/jourilo:report`, `/jourilo:experiment`. Plugin commands are namespaced; `/jourilo:jourilo` always works. Claude
+Code may also accept a bare `/jourilo` when no other command uses that name; to make it permanent, install the
+personal skill with `jourilo agent install claude-skill --write`. See [docs/PLUGIN.md](docs/PLUGIN.md).
 
 Other agents: `jourilo agent install codex --write` (adds a section to `AGENTS.md`) or `cursor`
 (`.cursor/rules/jourilo.mdc`).
@@ -115,12 +116,16 @@ and the comparison influenced Jourilo's rules; read the method and caveats in
 
 ## Safety and privacy
 
-Normal audits are read-only. Crawling stays on the target origin, respects robots.txt and refuses private-network
-targets unless you pass `--allow-private`. Journeys block payments, purchases, deletions and cancellations on any
-non-local host; form submission on non-local hosts needs `--allow-submit`. Password, card and marked fields are masked
+Audits are read-only, on every host: form validation is probed by simulating the submission, and nothing that would
+change data leaves the browser unless you pass `--allow-submit`. Crawling stays on the target origin and respects
+robots.txt. Every browser request goes through a local network guard, so an audited page cannot reach this machine,
+the local network or cloud-metadata services (private targets need `--allow-private`). Journeys block payments,
+purchases, deletions and cancellations however they are triggered (click, key, script, link) on any non-local host,
+and on local hosts unless you pass `--allow-destructive`. Fixes are written as one reversible change, and rollback
+never overwrites edits made afterwards. Password, card and marked fields are masked
 in screenshots; tokens, keys, e-mail addresses and card numbers are redacted from logs and reports. Page content is
 treated as untrusted data and is always HTML-escaped in reports. Details: [docs/PRIVACY.md](docs/PRIVACY.md),
-[SECURITY.md](SECURITY.md).
+[docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md) (including residual risks), [SECURITY.md](SECURITY.md).
 
 ## Works with Markilo and Searvex (optional)
 

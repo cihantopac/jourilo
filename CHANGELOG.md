@@ -19,6 +19,29 @@ All notable changes are documented here. The project follows [Semantic Versionin
 - The static server no longer serves hidden files (`.env`, `.git/`) and survives malformed URLs.
 - A warning when `--save-auth` writes a session file that git would commit.
 
+### Added
+
+- Keyboard reachability of composite widgets: tab lists, radio groups, list boxes, menu bars and trees whose arrow
+  keys do not reach the other items are reported (WCAG 2.1.1).
+- `journeys run --repeat N`: flaky journeys (mixed outcomes) are reported for review.
+- Lab metrics keep their range with `--runs`; `compare`/`verify` give every metric change a verdict (improved,
+  regressed, within noise, unconfirmed), and `verify` repeats the baseline's number of visits.
+- Reports: network guard refusals and security events, journey attempts and stopped requests, and the WCAG 2.2
+  questions that still need a person.
+- Laravel discovery follows included route files, groups and prefixes, Livewire/Inertia/Volt pages, Filament panels
+  (nested resources, `$slug`) and guards.
+- Independent benchmark on the W3C ACT Rules test cases (`benchmarks/act`); clean-install smoke test of the packed
+  tarball on Linux, macOS and Windows (`scripts/smoke-pack.mjs`).
+
+### Fixed (found on real applications)
+
+- In-page anchors (skip links with non-English targets, section navigation) were operated as lightbox triggers and
+  reported as broken dialogs.
+- A layer that a dialog leaves on the page after closing made the dialog look "still open" after Escape.
+- A local build with a production sitemap was crawled to 2 pages; a build without a page at `/` was reported as
+  broken.
+- A sign-up journey was suggested when only a dashboard route existed.
+
 ### Changed
 
 - `optimize --apply` writes fixes as one transaction (backups and hashes first, atomic writes, automatic restore

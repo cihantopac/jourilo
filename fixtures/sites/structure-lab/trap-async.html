@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Editor – Structure lab</title></head>
+<body>
+<!-- A small page whose button pulls focus back from onblur after a short timeout: Tab can never reach "Save draft".
+     (Pattern from the W3C ACT rule 80af7b failed examples.) -->
+<main><h1>Editor</h1>
+<p><a href="/">Back to the lab</a></p>
+<button type="button" onblur="setTimeout(() => this.focus(), 10)">Bold</button>
+<a href="/accessible">Save draft</a>
+</main>
+</body>
+</html>

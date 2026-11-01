@@ -145,5 +145,8 @@ describe('Laravel discovery on a realistic layout', () => {
     );
     expect(p.i18n.locales.sort()).toEqual(['en', 'tr']);
     expect(p.apps[0]!.routes.find((r) => r.path === '/members/login')?.role).toBe('login');
+    // No registration route: no sign-up journey, even though a dashboard exists (found by the plugin run).
+    expect(p.candidateJourneys.map((j) => j.name)).not.toContain('Sign up and reach the product');
+    expect(p.candidateJourneys.map((j) => j.name)).toContain('Sign in');
   });
 });

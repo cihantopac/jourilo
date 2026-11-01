@@ -19,15 +19,20 @@ Stated so nobody mistakes silence for a pass.
   of alt text, reading order, screen-reader announcements, captions quality, cognitive load. A run never certifies
   compliance.
 - The keyboard walk visits up to 60 stops per page and only on keyboard (non-touch) viewports by default. Dialogs and
-  disclosures that declare `aria-haspopup`/`aria-expanded` are operated with Enter/Escape; arrow-key patterns
-  (menus, tabs, listboxes, grids) are not tested yet.
-- Focus-visible detection compares styles of the element and its parent; indicators drawn by other elements (e.g. a
-  sibling) may be reported as missing.
+  disclosures that declare `aria-haspopup`/`aria-expanded` are operated with Enter/Escape. Composite widgets (tabs,
+  radio groups, list boxes, menu bars, trees) are tested for keyboard reachability (do the arrow keys reach the other
+  items?); the full arrow-key patterns (Home/End, typeahead, menus opening submenus, grids) are not.
+- Focus-visible detection compares the styles of the element and its parent, then the pixels around the element with
+  and without focus, so indicators drawn by a sibling are seen; an indicator drawn far away from the element is not.
+- A keyboard trap whose page explains a way out ("Press Ctrl+M to exit") is tested with that key; if it works the
+  trap is listed for review (WCAG 2.1.2 allows it), not as a defect. Whether the explanation is announced before
+  focus is held needs a person.
 
 ## Performance
 
-- Lab numbers come from one visit unless `--runs N` is used (median and range of N cold-cache visits); local servers
-  make LCP unrealistically fast. `--throttle`
+- Lab numbers come from one visit unless `--runs N` is used (median and range of N cold-cache visits); `verify` only
+  calls a change "improved" or "regressed" when the ranges of repeated visits do not overlap. Local servers make LCP
+  unrealistically fast. `--throttle`
   approximates Lighthouse's mobile profile in Chromium only. Measured on a local fixture it slowed rendering and
   subresources (LCP 16 → 200 ms, load 13 → 342 ms) but did **not** delay the main document from 127.0.0.1 (TTFB
   unchanged), so TTFB under `--throttle` is not meaningful for local targets.
@@ -35,7 +40,8 @@ Stated so nobody mistakes silence for a pass.
 
 ## Journeys and forms
 
-- Suggested journeys are heuristics from page structure; they need review. No multi-tab, file upload, OAuth popup,
+- Suggested journeys are heuristics from page structure; they need review. `--repeat N` detects flaky journeys but
+  cannot tell a product race from a fragile journey definition; the report says which attempts failed. No multi-tab, file upload, OAuth popup,
   CAPTCHA or e-mail verification support. Signed-in flows need a test account: run a sign-in journey with
   `--save-auth`, or provide a Playwright storage state.
 - The keyboard walk steps past the first trap it finds; a second trap on the same page ends the walk.
@@ -58,9 +64,12 @@ Stated so nobody mistakes silence for a pass.
 
 ## Discovery and root causes
 
-- Repository discovery is lexical (file patterns and regexes), not AST-based. Router configs written dynamically are
-  missed. Website discovery crawls up to 30 pages, same origin only, sitemaps on other origins are ignored.
-- Source location is lexical and can be wrong; each candidate states its reason and confidence. Five fix types are
+- Repository discovery is lexical (file patterns and regexes), not AST-based. Laravel route files, groups and
+  Filament panels are followed; router configs built dynamically at runtime are missed, and a configurable route
+  prefix is shown with its local default. Website discovery crawls up to 30 pages, same origin only; on a local
+  target, a sitemap that lists production URLs is mapped onto the local server, otherwise sitemaps on other origins
+  are ignored.
+- Source location is lexical and can be wrong; each candidate states its reason and confidence. Seven fix types are
   automated; everything else is done by a person or an agent and then verified.
 
 ## Network safety
@@ -76,7 +85,3 @@ Stated so nobody mistakes silence for a pass.
 - History in the report lists earlier runs of the same target with defect counts; it does not normalize for different
   page sets or viewports (use `verify` for like-for-like comparisons).
 - Screenshots are capped at 12 000 px height.
-
-## Other
-
-- No icon/brand identity yet for the plugin listing.

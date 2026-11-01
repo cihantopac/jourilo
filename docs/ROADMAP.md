@@ -1,24 +1,34 @@
 # Roadmap
 
-Priorities follow the rule: correctness and evidence before breadth.
+Priorities follow the rule: correctness and evidence before breadth. Items here are **not** part of 1.0.0; the
+1.0.0 scope and its evidence are in [RELEASE-1.0.md](RELEASE-1.0.md).
 
-## Next (0.2)
+## Done for 1.0
 
-1. Run the CI matrix on Linux and Windows; fix platform issues.
-2. Independent real-world fixtures: reproduce known UX bugs from public issue trackers (with permission/licences) and
-   measure recall that the rule authors did not design for.
-3. Extend the comparison (done for GOV.UK accessibility cases, see EVALUATION.md): W3C BAD demo before/after pages,
-   Pa11y with the axe runner, performance against Lighthouse, and fixtures built independently of the rules.
-4. Repeated-run medians for lab metrics; flake detection for journeys.
-5. Keyboard interaction for composite widgets (menus, tabs, dialogs: Escape closes, focus returns).
-6. Normalized trends across runs (per page and viewport), building on the current run history table.
+- CI on Linux, macOS and Windows (Node 20 and 22) with Chromium, Firefox and WebKit; clean install from the packed
+  tarball on all three platforms.
+- Network guard, fix transactions with conflict-safe rollback, request-level journey safety, read-only audits
+  ([SECURITY-REVIEW.md](SECURITY-REVIEW.md)).
+- Independent benchmark on the W3C ACT Rules test cases ([EVALUATION.md](EVALUATION.md)) and validation on real
+  applications.
+- Repeated-run medians with ranges and noise-aware verdicts in `verify`; `journeys run --repeat` for flaky journeys.
+- Keyboard reachability of composite widgets (tabs, radio groups, list boxes, menu bars, trees).
+- Laravel route discovery (included route files, groups, Livewire/Inertia/Volt, Filament panels, guards).
 
-## Later
+## Excluded from 1.0
 
-- AST-based route and component discovery (TS/TSX, Vue SFC, Svelte, Blade) and component-level root causes.
-- More deterministic fixers (labels from placeholders, `type="button"`, `scroll-padding` for sticky headers,
-  `width`/`height` on images) — each with a fixture and a verify test.
-- Analytics/flag adapters that read (never write) funnel rates for experiment plans: PostHog, GrowthBook, Amplitude.
-- Sequential testing option for experiments.
-- More languages for the shared lexicon (`src/core/lexicon.ts`), each with a fixture site.
-- npm publication and public marketplace listing (requires maintainer approval).
+- **Plugin icon.** Two design rounds in Markilo (seven directions) produced no mark that passed the independent
+  critic's gate, and the project's rule is to ship only Markilo-made assets. The icon is used only by the plugin
+  directory listing; the plugin works without it. A third round needs the maintainer's steer (the critic suggests a
+  wordmark-led identity with one constructed, measurable detail).
+
+## Next (1.x)
+
+1. Full arrow-key patterns for menus and dialogs inside menus (Escape closes, focus returns, Home/End).
+2. AST-based route and component discovery for TS/TSX, Vue SFC and Svelte, and component-level root causes.
+3. More deterministic fixers (`type="button"`, `scroll-padding` for sticky headers), each with a fixture and a
+   verify test.
+4. Normalized trends across runs (per page and viewport) on top of the run history table.
+5. Read-only analytics/flag adapters for experiment plans (PostHog, GrowthBook, Amplitude); sequential testing.
+6. Multi-tab journeys and OAuth popups against test identity providers.
+7. More languages for the shared lexicon (`src/core/lexicon.ts`), each with a fixture site.

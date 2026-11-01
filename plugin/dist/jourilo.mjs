@@ -40442,6 +40442,28 @@ var ESCAPE_TRAP = `(sels) => {
   next.focus();
   return true;
 }`;
+var TRAP_ADVICE = `(selectors) => {
+  const text = document.body.innerText || '';
+  const m = text.match(/(press|use|hit)\\s+(ctrl|control|alt|option|shift|cmd|command|esc|escape|f\\d+)[^.\\n]{0,24}?\\s+to\\s+(exit|leave|escape|close|quit|move on|continue)[^.\\n]{0,40}/i);
+  if (m) return m[0].trim();
+  for (const s of selectors) {
+    const el = document.querySelector(s);
+    const name = el ? (el.getAttribute('aria-label') || el.textContent || '').trim() : '';
+    if (/\\b(how to|help|exit|leave|skip out)\\b/i.test(name)) return name.slice(0, 80);
+  }
+  return null;
+}`;
+async function shotAround(page, r) {
+  const pad = 24;
+  const clip = {
+    x: Math.max(0, r.x - pad),
+    y: Math.max(0, r.y - pad),
+    width: r.width + pad * 2,
+    height: r.height + pad * 2
+  };
+  if (r.width < 1 || r.height < 1 || clip.width * clip.height > 640 * 480) return null;
+  return page.screenshot({ clip, fullPage: true, animations: "disabled", caret: "hide", type: "png" }).catch(() => null);
+}
 async function keyboardWalk(page, maxTabs = 60) {
   const focusableCount = await page.evaluate(COUNT_FOCUSABLE);
   const stops = [];
@@ -40452,6 +40474,7 @@ async function keyboardWalk(page, maxTabs = 60) {
   );
   let prevHandle = null;
   let prevFocused = null;
+  let prevShot = null;
   const limit = Math.min(maxTabs, focusableCount + 12);
   const sequence = [];
   const newStop = (d) => ({
@@ -40486,6 +40509,9 @@ async function keyboardWalk(page, maxTabs = 60) {
   for (let i = 0; i < limit; i++) {
     await page.keyboard.press(tabKey);
     walk2.pressed++;
+    await page.evaluate(
+      "new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 20))))"
+    ).catch(() => void 0);
     const handle = await page.evaluateHandle("document.activeElement");
     const data = await handle.evaluate(inPage(FOCUS_INFO));
     const prevSelector = sequence[sequence.length - 1];
@@ -40498,12 +40524,24 @@ async function keyboardWalk(page, maxTabs = 60) {
         walk2.trap = { selectors: [data.selector] };
       }
     }
+    const isNewStop = !!data && !noMove && !stops.some((s) => s.selector === data.selector);
+    const curFocused = isNewStop ? await handle.evaluate(inPage(FOCUS_STYLES)).catch(() => null) : null;
+    const curShot = isNewStop ? await shotAround(page, data.rect) : null;
     if (prevHandle && prevFocused && stops.length) {
       const unfocused = await prevHandle.evaluate(inPage(FOCUS_STYLES)).catch(() => null);
       const last = stops[stops.length - 1];
       if (unfocused) {
         last.indicatorChanges = prevFocused.filter((s, k) => s !== unfocused[k]);
         last.indicatorChecked = true;
+        if (!last.indicatorChanges.length && prevShot) {
+          await handle.evaluate(inPage("(el) => el.blur && el.blur()")).catch(() => void 0);
+          const neutral = await shotAround(page, last.rect);
+          await handle.evaluate(inPage("(el) => el.focus && el.focus()")).catch(() => void 0);
+          if (neutral && !neutral.equals(prevShot))
+            last.indicatorChanges = [
+              "the area around the element changes on focus (indicator drawn by another element)"
+            ];
+        }
         if (process.env.JOURILO_DEBUG?.includes("keyboard"))
           process.stderr.write(
             `[keyboard]   ${last.selector} changes=${JSON.stringify(last.indicatorChanges)}
@@ -40516,6 +40554,7 @@ async function keyboardWalk(page, maxTabs = 60) {
       break;
     }
     prevFocused = null;
+    prevShot = null;
     if (!data) {
       if (stops.length) walk2.completedCycle = true;
       break;
@@ -40536,7 +40575,8 @@ async function keyboardWalk(page, maxTabs = 60) {
       for (const s of tail) counts.set(s, (counts.get(s) ?? 0) + 1);
       const distinct = new Set([...counts].filter(([, n]) => n >= 2).map(([s]) => s));
       const cycling = distinct.size > 0 && tail.slice(-4).every((s) => distinct.has(s));
-      if (cycling && distinct.size <= 3 && focusableCount > distinct.size + 2 && !data.inModal) {
+      const unreached = focusableCount - new Set(sequence).size;
+      if (cycling && distinct.size <= 3 && unreached > 0 && !data.inModal) {
         walk2.trap = { selectors: [...distinct] };
         if (!escaped && await page.evaluate(`(${ESCAPE_TRAP})(${JSON.stringify([...distinct])})`).catch(() => false)) {
           escaped = true;
@@ -40556,11 +40596,52 @@ async function keyboardWalk(page, maxTabs = 60) {
       prevHandle = null;
       continue;
     }
-    prevFocused = await handle.evaluate(inPage(FOCUS_STYLES)).catch(() => null);
+    prevFocused = curFocused;
+    prevShot = curShot;
     prevHandle = handle;
     stops.push(newStop(data));
   }
+  if (walk2.trap) {
+    const advice = await page.evaluate(`(${TRAP_ADVICE})(${JSON.stringify(walk2.trap.selectors)})`).catch(() => null);
+    if (advice) {
+      walk2.trap.advice = advice;
+      const key = adviceKey(advice);
+      if (key) {
+        const trapped = walk2.trap.selectors;
+        await page.locator(trapped[0]).first().focus({ timeout: 2e3 }).catch(() => void 0);
+        await page.keyboard.press(key).catch(() => void 0);
+        await page.evaluate("new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30)))").catch(() => void 0);
+        const out = await page.evaluate(
+          `((sel) => { const a = document.activeElement; return !!a && a !== document.body && !sel.some((s) => a.matches(s)); })(${JSON.stringify(trapped)})`
+        ).catch(() => false);
+        walk2.trap.adviceWorks = out;
+      }
+    }
+  }
   return walk2;
+}
+function adviceKey(advice) {
+  const m = advice.match(/\b(?:press|use|hit)\s+([a-z0-9]+(?:\s*[+-]\s*[a-z0-9]+)*)/i);
+  if (!m) return null;
+  const NAMES = {
+    ctrl: "Control",
+    control: "Control",
+    alt: "Alt",
+    option: "Alt",
+    shift: "Shift",
+    cmd: "Meta",
+    command: "Meta",
+    esc: "Escape",
+    escape: "Escape",
+    tab: "Tab",
+    enter: "Enter"
+  };
+  const parts = m[1].split(/\s*[+-]\s*/).map(
+    (k) => NAMES[k.toLowerCase()] ?? (/^f\d{1,2}$/i.test(k) ? k.toUpperCase() : k.length === 1 ? k.toUpperCase() : null)
+  );
+  if (parts.some((p) => !p) || !parts.some((p) => p !== "Shift" && !/^(Control|Alt|Meta)$/.test(p) || parts.length === 1))
+    return null;
+  return parts.join("+");
 }
 
 // src/core/net-guard.ts
@@ -41259,6 +41340,11 @@ function toMetrics(v, spread, runs2 = 1) {
     }
     const rounded = unit === "score" ? Math.round(value * 1e3) / 1e3 : Math.round(value);
     const m = { name, value: rounded, unit, source: "lab" };
+    if (runs2 > 1 && range) {
+      const r2 = (x) => unit === "score" ? Math.round(x * 1e3) / 1e3 : Math.round(x);
+      m.runs = runs2;
+      m.range = [r2(range[0]), r2(range[1])];
+    }
     const r = rate(name, rounded);
     if (r) m.rating = r;
     if (note) m.note = note;
@@ -41364,9 +41450,88 @@ var STATE = `(controls, mode) => {
     activeSelector: ae && ae !== document.body ? (ae.id ? '#' + ae.id : ae.tagName.toLowerCase()) : null,
   };
 }`;
+var COMPOSITES = `(() => {
+  const ITEM = { tablist: 'tab', radiogroup: 'radio', listbox: 'option', menubar: 'menuitem, [role="menuitemcheckbox"], [role="menuitemradio"]', tree: 'treeitem' };
+  const visible = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+  const tabbable = (e) => e.tabIndex >= 0 && !e.disabled && e.getAttribute('aria-disabled') !== 'true' && visible(e);
+  const out = [];
+  for (const [role, item] of Object.entries(ITEM)) {
+    for (const c of document.querySelectorAll('[role="' + role + '"]')) {
+      if (!visible(c) || out.length >= 6) continue;
+      const items = Array.from(c.querySelectorAll(item.split(',').map((s) => s.trim().startsWith('[') ? s : '[role="' + s.trim() + '"]').join(','))).filter(visible);
+      if (items.length < 2) continue;
+      const stops = items.filter(tabbable);
+      const containerStop = tabbable(c) && c.hasAttribute('aria-activedescendant');
+      if (stops.length > 1 || (!stops.length && !containerStop)) continue;
+      const id = 'jourilo-composite-' + out.length;
+      c.setAttribute('data-jourilo-composite', id);
+      if (stops[0]) stops[0].setAttribute('data-jourilo-composite-stop', id);
+      const r = c.getBoundingClientRect();
+      const orientation = c.getAttribute('aria-orientation') || (role === 'listbox' || role === 'tree' ? 'vertical' : 'horizontal');
+      out.push({ id, role, orientation, items: items.length, name: (c.getAttribute('aria-label') || items.map((i) => i.innerText.trim()).filter(Boolean).slice(0, 3).join(' / ')).replace(/\\s+/g, ' ').slice(0, 80), rect: { x: Math.round(r.left + scrollX), y: Math.round(r.top + scrollY), width: Math.round(r.width), height: Math.round(r.height) } });
+    }
+  }
+  return out;
+})()`;
+var COMPOSITE_STATE = `(id) => {
+  const c = document.querySelector('[data-jourilo-composite="' + id + '"]');
+  if (!c) return null;
+  const ae = document.activeElement;
+  const marks = Array.from(c.querySelectorAll('[aria-selected], [aria-checked]')).map((e) => (e.getAttribute('aria-selected') || '') + (e.getAttribute('aria-checked') || '')).join('');
+  return { focusIn: !!ae && c.contains(ae), active: ae ? (ae.id || ae.textContent || '').trim().slice(0, 40) + '#' + Array.from(c.querySelectorAll('*')).indexOf(ae) : '', descendant: c.getAttribute('aria-activedescendant') || '', marks };
+}`;
+async function checkComposites(page, out) {
+  const found = await page.evaluate(COMPOSITES).catch(() => []);
+  for (const c of found) {
+    const stop = page.locator(`[data-jourilo-composite-stop="${c.id}"]`);
+    const target = await stop.count() ? stop.first() : page.locator(`[data-jourilo-composite="${c.id}"]`);
+    const read3 = () => page.evaluate(`(${COMPOSITE_STATE})(${JSON.stringify(c.id)})`);
+    try {
+      await target.focus({ timeout: 2e3 });
+    } catch {
+      continue;
+    }
+    const before = await read3();
+    if (!before?.focusIn) continue;
+    out.composites++;
+    const keys = c.orientation === "vertical" ? ["ArrowDown", "ArrowRight"] : ["ArrowRight", "ArrowDown"];
+    let moved = false;
+    for (const key of keys) {
+      await page.keyboard.press(key);
+      await page.waitForTimeout(120);
+      const after = await read3();
+      if (after && (after.active !== before.active || after.descendant !== before.descendant || after.marks !== before.marks)) {
+        moved = true;
+        break;
+      }
+    }
+    if (!moved)
+      out.issues.push({
+        kind: "composite-unreachable",
+        trigger: `[role="${c.role}"]`,
+        name: c.name || c.role,
+        rect: c.rect,
+        detail: `Only one of the ${c.items} items of this ${c.role} is in the Tab order, and the arrow keys do not move to the others, so ${c.items - 1} item(s) cannot be reached with a keyboard.`,
+        steps: [
+          `Press Tab until the ${c.role} "${c.name || c.role}" has focus.`,
+          `Press ${keys.join(" and ")}: focus and selection stay where they are.`
+        ]
+      });
+  }
+  await page.evaluate(
+    `document.querySelectorAll('[data-jourilo-composite],[data-jourilo-composite-stop]').forEach((e) => { e.removeAttribute('data-jourilo-composite'); e.removeAttribute('data-jourilo-composite-stop'); })`
+  ).catch(() => void 0);
+}
 async function checkWidgets(page) {
   const triggers = await page.evaluate(TRIGGERS);
-  const out = { triggers: triggers.length, dialogs: 0, disclosures: 0, issues: [] };
+  const out = {
+    triggers: triggers.length,
+    dialogs: 0,
+    disclosures: 0,
+    composites: 0,
+    issues: []
+  };
+  await checkComposites(page, out);
   const state = (controls, mode = "open") => page.evaluate(`(${STATE})(${JSON.stringify(controls)}, ${JSON.stringify(mode)})`);
   for (const t of triggers) {
     if (DESTRUCTIVE.test(t.name) || FINANCIAL.test(t.name) || AVOID.test(t.name)) continue;
@@ -41962,6 +42127,16 @@ function nielsen(n) {
     url: "https://www.nngroup.com/articles/ten-usability-heuristics/"
   };
 }
+var MANUAL_REVIEW = [
+  "1.1.1 Non-text content: is each text alternative accurate and useful (presence is checked, meaning is not)?",
+  "1.2.x Time-based media: are captions, audio description and transcripts correct and complete?",
+  "1.3.2 Meaningful sequence and 1.3.3 Sensory characteristics: does the reading order make sense; do instructions rely only on shape, position or colour?",
+  "1.4.1 Use of colour and 1.4.11 Non-text contrast (where not measured): is colour the only cue anywhere?",
+  "2.4.4 / 2.4.6 Link purpose, headings and labels: are they descriptive in context?",
+  "2.5.7 Dragging movements: does every drag have a single-pointer alternative?",
+  "3.1.2 Language of parts, 3.2.6 Consistent help, 3.3.7 Redundant entry, 3.3.8 Accessible authentication (beyond paste blocking).",
+  "4.1.3 Status messages and the overall experience with a screen reader and with voice control."
+];
 
 // src/conversion/rules.ts
 var VAGUE = lexicon("vagueCta", { exact: true });
@@ -43022,18 +43197,20 @@ function keyboardFindings(obs) {
     );
   }
   if (kb.trap) {
+    const advised = !!kb.trap.advice && kb.trap.adviceWorks !== false;
+    const broken = !!kb.trap.advice && kb.trap.adviceWorks === false;
     out.push(
       makeFinding({
         ruleId: "jourilo/keyboard-trap",
-        title: "Keyboard focus is trapped",
+        title: advised ? "Keyboard focus is held; the page explains a way out" : "Keyboard focus is trapped",
         category: "accessibility",
-        kind: "defect",
-        severity: "critical",
+        kind: advised ? "needs-review" : "defect",
+        severity: advised ? "moderate" : "critical",
         confidence: "medium",
         provenance: "observed",
         url: obs.url,
         viewport: vp,
-        description: `Pressing Tab cycled between ${kb.trap.selectors.length} element(s) outside any modal dialog while the page has ${kb.focusableCount} focusable elements.`,
+        description: `Pressing Tab cycled between ${kb.trap.selectors.length} element(s) outside any modal dialog while the page has ${kb.focusableCount} focusable elements.${advised ? ` The page explains how to leave ("${kb.trap.advice}")${kb.trap.adviceWorks ? ", and that key let focus out" : ""}; check that the instruction is announced before focus is held.` : ""}${broken ? ` The page says "${kb.trap.advice}", but pressing it did not let focus out.` : ""}`,
         impact: "Keyboard users cannot reach the rest of the page and may have to reload it.",
         recommendation: 'Remove custom keydown handlers that intercept Tab outside dialogs; if this is a dialog, mark it aria-modal="true" and provide Escape to close.',
         standards: [wcag("2.1.2")],
@@ -43228,6 +43405,22 @@ var WIDGET_RULES = {
       }
     ]
   },
+  "composite-unreachable": {
+    ruleId: "jourilo/composite-keyboard",
+    title: "Items of a tab list, radio group, list box or menu bar cannot be reached with the keyboard",
+    severity: "serious",
+    impact: "Keyboard and screen-reader users can reach only the current item; the other tabs, options or choices are out of reach.",
+    recommendation: "Implement the arrow-key pattern for this widget (move focus or aria-activedescendant to the next item with the arrow keys), or put every item in the Tab order.",
+    standards: [
+      wcag("2.1.1"),
+      {
+        standard: "WAI-ARIA APG",
+        id: "keyboard-interface",
+        title: "Developing a Keyboard Interface",
+        url: "https://www.w3.org/WAI/ARIA/apg/practices/keyboard-interface/"
+      }
+    ]
+  },
   "dialog-escape": {
     ruleId: "jourilo/dialog-escape",
     title: "Escape does not close the dialog",
@@ -43318,8 +43511,7 @@ function widgetFindings(obs) {
       occurrences: issues.length,
       reproduction: [
         `Open ${obs.url} at the ${obs.viewport.name} viewport.`,
-        `Focus "${issues[0].name}" with Tab and press Enter.`,
-        issues[0].detail
+        ...issues[0].steps ?? [`Focus "${issues[0].name}" with Tab and press Enter.`, issues[0].detail]
       ]
     });
   });
@@ -44642,7 +44834,9 @@ function journeysHtml(journeys2) {
   if (!journeys2.length)
     return '<p class="muted">No journeys were run. Use <code>jourilo journeys suggest</code> and <code>jourilo journeys run</code>.</p>';
   return journeys2.map(
-    (j) => `<section class="journey ${j.status}"><h3>${esc(j.name)} <span class="pill st-${j.status}">${j.status}</span> <span class="muted">${esc(j.viewport)} \xB7 ${(j.durationMs / 1e3).toFixed(1)} s</span></h3>
+    (j) => `<section class="journey ${j.status}"><h3>${esc(j.name)} <span class="pill st-${j.status}">${j.status}</span>${j.stability ? ` <span class="pill ${j.stability === "flaky" ? "st-failed" : "st-passed"}">${j.stability}</span>` : ""} <span class="muted">${esc(j.viewport)} \xB7 ${(j.durationMs / 1e3).toFixed(1)} s</span></h3>
+${j.attempts ? `<p class="muted">${j.attempts.length} attempts: ${j.attempts.map((a) => esc(a.status)).join(", ")}${j.stability === "flaky" ? " \u2014 the steps below are from a failing attempt." : ""}</p>` : ""}
+${j.blockedRequests?.length ? `<details><summary>${j.blockedRequests.length} request(s) stopped by the safety policy</summary><ul>${j.blockedRequests.map((b) => `<li><code>${esc(b.method)} ${esc(b.url)}</code> \u2014 ${esc(b.reason)}</li>`).join("")}</ul></details>` : ""}
 <ol class="steps">${j.steps.map(
       (s) => `<li class="${s.status}"><div>${esc(s.description)} <span class="pill st-${s.status}">${s.status}</span> <span class="muted">${s.durationMs} ms</span>${s.error ? `<pre>${esc(s.error)}</pre>` : ""}</div>${s.screenshot ? `<a href="${safeHref(s.screenshot)}" target="_blank" rel="noopener"><img class="stepshot" loading="lazy" alt="" src="${safeHref(s.screenshot)}"></a>` : ""}</li>`
     ).join("")}</ol>
@@ -44650,11 +44844,18 @@ function journeysHtml(journeys2) {
 ${j.trace ? `<p>Trace: <code>${esc(j.trace)}</code> (open with <code>npx playwright show-trace</code>)</p>` : ""}</section>`
   ).join("");
 }
+function networkHtml(run) {
+  const n = run.network;
+  if (!n || !n.blocked.length && !n.escaped.length) return "";
+  return `<h2>Network safety</h2>
+${n.escaped.length ? `<p class="poor"><strong>Security event:</strong> ${n.escaped.length} redirect(s) reached this machine outside the network guard. Rerun untrusted sites in Chromium or Firefox.</p><ul>${n.escaped.map((e) => `<li><code>${esc(e.url)}</code> \u2014 ${esc(e.reason)}</li>`).join("")}</ul>` : ""}
+${n.blocked.length ? `<p class="muted">Connections the page tried to open and the guard refused (content depending on them did not load):</p><table><thead><tr><th>Host</th><th>Port</th><th>Reason</th></tr></thead><tbody>${n.blocked.map((b) => `<tr><td><code>${esc(b.host)}</code></td><td>${b.port}</td><td>${esc(b.reason)}</td></tr>`).join("")}</tbody></table>` : ""}`;
+}
 function compareHtml(cmp) {
   const row = (label, n, cls) => `<div class="card ${cls}"><div class="num">${n}</div><div>${label}</div></div>`;
   return `<div class="cards">${row("Fixed", cmp.fixed.length, "good")}${row("New", cmp.introduced.length, "poor")}${row("Still present", cmp.persisting.length, "")}${row("Changed severity", cmp.changed.length, "")}</div>
 <p class="muted">Baseline run <code>${esc(cmp.base.id)}</code> (${esc(cmp.base.startedAt)}) vs <code>${esc(cmp.head.id)}</code> (${esc(cmp.head.startedAt)}).</p>
-${cmp.metrics.length ? `<table><thead><tr><th>Page</th><th>Viewport</th><th>Metric</th><th>Before</th><th>After</th><th>\u0394</th></tr></thead><tbody>${cmp.metrics.map((m) => `<tr><td>${esc(pathname(m.url))}</td><td>${esc(m.viewport)}</td><td>${esc(m.name)}</td><td>${m.before}</td><td>${m.after}</td><td class="${m.delta < 0 ? "good" : m.delta > 0 ? "poor" : ""}">${m.delta > 0 ? "+" : ""}${m.delta}</td></tr>`).join("")}</tbody></table><p class="muted">Lab deltas from single visits can be noise; repeat runs before drawing conclusions.</p>` : ""}`;
+${cmp.metrics.length ? `<table><thead><tr><th>Page</th><th>Viewport</th><th>Metric</th><th>Before</th><th>After</th><th>\u0394</th><th>Verdict</th></tr></thead><tbody>${cmp.metrics.map((m) => `<tr><td>${esc(pathname(m.url))}</td><td>${esc(m.viewport)}</td><td>${esc(m.name)}</td><td>${m.before}</td><td>${m.after}</td><td class="${m.verdict === "improved" ? "good" : m.verdict === "regressed" ? "poor" : ""}">${m.delta > 0 ? "+" : ""}${m.delta}</td><td>${esc(m.verdict)}</td></tr>`).join("")}</tbody></table><p class="muted">Lab metrics. "Improved"/"regressed" need repeated visits whose ranges do not overlap (<code>--runs 5</code>); "unconfirmed" is a large change seen in single visits; "noise" is within measurement variation.</p>` : ""}`;
 }
 function contextHtml(run) {
   const c = run.context;
@@ -44767,6 +44968,8 @@ ${roadmapHtml(findings)}
 ${historyHtml(run, history)}
 ${contextHtml(run)}
 <h2>Limitations of this run</h2><ul class="limits">${run.limitations.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
+${networkHtml(run)}
+<h2>Still needs a person</h2><p class="muted">Automated checks cannot judge these WCAG 2.2 criteria; no run, including this one, shows conformance.</p><ul class="limits">${MANUAL_REVIEW.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>
 </section>
 <section id="findings" class="panel" hidden>
 <div class="filters">
@@ -44872,6 +45075,18 @@ function renderMarkdown(run, cmp, limit = 25) {
       lines.push(`- \u{1F195} ${f.severity}: ${md(f.title)} \u2014 \`${path(f.url)}\``);
     for (const f of cmp.fixed.slice(0, 10)) lines.push(`- \u2705 fixed: ${md(f.title)} \u2014 \`${path(f.url)}\``);
     lines.push("");
+    if (cmp.metrics.length) {
+      lines.push(
+        "| Page | Viewport | Metric | Before | After | Verdict |",
+        "| ---- | -------- | ------ | ------ | ----- | ------- |",
+        ...cmp.metrics.map(
+          (m) => `| \`${path(m.url)}\` | ${m.viewport} | ${m.name} | ${m.before} | ${m.after} | ${m.verdict} |`
+        ),
+        "",
+        "Lab metrics. Improved/regressed requires repeated visits whose ranges do not overlap (`--runs 5`).",
+        ""
+      );
+    }
   }
   const sorted = [...run.findings].sort(
     (a, b) => severityRank(a.severity) - severityRank(b.severity) || b.occurrences - a.occurrences
@@ -44912,6 +45127,22 @@ function renderMarkdown(run, cmp, limit = 25) {
     lines.push("");
   }
   lines.push("## Limitations", "", ...run.limitations.map((l) => `- ${md(l)}`), "");
+  if (run.network?.blocked.length || run.network?.escaped.length)
+    lines.push(
+      "## Network safety",
+      "",
+      ...run.network.escaped.map((e) => `- \u26A0\uFE0F security event: \`${md(e.url)}\` \u2014 ${md(e.reason)}`) ?? [],
+      ...run.network.blocked.map((b) => `- refused \`${md(b.host)}:${b.port}\` \u2014 ${md(b.reason)}`),
+      ""
+    );
+  lines.push(
+    "## Still needs a person",
+    "",
+    "Automated checks cannot judge these WCAG 2.2 criteria; no run shows conformance.",
+    "",
+    ...MANUAL_REVIEW.map((m) => `- ${md(m)}`),
+    ""
+  );
   return lines.join("\n");
 }
 function renderSarif(run) {
@@ -45156,7 +45387,7 @@ var conversion = {
 import { existsSync as existsSync7, readdirSync as readdirSync5, readFileSync as readFileSync6, writeFileSync as writeFileSync5 } from "node:fs";
 import { join as join10, resolve as resolve6 } from "node:path";
 init_errors();
-var matches = (f, e) => f.ruleId === e.rule && pathOf(f.url).split("?")[0].replace(/\/$/, "") === e.path.replace(/\/$/, "") && (!e.viewport || (f.viewport ?? "").split(", ").includes(e.viewport));
+var matches = (f, e) => f.ruleId === e.rule && (!e.kind || f.kind === e.kind) && pathOf(f.url).split("?")[0].replace(/\/$/, "") === e.path.replace(/\/$/, "") && (!e.viewport || (f.viewport ?? "").split(", ").includes(e.viewport));
 async function benchFixture(dir, wsRoot) {
   const expected = JSON.parse(readFileSync6(join10(dir, "expected.json"), "utf8"));
   const server = await serveStatic(dir);
@@ -45959,11 +46190,12 @@ function discoverRepository(root) {
   const cj = (name, rs, why) => {
     if (rs.length) candidateJourneys.push({ name, routes: [...new Set(rs)].slice(0, 6), why });
   };
-  cj(
-    "Sign up and reach the product",
-    [...byRole("signup"), ...byRole("dashboard")],
-    "signup and dashboard routes exist"
-  );
+  if (byRole("signup").length)
+    cj(
+      "Sign up and reach the product",
+      [...byRole("signup"), ...byRole("dashboard")],
+      byRole("dashboard").length ? "signup and dashboard routes exist" : "signup route exists"
+    );
   cj("Sign in", byRole("login"), "login route exists");
   cj("Recover access", byRole("recovery"), "password recovery route exists");
   cj(
@@ -47917,6 +48149,42 @@ async function suggest(ctx) {
     ].filter(Boolean).join("\n")
   };
 }
+function summarizeAttempts(spec, attempts) {
+  if (attempts.length === 1) return attempts[0];
+  const passed = attempts.filter((a) => a.result.status === "passed").length;
+  const rep = attempts.find((a) => a.result.status !== "passed") ?? attempts[0];
+  const result = {
+    ...rep.result,
+    attempts: attempts.map((a) => ({ status: a.result.status, durationMs: a.result.durationMs })),
+    stability: passed === 0 || passed === attempts.length ? "stable" : "flaky"
+  };
+  if (result.stability === "stable") return { result, findings: rep.findings };
+  const findings = [
+    ...rep.findings.map((f) => ({ ...f, confidence: "low" })),
+    makeFinding({
+      ruleId: "journey/flaky",
+      key: spec.id,
+      journey: spec.id,
+      title: `Journey "${spec.name}" passed ${passed} of ${attempts.length} times`,
+      category: "reliability",
+      kind: "needs-review",
+      severity: "moderate",
+      confidence: "high",
+      provenance: "observed",
+      url: rep.result.steps.at(-1)?.url || spec.start,
+      viewport: rep.result.viewport,
+      description: `The same steps gave different outcomes across ${attempts.length} runs (${attempts.map((a) => a.result.status).join(", ")}). Either the product behaves inconsistently (race conditions, timing, data dependence) or the journey depends on timing; the failing run's evidence is attached to the journey.`,
+      impact: "Intermittent failures reach real users and make before/after comparisons unreliable.",
+      recommendation: "Compare the failing attempt with a passing one: look for requests that finish in a different order, elements that render late, or data created by an earlier run. Fix the product if it is a race; otherwise make the journey wait for the right state.",
+      standards: [],
+      evidence: [{ type: "step", snippet: rep.result.steps.find((s) => s.status !== "passed")?.error ?? "" }],
+      reproduction: [
+        `Run the journey ${attempts.length} times: jourilo journeys run ${spec.id} --repeat ${attempts.length}`
+      ]
+    })
+  ];
+  return { result, findings };
+}
 async function runCmd(ctx) {
   const baseArg = str(ctx, "base");
   if (!baseArg)
@@ -47960,7 +48228,10 @@ async function runCmd(ctx) {
       const u = parseTargetUrl(o);
       return u.origin;
     });
+    const repeat = Math.max(1, Math.min(10, num(ctx, "repeat", 1)));
     const saveAuthArg = str(ctx, "save-auth");
+    if (saveAuthArg && repeat > 1)
+      throw new JouriloError("USAGE", "--save-auth cannot be combined with --repeat.");
     if (saveAuthArg && specs.length !== 1)
       throw new JouriloError("USAGE", "--save-auth needs exactly one journey (the sign-in journey).");
     const saveAuth = saveAuthArg ? resolve8(saveAuthArg) : void 0;
@@ -47985,21 +48256,29 @@ async function runCmd(ctx) {
       for (const spec of specs) {
         for (const vp of viewports) {
           ctx.log(`journey ${spec.id}${vp ? ` (${vp})` : ""}`);
-          const { result, findings: jf } = await runJourney(browser, spec, {
-            base: base2,
-            runDir,
-            hostClass,
-            policy,
-            data,
-            trace: flag(ctx, "trace"),
-            stepTimeoutMs: num(ctx, "timeout", 10) * 1e3,
-            ...vp ? { viewportOverride: vp } : {},
-            ...str(ctx, "auth") ? { storageState: str(ctx, "auth") } : {},
-            ...saveAuth ? { saveAuth } : {},
-            ...allowOrigins.length ? { allowOrigins } : {},
-            log: ctx.log
-          });
-          ctx.log(`  \u2192 ${result.status} (${(result.durationMs / 1e3).toFixed(1)} s)`);
+          const attempts = [];
+          for (let k = 0; k < repeat; k++) {
+            const r = await runJourney(browser, spec, {
+              base: base2,
+              runDir,
+              hostClass,
+              policy,
+              data: repeat > 1 ? testData(`${id}${k}`, parseVars(ctx)) : data,
+              trace: flag(ctx, "trace") && k === 0,
+              stepTimeoutMs: num(ctx, "timeout", 10) * 1e3,
+              ...vp ? { viewportOverride: vp } : {},
+              ...str(ctx, "auth") ? { storageState: str(ctx, "auth") } : {},
+              ...saveAuth ? { saveAuth } : {},
+              ...allowOrigins.length ? { allowOrigins } : {},
+              log: k === 0 ? ctx.log : void 0
+            });
+            if (repeat > 1) ctx.log(`  attempt ${k + 1}/${repeat}: ${r.result.status}`);
+            attempts.push(r);
+          }
+          const { result, findings: jf } = summarizeAttempts(spec, attempts);
+          ctx.log(
+            `  \u2192 ${result.status}${result.stability ? ` (${result.stability})` : ""} (${(result.durationMs / 1e3).toFixed(1)} s)`
+          );
           journeys2.push(result);
           findings.push(...jf);
         }
@@ -48079,7 +48358,8 @@ var journeys = {
     timeout: { type: "string" },
     pages: { type: "string" },
     force: { type: "boolean" },
-    "save-auth": { type: "string" }
+    "save-auth": { type: "string" },
+    repeat: { type: "string" }
   },
   details: `Subcommands:
   suggest [url|dir|run]  Derive journeys from a site (or an existing run) into .jourilo/journeys/*.json
@@ -48096,6 +48376,7 @@ Run options:
   --trace                Record a Playwright trace per journey (contains typed values; keep private)
   --auth FILE            Playwright storage state for signed-in journeys
   --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
+  --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission
@@ -48517,6 +48798,20 @@ function planFixes(findings, root) {
 }
 
 // src/report/compare.ts
+var RESOLUTION = { LCP: 150, FCP: 150, TBT: 100, CLS: 0.02, Transfer: 0 };
+function metricVerdict(name, a, b) {
+  const delta = b.value - a.value;
+  if (name === "Transfer") {
+    if (Math.abs(delta) <= Math.max(2048, a.value * 0.02)) return "noise";
+    return delta < 0 ? "improved" : "regressed";
+  }
+  if (a.range && b.range) {
+    const overlap = a.range[0] <= b.range[1] && b.range[0] <= a.range[1];
+    if (overlap || Math.abs(delta) < (RESOLUTION[name] ?? 0) / 2) return "noise";
+    return delta < 0 ? "improved" : "regressed";
+  }
+  return Math.abs(delta) < (RESOLUTION[name] ?? 0) ? "noise" : "unconfirmed";
+}
 function pathKey(u) {
   try {
     const x = new URL(u);
@@ -48542,7 +48837,15 @@ function compareRuns(base2, head) {
       const b = hp.metrics.find((m) => m.name === name);
       if (!a || !b) continue;
       const delta = Math.round((b.value - a.value) * 1e3) / 1e3;
-      metrics.push({ url: hp.url, viewport: hp.viewport, name, before: a.value, after: b.value, delta });
+      metrics.push({
+        url: hp.url,
+        viewport: hp.viewport,
+        name,
+        before: a.value,
+        after: b.value,
+        delta,
+        verdict: metricVerdict(name, a, b)
+      });
     }
   }
   const regressionFree = !introduced.some(
@@ -48554,7 +48857,7 @@ function compareRuns(base2, head) {
 // src/cli/commands/optimize.ts
 var optimize = {
   name: "optimize",
-  summary: "Plan (and with --apply, make) minimal source fixes for located findings; shows diffs, checkpoints first.",
+  summary: "Plan (and with --apply, make) minimal source fixes for located findings; shows diffs, writes one reversible change.",
   usage: "jourilo optimize [run=latest] --repo <path> [--rule id ...] [--apply]",
   options: {
     repo: { type: "string" },
@@ -48563,7 +48866,8 @@ var optimize = {
     apply: { type: "boolean" }
   },
   details: `Deterministic fixers (others are reported with source candidates for a person or agent to fix):
-  axe/html-has-lang, jourilo/missing-viewport-meta, jourilo/input-purpose, jourilo/focus-visible, jourilo/paste-blocked
+  axe/html-has-lang, jourilo/missing-viewport-meta, jourilo/input-purpose, jourilo/focus-visible, jourilo/paste-blocked,
+  jourilo/unsized-images, jourilo/placeholder-label
 Without --apply nothing is written. With --apply, all files are written as one change: each file must be unchanged
 since the plan, writes are atomic, an interrupted apply is undone, and \`jourilo rollback <id>\` restores the files
 (git is not required).
@@ -48649,6 +48953,21 @@ Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
     };
   }
 };
+function metricSummary(metrics) {
+  if (!metrics.length) return [];
+  const n = (v) => metrics.filter((m) => m.verdict === v);
+  const lines = [
+    `  lab metrics: ${n("improved").length} improved \xB7 ${n("regressed").length} regressed \xB7 ${n("noise").length} within noise \xB7 ${n("unconfirmed").length} unconfirmed`,
+    ...[...n("improved"), ...n("regressed")].map(
+      (m) => `    ${m.verdict === "improved" ? "\u2193" : "\u2191"} ${m.name} ${new URL(m.url).pathname} (${m.viewport}): ${m.before} \u2192 ${m.after}`
+    )
+  ];
+  if (n("unconfirmed").length)
+    lines.push(
+      "    Unconfirmed changes come from single visits; repeat with `jourilo audit \u2026 --runs 5` to confirm."
+    );
+  return lines;
+}
 var verify = {
   name: "verify",
   summary: "Repeat a run with the same scope (pages, viewports) after a change and compare: fixed, new, persisting, metric deltas.",
@@ -48687,6 +49006,8 @@ var verify = {
         allowPrivate: base2.settings.hostClass === "private",
         keyboard: base2.settings.keyboard !== false,
         throttle: base2.settings.throttle === true,
+        // Same number of visits as the baseline, so medians are compared with medians.
+        runs: typeof base2.settings.runs === "number" ? base2.settings.runs : 1,
         timeoutMs: 3e4,
         mask: [],
         mode: base2.mode,
@@ -48722,6 +49043,7 @@ var verify = {
           `  fixed ${cmp.fixed.length} \xB7 new ${cmp.introduced.length} \xB7 still present ${cmp.persisting.length}`,
           ...cmp.fixed.map((f) => `  \u2713 fixed  ${f.title} (${new URL(f.url).pathname})`),
           ...cmp.introduced.map((f) => `  \u2717 new    ${f.severity} ${f.title} (${new URL(f.url).pathname})`),
+          ...metricSummary(cmp.metrics),
           cmp.regressionFree ? "  No new serious/critical defects." : "  \u26A0 Regression: new serious/critical defects.",
           `  Report: ${reports.html}`
         ].join("\n"),
@@ -49082,7 +49404,18 @@ function usage() {
   lines.push("Global options: --json (machine-readable stdout), --workspace DIR (default .jourilo), --quiet");
   return lines.join("\n");
 }
+function nodeSupported(version) {
+  const [major = 0, minor = 0] = version.replace(/^v/, "").split(".").map(Number);
+  return major > 20 || major === 20 && minor >= 10;
+}
 async function main(argv) {
+  if (!nodeSupported(process.versions.node)) {
+    process.stderr.write(
+      `Jourilo needs Node.js 20.10 or newer (this is ${process.versions.node}). Install a current LTS from https://nodejs.org.
+`
+    );
+    return 2;
+  }
   const [name, ...rest] = argv;
   if (!name || name === "--help" || name === "-h" || name === "help") {
     process.stdout.write(`${usage()}
@@ -49143,7 +49476,8 @@ main(process.argv.slice(2)).then((code) => {
   process.exitCode = code;
 });
 export {
-  main
+  main,
+  nodeSupported
 };
 /*! Bundled license information:
 

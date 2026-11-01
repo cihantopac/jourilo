@@ -30,7 +30,7 @@ import { type Command, flag, list, str } from '../framework.js';
 export const optimize: Command = {
   name: 'optimize',
   summary:
-    'Plan (and with --apply, make) minimal source fixes for located findings; shows diffs, checkpoints first.',
+    'Plan (and with --apply, make) minimal source fixes for located findings; shows diffs, writes one reversible change.',
   usage: 'jourilo optimize [run=latest] --repo <path> [--rule id ...] [--apply]',
   options: {
     repo: { type: 'string' },
@@ -39,7 +39,8 @@ export const optimize: Command = {
     apply: { type: 'boolean' },
   },
   details: `Deterministic fixers (others are reported with source candidates for a person or agent to fix):
-  axe/html-has-lang, jourilo/missing-viewport-meta, jourilo/input-purpose, jourilo/focus-visible, jourilo/paste-blocked
+  axe/html-has-lang, jourilo/missing-viewport-meta, jourilo/input-purpose, jourilo/focus-visible, jourilo/paste-blocked,
+  jourilo/unsized-images, jourilo/placeholder-label
 Without --apply nothing is written. With --apply, all files are written as one change: each file must be unchanged
 since the plan, writes are atomic, an interrupted apply is undone, and \`jourilo rollback <id>\` restores the files
 (git is not required).

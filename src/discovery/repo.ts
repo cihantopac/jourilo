@@ -593,11 +593,13 @@ export function discoverRepository(root: string): ProductProfile {
   const cj = (name: string, rs: string[], why: string) => {
     if (rs.length) candidateJourneys.push({ name, routes: [...new Set(rs)].slice(0, 6), why });
   };
-  cj(
-    'Sign up and reach the product',
-    [...byRole('signup'), ...byRole('dashboard')],
-    'signup and dashboard routes exist',
-  );
+  // A journey is suggested only when its first step exists (a dashboard alone is not a sign-up path).
+  if (byRole('signup').length)
+    cj(
+      'Sign up and reach the product',
+      [...byRole('signup'), ...byRole('dashboard')],
+      byRole('dashboard').length ? 'signup and dashboard routes exist' : 'signup route exists',
+    );
   cj('Sign in', byRole('login'), 'login route exists');
   cj('Recover access', byRole('recovery'), 'password recovery route exists');
   cj(

@@ -20,7 +20,8 @@ export interface KeyboardWalk {
   stops: FocusStop[];
   focusableCount: number;
   completedCycle: boolean;
-  trap: { selectors: string[] } | null;
+  /** advice: text on the page that explains how to leave (WCAG 2.1.2 allows a documented non-standard key). */
+  trap: { selectors: string[]; advice?: string; adviceWorks?: boolean } | null;
   pressed: number;
   // The browser build has no key that moves focus to links, so links were not part of the walk.
   skipsLinks?: boolean;
@@ -123,6 +124,39 @@ const ESCAPE_TRAP = `(sels) => {
   return true;
 }`;
 
+// Instructions for leaving a trap: "Press Ctrl+M to exit" in the page text, or a help control among the trapped
+// elements ("How to move on", "Help", "Exit").
+const TRAP_ADVICE = `(selectors) => {
+  const text = document.body.innerText || '';
+  const m = text.match(/(press|use|hit)\\s+(ctrl|control|alt|option|shift|cmd|command|esc|escape|f\\d+)[^.\\n]{0,24}?\\s+to\\s+(exit|leave|escape|close|quit|move on|continue)[^.\\n]{0,40}/i);
+  if (m) return m[0].trim();
+  for (const s of selectors) {
+    const el = document.querySelector(s);
+    const name = el ? (el.getAttribute('aria-label') || el.textContent || '').trim() : '';
+    if (/\\b(how to|help|exit|leave|skip out)\\b/i.test(name)) return name.slice(0, 80);
+  }
+  return null;
+}`;
+
+/**
+ * The area around a focus stop in page coordinates. Comparing it focused and with nothing focused shows indicators
+ * that other elements draw (a sibling that lights up, a moving underline), which a style comparison of the element
+ * and its parent cannot see.
+ */
+async function shotAround(page: Page, r: Rect): Promise<Buffer | null> {
+  const pad = 24;
+  const clip = {
+    x: Math.max(0, r.x - pad),
+    y: Math.max(0, r.y - pad),
+    width: r.width + pad * 2,
+    height: r.height + pad * 2,
+  };
+  if (r.width < 1 || r.height < 1 || clip.width * clip.height > 640 * 480) return null;
+  return page
+    .screenshot({ clip, fullPage: true, animations: 'disabled', caret: 'hide', type: 'png' })
+    .catch(() => null);
+}
+
 export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWalk> {
   const focusableCount = (await page.evaluate(COUNT_FOCUSABLE)) as number;
   const stops: FocusStop[] = [];
@@ -135,6 +169,7 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
   );
   let prevHandle: ElementHandle | null = null;
   let prevFocused: string[] | null = null;
+  let prevShot: Buffer | null = null;
   const limit = Math.min(maxTabs, focusableCount + 12);
   const sequence: string[] = [];
   const newStop = (d: Omit<FocusStop, 'index' | 'indicatorChanges' | 'indicatorChecked'>): FocusStop => ({
@@ -173,6 +208,12 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
   for (let i = 0; i < limit; i++) {
     await page.keyboard.press(tabKey);
     walk.pressed++;
+    // Let focus handlers run: a trap often pulls focus back from onblur with a short timeout.
+    await page
+      .evaluate(
+        'new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 20))))',
+      )
+      .catch(() => undefined);
     const handle = (await page.evaluateHandle('document.activeElement')) as ElementHandle;
     const data = (await handle.evaluate(inPage(FOCUS_INFO))) as Omit<
       FocusStop,
@@ -192,6 +233,13 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
       }
     }
 
+    // The new stop's focused state is recorded first: the comparison below may blur it for a moment.
+    const isNewStop = !!data && !noMove && !stops.some((s) => s.selector === data.selector);
+    const curFocused = isNewStop
+      ? ((await handle.evaluate(inPage(FOCUS_STYLES)).catch(() => null)) as string[] | null)
+      : null;
+    const curShot = isNewStop ? await shotAround(page, data!.rect) : null;
+
     // The previous stop is now unfocused: compare its styles to what we recorded while it had focus.
     if (prevHandle && prevFocused && stops.length) {
       const unfocused = (await prevHandle.evaluate(inPage(FOCUS_STYLES)).catch(() => null)) as
@@ -201,6 +249,16 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
       if (unfocused) {
         last.indicatorChanges = prevFocused.filter((s, k) => s !== unfocused[k]);
         last.indicatorChecked = true;
+        // No style change on the element or its parent: look at the pixels around it with nothing focused.
+        if (!last.indicatorChanges.length && prevShot) {
+          await handle.evaluate(inPage('(el) => el.blur && el.blur()')).catch(() => undefined);
+          const neutral = await shotAround(page, last.rect);
+          await handle.evaluate(inPage('(el) => el.focus && el.focus()')).catch(() => undefined);
+          if (neutral && !neutral.equals(prevShot))
+            last.indicatorChanges = [
+              'the area around the element changes on focus (indicator drawn by another element)',
+            ];
+        }
         if (process.env.JOURILO_DEBUG?.includes('keyboard'))
           process.stderr.write(
             `[keyboard]   ${last.selector} changes=${JSON.stringify(last.indicatorChanges)}\n`,
@@ -212,6 +270,7 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
       break;
     }
     prevFocused = null;
+    prevShot = null;
 
     if (!data) {
       // Focus left the document (end of the tab order).
@@ -237,7 +296,9 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
       for (const s of tail) counts.set(s, (counts.get(s) ?? 0) + 1);
       const distinct = new Set([...counts].filter(([, n]) => n >= 2).map(([s]) => s));
       const cycling = distinct.size > 0 && tail.slice(-4).every((s) => distinct.has(s));
-      if (cycling && distinct.size <= 3 && focusableCount > distinct.size + 2 && !data.inModal) {
+      // Focusable elements that Tab never reached while focus kept cycling are what the trap keeps out of reach.
+      const unreached = focusableCount - new Set(sequence).size;
+      if (cycling && distinct.size <= 3 && unreached > 0 && !data.inModal) {
         walk.trap = { selectors: [...distinct] };
         // Record the trap, then step past it once so the rest of the page is still checked.
         if (
@@ -262,9 +323,70 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
       prevHandle = null;
       continue;
     }
-    prevFocused = (await handle.evaluate(inPage(FOCUS_STYLES)).catch(() => null)) as string[] | null;
+    prevFocused = curFocused;
+    prevShot = curShot;
     prevHandle = handle;
     stops.push(newStop(data));
   }
+  if (walk.trap) {
+    const advice = (await page
+      .evaluate(`(${TRAP_ADVICE})(${JSON.stringify(walk.trap.selectors)})`)
+      .catch(() => null)) as string | null;
+    if (advice) {
+      walk.trap.advice = advice;
+      // Try the advertised key: does it actually let focus out of the trapped elements?
+      const key = adviceKey(advice);
+      if (key) {
+        const trapped = walk.trap.selectors;
+        await page
+          .locator(trapped[0]!)
+          .first()
+          .focus({ timeout: 2000 })
+          .catch(() => undefined);
+        await page.keyboard.press(key).catch(() => undefined);
+        await page
+          .evaluate('new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30)))')
+          .catch(() => undefined);
+        const out = (await page
+          .evaluate(
+            `((sel) => { const a = document.activeElement; return !!a && a !== document.body && !sel.some((s) => a.matches(s)); })(${JSON.stringify(trapped)})`,
+          )
+          .catch(() => false)) as boolean;
+        walk.trap.adviceWorks = out;
+      }
+    }
+  }
   return walk;
+}
+
+/** Playwright key for "Press Ctrl+M to exit"-style advice, or null when the advice is not a key. */
+export function adviceKey(advice: string): string | null {
+  const m = advice.match(/\b(?:press|use|hit)\s+([a-z0-9]+(?:\s*[+-]\s*[a-z0-9]+)*)/i);
+  if (!m) return null;
+  const NAMES: Record<string, string> = {
+    ctrl: 'Control',
+    control: 'Control',
+    alt: 'Alt',
+    option: 'Alt',
+    shift: 'Shift',
+    cmd: 'Meta',
+    command: 'Meta',
+    esc: 'Escape',
+    escape: 'Escape',
+    tab: 'Tab',
+    enter: 'Enter',
+  };
+  const parts = m[1]!
+    .split(/\s*[+-]\s*/)
+    .map(
+      (k) =>
+        NAMES[k.toLowerCase()] ??
+        (/^f\d{1,2}$/i.test(k) ? k.toUpperCase() : k.length === 1 ? k.toUpperCase() : null),
+    );
+  if (
+    parts.some((p) => !p) ||
+    !parts.some((p) => (p !== 'Shift' && !/^(Control|Alt|Meta)$/.test(p!)) || parts.length === 1)
+  )
+    return null;
+  return parts.join('+');
 }

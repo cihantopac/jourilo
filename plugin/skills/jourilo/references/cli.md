@@ -148,6 +148,7 @@ Run options:
   --trace                Record a Playwright trace per journey (contains typed values; keep private)
   --auth FILE            Playwright storage state for signed-in journeys
   --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
+  --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission
@@ -180,7 +181,7 @@ Jourilo never invents traffic, conversions or effects: every number comes from y
 
 ### `jourilo optimize`
 
-Plan (and with --apply, make) minimal source fixes for located findings; shows diffs, checkpoints first.
+Plan (and with --apply, make) minimal source fixes for located findings; shows diffs, writes one reversible change.
 
 ```
 jourilo optimize [run=latest] --repo <path> [--rule id ...] [--apply]
@@ -188,7 +189,8 @@ jourilo optimize [run=latest] --repo <path> [--rule id ...] [--apply]
 
 ```
 Deterministic fixers (others are reported with source candidates for a person or agent to fix):
-  axe/html-has-lang, jourilo/missing-viewport-meta, jourilo/input-purpose, jourilo/focus-visible, jourilo/paste-blocked
+  axe/html-has-lang, jourilo/missing-viewport-meta, jourilo/input-purpose, jourilo/focus-visible, jourilo/paste-blocked,
+  jourilo/unsized-images, jourilo/placeholder-label
 Without --apply nothing is written. With --apply, all files are written as one change: each file must be unchanged
 since the plan, writes are atomic, an interrupted apply is undone, and `jourilo rollback <id>` restores the files
 (git is not required).
