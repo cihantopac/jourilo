@@ -89,6 +89,18 @@ report uses the darker `#875802` for text, which keeps 4.5:1). The report inline
 file with no font. Originality: low visual similarity to the collected competitor marks (highest 38 %), but no
 trademark-register search was done; the maintainer accepted that risk. This is not trademark clearance.
 
+## D17 · An actionable report that never acts itself (2026-11-01)
+
+The report stays one offline HTML file rendered on the server, so it reads without JavaScript; a small inline script
+adds language, theme, filters, selection and the repair prompt, and reads only a JSON payload whose `<` is escaped.
+Repair prompts follow the Relivaro and Searvex pattern (selection → editable Markdown → copy or download) without
+their client-side rendering: the report writes text for an agent and a person to review, never runs or sends
+anything, and says so. Findings are grouped by root cause (same rule and confident source line, else the same
+specific selector), and every finding has a fix path: automatic only when a Jourilo fixer exists, manual for
+needs-review items, experiment briefs for hypotheses. Interface strings are translated (English, Turkish);
+finding texts come from rules and pages and are not, so evidence is never paraphrased. The decision not to show an
+overall UX score (D3) is kept.
+
 ## D11 · Integration contract `jourilo.context/v1` (2026-10-30)
 
 Markilo and Searvex are read through adapters into a neutral shape (brand: colors, fonts, locked; search: findings by

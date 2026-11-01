@@ -46,6 +46,11 @@ Rules:
   (downloads Chromium). Never use real payment details or real accounts.
 - Make minimal changes that fix the cause; keep brand tokens (never change a locked brand). Run the project's checks,
   then \`${cmd} verify <baseline-run>\` and report fixed / new / persisting honestly.
+
+Answer in 80–150 words unless asked for more: the target and what ran; blocked journeys and key defects; three
+priorities by root cause; which fixes are automatic, agent-assisted or need a person; the real \`report.html\` path
+from the command's JSON and how to open it (any browser, offline; it turns selected findings into a repair prompt);
+one recommended next step. The evidence stays in the report.
 `;
 }
 

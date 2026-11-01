@@ -175,6 +175,16 @@ After the fixes, the portfolio's remaining defects are the three confirmed in se
 scrollable region without keyboard access, content outside landmarks); the product site has no defects on its seven pages (18 axe "needs review" items and 2 conversion
 hypotheses are listed separately, as designed); the Laravel profile matches the routes by hand count.
 
+## 3c. Report validation for 1.1.0 (2026-11-01)
+
+The redesigned report was checked on the seeded demo app and on the maintainer's portfolio (static export, 8 pages ×
+2 viewports, read-only, run data outside this repository) in Chromium, Firefox and WebKit: 40 scripted checks per
+engine pass — axe-core finds no WCAG 2.2 A/AA violations in the report in light or dark, language and theme
+persist across reloads and reports, tabs work with arrow keys, the prompt dialog traps and returns focus, clipboard
+copy and Markdown download carry the edited prompt, no page scrolls sideways at 390 px, and the report makes no
+network request. The portfolio run showed one engine weakness (a theme toggle suggested as the main call to action),
+recorded in [LIMITATIONS.md](LIMITATIONS.md).
+
 ## 4. Claude Code plugin (headless)
 
 `claude -p "/jourilo:discover fixtures/repos/next-saas" --plugin-dir ./plugin` loaded the plugin, ran the real

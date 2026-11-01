@@ -15,3 +15,4 @@ Toolchain: `node "${CLAUDE_PLUGIN_ROOT}/dist/jourilo.mjs" <command> … --json` 
 1. `jourilo runs --json` to find run ids if needed, then `jourilo compare <baseline> [head] --json`.
 2. Report fixed, new (regressions first) and persisting findings with pages and severities, and metric deltas.
    Single lab visits are noisy: treat small metric changes as noise unless repeated runs agree.
+3. Answer in the short format of `${CLAUDE_PLUGIN_ROOT}/skills/jourilo/SKILL.md` → Answer format (80–150 words, report path, one next step). Lead with regressions, then fixed and still-present counts; the report's Before / after tab shows them.

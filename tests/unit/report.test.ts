@@ -177,7 +177,7 @@ describe('report sections for safety and stability', () => {
     expect(html).toContain('Security event');
     expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
     expect(html).not.toContain('<img src=x onerror');
-    expect(html).toContain('>flaky<');
+    expect(html).toContain('data-i18n="st.flaky">Flaky<');
     expect(html).toContain('2 attempts: passed, failed');
     expect(html).toContain('&lt;b&gt;irreversible&lt;/b&gt;');
     expect(html).toContain('Still needs a person');

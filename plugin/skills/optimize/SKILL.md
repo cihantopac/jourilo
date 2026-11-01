@@ -25,3 +25,4 @@ Toolchain: `node "${CLAUDE_PLUGIN_ROOT}/dist/jourilo.mjs" <command> … --json` 
    did not work or regressed something, say so and iterate, or offer `jourilo rollback <id> --yes` (show the
    user the preview without `--yes` first; it lists conflicts with edits made after the change).
 6. Do not commit unless the user asks.
+7. Answer in the short format of `${CLAUDE_PLUGIN_ROOT}/skills/jourilo/SKILL.md` → Answer format (80–150 words, report path, one next step). Say what was verified as fixed, what is new and what still needs a person.

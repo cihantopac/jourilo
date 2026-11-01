@@ -4,6 +4,44 @@ All notable changes are documented here. The project follows [Semantic Versionin
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-01
+
+The detection engine is unchanged from 1.0.0 (fixture benchmark 45/45, 0 false positives); this release is about
+seeing, understanding and acting on the results.
+
+### Added
+
+- **Repair prompts.** Select findings or whole root-cause groups in the HTML report and turn them into an editable
+  Markdown prompt for Claude Code or any coding agent (copy, or download as `jourilo-repair-<run>.md`). It carries
+  finding ids, pages, run-relative screenshot and evidence paths, likely source files and reproduction steps, and
+  asks the agent to revalidate, make the smallest change, add regression tests and verify with `jourilo verify`.
+  Page-derived text is flattened and fenced between nonce markers it cannot forge. The report never runs anything.
+- **Fix paths.** Every finding is labelled automatic fix (a Jourilo fixer exists), agent-assisted, manual review or
+  experiment brief; conversion hypotheses produce experiment or investigation briefs, never code changes.
+- **English and Turkish report interface** and a **Light / Dark / System** theme selector. The browser's language and
+  color scheme are used first; choices are remembered. Finding texts, code and screenshots stay in their original
+  language.
+- `docs/WORKFLOW.md`: the improvement loop, the report, repair prompts and the agent answer format.
+
+### Changed
+
+- **The report is redesigned** in the Daybook identity (paper, ink and brass, a book serif for headings, the
+  wordmark's diamond as the recurring mark): compact counts, blocked journeys first with the step where they stopped,
+  "Fix first" cards with the outlined element, three separate lanes for verified defects, manual review and
+  conversion hypotheses, and short limitations with the rest folded away. Still no overall UX score.
+- **Root-cause grouping** everywhere: the same rule on the same source line, or on the same element across pages, is
+  one card listing every page and finding id. Filters for result type, severity, category, fix path and page.
+- **Journey timelines** with the real screenshot of every step, the step that failed and the goal with its criteria;
+  one blocked-journey card per journey across viewports.
+- **Before / after**: the same region of the page from the baseline and the new run side by side for each fixed root
+  cause, page screenshots in pairs, and metric verdicts.
+- Accessibility of the report itself: a page heading, landmarks, a skip link, arrow-key tabs, keyboard-scrollable
+  regions, named screenshot links, 24 px targets; axe-core finds no WCAG 2.2 A/AA violations in either theme.
+- Claude Code skills and the other-agent instructions answer in 80–150 words: target, blocked journeys and key
+  defects, three priorities, available fixes, the real report path and how to open it, one next step.
+- The README is a visual product page; CLI examples, evaluation details and safety specifics moved to the docs.
+  README images use absolute URLs so they also render on npm.
+
 ## [1.0.1] - 2026-11-01
 
 ### Added
