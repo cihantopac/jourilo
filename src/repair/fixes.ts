@@ -322,6 +322,23 @@ export const FIXERS: Record<string, Fixer> = {
   'jourilo/placeholder-label': placeholderLabel,
 };
 
+/** Text of a file that is valid UTF-8; other encodings are left alone (rewriting them would change bytes). */
+function utf8OrNull(buf: Buffer): string | null {
+  const text = buf.toString('utf8');
+  return Buffer.from(text, 'utf8').equals(buf) ? text : null;
+}
+
+/** One edit per file for a set of plans: the original text from the first plan, the final text from the last. */
+export function composeEdits(plans: FixPlan[]): FileEdit[] {
+  const byFile = new Map<string, FileEdit>();
+  for (const p of plans)
+    for (const e of p.edits) {
+      const prev = byFile.get(e.file);
+      byFile.set(e.file, { file: e.file, before: prev?.before ?? e.before, after: e.after });
+    }
+  return [...byFile.values()];
+}
+
 export function planFixes(findings: Finding[], root: string): FixPlan[] {
   const cache = new Map<string, string | null>();
   const read = (file: string) => {
@@ -346,7 +363,7 @@ export function planFixes(findings: Finding[], root: string): FixPlan[] {
               '.astro',
               '.php',
             ].includes(extname(abs).toLowerCase())
-            ? readFileSync(abs, 'utf8')
+            ? utf8OrNull(readFileSync(abs))
             : null,
         );
       } catch {

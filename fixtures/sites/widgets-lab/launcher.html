@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Help launcher – Widgets lab</title><link rel="stylesheet" href="/style.css">
+<style>
+  .fab { position: fixed; right: 24px; bottom: 24px; width: 56px; height: 56px; border-radius: 50%; }
+  .hint { position: fixed; right: 24px; bottom: 96px; width: 280px; height: 120px; background: #fffbe6; padding: 12px; }
+  dialog { border: 0; border-radius: 8px; padding: 24px; }
+</style></head>
+<body>
+<!-- An accessible help dialog. Opening it the first time also adds a hint bubble that stays on the page after the
+     dialog closes; that bubble is not the dialog and must not make the dialog look "still open". -->
+<main><h1>Help center</h1><p><a href="/">Back to the lab</a></p></main>
+<button type="button" class="fab" aria-haspopup="dialog" aria-expanded="false" aria-label="Open help">?</button>
+<dialog aria-labelledby="h-title"><h2 id="h-title">How can we help?</h2>
+  <label for="q">Question</label> <input id="q" type="search">
+  <p><button type="button" class="close">Close</button></p></dialog>
+<script>
+  var fab = document.querySelector('.fab'), dlg = document.querySelector('dialog');
+  fab.addEventListener('click', function () {
+    dlg.showModal(); fab.setAttribute('aria-expanded', 'true');
+    if (!document.querySelector('.hint')) { var h = document.createElement('p'); h.className = 'hint'; h.textContent = 'Tip: type a question.'; document.body.appendChild(h); }
+  });
+  dlg.querySelector('.close').addEventListener('click', function () { dlg.close(); });
+  dlg.addEventListener('close', function () { fab.setAttribute('aria-expanded', 'false'); fab.focus(); });
+</script>
+</body>
+</html>

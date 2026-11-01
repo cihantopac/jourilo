@@ -1,5 +1,5 @@
 // The full improvement loop on a disposable git copy of the acme-saas fixture:
-// audit → optimize (dry run, then apply with checkpoint) → verify (fixed, no regressions) → idempotency → rollback.
+// audit → optimize (dry run, then apply as a transaction) → verify (fixed, no regressions) → idempotency → rollback.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cpSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -82,12 +82,16 @@ describe('repair loop', () => {
     expect(readFileSync(join(app, 'style.css'), 'utf8').match(/:focus-visible/g)?.length).toBe(3);
   });
 
-  it('rolls back to the checkpoint', () => {
+  it('rolls back each change, newest first, without conflicts', () => {
     const cps = jourilo('runs');
     expect(cps.length).toBeGreaterThan(0);
-    const r = jourilo('rollback', firstCheckpoint, '--yes');
-    // Everything since the first checkpoint: five files from the first fix round plus launch.html.
-    expect(r.restored.length).toBe(6);
+    // `latest` is the image-size change; it touched launch.html only.
+    const second = jourilo('rollback', 'latest', '--yes');
+    expect(second.restored).toEqual(['launch.html']);
+    // The first change: the five files of the first fix round, all still as Jourilo wrote them.
+    const first = jourilo('rollback', firstCheckpoint, '--yes');
+    expect(first.restored.length).toBe(5);
+    expect(first.conflicts).toEqual([]);
     expect(git('status', '--short')).toBe('');
   });
 });

@@ -131,6 +131,9 @@ export interface MetricValue {
   source: 'lab';
   rating?: 'good' | 'needs-improvement' | 'poor';
   note?: string;
+  /** With --runs N: number of visits, and the lowest and highest value measured. */
+  runs?: number;
+  range?: [number, number];
 }
 
 export interface PageCapture {
@@ -223,6 +226,11 @@ export interface JourneyResult {
   successCriteria: { description: string; met: boolean; detail?: string }[];
   durationMs: number;
   trace?: string;
+  /** Requests the safety policy stopped during the journey. */
+  blockedRequests?: { method: string; url: string; reason: string }[];
+  /** With --repeat: every attempt, and whether the outcome was the same each time. */
+  attempts?: { status: JourneyResult['status']; durationMs: number }[];
+  stability?: 'stable' | 'flaky';
 }
 
 export type RunMode = 'website' | 'repository';
@@ -257,4 +265,6 @@ export interface Run {
   product?: unknown;
   /** Brand/search context (jourilo.context/v1) used by this run, when present. */
   context?: import('../integrations/context.js').ExperienceContext;
+  /** What the network guard refused or detected during the run. */
+  network?: import('../browser/session.js').NetworkReport;
 }

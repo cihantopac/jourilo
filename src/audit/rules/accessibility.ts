@@ -240,18 +240,21 @@ export function keyboardFindings(obs: PageObservation): Finding[] {
   }
 
   if (kb.trap) {
+    // WCAG 2.1.2 accepts a trap whose way out is explained; whether the explained key works needs a person.
+    const advised = !!kb.trap.advice && kb.trap.adviceWorks !== false;
+    const broken = !!kb.trap.advice && kb.trap.adviceWorks === false;
     out.push(
       makeFinding({
         ruleId: 'jourilo/keyboard-trap',
-        title: 'Keyboard focus is trapped',
+        title: advised ? 'Keyboard focus is held; the page explains a way out' : 'Keyboard focus is trapped',
         category: 'accessibility',
-        kind: 'defect',
-        severity: 'critical',
+        kind: advised ? 'needs-review' : 'defect',
+        severity: advised ? 'moderate' : 'critical',
         confidence: 'medium',
         provenance: 'observed',
         url: obs.url,
         viewport: vp,
-        description: `Pressing Tab cycled between ${kb.trap.selectors.length} element(s) outside any modal dialog while the page has ${kb.focusableCount} focusable elements.`,
+        description: `Pressing Tab cycled between ${kb.trap.selectors.length} element(s) outside any modal dialog while the page has ${kb.focusableCount} focusable elements.${advised ? ` The page explains how to leave ("${kb.trap.advice}")${kb.trap.adviceWorks ? ', and that key let focus out' : ''}; check that the instruction is announced before focus is held.` : ''}${broken ? ` The page says "${kb.trap.advice}", but pressing it did not let focus out.` : ''}`,
         impact: 'Keyboard users cannot reach the rest of the page and may have to reload it.',
         recommendation:
           'Remove custom keydown handlers that intercept Tab outside dialogs; if this is a dialog, mark it aria-modal="true" and provide Escape to close.',
@@ -490,6 +493,24 @@ const WIDGET_RULES: Record<
       },
     ],
   },
+  'composite-unreachable': {
+    ruleId: 'jourilo/composite-keyboard',
+    title: 'Items of a tab list, radio group, list box or menu bar cannot be reached with the keyboard',
+    severity: 'serious',
+    impact:
+      'Keyboard and screen-reader users can reach only the current item; the other tabs, options or choices are out of reach.',
+    recommendation:
+      'Implement the arrow-key pattern for this widget (move focus or aria-activedescendant to the next item with the arrow keys), or put every item in the Tab order.',
+    standards: [
+      wcag('2.1.1'),
+      {
+        standard: 'WAI-ARIA APG',
+        id: 'keyboard-interface',
+        title: 'Developing a Keyboard Interface',
+        url: 'https://www.w3.org/WAI/ARIA/apg/practices/keyboard-interface/',
+      },
+    ],
+  },
   'dialog-escape': {
     ruleId: 'jourilo/dialog-escape',
     title: 'Escape does not close the dialog',
@@ -585,8 +606,7 @@ export function widgetFindings(obs: PageObservation): Finding[] {
       occurrences: issues.length,
       reproduction: [
         `Open ${obs.url} at the ${obs.viewport.name} viewport.`,
-        `Focus "${issues[0]!.name}" with Tab and press Enter.`,
-        issues[0]!.detail,
+        ...(issues[0]!.steps ?? [`Focus "${issues[0]!.name}" with Tab and press Enter.`, issues[0]!.detail]),
       ],
     });
   });

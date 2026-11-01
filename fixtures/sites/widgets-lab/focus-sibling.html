@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Steps – Widgets lab</title><link rel="stylesheet" href="/style.css">
+<style>
+  .steps a { outline: none; color: #1a1a1a; text-decoration: none; padding: 4px 2px; }
+  .mark { display: inline-block; width: 12px; height: 12px; margin: 0 6px; border: 2px solid transparent; vertical-align: middle; }
+  .mark.on { background: #1a1a1a; border-color: #1a1a1a; }
+</style></head>
+<body>
+<!-- The links have no outline of their own: the focus indicator is the square next to each link, which a script
+     fills while the link has focus. That indicator is visible; it is only drawn by a sibling element. -->
+<main><h1>Steps</h1><p><a href="/">Back to the lab</a></p>
+<nav class="steps" aria-label="Steps">
+  <span class="mark" id="m1"></span><a href="#s1" data-mark="m1">Plan</a>
+  <span class="mark" id="m2"></span><a href="#s2" data-mark="m2">Build</a>
+  <span class="mark" id="m3"></span><a href="#s3" data-mark="m3">Verify</a>
+</nav>
+<section id="s1"><h2>Plan</h2></section><section id="s2"><h2>Build</h2></section><section id="s3"><h2>Verify</h2></section>
+</main>
+<script>
+  document.querySelectorAll('.steps a').forEach(function (a) {
+    var m = document.getElementById(a.dataset.mark);
+    a.addEventListener('focus', function () { m.classList.add('on'); });
+    a.addEventListener('blur', function () { m.classList.remove('on'); });
+  });
+</script>
+</body>
+</html>

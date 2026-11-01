@@ -30,3 +30,5 @@ jobs:
       - name: Changelog has an entry for this version
         run: grep -q "^## \[$(node -p "require('./package.json').version")\]" CHANGELOG.md
       - run: npm pack --dry-run
+      - name: Clean install from the packed tarball
+        run: node scripts/smoke-pack.mjs

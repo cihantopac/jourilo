@@ -1,8 +1,9 @@
 // Site discovery for Website Mode: starts at the target, reads robots.txt and sitemap.xml, follows same-origin
 // links found in the rendered DOM and ranks pages by how likely they are part of a key user journey.
 import type { BrowserContext } from 'playwright-core';
+import { guardedFetchText } from '../core/net-guard.js';
 import { redactUrl } from '../core/redact.js';
-import { isCrawlable, normalizeForCrawl } from '../core/url-safety.js';
+import { type AddressPolicy, isCrawlable, normalizeForCrawl } from '../core/url-safety.js';
 import { isAllowed, parseRobots, type RobotsRules } from './robots.js';
 
 export const USER_AGENT_TOKEN = 'Jourilo';
@@ -43,6 +44,8 @@ export interface CrawlOptions {
   timeoutMs: number;
   /** Extra URLs the user wants included. */
   include?: string[];
+  /** Address policy for Node-side fetches (robots.txt, sitemaps). */
+  policy: AddressPolicy;
 }
 
 export interface CrawlResult {
@@ -50,56 +53,70 @@ export interface CrawlResult {
   skipped: { url: string; reason: string }[];
   robots: RobotsRules | null;
   sitemapUrls: number;
+  /** The sitemap's own origin when its URLs were mapped onto a local target. */
+  sitemapRebasedFrom: string | null;
 }
 
-async function fetchText(url: string, timeoutMs: number): Promise<string | null> {
-  try {
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(timeoutMs),
-      redirect: 'follow',
-      headers: { 'user-agent': `${USER_AGENT_TOKEN} (+https://github.com/cihantopac/jourilo)` },
-    });
-    if (!res.ok) return null;
-    // Refuse to follow a redirect off the origin for these helper files.
-    if (new URL(res.url).origin !== new URL(url).origin) return null;
-    const text = await res.text();
-    return text.slice(0, 2_000_000);
-  } catch {
-    return null;
-  }
+async function fetchText(url: string, timeoutMs: number, policy: AddressPolicy): Promise<string | null> {
+  // Same origin only, every redirect hop checked against the address policy before connecting.
+  return guardedFetchText(url, policy, {
+    timeoutMs,
+    userAgent: `${USER_AGENT_TOKEN} (+https://github.com/cihantopac/jourilo)`,
+  }).catch(() => null);
 }
 
-export async function loadRobots(origin: string, timeoutMs = 8000): Promise<RobotsRules | null> {
-  const text = await fetchText(`${origin}/robots.txt`, timeoutMs);
+export async function loadRobots(
+  origin: string,
+  policy: AddressPolicy,
+  timeoutMs = 8000,
+): Promise<RobotsRules | null> {
+  const text = await fetchText(`${origin}/robots.txt`, timeoutMs, policy);
   return text === null ? null : parseRobots(text, USER_AGENT_TOKEN);
 }
 
-async function sitemapUrls(origin: string, robots: RobotsRules | null, timeoutMs: number): Promise<string[]> {
+async function sitemapUrls(
+  origin: string,
+  robots: RobotsRules | null,
+  timeoutMs: number,
+  policy: AddressPolicy,
+): Promise<{ urls: string[]; rebasedFrom: string | null }> {
+  // A local build usually carries its production sitemap (https://example.com/...): on a local target, its paths are
+  // mapped onto the local server, because they describe the same build.
+  const local = policy.target === 'local';
+  const rebase = (raw: string): string | null => {
+    try {
+      const u = new URL(raw, origin);
+      if (u.origin === origin) return u.toString();
+      return local ? new URL(`${u.pathname}${u.search}`, origin).toString() : null;
+    } catch {
+      return null;
+    }
+  };
   const candidates = [...(robots?.sitemaps ?? []), `${origin}/sitemap.xml`];
   const urls: string[] = [];
+  let rebasedFrom: string | null = null;
   for (const sm of candidates.slice(0, 3)) {
-    let smUrl: URL;
-    try {
-      smUrl = new URL(sm);
-    } catch {
-      continue;
-    }
-    if (smUrl.origin !== origin) continue;
-    const xml = await fetchText(smUrl.toString(), timeoutMs);
+    const smUrl = rebase(sm);
+    if (!smUrl) continue;
+    const xml = await fetchText(smUrl, timeoutMs, policy);
     if (!xml) continue;
     for (const m of xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)) {
-      urls.push(m[1]!.replace(/&amp;/g, '&'));
+      const loc = m[1]!.replace(/&amp;/g, '&');
+      const mapped = rebase(loc);
+      if (!mapped) continue;
+      if (mapped !== loc) rebasedFrom ??= new URL(loc).origin;
+      urls.push(mapped);
       if (urls.length >= 500) break;
     }
     if (urls.length) break;
   }
-  return urls;
+  return { urls, rebasedFrom };
 }
 
 /** Breadth-first crawl in a real browser so client-rendered links are found. */
 export async function crawl(ctx: BrowserContext, start: string, opts: CrawlOptions): Promise<CrawlResult> {
   const origin = new URL(start).origin;
-  const robots = opts.respectRobots ? await loadRobots(origin) : null;
+  const robots = opts.respectRobots ? await loadRobots(origin, opts.policy) : null;
   const skipped: CrawlResult['skipped'] = [];
   const seen = new Map<string, number>();
   const queue: { url: string; depth: number }[] = [];
@@ -122,8 +139,8 @@ export async function crawl(ctx: BrowserContext, start: string, opts: CrawlOptio
   };
   push(start, 0);
   for (const extra of opts.include ?? []) push(new URL(extra, start).toString(), 0);
-  const fromSitemap = await sitemapUrls(origin, robots, opts.timeoutMs);
-  for (const u of fromSitemap) push(u, 1);
+  const fromSitemap = await sitemapUrls(origin, robots, opts.timeoutMs, opts.policy);
+  for (const u of fromSitemap.urls) push(u, 1);
 
   // Visit pages (best first) to find more links, until we have enough candidates.
   const visited = new Set<string>();
@@ -174,5 +191,11 @@ export async function crawl(ctx: BrowserContext, start: string, opts: CrawlOptio
     if (picked.length >= opts.maxPages) break;
     if (!picked.includes(p)) picked.push(p);
   }
-  return { pages: picked, skipped, robots, sitemapUrls: fromSitemap.length };
+  return {
+    pages: picked,
+    skipped,
+    robots,
+    sitemapUrls: fromSitemap.urls.length,
+    sitemapRebasedFrom: fromSitemap.rebasedFrom,
+  };
 }

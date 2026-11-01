@@ -1,5 +1,5 @@
 // Before/after comparison of two runs by finding fingerprint, plus lab metric deltas per page and viewport.
-import type { Finding, Run } from '../core/types.js';
+import type { Finding, MetricValue, Run } from '../core/types.js';
 
 export interface MetricDelta {
   url: string;
@@ -8,6 +8,28 @@ export interface MetricDelta {
   before: number;
   after: number;
   delta: number;
+  /**
+   * improved / regressed: the ranges of repeated visits do not overlap; noise: they overlap, or the change is below
+   * what a single visit can resolve; unconfirmed: a large change seen in single visits (rerun with --runs).
+   */
+  verdict: 'improved' | 'regressed' | 'noise' | 'unconfirmed';
+}
+
+/** Smallest change a single lab visit can resolve; below this, a difference is treated as noise. */
+const RESOLUTION: Record<string, number> = { LCP: 150, FCP: 150, TBT: 100, CLS: 0.02, Transfer: 0 };
+
+export function metricVerdict(name: string, a: MetricValue, b: MetricValue): MetricDelta['verdict'] {
+  const delta = b.value - a.value;
+  if (name === 'Transfer') {
+    if (Math.abs(delta) <= Math.max(2048, a.value * 0.02)) return 'noise';
+    return delta < 0 ? 'improved' : 'regressed';
+  }
+  if (a.range && b.range) {
+    const overlap = a.range[0] <= b.range[1] && b.range[0] <= a.range[1];
+    if (overlap || Math.abs(delta) < (RESOLUTION[name] ?? 0) / 2) return 'noise';
+    return delta < 0 ? 'improved' : 'regressed';
+  }
+  return Math.abs(delta) < (RESOLUTION[name] ?? 0) ? 'noise' : 'unconfirmed';
 }
 
 export interface RunComparison {
@@ -52,7 +74,15 @@ export function compareRuns(base: Run, head: Run): RunComparison {
       const b = hp.metrics.find((m) => m.name === name);
       if (!a || !b) continue;
       const delta = Math.round((b.value - a.value) * 1000) / 1000;
-      metrics.push({ url: hp.url, viewport: hp.viewport, name, before: a.value, after: b.value, delta });
+      metrics.push({
+        url: hp.url,
+        viewport: hp.viewport,
+        name,
+        before: a.value,
+        after: b.value,
+        delta,
+        verdict: metricVerdict(name, a, b),
+      });
     }
   }
   const regressionFree = !introduced.some(

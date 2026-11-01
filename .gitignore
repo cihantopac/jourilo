@@ -11,3 +11,5 @@ Thumbs.db
 /.jourilo/
 **/.jourilo/
 plugin/node_modules/
+# Downloaded benchmark corpora (not ours to redistribute)
+benchmarks/act/.cache/

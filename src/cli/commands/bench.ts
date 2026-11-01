@@ -18,6 +18,8 @@ interface Expectation {
   rule: string;
   path: string;
   viewport?: string;
+  /** Only a finding of this kind matches (e.g. a defect must not be reported where review is right). */
+  kind?: Finding['kind'];
   why?: string;
 }
 
@@ -31,6 +33,8 @@ interface Expected {
   recommendations?: { rule: string; path: string; includes: string }[];
   /** Expected source file for a rule (root-cause location accuracy). */
   sources?: { rule: string; path: string; file: string }[];
+  /** Audit settings for this fixture (a static fixture is disposable, so real submissions are allowed). */
+  audit?: { allowSubmit?: boolean };
 }
 
 export interface FixtureResult {
@@ -49,6 +53,7 @@ export interface FixtureResult {
 
 const matches = (f: Finding, e: Expectation) =>
   f.ruleId === e.rule &&
+  (!e.kind || f.kind === e.kind) &&
   pathOf(f.url).split('?')[0]!.replace(/\/$/, '') === e.path.replace(/\/$/, '') &&
   (!e.viewport || (f.viewport ?? '').split(', ').includes(e.viewport));
 
@@ -68,6 +73,7 @@ export async function benchFixture(dir: string, wsRoot: string): Promise<Fixture
       headed: false,
       respectRobots: true,
       allowPrivate: false,
+      allowSubmit: expected.audit?.allowSubmit === true,
       keyboard: true,
       throttle: false,
       timeoutMs: 30_000,

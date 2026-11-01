@@ -127,6 +127,11 @@ export function toMetrics(v: RawVitals, spread?: Record<string, [number, number]
     }
     const rounded = unit === 'score' ? Math.round(value * 1000) / 1000 : Math.round(value);
     const m: MetricValue = { name, value: rounded, unit, source: 'lab' };
+    if (runs > 1 && range) {
+      const r2 = (x: number) => (unit === 'score' ? Math.round(x * 1000) / 1000 : Math.round(x));
+      m.runs = runs;
+      m.range = [r2(range[0]), r2(range[1])];
+    }
     const r = rate(name, rounded);
     if (r) m.rating = r;
     if (note) m.note = note;

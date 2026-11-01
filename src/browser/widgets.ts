@@ -14,17 +14,22 @@ export interface WidgetIssue {
     | 'dialog-focus-not-returned'
     | 'dialog-focus-escapes'
     | 'dialog-no-role'
-    | 'expanded-state-mismatch';
+    | 'expanded-state-mismatch'
+    | 'composite-unreachable';
   trigger: string;
   name: string;
   rect: Rect;
   detail: string;
+  /** How to reproduce, when it is not "focus the trigger and press Enter". */
+  steps?: string[];
 }
 
 export interface WidgetCheck {
   triggers: number;
   dialogs: number;
   disclosures: number;
+  /** Composite widgets (tabs, radio groups, listboxes, menubars, trees) whose arrow keys were tested. */
+  composites: number;
   issues: WidgetIssue[];
 }
 
@@ -46,6 +51,16 @@ const TRIGGERS = `(() => {
   };
   return Array.from(document.querySelectorAll('[aria-haspopup]:not([aria-haspopup="false"]), [aria-expanded], [aria-controls], a[href="#"], a[href^="#"]:not([href="#main"]):not([href^="#content"]), a[href^="javascript:"]'))
     .filter((e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden' && !e.disabled && /^(BUTTON|A|SUMMARY)$|^button$/i.test(e.tagName === 'DIV' || e.tagName === 'SPAN' ? (e.getAttribute('role') || '') : e.tagName))
+    // A link to a section that is already on screen is in-page navigation (skip links, table of contents), not a
+    // popup trigger; following it only scrolls.
+    .filter((e) => {
+      const href = e.tagName === 'A' ? e.getAttribute('href') || '' : '';
+      if (!/^#./.test(href) || e.hasAttribute('aria-haspopup') || e.hasAttribute('aria-expanded') || e.hasAttribute('aria-controls')) return true;
+      let id = href.slice(1);
+      try { id = decodeURIComponent(id); } catch {}
+      const target = document.getElementById(id) || document.getElementsByName(id)[0];
+      return !(target && target.getClientRects().length > 0 && getComputedStyle(target).visibility !== 'hidden');
+    })
     .slice(0, 8)
     .map((e) => {
       const r = e.getBoundingClientRect();
@@ -70,12 +85,20 @@ const SNAPSHOT_LAYERS = `(() => {
     return (cs.position === 'fixed' || cs.position === 'absolute') && e.getClientRects().length > 0 && cs.visibility !== 'hidden' && big(e);
   });
   // Signatures, not node identity: frameworks that re-render replace nodes without anything new appearing.
-  const sig = (e) => { const r = e.getBoundingClientRect(); return e.tagName + '.' + String(e.className) + '|' + Math.round(r.left) + ',' + Math.round(r.top) + ',' + Math.round(r.width) + ',' + Math.round(r.height); };
+  // Page coordinates for absolutely positioned layers, so scrolling does not make an existing layer look new.
+  const sig = (e) => { const r = e.getBoundingClientRect(); const fixed = getComputedStyle(e).position === 'fixed'; return e.tagName + '.' + String(e.className) + '|' + Math.round(r.left + (fixed ? 0 : scrollX)) + ',' + Math.round(r.top + (fixed ? 0 : scrollY)) + ',' + Math.round(r.width) + ',' + Math.round(r.height); };
   window.__jouriloLayers = new Set(layers.map(sig));
 })()`;
 
-const STATE = `(controls) => {
-  const visible = (e) => !!e && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+// mode "open": find a dialog that opened (a real one, else a new overlay layer); "same": is the dialog found by the
+// last "open" call still shown? Checking only that element keeps other layers (toasts, launchers) from looking open.
+const STATE = `(controls, mode) => {
+  const visible = (e) => !!e && e.isConnected && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+  if (mode === 'same') {
+    const d = window.__jouriloDialog;
+    const ae = document.activeElement;
+    return { dialogOpen: visible(d) && (d.tagName !== 'DIALOG' || d.open), unlabelled: false, focusInDialog: !!d && !!ae && d.contains(ae), focusables: 0, controlledVisible: null, activeSelector: ae && ae !== document.body ? (ae.id ? '#' + ae.id : ae.tagName.toLowerCase()) : null };
+  }
   const dialogs = Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"], dialog[open], [aria-modal="true"]')).filter(visible);
   let d = dialogs[dialogs.length - 1] || null;
   let unlabelled = false;
@@ -84,12 +107,14 @@ const STATE = `(controls) => {
     const fresh = Array.from(document.querySelectorAll('body *')).filter((e) => {
       const cs = getComputedStyle(e);
       const r = e.getBoundingClientRect();
-      const sig = e.tagName + '.' + String(e.className) + '|' + Math.round(r.left) + ',' + Math.round(r.top) + ',' + Math.round(r.width) + ',' + Math.round(r.height);
+      const fixed = cs.position === 'fixed';
+      const sig = e.tagName + '.' + String(e.className) + '|' + Math.round(r.left + (fixed ? 0 : scrollX)) + ',' + Math.round(r.top + (fixed ? 0 : scrollY)) + ',' + Math.round(r.width) + ',' + Math.round(r.height);
       return (cs.position === 'fixed' || cs.position === 'absolute') && visible(e) && big(e) && !window.__jouriloLayers.has(sig);
     });
     const outer = fresh.filter((e) => !fresh.some((o) => o !== e && o.contains(e)));
     if (outer.length) { d = outer[outer.length - 1]; unlabelled = true; }
   }
+  window.__jouriloDialog = d;
   const ae = document.activeElement;
   const controlled = controls ? controls.split(/\\s+/).map((id) => document.getElementById(id)).filter(Boolean) : [];
   const focusables = d ? Array.from(d.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])')).filter(visible).length : 0;
@@ -112,6 +137,105 @@ type State = {
   activeSelector: string | null;
 };
 
+// Composite widgets that keep only one item in the Tab order (roving tabindex, or focus on the container with
+// aria-activedescendant). Their other items are reachable only with arrow keys, so if arrows do nothing, those items
+// cannot be reached with a keyboard at all (WCAG 2.1.1). Composites whose items are all tabbable are not tested:
+// Tab already reaches every item.
+const COMPOSITES = `(() => {
+  const ITEM = { tablist: 'tab', radiogroup: 'radio', listbox: 'option', menubar: 'menuitem, [role="menuitemcheckbox"], [role="menuitemradio"]', tree: 'treeitem' };
+  const visible = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+  const tabbable = (e) => e.tabIndex >= 0 && !e.disabled && e.getAttribute('aria-disabled') !== 'true' && visible(e);
+  const out = [];
+  for (const [role, item] of Object.entries(ITEM)) {
+    for (const c of document.querySelectorAll('[role="' + role + '"]')) {
+      if (!visible(c) || out.length >= 6) continue;
+      const items = Array.from(c.querySelectorAll(item.split(',').map((s) => s.trim().startsWith('[') ? s : '[role="' + s.trim() + '"]').join(','))).filter(visible);
+      if (items.length < 2) continue;
+      const stops = items.filter(tabbable);
+      const containerStop = tabbable(c) && c.hasAttribute('aria-activedescendant');
+      if (stops.length > 1 || (!stops.length && !containerStop)) continue;
+      const id = 'jourilo-composite-' + out.length;
+      c.setAttribute('data-jourilo-composite', id);
+      if (stops[0]) stops[0].setAttribute('data-jourilo-composite-stop', id);
+      const r = c.getBoundingClientRect();
+      const orientation = c.getAttribute('aria-orientation') || (role === 'listbox' || role === 'tree' ? 'vertical' : 'horizontal');
+      out.push({ id, role, orientation, items: items.length, name: (c.getAttribute('aria-label') || items.map((i) => i.innerText.trim()).filter(Boolean).slice(0, 3).join(' / ')).replace(/\\s+/g, ' ').slice(0, 80), rect: { x: Math.round(r.left + scrollX), y: Math.round(r.top + scrollY), width: Math.round(r.width), height: Math.round(r.height) } });
+    }
+  }
+  return out;
+})()`;
+
+const COMPOSITE_STATE = `(id) => {
+  const c = document.querySelector('[data-jourilo-composite="' + id + '"]');
+  if (!c) return null;
+  const ae = document.activeElement;
+  const marks = Array.from(c.querySelectorAll('[aria-selected], [aria-checked]')).map((e) => (e.getAttribute('aria-selected') || '') + (e.getAttribute('aria-checked') || '')).join('');
+  return { focusIn: !!ae && c.contains(ae), active: ae ? (ae.id || ae.textContent || '').trim().slice(0, 40) + '#' + Array.from(c.querySelectorAll('*')).indexOf(ae) : '', descendant: c.getAttribute('aria-activedescendant') || '', marks };
+}`;
+
+async function checkComposites(page: Page, out: WidgetCheck): Promise<void> {
+  const found = (await page.evaluate(COMPOSITES).catch(() => [])) as {
+    id: string;
+    role: string;
+    orientation: string;
+    items: number;
+    name: string;
+    rect: Rect;
+  }[];
+  for (const c of found) {
+    const stop = page.locator(`[data-jourilo-composite-stop="${c.id}"]`);
+    const target = (await stop.count()) ? stop.first() : page.locator(`[data-jourilo-composite="${c.id}"]`);
+    const read = () =>
+      page.evaluate(`(${COMPOSITE_STATE})(${JSON.stringify(c.id)})`) as Promise<{
+        focusIn: boolean;
+        active: string;
+        descendant: string;
+        marks: string;
+      } | null>;
+    try {
+      await target.focus({ timeout: 2000 });
+    } catch {
+      continue;
+    }
+    const before = await read();
+    if (!before?.focusIn) continue;
+    out.composites++;
+    const keys = c.orientation === 'vertical' ? ['ArrowDown', 'ArrowRight'] : ['ArrowRight', 'ArrowDown'];
+    let moved = false;
+    for (const key of keys) {
+      await page.keyboard.press(key);
+      await page.waitForTimeout(120);
+      const after = await read();
+      if (
+        after &&
+        (after.active !== before.active ||
+          after.descendant !== before.descendant ||
+          after.marks !== before.marks)
+      ) {
+        moved = true;
+        break;
+      }
+    }
+    if (!moved)
+      out.issues.push({
+        kind: 'composite-unreachable',
+        trigger: `[role="${c.role}"]`,
+        name: c.name || c.role,
+        rect: c.rect,
+        detail: `Only one of the ${c.items} items of this ${c.role} is in the Tab order, and the arrow keys do not move to the others, so ${c.items - 1} item(s) cannot be reached with a keyboard.`,
+        steps: [
+          `Press Tab until the ${c.role} "${c.name || c.role}" has focus.`,
+          `Press ${keys.join(' and ')}: focus and selection stay where they are.`,
+        ],
+      });
+  }
+  await page
+    .evaluate(
+      `document.querySelectorAll('[data-jourilo-composite],[data-jourilo-composite-stop]').forEach((e) => { e.removeAttribute('data-jourilo-composite'); e.removeAttribute('data-jourilo-composite-stop'); })`,
+    )
+    .catch(() => undefined);
+}
+
 export async function checkWidgets(page: Page): Promise<WidgetCheck> {
   const triggers = (await page.evaluate(TRIGGERS)) as {
     selector: string;
@@ -122,9 +246,17 @@ export async function checkWidgets(page: Page): Promise<WidgetCheck> {
     controls: string | null;
     rect: Rect;
   }[];
-  const out: WidgetCheck = { triggers: triggers.length, dialogs: 0, disclosures: 0, issues: [] };
-  const state = (controls: string | null) =>
-    page.evaluate(`(${STATE})(${JSON.stringify(controls)})`) as Promise<State>;
+  const out: WidgetCheck = {
+    triggers: triggers.length,
+    dialogs: 0,
+    disclosures: 0,
+    composites: 0,
+    issues: [],
+  };
+  // Composites first: dialog checks may reload the page.
+  await checkComposites(page, out);
+  const state = (controls: string | null, mode: 'open' | 'same' = 'open') =>
+    page.evaluate(`(${STATE})(${JSON.stringify(controls)}, ${JSON.stringify(mode)})`) as Promise<State>;
   for (const t of triggers) {
     if (DESTRUCTIVE.test(t.name) || FINANCIAL.test(t.name) || AVOID.test(t.name)) continue;
     const loc = page.locator(t.selector).first();
@@ -158,7 +290,7 @@ export async function checkWidgets(page: Page): Promise<WidgetCheck> {
       } else {
         // A modal layer must keep Tab inside it while it is open.
         for (let k = 0; k <= after.focusables; k++) await page.keyboard.press('Tab');
-        const tabbed = await state(t.controls);
+        const tabbed = await state(t.controls, 'same');
         if (tabbed.dialogOpen && !tabbed.focusInDialog)
           issue(
             'dialog-focus-escapes',
@@ -167,7 +299,7 @@ export async function checkWidgets(page: Page): Promise<WidgetCheck> {
       }
       await page.keyboard.press('Escape');
       await page.waitForTimeout(300);
-      const closed = await state(t.controls);
+      const closed = await state(t.controls, 'same');
       if (closed.dialogOpen) {
         issue('dialog-escape', 'Pressing Escape did not close the dialog.');
         // Leave the page as we found it so later checks are not affected.

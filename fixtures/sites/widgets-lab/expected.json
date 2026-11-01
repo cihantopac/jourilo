@@ -15,6 +15,11 @@
       "rule": "jourilo/dialog-escape",
       "path": "/broken",
       "why": "Escape does nothing"
+    },
+    {
+      "rule": "jourilo/composite-keyboard",
+      "path": "/composite-broken",
+      "why": "roving tab list and radio group without arrow keys"
     }
   ],
   "mustNotFind": [
@@ -37,13 +42,67 @@
       "rule": "jourilo/dialog-focus-return",
       "path": "/accessible",
       "why": "focus returns to the opener"
+    },
+    {
+      "rule": "jourilo/dialog-focus",
+      "path": "/anchors",
+      "why": "in-page anchors scroll the page; no dialog opens (real-site false positive, 2026-10-31)"
+    },
+    {
+      "rule": "jourilo/dialog-role",
+      "path": "/anchors",
+      "why": "in-page anchors scroll the page; no dialog opens (real-site false positive, 2026-10-31)"
+    },
+    {
+      "rule": "jourilo/dialog-escape",
+      "path": "/anchors",
+      "why": "in-page anchors scroll the page; no dialog opens (real-site false positive, 2026-10-31)"
+    },
+    {
+      "rule": "jourilo/dialog-focus-return",
+      "path": "/anchors",
+      "why": "in-page anchors scroll the page; no dialog opens (real-site false positive, 2026-10-31)"
+    },
+    {
+      "rule": "jourilo/dialog-escape",
+      "path": "/launcher",
+      "why": "a layer added on open stays after the dialog closes; the dialog itself closes on Escape (real-site false positive, 2026-10-31)"
+    },
+    {
+      "rule": "jourilo/dialog-focus",
+      "path": "/launcher",
+      "why": "a layer added on open stays after the dialog closes; the dialog itself closes on Escape (real-site false positive, 2026-10-31)"
+    },
+    {
+      "rule": "jourilo/dialog-focus-return",
+      "path": "/launcher",
+      "why": "a layer added on open stays after the dialog closes; the dialog itself closes on Escape (real-site false positive, 2026-10-31)"
+    },
+    {
+      "rule": "jourilo/dialog-role",
+      "path": "/launcher",
+      "why": "a layer added on open stays after the dialog closes; the dialog itself closes on Escape (real-site false positive, 2026-10-31)"
+    },
+    {
+      "rule": "jourilo/composite-keyboard",
+      "path": "/composite-ok",
+      "why": "arrow-key tabs, aria-activedescendant list box, all-tabbable tabs"
+    },
+    {
+      "rule": "jourilo/focus-visible",
+      "path": "/focus-sibling",
+      "why": "the indicator is drawn by a sibling element (ACT oj04fd passed examples)"
     }
   ],
   "maxDefects": {
     "minSeverity": "moderate",
     "count": 0,
     "paths": [
-      "/accessible"
+      "/accessible",
+      "/anchors",
+      "/launcher",
+      "/composite-ok",
+      "/focus-sibling"
     ]
   }
 }

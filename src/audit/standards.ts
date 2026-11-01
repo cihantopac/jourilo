@@ -146,3 +146,18 @@ export function nielsen(n: number): StandardRef {
     url: 'https://www.nngroup.com/articles/ten-usability-heuristics/',
   };
 }
+
+/**
+ * WCAG 2.2 A/AA questions that automated checks cannot answer, listed in every report so a clean run is never read
+ * as conformance.
+ */
+export const MANUAL_REVIEW: string[] = [
+  '1.1.1 Non-text content: is each text alternative accurate and useful (presence is checked, meaning is not)?',
+  '1.2.x Time-based media: are captions, audio description and transcripts correct and complete?',
+  '1.3.2 Meaningful sequence and 1.3.3 Sensory characteristics: does the reading order make sense; do instructions rely only on shape, position or colour?',
+  '1.4.1 Use of colour and 1.4.11 Non-text contrast (where not measured): is colour the only cue anywhere?',
+  '2.4.4 / 2.4.6 Link purpose, headings and labels: are they descriptive in context?',
+  '2.5.7 Dragging movements: does every drag have a single-pointer alternative?',
+  '3.1.2 Language of parts, 3.2.6 Consistent help, 3.3.7 Redundant entry, 3.3.8 Accessible authentication (beyond paste blocking).',
+  '4.1.3 Status messages and the overall experience with a screen reader and with voice control.',
+];

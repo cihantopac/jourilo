@@ -1,5 +1,6 @@
 // Markdown summary (for PRs, issues and agents) and SARIF 2.1.0 (for GitHub code scanning).
 import { severityRank } from '../audit/finding.js';
+import { MANUAL_REVIEW } from '../audit/standards.js';
 import type { Finding, Run } from '../core/types.js';
 import { VERSION } from '../core/version.js';
 import type { RunComparison } from './compare.js';
@@ -36,6 +37,19 @@ export function renderMarkdown(run: Run, cmp?: RunComparison, limit = 25): strin
       lines.push(`- 🆕 ${f.severity}: ${md(f.title)} — \`${path(f.url)}\``);
     for (const f of cmp.fixed.slice(0, 10)) lines.push(`- ✅ fixed: ${md(f.title)} — \`${path(f.url)}\``);
     lines.push('');
+    if (cmp.metrics.length) {
+      lines.push(
+        '| Page | Viewport | Metric | Before | After | Verdict |',
+        '| ---- | -------- | ------ | ------ | ----- | ------- |',
+        ...cmp.metrics.map(
+          (m) =>
+            `| \`${path(m.url)}\` | ${m.viewport} | ${m.name} | ${m.before} | ${m.after} | ${m.verdict} |`,
+        ),
+        '',
+        'Lab metrics. Improved/regressed requires repeated visits whose ranges do not overlap (`--runs 5`).',
+        '',
+      );
+    }
   }
   const sorted = [...run.findings].sort(
     (a, b) => severityRank(a.severity) - severityRank(b.severity) || b.occurrences - a.occurrences,
@@ -76,6 +90,22 @@ export function renderMarkdown(run: Run, cmp?: RunComparison, limit = 25): strin
     lines.push('');
   }
   lines.push('## Limitations', '', ...run.limitations.map((l) => `- ${md(l)}`), '');
+  if (run.network?.blocked.length || run.network?.escaped.length)
+    lines.push(
+      '## Network safety',
+      '',
+      ...(run.network.escaped.map((e) => `- ⚠️ security event: \`${md(e.url)}\` — ${md(e.reason)}`) ?? []),
+      ...run.network.blocked.map((b) => `- refused \`${md(b.host)}:${b.port}\` — ${md(b.reason)}`),
+      '',
+    );
+  lines.push(
+    '## Still needs a person',
+    '',
+    'Automated checks cannot judge these WCAG 2.2 criteria; no run shows conformance.',
+    '',
+    ...MANUAL_REVIEW.map((m) => `- ${md(m)}`),
+    '',
+  );
   return lines.join('\n');
 }
 

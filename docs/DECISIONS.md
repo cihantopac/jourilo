@@ -58,6 +58,28 @@ color tokens, `<html>` without `lang`) outrank element matches; route files are 
 `git stash create` + a private ref (`refs/jourilo/checkpoints/<id>`) capture the working tree without changing
 branches, index or the stash list. Rollback restores tracked files and lists (never deletes) new untracked files.
 
+## D13 · Fix transactions instead of whole-tree rollback (2026-10-31)
+
+0.1.0 rolled back by restoring every file that differed from the checkpoint, which also overwrote edits made after
+it. A fix is now a transaction: exact backups and hashes are recorded before anything is written; rollback restores a
+file only while it still holds the bytes Jourilo wrote, and reports any other state as a conflict. Writes are atomic
+and an interrupted apply is recoverable. Git is no longer required for `optimize --apply`. Checkpoint rollbacks
+(for agent edits) restore everything since the checkpoint, but run as a transaction that keeps the overwritten
+versions, so they can be undone.
+
+## D14 · Network guard proxy for all browser traffic (2026-10-31)
+
+Checking the target URL is not enough: a page can make the browser reach loopback, LAN or metadata services through
+subrequests, redirects, iframes and WebSockets, and DNS can change between a check and the browser's own lookup.
+Route interception does not see redirect hops, so every request goes through a local proxy that resolves names
+itself and connects only to the address it checked. WebRTC and QUIC are disabled so traffic cannot bypass it.
+
+## D15 · Audits and form probes are read-only on every host (2026-10-31)
+
+Local hosts often have persistent databases. Audits now intercept every request that would send data while keys are
+pressed, widgets operated and forms probed; the form probe simulates the empty submission and reports server-side
+feedback as untested. A real submission needs `--allow-submit`.
+
 ## D11 · Integration contract `jourilo.context/v1` (2026-10-30)
 
 Markilo and Searvex are read through adapters into a neutral shape (brand: colors, fonts, locked; search: findings by

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="tr">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Çapalar – Widgets lab</title><link rel="stylesheet" href="/style.css">
+<style>
+  .skip { position: absolute; left: 12px; top: -60px; background: #fff; padding: 8px; }
+  .skip:focus { top: 12px; }
+  header nav ol { display: flex; gap: 16px; list-style: none; padding: 0; }
+  section { min-height: 900px; position: relative; padding: 24px 0; }
+  .ornament { position: absolute; right: 0; top: 40px; width: 260px; height: 200px; background: #eef2f5; }
+</style></head>
+<body>
+<!-- In-page navigation only: a skip link with a non-English target and numbered section anchors. Following them
+     scrolls the page; absolutely positioned decorations move with it. None of this is a dialog. -->
+<a class="skip" href="#icerik">içeriğe geç</a>
+<header><nav aria-label="Bölümler"><ol>
+  <li><a href="#isler">01 İşler</a></li>
+  <li><a href="#calisma">02 Çalışma</a></li>
+  <li><a href="#hakkimda">03 Hakkımda</a></li>
+</ol></nav></header>
+<main id="icerik">
+  <h1>Portfolyo</h1>
+  <section id="isler"><h2>İşler</h2><div class="ornament" aria-hidden="true"></div><p>Seçilmiş işler.</p></section>
+  <section id="calisma"><h2>Çalışma</h2><div class="ornament" aria-hidden="true"></div><p>Nasıl çalışıyorum.</p></section>
+  <section id="hakkimda"><h2>Hakkımda</h2><div class="ornament" aria-hidden="true"></div><p>Kısa bir özgeçmiş.</p></section>
+</main>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "description": "A static build without a page at / (production redirects it), two languages, and a sitemap with production URLs. A page reachable only through the sitemap has a seeded defect.",
+  "mustFind": [
+    { "rule": "axe/image-alt", "path": "/tr/sss", "why": "image without alt, only listed in the production sitemap" }
+  ],
+  "mustNotFind": [
+    { "rule": "jourilo/http-error-page", "path": "/", "why": "no start page in a local build is a limitation, not a broken page (real-site false positive, 2026-10-31)" }
+  ],
+  "maxDefects": { "minSeverity": "moderate", "count": 0, "paths": ["/en", "/tr"] }
+}

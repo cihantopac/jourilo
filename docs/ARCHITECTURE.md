@@ -16,21 +16,23 @@ masquerades as measurement.
 │ discovery     │ audit            │ journeys         │ repair           │ report            │
 │ repo.ts       │ engine.ts        │ schema / runner  │ locate.ts        │ html / md / sarif │
 │ site.ts       │ rules/*          │ suggest / forms  │ fixes / diff     │ compare.ts        │
-│ crawl/robots  │ conversion/      │ safety.ts        │ git.ts           │                   │
-│               │ integrations/    │                  │                  │ experiment/       │
+│ crawl/robots  │ conversion/      │ safety.ts        │ transaction.ts   │                   │
+│               │ integrations/    │ request-guard.ts │ git.ts           │ experiment/       │
 ├───────────────┴──────────────────┴──────────────────┴──────────────────┴───────────────────┤
 │ browser (src/browser): runtime (lazy Playwright), capture, in-page probe, keyboard walk,     │
 │ vitals, viewports                                    ← deterministic measurement & execution│
 ├─────────────────────────────────────────────────────────────────────────────────────────────┤
-│ core (src/core): types (versioned Run schema), redaction, URL/path safety, static server,    │
-│ workspace (.jourilo/runs/<id>/)                                                              │
+│ core (src/core): types (versioned Run schema), redaction, URL/path safety, network guard,    │
+│ static server, workspace (.jourilo/runs/<id>/)                                               │
 └─────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Data flow of an audit
 
-1. **Target check** (`core/url-safety`): http(s) only; private-network hosts refused without `--allow-private`;
-   a local directory is served on 127.0.0.1 (`core/static-server`, path-traversal safe).
+1. **Target check** (`core/url-safety`): http(s) only; a host is refused when any DNS answer is non-public (unless
+   `--allow-private`; metadata and reserved addresses always); a local directory is served on 127.0.0.1
+   (`core/static-server`, path-traversal safe, hidden files never served). The browser is then started behind the
+   network guard (`core/net-guard`), a local proxy that resolves and checks every connection the page makes.
 2. **Discovery** (`discovery/crawl`): robots.txt (RFC 9309 subset), sitemap, same-origin links from the rendered DOM,
    ranked by journey importance (pricing, signup, checkout…) with role diversity.
 3. **Capture** (`browser/capture`), per page × viewport, in this order so measurements do not disturb each other:
@@ -38,8 +40,10 @@ masquerades as measurement.
    controls, paste blocking, style samples, technology hints) → axe-core → masked screenshots (full page + first
    screen) → keyboard walk (real Tab presses; focus styles compared focused vs. unfocused; elementFromPoint for
    obscured focus; cycle analysis for traps). Console errors, page errors and failed requests are recorded throughout.
-4. **Form probe** (`journeys/forms`, local hosts or `--allow-submit`): empty submission, then error text, aria-invalid,
-   describedby/live-region association and focus are measured.
+4. **Form probe** (`journeys/forms`, local hosts or `--allow-submit`): an empty submission is simulated (requests
+   that would send data are intercepted by `journeys/request-guard`; real only with `--allow-submit`), then error
+   text, aria-invalid, describedby/live-region association and focus are measured. The keyboard walk and widget
+   checks run under the same read-only guard.
 5. **Rules** (`audit/rules/*`, `conversion/rules`, `integrations/design-rules`): pure functions
    `PageObservation → Finding[]`, unit-tested with synthetic observations. Findings carry kind (defect / hypothesis /
    needs-review), provenance, confidence, standards, evidence and reproduction steps.
@@ -48,7 +52,10 @@ masquerades as measurement.
 7. **Root cause** (`repair/locate`): lexical, explainable matching of evidence (ids, test ids, attributes, text,
    colors, color tokens, rule-specific patterns such as `outline: none`) to source lines, boosted for files that
    render the route.
-8. **Storage and reports**: `run.json` (schema v1), `report.html`, `report.md`, optional `report.sarif`.
+8. **Repair** (`repair/fixes`, `repair/transaction`): deterministic fixers produce edits; `--apply` writes them as
+   one transaction (backups and hashes first, atomic writes, recovery after interruption); rollback restores only
+   files that still hold what Jourilo wrote.
+9. **Storage and reports**: `run.json` (schema v1), `report.html`, `report.md`, optional `report.sarif`.
 
 ## Why the layers matter
 

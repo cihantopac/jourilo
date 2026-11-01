@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import type { Browser, BrowserType, LaunchOptions } from 'playwright-core';
 import { JouriloError } from '../core/errors.js';
+import type { NetGuard } from '../core/net-guard.js';
 
 export type BrowserName = 'chromium' | 'firefox' | 'webkit' | 'chrome' | 'msedge';
 
@@ -26,11 +27,40 @@ export async function loadPlaywright(): Promise<PlaywrightModule> {
   }
 }
 
-export async function launchBrowser(name: BrowserName = 'chromium', headed = false): Promise<Browser> {
+/**
+ * Launches a browser. With a network guard, every request (loopback included) goes through the guard's proxy, and
+ * WebRTC, which could otherwise send UDP to local addresses outside the proxy, is disabled.
+ */
+export async function launchBrowser(
+  name: BrowserName = 'chromium',
+  headed = false,
+  guard?: NetGuard,
+): Promise<Browser> {
   const pw = await loadPlaywright();
   const type: BrowserType = name === 'firefox' ? pw.firefox : name === 'webkit' ? pw.webkit : pw.chromium;
   const opts: LaunchOptions = { headless: !headed };
   if (name === 'chrome' || name === 'msedge') opts.channel = name;
+  if (guard) {
+    if (name === 'firefox') {
+      opts.proxy = { server: guard.url };
+      opts.firefoxUserPrefs = {
+        'network.proxy.allow_hijacking_localhost': true,
+        'network.proxy.no_proxies_on': '',
+        'media.peerconnection.enabled': false,
+        'network.dns.disablePrefetch': true,
+      };
+    } else if (name === 'webkit') {
+      opts.proxy = { server: guard.url };
+    } else {
+      // `<-loopback>` removes Chromium's implicit bypass for localhost and 127.0.0.1.
+      opts.proxy = { server: guard.url, bypass: '<-loopback>' };
+      opts.args = [
+        '--force-webrtc-ip-handling-policy=disable_non_proxied_udp',
+        '--webrtc-ip-handling-policy=disable_non_proxied_udp',
+        '--disable-quic',
+      ];
+    }
+  }
   try {
     return await type.launch(opts);
   } catch (err) {

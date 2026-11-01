@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Canvas – Structure lab</title></head>
+<body>
+<!-- Focus is held on purpose (a drawing canvas that uses Tab), and the page says how to leave; the advertised key
+     works. WCAG 2.1.2 allows this, so it is a review item, not a defect. -->
+<main><h1>Canvas</h1>
+<p>Press Ctrl+M to exit the canvas.</p>
+<a id="first" href="/">Back to the lab</a>
+<button type="button" id="b1">Pen</button>
+<button type="button" id="b2">Eraser</button>
+<a id="after" href="/accessible">Gallery</a>
+</main>
+<script>
+  var held = false;
+  function back(id) { return function () { if (held) setTimeout(function () { document.getElementById(id).focus(); }, 0); }; }
+  document.getElementById('b1').addEventListener('focus', function () { held = true; });
+  document.getElementById('b1').addEventListener('blur', back('b2'));
+  document.getElementById('b2').addEventListener('blur', back('b1'));
+  document.addEventListener('keydown', function (e) {
+    if (e.ctrlKey && (e.key === 'm' || e.key === 'M')) { held = false; e.preventDefault(); document.getElementById('after').focus(); }
+  });
+</script>
+</body>
+</html>

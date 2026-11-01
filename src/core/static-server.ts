@@ -60,7 +60,18 @@ export async function serveStatic(
   const spa = opts.spa ?? cfg.spa ?? looksLikeSpa(root);
   const server: Server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
-    let pathname = decodeURIComponent(url.pathname);
+    let pathname: string;
+    try {
+      pathname = decodeURIComponent(url.pathname);
+    } catch {
+      res.writeHead(400).end('Bad request');
+      return;
+    }
+    // Never serve hidden files or folders (.env, .git/, .npmrc …): a script on the audited page could read them.
+    if (pathname.split('/').some((seg) => seg.startsWith('.') && seg !== '.well-known')) {
+      res.writeHead(404, { 'content-type': 'text/plain' }).end('Not found');
+      return;
+    }
     const delay = cfg.delays?.[pathname] ?? 0;
     const send = () => {
       try {

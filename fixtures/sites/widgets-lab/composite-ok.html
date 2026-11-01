@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Plans (accessible composites) – Widgets lab</title><link rel="stylesheet" href="/style.css">
+<style>[role="tab"][aria-selected="true"]{font-weight:700} [role="option"][aria-selected="true"]{background:#dbe7ff} [role="listbox"]{border:1px solid #555;padding:4px;max-width:240px}</style></head>
+<body>
+<!-- The same widgets done right: tabs with the arrow-key pattern, a list box using aria-activedescendant, and a
+     second tab list whose tabs are all in the Tab order (no arrows needed). -->
+<main><h1>Plans</h1><p><a href="/">Back to the lab</a></p>
+<div role="tablist" aria-label="Billing period" id="tabs">
+  <button role="tab" id="t1" aria-selected="true" aria-controls="p1" tabindex="0">Monthly</button>
+  <button role="tab" id="t2" aria-selected="false" aria-controls="p2" tabindex="-1">Yearly</button>
+  <button role="tab" id="t3" aria-selected="false" aria-controls="p3" tabindex="-1">Lifetime</button>
+</div>
+<div role="tabpanel" id="p1" aria-labelledby="t1"><p>$19 per month.</p></div>
+<div role="tabpanel" id="p2" aria-labelledby="t2" hidden><p>$190 per year.</p></div>
+<div role="tabpanel" id="p3" aria-labelledby="t3" hidden><p>$490 once.</p></div>
+<p id="region-label">Data region</p>
+<div role="listbox" id="regions" tabindex="0" aria-labelledby="region-label" aria-activedescendant="r1">
+  <div role="option" id="r1" aria-selected="true">Europe</div>
+  <div role="option" id="r2" aria-selected="false">United States</div>
+  <div role="option" id="r3" aria-selected="false">Asia Pacific</div>
+</div>
+<div role="tablist" aria-label="Support channel">
+  <button role="tab" aria-selected="true">Email</button>
+  <button role="tab" aria-selected="false">Chat</button>
+</div>
+</main>
+<script>
+  var tabs = Array.from(document.querySelectorAll('#tabs [role="tab"]'));
+  function select(t) {
+    tabs.forEach(function (o) { o.setAttribute('aria-selected', String(o === t)); o.tabIndex = o === t ? 0 : -1; document.getElementById(o.getAttribute('aria-controls')).hidden = o !== t; });
+    t.focus();
+  }
+  tabs.forEach(function (t, i) {
+    t.addEventListener('click', function () { select(t); });
+    t.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight') { e.preventDefault(); select(tabs[(i + 1) % tabs.length]); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); select(tabs[(i + tabs.length - 1) % tabs.length]); }
+    });
+  });
+  var lb = document.getElementById('regions'), opts = Array.from(lb.querySelectorAll('[role="option"]'));
+  lb.addEventListener('keydown', function (e) {
+    var i = opts.findIndex(function (o) { return o.id === lb.getAttribute('aria-activedescendant'); });
+    if (e.key === 'ArrowDown') i = Math.min(opts.length - 1, i + 1); else if (e.key === 'ArrowUp') i = Math.max(0, i - 1); else return;
+    e.preventDefault();
+    opts.forEach(function (o, k) { o.setAttribute('aria-selected', String(k === i)); });
+    lb.setAttribute('aria-activedescendant', opts[i].id);
+  });
+</script>
+</body>
+</html>

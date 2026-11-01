@@ -4,6 +4,55 @@ All notable changes are documented here. The project follows [Semantic Versionin
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-01
+
+### Security
+
+- Network guard: every browser request (subresources, redirects, iframes, WebSockets) goes through a local proxy
+  that resolves names itself and connects only to allowed addresses, so an audited page can no longer reach
+  loopback, LAN or cloud-metadata services, including through DNS rebinding. WebRTC and QUIC are disabled.
+- Targets whose DNS answer mixes public and private addresses are refused; address classification covers IPv4/IPv6
+  special-purpose ranges, embedded IPv4 and metadata endpoints. robots.txt and sitemap fetches check every redirect.
+- Journey safety: key presses (with or without a target) are judged like clicks; icon-only buttons, link targets,
+  `formaction` and form actions count; every request a journey triggers is checked (DELETE, destructive or payment
+  endpoints, form posts on non-local hosts, navigation to other origins — `--allow-origin` for authorized ones).
+- Audits never write data: the form probe simulates the empty submission by default (real only with
+  `--allow-submit`), and keyboard/widget checks run read-only.
+- The static server no longer serves hidden files (`.env`, `.git/`) and survives malformed URLs.
+- A warning when `--save-auth` writes a session file that git would commit.
+
+### Added
+
+- Keyboard reachability of composite widgets: tab lists, radio groups, list boxes, menu bars and trees whose arrow
+  keys do not reach the other items are reported (WCAG 2.1.1).
+- `journeys run --repeat N`: flaky journeys (mixed outcomes) are reported for review.
+- Lab metrics keep their range with `--runs`; `compare`/`verify` give every metric change a verdict (improved,
+  regressed, within noise, unconfirmed), and `verify` repeats the baseline's number of visits.
+- Reports: network guard refusals and security events, journey attempts and stopped requests, and the WCAG 2.2
+  questions that still need a person.
+- Laravel discovery follows included route files, groups and prefixes, Livewire/Inertia/Volt pages, Filament panels
+  (nested resources, `$slug`) and guards.
+- Independent benchmark on the W3C ACT Rules test cases (`benchmarks/act`); clean-install smoke test of the packed
+  tarball on Linux, macOS and Windows (`scripts/smoke-pack.mjs`).
+
+### Fixed (found on real applications)
+
+- In-page anchors (skip links with non-English targets, section navigation) were operated as lightbox triggers and
+  reported as broken dialogs.
+- A layer that a dialog leaves on the page after closing made the dialog look "still open" after Escape.
+- A local build with a production sitemap was crawled to 2 pages; a build without a page at `/` was reported as
+  broken.
+- A sign-up journey was suggested when only a dashboard route existed.
+
+### Changed
+
+- `optimize --apply` writes fixes as one transaction (backups and hashes first, atomic writes, automatic restore
+  after a failure, recovery of interrupted applies) and no longer needs git. **`rollback` never overwrites edits made
+  after a change**: such files are reported as conflicts (`--force` restores them after saving the current version).
+  Checkpoint rollbacks keep the overwritten versions and can be undone. `rollback latest` skips rollbacks.
+- `--allow-submit` in audits now means "really send the empty submission", on local hosts too.
+- Writes cannot escape the repository through symlinked directories; files that are not UTF-8 are never rewritten.
+
 ## [0.1.0] - 2026-10-31
 
 First working version.

@@ -1,5 +1,6 @@
 {
   "description": "SaaS marketing site with seeded UX, accessibility, reliability, performance and conversion defects.",
+  "audit": { "allowSubmit": true },
   "mustFind": [
     {
       "rule": "axe/color-contrast",

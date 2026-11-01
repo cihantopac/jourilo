@@ -1,16 +1,69 @@
 {
   "description": "Form grouping, data tables and image alternatives: broken and accessible versions.",
   "mustFind": [
-    { "rule": "jourilo/fieldset-legend", "path": "/broken", "why": "fieldset without legend and with an empty legend" },
-    { "rule": "jourilo/radio-group", "path": "/broken", "why": "radio pair not grouped" },
-    { "rule": "jourilo/table-headers", "path": "/broken", "why": "3x2 data table with td only" },
-    { "rule": "jourilo/empty-alt-with-title", "path": "/broken", "why": "alt=\"\" with a descriptive title" }
+    {
+      "rule": "jourilo/fieldset-legend",
+      "path": "/broken",
+      "why": "fieldset without legend and with an empty legend"
+    },
+    {
+      "rule": "jourilo/radio-group",
+      "path": "/broken",
+      "why": "radio pair not grouped"
+    },
+    {
+      "rule": "jourilo/table-headers",
+      "path": "/broken",
+      "why": "3x2 data table with td only"
+    },
+    {
+      "rule": "jourilo/empty-alt-with-title",
+      "path": "/broken",
+      "why": "alt=\"\" with a descriptive title"
+    },
+    {
+      "rule": "jourilo/keyboard-trap",
+      "path": "/trap-async",
+      "kind": "defect",
+      "why": "onblur refocus after a timeout (ACT 80af7b)"
+    },
+    {
+      "rule": "jourilo/keyboard-trap",
+      "path": "/trap-documented",
+      "kind": "needs-review",
+      "why": "held focus with a documented, working Ctrl+M exit"
+    }
   ],
   "mustNotFind": [
-    { "rule": "jourilo/fieldset-legend", "path": "/accessible" },
-    { "rule": "jourilo/radio-group", "path": "/accessible" },
-    { "rule": "jourilo/table-headers", "path": "/accessible", "why": "header cells, and a layout table with role=presentation" },
-    { "rule": "jourilo/empty-alt-with-title", "path": "/accessible" }
+    {
+      "rule": "jourilo/fieldset-legend",
+      "path": "/accessible"
+    },
+    {
+      "rule": "jourilo/radio-group",
+      "path": "/accessible"
+    },
+    {
+      "rule": "jourilo/table-headers",
+      "path": "/accessible",
+      "why": "header cells, and a layout table with role=presentation"
+    },
+    {
+      "rule": "jourilo/empty-alt-with-title",
+      "path": "/accessible"
+    },
+    {
+      "rule": "jourilo/keyboard-trap",
+      "path": "/trap-documented",
+      "kind": "defect",
+      "why": "WCAG 2.1.2 allows a documented way out that works"
+    }
   ],
-  "maxDefects": { "minSeverity": "moderate", "count": 0, "paths": ["/accessible"] }
+  "maxDefects": {
+    "minSeverity": "moderate",
+    "count": 0,
+    "paths": [
+      "/accessible"
+    ]
+  }
 }

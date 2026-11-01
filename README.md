@@ -8,8 +8,8 @@ Local-first · evidence-driven · no paid services required · works as a CLI an
 
 ![Jourilo report overview: defects by severity, conversion hypotheses kept separate, fixes grouped by root cause](docs/assets/report-overview.png)
 
-> Status: **0.1.0, pre-release.** Tested on macOS (Apple Silicon) with Chromium. See [Limitations](docs/LIMITATIONS.md)
-> for what is not covered yet.
+> Status: **1.0.0.** Tested in CI on Linux, macOS and Windows (Node 20 and 22) with Chromium, Firefox and WebKit. An
+> automated run never proves WCAG conformance: see [Limitations](docs/LIMITATIONS.md) for what is not covered.
 
 ## What it does
 
@@ -19,7 +19,7 @@ Local-first · evidence-driven · no paid services required · works as a CLI an
 | **Audit in a real browser** | Playwright + axe-core 4.14 (WCAG 2.0–2.2 A/AA), a keyboard-only walk (focus visible, focus obscured, traps), target size, reflow at 320 px, horizontal overflow, input purpose, paste blocking, form error feedback, lab Web Vitals (LCP, CLS, FCP, TTFB, TBT; INP during journeys), JavaScript errors and failed requests — on desktop and mobile. |
 | **Journeys**                | Reusable JSON scenarios with explicit success criteria, suggested from what the site actually contains, run with a screenshot per step. A safety policy never pays, deletes or cancels on non-local hosts.                                                                                                                                          |
 | **Conversion**              | CTA prominence and clarity, value proposition, trust signals, signup/checkout friction, pricing clarity — always reported as **hypotheses**, never as predicted lifts, with experiment plans and the statistics to read real results.                                                                                                               |
-| **Fix and verify**          | Findings point to likely source lines. `optimize` previews minimal fixes as diffs and applies them only with `--apply` after a git checkpoint. `verify` repeats the exact scope and reports fixed, new and persisting problems.                                                                                                                     |
+| **Fix and verify**          | Findings point to likely source lines. `optimize` previews minimal fixes as diffs and applies them only with `--apply`, as one reversible change (atomic writes; rollback never overwrites later edits). `verify` repeats the exact scope and reports fixed, new and persisting problems.                                                           |
 | **Report**                  | A self-contained HTML _Experience Observatory_ (screenshots with highlighted elements, reproduction steps, standards, sources, journeys, before/after), plus Markdown for PRs and SARIF for code scanning.                                                                                                                                          |
 
 What Jourilo does **not** do: invent observations, give a single "UX score", claim WCAG compliance from an automated
@@ -66,8 +66,9 @@ machine-readable output.
 
 Then use `/jourilo:jourilo <url or path>` for the full workflow, or `/jourilo:discover`, `/jourilo:audit`,
 `/jourilo:journeys`, `/jourilo:accessibility`, `/jourilo:conversion`, `/jourilo:optimize`, `/jourilo:compare`,
-`/jourilo:report`, `/jourilo:experiment`. Claude Code namespaces plugin commands, so a bare `/jourilo` is available
-by installing the personal skill: `jourilo agent install claude-skill --write`. See [docs/PLUGIN.md](docs/PLUGIN.md).
+`/jourilo:report`, `/jourilo:experiment`. Plugin commands are namespaced; `/jourilo:jourilo` always works. Claude
+Code may also accept a bare `/jourilo` when no other command uses that name; to make it permanent, install the
+personal skill with `jourilo agent install claude-skill --write`. See [docs/PLUGIN.md](docs/PLUGIN.md).
 
 Other agents: `jourilo agent install codex --write` (adds a section to `AGENTS.md`) or `cursor`
 (`.cursor/rules/jourilo.mdc`).
@@ -79,7 +80,7 @@ jourilo audit http://localhost:3000 --repo .        # evidence + likely source l
 jourilo journeys suggest latest                     # edit .jourilo/journeys/*.json
 jourilo journeys run --base http://localhost:3000   # step screenshots, success criteria
 jourilo optimize latest --repo .                    # preview minimal diffs (dry run)
-jourilo optimize latest --repo . --apply            # git checkpoint, then write
+jourilo optimize latest --repo . --apply            # write as one reversible change
 jourilo verify <baseline-run>                       # same scope again: fixed / new / persisting
 jourilo rollback latest --yes                       # undo if needed
 ```
@@ -94,33 +95,37 @@ Fixes are idempotent and fully reversible (see [docs/EVALUATION.md](docs/EVALUAT
 
 ## Detection quality
 
-**Fixture benchmark** (`jourilo bench`): sites with seeded problems and clean control pages. It fails on any miss,
-false positive or wrong root-cause file. 0.1.0, Chromium, macOS:
+**Fixture benchmark** (`jourilo bench`, a CI gate): sites with seeded problems and clean control pages; it fails on
+any miss, false positive or wrong root-cause file. 1.0.0: **45 / 45** seeded problems found, **0** false positives,
+root cause in the expected file 9 / 9 (Chromium; the `acme-saas` set also in Firefox and WebKit). These fixtures were written alongside the
+rules, so they show the rules work as designed.
 
-| Fixture                                                                                     | Seeded problems found | False positives                           |
-| ------------------------------------------------------------------------------------------- | --------------------- | ----------------------------------------- |
-| `acme-saas` (SaaS marketing, signup, login, slow and shifting pages)                        | 23 / 23               | 0 (root cause in the expected file 9 / 9) |
-| `tr-dukkan` (Turkish shop)                                                                  | 8 / 8                 | 0                                         |
-| `structure-lab` (form grouping, tables, image alternatives; broken and accessible versions) | 4 / 4                 | 0                                         |
-| `widgets-lab` (dialog and disclosure; broken and accessible versions)                       | 3 / 3                 | 0                                         |
-| `brand-site` (locked Markilo brand)                                                         | 3 / 3                 | 0                                         |
-| `clean-shop` (control)                                                                      | —                     | 0                                         |
+**Independent benchmark** on the 955 [W3C ACT Rules](https://www.w3.org/WAI/standards-guidelines/act/rules/) test
+cases that map to WCAG criteria, written by the ACT Rules Community Group, not for Jourilo:
 
-These fixtures were written alongside the rules, so they show the rules work as designed. For an independent view,
-[`benchmarks/compare`](benchmarks/compare) runs Jourilo, Pa11y and Lighthouse on the 142 published test cases of the
-[GOV.UK accessibility tool audit](https://alphagov.github.io/accessibility-tool-audit/): error-level detections were
-Jourilo 54 (49 counted conservatively), Pa11y 38 and Lighthouse 34, with the same Chromium build. The metric is coarse
-and the comparison influenced Jourilo's rules; read the method and caveats in
-[docs/EVALUATION.md](docs/EVALUATION.md#comparison) before quoting it.
+| 2026-11-01            | Precision | Recall | False positives |
+| --------------------- | --------- | ------ | --------------- |
+| Jourilo 1.0.0         | 93.9 %    | 55.4 % | 11              |
+| axe-core 4.14.0 alone | 93.6 %    | 53.5 % | 11              |
+
+Jourilo runs axe-core internally; its own checks add keyboard-trap and focus-indicator detections without adding
+false positives. Many misses are criteria that need a person (media alternatives, meaning, descriptive headings), which
+every report lists under "Still needs a person". A separate comparison with Pa11y and Lighthouse on the 142 cases of the
+[GOV.UK accessibility tool audit](https://alphagov.github.io/accessibility-tool-audit/) is in
+[docs/EVALUATION.md](docs/EVALUATION.md#comparison), with its method and caveats.
 
 ## Safety and privacy
 
-Normal audits are read-only. Crawling stays on the target origin, respects robots.txt and refuses private-network
-targets unless you pass `--allow-private`. Journeys block payments, purchases, deletions and cancellations on any
-non-local host; form submission on non-local hosts needs `--allow-submit`. Password, card and marked fields are masked
+Audits are read-only, on every host: form validation is probed by simulating the submission, and nothing that would
+change data leaves the browser unless you pass `--allow-submit`. Crawling stays on the target origin and respects
+robots.txt. Every browser request goes through a local network guard, so an audited page cannot reach this machine,
+the local network or cloud-metadata services (private targets need `--allow-private`). Journeys block payments,
+purchases, deletions and cancellations however they are triggered (click, key, script, link) on any non-local host,
+and on local hosts unless you pass `--allow-destructive`. Fixes are written as one reversible change, and rollback
+never overwrites edits made afterwards. Password, card and marked fields are masked
 in screenshots; tokens, keys, e-mail addresses and card numbers are redacted from logs and reports. Page content is
 treated as untrusted data and is always HTML-escaped in reports. Details: [docs/PRIVACY.md](docs/PRIVACY.md),
-[SECURITY.md](SECURITY.md).
+[docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md) (including residual risks), [SECURITY.md](SECURITY.md).
 
 ## Works with Markilo and Searvex (optional)
 

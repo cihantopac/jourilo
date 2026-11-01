@@ -1,40 +1,39 @@
 # Progress log and resume checkpoint
 
-Use this file to resume work in a new session: read it, then `docs/ROADMAP.md` and `docs/LIMITATIONS.md`.
+Use this file to resume work in a new session: read it, then [RELEASE-1.0.md](RELEASE-1.0.md) (plan, checklist,
+evidence), [LIMITATIONS.md](LIMITATIONS.md) and [ROADMAP.md](ROADMAP.md).
 
-## State on 2026-10-31 (v0.1.0 released)
+## State on 2026-11-01 (1.0.0 released)
 
-Repository: https://github.com/cihantopac/jourilo (public), branch `main`. Tag `v0.1.0`, GitHub release and npm
-package `jourilo@0.1.0` published on 2026-10-31. CI green on Linux, macOS and Windows (Node 20 and 22).
+Repository: https://github.com/cihantopac/jourilo (public), branch `main`. 1.0.0 is tagged and published on npm and
+GitHub (2026-11-01). Open follow-ups are in ROADMAP.md (icon excluded from 1.0).
 
-### Done (each with tests and a real run)
+### Done for 1.0 (each with tests and a real run)
 
-| Milestone                                                                                  | Commit message prefix  | Evidence                                                        |
-| ------------------------------------------------------------------------------------------ | ---------------------- | --------------------------------------------------------------- |
-| Vertical slice: discovery → browser capture → rules → report → bench                       | "Vertical slice"       | bench 19/19 at the time                                         |
-| Journey engine, safety policy, form validation probe, paste blocking                       | "Journey engine"       | journeys.test.ts; bench 22/22                                   |
-| Product intelligence (repo + site), experiments, `jourilo.context/v1` with Markilo/Searvex | "Product intelligence" | discovery/experiment/integration tests; brand-site fixture      |
-| Repair engine: fixers, checkpoints, verify, rollback                                       | "Repair engine"        | repair.test.ts: 10 fixed, 0 new                                 |
-| Claude Code plugin, agent adapters, generated CLI docs                                     | "Claude Code plugin"   | `claude plugin validate --strict`; headless `/jourilo:discover` |
-| Real-site iteration, WebKit fix, docs, CI                                                  | "Docs, CI"             | EVALUATION.md §1, §3                                            |
+| Milestone                                                                                 | Evidence                                                     |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Network guard, mixed-DNS refusal, guarded robots/sitemap fetches                          | `net-guard.test.ts` (3 engines), `unit/net-guard.test.ts`    |
+| Fix transactions, conflict-safe and reversible rollback, no git requirement               | `unit/git.test.ts`, `repair.test.ts`                         |
+| Journey action guard (keys, signals, request backstop), read-only audits, simulated forms | `action-safety.test.ts`, `unit/journeys.test.ts`             |
+| Security review with residual risks                                                       | [SECURITY-REVIEW.md](SECURITY-REVIEW.md)                     |
+| Laravel discovery; real-application fixes (anchors, launcher dialogs, local sitemaps)     | EVALUATION.md §3b; fixtures `widgets-lab`, `multilang-build` |
+| Composite keyboard reachability, `--repeat` flake detection, noise-aware verify verdicts  | `widgets-lab/composite-*`, `flaky.test.ts`, `report.test.ts` |
+| Clean install from the packed tarball (CI on 3 platforms); marketplace install verified   | `scripts/smoke-pack.mjs`; RELEASE-1.0.md evidence log        |
 
 ### How to verify quickly
 
 ```bash
 npm install && node plugin/dist/jourilo.mjs setup
-npm run ci            # lint, typecheck, build, unit + browser tests, dist check
-npm run bench         # detection benchmark
+npm run ci                      # lint, typecheck, build, unit + browser tests, dist check
+npm run bench                   # detection benchmark on the fixtures
+node scripts/smoke-pack.mjs     # every command from the packed tarball
+node benchmarks/act/fetch.mjs && node benchmarks/act/run.mjs   # independent ACT benchmark (about 90 minutes)
 ```
-
-### Open items (in priority order)
-
-1. Keep Windows CI green (Linux and macOS pass on GitHub Actions; Windows rollback fixed on 2026-10-30).
-2. Plugin icon (suggest designing with Markilo) — validator warns `ICON_MISSING`.
-3. Independent fixtures (the GOV.UK comparison has influenced the rules); W3C BAD before/after comparison.
-4. Release: tag v0.1.0 and npm publish — **requires the maintainer's approval**.
 
 ### Conventions to keep
 
 - Every rule: unit test + fixture `mustFind` + clean control stays clean.
+- Every engine defect found on a real site: a fixture that fails on the old code and passes on the new one.
 - `npm run build` after any `src/` change; commit `plugin/dist` and generated `docs/CLI.md`.
 - Findings: correct `kind` / `provenance` / `confidence`; conversion = hypothesis.
+- Real-application evidence stays outside this repository; only a summary without private details goes into docs.
