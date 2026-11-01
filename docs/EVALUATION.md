@@ -1,7 +1,7 @@
 # Evaluation
 
-All numbers below come from real runs on 2026-10-30 (macOS 27, Apple Silicon, Node 22.23, Playwright 1.64.1,
-Chromium 156.0.8078.4 unless stated). Raw benchmark records: [`evaluation/bench-history.jsonl`](evaluation/bench-history.jsonl).
+Numbers come from real runs on macOS 27 (Apple Silicon), Node 22.23, Playwright 1.64.1, Chromium 156.0.8078.4 unless
+stated; each section gives its date. The 1.0.0 numbers are from 2026-11-01. Raw benchmark records: [`evaluation/bench-history.jsonl`](evaluation/bench-history.jsonl).
 
 ## 1. Fixture benchmark (`jourilo bench`)
 
@@ -10,11 +10,16 @@ root-cause files, required recommendation text). The clean control must have no 
 
 | Fixture                                          | Pages × viewports     | Found   | False positives | Root-cause file | Time   |
 | ------------------------------------------------ | --------------------- | ------- | --------------- | --------------- | ------ |
-| acme-saas                                        | 6 × 2 (+ form probes) | 22 / 22 | 0               | 9 / 9           | 32.9 s |
-| brand-site (locked Markilo brand + Searvex data) | 2 × 2                 | 3 / 3   | 0               | —               | 5.3 s  |
-| clean-shop (control)                             | 4 × 2                 | —       | 0               | —               | 11.1 s |
+| acme-saas                                        | 7 × 2 (+ form probes) | 23 / 23 | 0               | 9 / 9           | 43.1 s |
+| brand-site (locked Markilo brand + Searvex data) | 2 × 2                 | 3 / 3   | 0               | —               | 5.5 s  |
+| clean-shop (control)                             | 4 × 2                 | —       | 0               | —               | 12.4 s |
+| multilang-build (no `/`, production sitemap)     | 3 × 2                 | 1 / 1   | 0               | —               | 11.2 s |
+| structure-lab (structure, keyboard traps)        | 5 × 2                 | 6 / 6   | 0               | —               | 15.0 s |
+| tr-dukkan (Turkish shop)                         | 5 × 2                 | 8 / 8   | 0               | —               | 15.8 s |
+| widgets-lab (dialogs, disclosures, composites)   | 8 × 2                 | 4 / 4   | 0               | —               | 30.2 s |
 
-Cross-browser (same acme-saas ground truth): Firefox 22/22, WebKit 22/22 (after the WebKit Option+Tab fix below).
+1.0.0 on 2026-11-01: 45 / 45 seeded problems, 0 false positives, 9 / 9 root-cause files (CI gate on every push).
+Cross-browser (same acme-saas ground truth): Firefox and WebKit find the same set (CI on Linux, macOS and Windows).
 
 **Caveat.** The fixtures were built by the same team as the rules. They prove that each rule detects what it is
 designed to detect and stays quiet on a clean page; they do not measure coverage of real-world problems or compare
@@ -38,6 +43,43 @@ Jourilo with other tools.
 | 3         | Shared reports leaked `/Users/<name>/…`                                     | absolute paths in targets                                                                        | `displayPath` (relative or `~`)                                                                                                     | manual check of report HTML            |
 | 4         | WebKit missed focus problems                                                | WebKit follows Safari: Tab skips links and buttons                                               | keyboard walk uses Option+Tab in WebKit                                                                                             | `cross-browser.test.ts`                |
 | 6         | Windows CI: rollback left files modified                                    | `git restore` applies `core.autocrlf=true` and rewrote LF files as CRLF                          | `optimize --apply` backs up exact bytes; rollback writes backups or the raw blob (keeping CRLF only where the working copy used it) | `git.test.ts` (autocrlf on and off)    |
+
+## 1a. Independent benchmark: W3C ACT Rules test cases
+
+The [ACT Rules](https://www.w3.org/WAI/standards-guidelines/act/rules/) test cases are written by the W3C ACT Rules
+Community Group, not for Jourilo. Each HTML case is labelled _failed_, _passed_ or _inapplicable_ for one rule, and each
+rule names the WCAG success criteria it is required for. Scripts: [`benchmarks/act`](../benchmarks/act) (`fetch.mjs`
+mirrors the cases politely into a local cache that is not committed; `run.mjs` scores). Raw results:
+[`evaluation/act-2026-11-01.json`](evaluation/act-2026-11-01.json), tables per criterion and rule:
+[`evaluation/act-2026-11-01.md`](evaluation/act-2026-11-01.md).
+
+**Method, the same for both tools.** 955 cases on the 63 rules that map to WCAG criteria (of 1 195 HTML cases). A
+_failed_ case is a true positive when the tool reports an error-level problem mapped to one of the rule's criteria on
+that page; a _passed_ or _inapplicable_ case is a false positive when it does. Problems mapped to other criteria are
+ignored. Jourilo ran its full audit (desktop viewport, keyboard walk, widget checks, read-only form probe); the
+baseline is axe-core alone, the same version and tags Jourilo runs, so the difference is what Jourilo's own checks add
+or cost. Jourilo's "needs review" items are not counted as detections.
+
+| Tool (2026-11-01)     | TP  | FN  | FP  | TN  | Precision | Recall |
+| --------------------- | --- | --- | --- | --- | --------- | ------ |
+| Jourilo 1.0.0         | 168 | 135 | 11  | 641 | 93.9 %    | 55.4 % |
+| axe-core 4.14.0 alone | 162 | 141 | 11  | 641 | 93.6 %    | 53.5 % |
+
+- Jourilo adds 6 detections and no false positive over axe-core: keyboard traps (2.1.2: 5 / 5, axe 0 / 5) and a
+  missing focus indicator (2.4.7: 1 / 1, axe 0 / 1). Its 11 false positives are axe-core results that both tools
+  report (ARIA attribute values, `aria-hidden` focus, language and frame title rules).
+- Criteria with no detection by either tool: media alternatives (1.2.x), sensory characteristics (1.3.3),
+  orientation (1.3.4), images of text (1.4.5), enhanced contrast (1.4.6, AAA, not targeted), audio control (1.4.2),
+  character key shortcuts (2.1.4), pause/stop (2.2.2), bypass blocks (2.4.1), descriptive headings (2.4.6),
+  motion actuation (2.5.4) and error identification after a real submission (3.3.1; audits do not submit by default).
+  Most of these need a person, which the report says in "Still needs a person".
+- axe-core could not finish 4 pages (a test page spins its renderer); they count as "no findings" for axe.
+
+**What it changed.** The first run (2026-10-31, [raw](evaluation/act-2026-10-31.json)) found two engine defects:
+Jourilo reported a missing focus indicator where a sibling element draws it (2 false positives) and missed all five
+keyboard traps that pull focus back from `onblur` with a timeout. Both were fixed, each with a fixture that fails on
+the old code (`widgets-lab/focus-sibling`, `structure-lab/trap-async`, `structure-lab/trap-documented`), before the
+run above. This benchmark is no longer independent of those two checks; future changes should be judged on new cases.
 
 ## 1b. Signed-in single-page app (`fixtures/apps/pulse-dashboard`, `tests/browser/auth-spa.test.ts`)
 
@@ -149,5 +191,5 @@ validation, dependency audit).
 
 ## 6. Not evaluated yet
 
-Recall on fixtures built independently of the rules (after the GOV.UK comparison influenced the rules); long-running authenticated SaaS flows; performance under CPU/network throttling on real
-devices. See [LIMITATIONS.md](LIMITATIONS.md) and [ROADMAP.md](ROADMAP.md).
+Long-running authenticated SaaS flows against a production-like backend; performance under CPU/network throttling on
+real devices; Pa11y and Lighthouse on the ACT cases. See [LIMITATIONS.md](LIMITATIONS.md) and [ROADMAP.md](ROADMAP.md).

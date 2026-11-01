@@ -3,10 +3,10 @@
 Use this file to resume work in a new session: read it, then [RELEASE-1.0.md](RELEASE-1.0.md) (plan, checklist,
 evidence), [LIMITATIONS.md](LIMITATIONS.md) and [ROADMAP.md](ROADMAP.md).
 
-## State on 2026-11-01 (1.0.0 release candidate in progress)
+## State on 2026-11-01 (1.0.0 released)
 
-Repository: https://github.com/cihantopac/jourilo (public). 0.1.0 is on npm and GitHub (2026-10-31). The 1.0 work
-lives on branch `release/1.0` until the release checklist in RELEASE-1.0.md is complete.
+Repository: https://github.com/cihantopac/jourilo (public), branch `main`. 1.0.0 is tagged and published on npm and
+GitHub (2026-11-01). Open follow-ups are in ROADMAP.md (icon excluded from 1.0).
 
 ### Done for 1.0 (each with tests and a real run)
 

@@ -42,41 +42,57 @@ Status keys: ☐ open · ◐ in progress · ☑ done (evidence linked) · ✗ ex
 
 | ID   | Work                                                                                                  | Acceptance                                                                          | Status |
 | ---- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------ |
-| P1.1 | Arrow-key patterns for composite widgets (menus, tabs, listboxes): Escape closes, focus returns.      | Fixture with broken and correct widgets; Chromium/Firefox/WebKit agree.             | ☐      |
-| P1.2 | Journey flake detection (`--repeat N`) and stability report.                                          | Fixture with a deliberately flaky step is flagged; stable journeys report 0 flakes. | ☐      |
-| P1.3 | Lab-metric stability: repeated-run medians in `verify`, spread shown, unmeasured conditions stated.   | Report shows median and range; verify does not call noise a regression.             | ☐      |
-| P1.4 | Report polish: blocked requests/actions, measured vs. unmeasured conditions, manual-review checklist. | Report tests assert the sections; HTML/MD/JSON/SARIF consistent.                    | ☐      |
-| P1.5 | Discovery accuracy on real repositories (AST where lexical is wrong).                                 | Real-repo validation table in EVALUATION.md with errors found and fixed.            | ◐      |
+| P1.1 | Keyboard reachability of composite widgets (tabs, radio groups, list boxes, menu bars, trees).        | Fixture with broken and correct widgets; Chromium/Firefox/WebKit agree.             | ☑      |
+| P1.2 | Journey flake detection (`--repeat N`) and stability report.                                          | Fixture with a deliberately flaky step is flagged; stable journeys report 0 flakes. | ☑      |
+| P1.3 | Lab-metric stability: repeated-run medians in `verify`, spread shown, unmeasured conditions stated.   | Report shows median and range; verify does not call noise a regression.             | ☑      |
+| P1.4 | Report polish: blocked requests/actions, measured vs. unmeasured conditions, manual-review checklist. | Report tests assert the sections; HTML/MD/JSON/SARIF consistent.                    | ☑      |
+| P1.5 | Discovery accuracy on real repositories (Laravel; AST deferred to 1.x, see ROADMAP).                  | Real-repo validation table in EVALUATION.md with errors found and fixed.            | ☑      |
 
 ### Validation, distribution and release
 
-| ID  | Work                                                                                       | Acceptance                                                                            | Status |
-| --- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- | ------ |
-| V.1 | Independent benchmark (cases not designed with the rules), precision/recall per category.  | Results and method in EVALUATION.md; every engine defect found has a regression test. | ☐      |
-| V.2 | Real local applications (read-only, disposable copies for repairs).                        | Evidence kept outside the public repo; summary without private data in EVALUATION.md. | ☐      |
-| V.3 | Clean-install test of the packed tarball: every advertised command works from the package. | Script `scripts/smoke-pack.mjs` passes in CI on Linux, macOS, Windows.                | ☐      |
-| V.4 | Claude Code marketplace install and `/jourilo:jourilo` flow; icon.                         | Headless plugin run recorded; validator has no warnings.                              | ☐      |
-| R.1 | Versions, changelog, docs, limitations synchronized; no stale "unsupported" statements.    | Release workflow checks pass; doc review checklist below ticked.                      | ☐      |
-| R.2 | CI green on all platforms and Node versions.                                               | Link to the run.                                                                      | ☐      |
+| ID  | Work                                                                                       | Acceptance                                                                            | Status     |
+| --- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- | ---------- |
+| V.1 | Independent benchmark (cases not designed with the rules), precision/recall per category.  | Results and method in EVALUATION.md; every engine defect found has a regression test. | ☑          |
+| V.2 | Real local applications (read-only, disposable copies for repairs).                        | Evidence kept outside the public repo; summary without private data in EVALUATION.md. | ☑          |
+| V.3 | Clean-install test of the packed tarball: every advertised command works from the package. | Script `scripts/smoke-pack.mjs` passes in CI on Linux, macOS, Windows.                | ☑          |
+| V.4 | Claude Code marketplace install and `/jourilo:jourilo` flow; icon.                         | Headless plugin run recorded; validator has no warnings.                              | ☑ (icon ✗) |
+| R.1 | Versions, changelog, docs, limitations synchronized; no stale "unsupported" statements.    | Release workflow checks pass; doc review checklist below ticked.                      | ☑          |
+| R.2 | CI green on all platforms and Node versions.                                               | Link to the run.                                                                      | ☑          |
 
 ## Release checklist (final gate)
 
-- [ ] All advertised core functionality works end to end (V.3, V.4).
-- [ ] No open critical/high defects (table above all ☑).
-- [ ] Security and rollback protections verified (P0.\*).
-- [ ] Clean install works (V.3).
-- [ ] CLI and plugin both work (V.3, V.4).
-- [ ] Cross-platform CI passes (R.2).
-- [ ] Independent real-world validation completed (V.1, V.2).
-- [ ] Known false positives and unstable journeys addressed (P1.2, V.\*).
-- [ ] Safe repairs verified without unexplained regressions (P0.4, P0.5, repair test).
-- [ ] Reports state measured and unmeasured conditions (P1.4).
-- [ ] Documentation matches the product (R.1).
-- [ ] Maintainer approval for npm publish and GitHub release.
+- [x] All advertised core functionality works end to end (V.3, V.4).
+- [x] No open critical/high defects (table above all ☑).
+- [x] Security and rollback protections verified (P0.\*).
+- [x] Clean install works (V.3).
+- [x] CLI and plugin both work (V.3, V.4).
+- [x] Cross-platform CI passes (R.2).
+- [x] Independent real-world validation completed (V.1, V.2).
+- [x] Known false positives and unstable journeys addressed (P1.2, V.\*).
+- [x] Safe repairs verified without unexplained regressions (P0.4, P0.5, repair test).
+- [x] Reports state measured and unmeasured conditions (P1.4).
+- [x] Documentation matches the product (R.1).
+- [x] Maintainer approval for npm publish and GitHub release (2026-11-01: "push and release when all open work is done").
 
 ## Evidence log
 
 Newest first. Each entry: date, what was run, result, link.
+
+- **2026-11-01 · Release candidate.** GitHub Actions on the release branch
+  ([cihantopac/jourilo#1](https://github.com/cihantopac/jourilo/pull/1)): 12 of 12 checks passed — tests on
+  Linux, macOS and Windows × Node 20 and 22 (Chromium, Firefox, WebKit), clean install from the packed tarball on all
+  three platforms, detection benchmark, plugin manifest validation, dependency audit. Local `npm run ci`: 226 tests.
+  Fixture benchmark: 45 / 45, 0 false positives, 9 / 9 root-cause files.
+- **2026-11-01 · ACT Rules benchmark (independent).** 955 cases: Jourilo 1.0.0 precision 93.9 %, recall 55.4 %;
+  axe-core alone 93.6 % / 53.5 %. The first run found two engine defects (sibling-drawn focus indicators, timed
+  keyboard traps), fixed with fixtures before the final run. EVALUATION.md §1a.
+- **2026-11-01 · Plugin.** Marketplace install from GitHub into an isolated Claude Code configuration: plugin and
+  `playwright-core` installed, `doctor` passes from the plugin cache. Headless `/jourilo:discover` on the Laravel
+  fixture separated observed facts from inferences and found a discovery defect (sign-up journey suggested without a
+  sign-up route), fixed with a test. Icon: two Markilo rounds, no concept passed the critic's gate; excluded from 1.0
+  (ROADMAP).
+- **2026-11-01 · Clean install.** `scripts/smoke-pack.mjs`: every advertised command from the packed tarball,
+  including optimize → verify (10 fixed, 0 new) → rollback (tree clean).
 
 - **2026-10-31 · Laravel discovery on a private Laravel 12 + Livewire + Filament 4 application (read-only).**
   Before: 6 routes (only `routes/web.php`), no auth, no panel. Defects found: included route files

@@ -95,24 +95,24 @@ Fixes are idempotent and fully reversible (see [docs/EVALUATION.md](docs/EVALUAT
 
 ## Detection quality
 
-**Fixture benchmark** (`jourilo bench`): sites with seeded problems and clean control pages. It fails on any miss,
-false positive or wrong root-cause file. 0.1.0, Chromium, macOS:
+**Fixture benchmark** (`jourilo bench`, a CI gate): sites with seeded problems and clean control pages; it fails on
+any miss, false positive or wrong root-cause file. 1.0.0: **45 / 45** seeded problems found, **0** false positives,
+root cause in the expected file 9 / 9 (Chromium; the `acme-saas` set also in Firefox and WebKit). These fixtures were written alongside the
+rules, so they show the rules work as designed.
 
-| Fixture                                                                                     | Seeded problems found | False positives                           |
-| ------------------------------------------------------------------------------------------- | --------------------- | ----------------------------------------- |
-| `acme-saas` (SaaS marketing, signup, login, slow and shifting pages)                        | 23 / 23               | 0 (root cause in the expected file 9 / 9) |
-| `tr-dukkan` (Turkish shop)                                                                  | 8 / 8                 | 0                                         |
-| `structure-lab` (form grouping, tables, image alternatives; broken and accessible versions) | 4 / 4                 | 0                                         |
-| `widgets-lab` (dialog and disclosure; broken and accessible versions)                       | 3 / 3                 | 0                                         |
-| `brand-site` (locked Markilo brand)                                                         | 3 / 3                 | 0                                         |
-| `clean-shop` (control)                                                                      | —                     | 0                                         |
+**Independent benchmark** on the 955 [W3C ACT Rules](https://www.w3.org/WAI/standards-guidelines/act/rules/) test
+cases that map to WCAG criteria, written by the ACT Rules Community Group, not for Jourilo:
 
-These fixtures were written alongside the rules, so they show the rules work as designed. For an independent view,
-[`benchmarks/compare`](benchmarks/compare) runs Jourilo, Pa11y and Lighthouse on the 142 published test cases of the
-[GOV.UK accessibility tool audit](https://alphagov.github.io/accessibility-tool-audit/): error-level detections were
-Jourilo 54 (49 counted conservatively), Pa11y 38 and Lighthouse 34, with the same Chromium build. The metric is coarse
-and the comparison influenced Jourilo's rules; read the method and caveats in
-[docs/EVALUATION.md](docs/EVALUATION.md#comparison) before quoting it.
+| 2026-11-01            | Precision | Recall | False positives |
+| --------------------- | --------- | ------ | --------------- |
+| Jourilo 1.0.0         | 93.9 %    | 55.4 % | 11              |
+| axe-core 4.14.0 alone | 93.6 %    | 53.5 % | 11              |
+
+Jourilo runs axe-core internally; its own checks add keyboard-trap and focus-indicator detections without adding
+false positives. Many misses are criteria that need a person (media alternatives, meaning, descriptive headings), which
+every report lists under "Still needs a person". A separate comparison with Pa11y and Lighthouse on the 142 cases of the
+[GOV.UK accessibility tool audit](https://alphagov.github.io/accessibility-tool-audit/) is in
+[docs/EVALUATION.md](docs/EVALUATION.md#comparison), with its method and caveats.
 
 ## Safety and privacy
 
