@@ -5,8 +5,9 @@ evidence), [LIMITATIONS.md](LIMITATIONS.md) and [ROADMAP.md](ROADMAP.md).
 
 ## State on 2026-11-01 (1.0.0 released)
 
-Repository: https://github.com/cihantopac/jourilo (public), branch `main`. 1.0.0 is tagged and published on npm and
-GitHub (2026-11-01). Open follow-ups are in ROADMAP.md (icon excluded from 1.0).
+Repository: https://github.com/cihantopac/jourilo (public), branch `main`. 1.0.0 is tagged and released on GitHub
+(2026-11-01); the npm publish is run by the maintainer. After 1.0.0: brand identity and plugin icon (D16), on `main`
+under "Unreleased". Open follow-ups are in ROADMAP.md.
 
 ### Done for 1.0 (each with tests and a real run)
 

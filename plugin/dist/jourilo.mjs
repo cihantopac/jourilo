@@ -44716,6 +44716,25 @@ function locateFindings(run, repoRoot) {
 import { writeFileSync as writeFileSync4 } from "node:fs";
 import { join as join9 } from "node:path";
 
+// src/report/brand.ts
+var WORDMARK_VIEWBOX = "-18 -74 320 107";
+var WORDMARK_PATHS = [
+  "m-15.5-64.4 3.2-3.2h55.5v2.6l-8 2.65L35.3-2C35.3 18 25 30.5 10 30.5c-6.5 0-12-3-15-9.5l-6.5-8L-5 5l6.5 8-3 3.7c2 4.8 6 7.8 11.5 7.8 9 0 14.3-6.5 14.3-18.5v-65.5q-.7-1.3-2.8-1.7h-33.8Z",
+  "M70.15-3.85q3.65 0 6.4-1.75t4.3-5.45 1.55-9.6q0-6.5-1.5-10.87-1.5-4.38-4.25-6.6-2.75-2.23-6.7-2.23-3.6 0-6.35 1.73-2.75 1.72-4.3 5.44-1.55 3.73-1.55 9.63 0 6.4 1.48 10.8 1.47 4.4 4.27 6.65t6.65 2.25M69.8 1.1q-6.85 0-11.97-2.87-5.13-2.88-7.93-8-2.8-5.13-2.8-11.88 0-6.95 2.98-12.3 2.97-5.35 8.2-8.37 5.22-3.03 12.07-3.03 6.9 0 11.98 2.88 5.07 2.87 7.9 7.97 2.82 5.1 2.82 11.9 0 6.95-2.97 12.3-2.98 5.35-8.2 8.38Q76.65 1.1 69.8 1.1",
+  "M115.1-14.95q0 2.8.8 4.45t2.73 2.4q1.92.75 5.22.75 3.1 0 6.1-1.05 2.1-.75 3.5-1.8v-28.25l-6.65-3.05v-2.55l17.2-.9-.65 6.3V-8.3q.5.45 1.3 1t1.78 1.05q.97.5 1.95.9.97.4 1.82.6v1.8L136.2.9h-1.35l-1.1-7.45q-1.55 1.5-2.9 2.6Q128.45-2 126.4-.9T122.3.65t-4.45.45q-6.45 0-9.52-3.88-3.08-3.87-3.08-11.57v-23.9l-7.2-3.2v-2.6L115.7-45l-.6 6.25Z",
+  "m186-44 6.5 8-6.5 8-6.5-8q-3.5.6-7.5 2v29.1l7.75 2.5V0h-24.9v-2.4l7.3-2.4v-29.25q-.7-.75-1.77-1.42-1.08-.68-2.48-1.38t-3.15-1.4v-1.65l14.65-5.45h1.4l1 8.15Q178-43.5 186-44",
+  "m207.8-72.4 6.5 7.5-6.5 7.5-6.5-7.5Zm5.85 27.05-.45 9.45v31.1l7.3 2.4V0h-24.45v-2.4l7.25-2.4v-29.95q-.55-.65-1.75-1.43-1.2-.77-2.67-1.54-1.48-.78-2.98-1.33V-41l16.05-4.35Z",
+  "m241.2-4.8 7.3 2.4V0h-24.45v-2.4l7.25-2.4v-55.5q-.7-.8-1.85-1.6t-2.75-1.65-3.55-1.65v-1.9l17.25-4.5h1.5l-.7 9.25Z",
+  "M277-3.85q3.65 0 6.4-1.75t4.3-5.45 1.55-9.6q0-6.5-1.5-10.87-1.5-4.38-4.25-6.6-2.75-2.23-6.7-2.23-3.6 0-6.35 1.73-2.75 1.72-4.3 5.44-1.55 3.73-1.55 9.63 0 6.4 1.48 10.8 1.47 4.4 4.27 6.65T277-3.85m-.35 4.95q-6.85 0-11.97-2.87-5.13-2.88-7.93-8-2.8-5.13-2.8-11.88 0-6.95 2.98-12.3 2.97-5.35 8.2-8.37 5.22-3.03 12.07-3.03 6.9 0 11.98 2.88 5.07 2.87 7.9 7.97 2.82 5.1 2.82 11.9 0 6.95-2.97 12.3-2.98 5.35-8.2 8.38-5.23 3.02-12.08 3.02"
+];
+var SYMBOL_PATH = "m150 122 42-42h670v70q-75 10-120 50v400c0 220-130 345-310 345-90 0-150-30-175-75l-85-100 85-100 85 100-18 21c23 39 58 61 113 61 115 0 175-82 175-252V205q-12-35-52-41H192Z";
+function wordmarkSvg(height) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${WORDMARK_VIEWBOX}" height="${height}" role="img" aria-label="Jourilo" fill="currentColor">${WORDMARK_PATHS.map((d) => `<path d="${d}"/>`).join("")}</svg>`;
+}
+var FAVICON_URL = `data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><style>path{fill:#1c1a17}@media (prefers-color-scheme:dark){path{fill:#f4efe4}}</style><path d="${SYMBOL_PATH}"/></svg>`
+)}`;
+
 // src/report/html.ts
 function esc(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -44945,9 +44964,10 @@ function renderHtml(run, cmp, history = []) {
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <title>Jourilo report \xB7 ${esc(run.target)}</title>
+<link rel="icon" href="${FAVICON_URL}">
 <style>${CSS2}</style></head>
 <body>
-<header class="top"><div class="brand">Jourilo <span class="muted">Experience Observatory</span></div>
+<header class="top"><div class="brand">${wordmarkSvg(34)}<span class="muted">Experience Observatory</span></div>
 <div class="meta"><b>${esc(run.target)}</b><br><span class="muted">${esc(run.mode)} mode \xB7 ${esc(new Date(run.startedAt).toUTCString())} \xB7 ${esc(run.browser.name)} ${esc(run.browser.version)} \xB7 ${run.viewports.map((v) => `${esc(v.name)} ${v.width}\xD7${v.height}`).join(", ")} \xB7 Jourilo ${esc(run.tool.version)}</span></div></header>
 <nav class="tabs" role="tablist">
 <button role="tab" aria-selected="true" data-tab="overview">Overview</button>
@@ -44990,12 +45010,12 @@ ${cmp ? `<section id="compare" class="panel" hidden>${compareHtml(cmp)}</section
 </body></html>`;
 }
 var CSS2 = `
-:root{--bg:#f7f7f8;--fg:#18181b;--muted:#6b6b76;--card:#fff;--line:#e4e4e7;--accent:#4338ca;--crit:#b91c1c;--ser:#c2410c;--mod:#a16207;--min:#4b5563;--good:#15803d;--poor:#b91c1c;--ni:#a16207}
-@media (prefers-color-scheme:dark){:root{--bg:#0f0f12;--fg:#ececf1;--muted:#a1a1aa;--card:#18181d;--line:#2e2e35;--accent:#a5b4fc;--crit:#f87171;--ser:#fb923c;--mod:#facc15;--min:#cbd5e1;--good:#4ade80;--poor:#f87171;--ni:#facc15}}
+:root{--bg:#f4efe4;--fg:#1c1a17;--muted:#65635f;--card:#fffdf8;--line:#e2d9c7;--accent:#875802;--crit:#b91c1c;--ser:#c2410c;--mod:#955d05;--min:#4b5563;--good:#14713a;--poor:#b91c1c;--ni:#955d05}
+@media (prefers-color-scheme:dark){:root{--bg:#100d08;--fg:#f4efe4;--muted:#b9b7b4;--card:#1c1a17;--line:#393835;--accent:#d9af79;--crit:#f87171;--ser:#fb923c;--mod:#facc15;--min:#cbd5e1;--good:#4ade80;--poor:#f87171;--ni:#facc15}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
 a{color:var(--accent)}code,pre{font:12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}pre{white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--line);padding:6px 8px;border-radius:6px;margin:4px 0}
 .top{display:flex;gap:24px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:16px 24px;border-bottom:1px solid var(--line);background:var(--card)}
-.brand{font-weight:700;font-size:18px}.muted{color:var(--muted)}.meta{text-align:right;font-size:13px;overflow-wrap:anywhere}
+.brand{display:flex;align-items:center;gap:20px;font-size:15px}.brand svg{display:block;flex:none}.muted{color:var(--muted)}.meta{text-align:right;font-size:13px;overflow-wrap:anywhere}
 .tabs{display:flex;gap:4px;padding:0 24px;background:var(--card);border-bottom:1px solid var(--line);overflow-x:auto}
 .tabs button{font:inherit;background:none;border:0;border-bottom:3px solid transparent;padding:12px 12px;color:var(--muted);cursor:pointer;white-space:nowrap}
 .tabs button[aria-selected=true]{color:var(--fg);border-color:var(--accent);font-weight:600}.tabs button:focus-visible{outline:2px solid var(--accent)}

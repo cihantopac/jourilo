@@ -1,4 +1,9 @@
-# Jourilo
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/jourilo-wordmark-reversed.svg">
+    <img src="docs/assets/brand/jourilo-wordmark.svg" alt="Jourilo" width="240">
+  </picture>
+</h1>
 
 **AI-powered product experience & conversion engineering studio.** Jourilo drives a real browser through your
 product, finds UX, accessibility, performance and conversion problems with evidence, traces them to the code that

@@ -31,12 +31,13 @@ and 42.
 
 `claude plugin validate plugin --strict --profile directory`:
 
-| Check                                                            | Status                                |
-| ---------------------------------------------------------------- | ------------------------------------- |
-| Manifest, skills, agent                                          | pass                                  |
-| README at the repository root                                    | pass (taken from the repository root) |
-| Icon (`.claude-plugin/icon.png`, square PNG 512–2048 px, < 2 MB) | **missing** — the only blocking item  |
+| Check                                                            | Status                                    |
+| ---------------------------------------------------------------- | ----------------------------------------- |
+| Manifest, skills, agent                                          | pass                                      |
+| README at the repository root                                    | pass (taken from the repository root)     |
+| Icon (`.claude-plugin/icon.png`, square PNG 512–2048 px, < 2 MB) | pass (1024 px appmark, added after 1.0.0) |
 
 The validator notes that the icon becomes the listing icon only the first time the plugin is saved or submitted,
-so the plugin should **not be submitted before the final icon exists**. The directory also runs a safety scan and a
+so the plugin should **not be submitted before the final icon exists**. The final icon now exists and the validator
+reports nothing. The directory also runs a safety scan and a
 policy review that the local validator does not. Submission is a maintainer decision.

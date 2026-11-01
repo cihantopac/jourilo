@@ -49,6 +49,13 @@ describe('html report', () => {
     expect(html).toContain('Content-Security-Policy');
     expect(esc(`"'<>&`)).toBe('&quot;&#39;&lt;&gt;&amp;');
   });
+  it('carries the wordmark and a favicon the CSP allows, with no external requests', () => {
+    const html = renderHtml(run([]));
+    expect(html).toMatch(/<div class="brand"><svg [^>]*role="img" aria-label="Jourilo" fill="currentColor">/);
+    expect(html).toContain('<link rel="icon" href="data:image/svg+xml,');
+    expect(html).toContain("img-src 'self' data:");
+    expect(html).not.toMatch(/(src|href)="https?:/);
+  });
 });
 
 describe('compare', () => {
