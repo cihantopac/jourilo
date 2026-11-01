@@ -13,7 +13,7 @@ Local-first · evidence-driven · no paid services required · works as a CLI an
 
 ![Jourilo report overview: defects by severity, conversion hypotheses kept separate, fixes grouped by root cause](docs/assets/report-overview.png)
 
-> Status: **1.0.0.** Tested in CI on Linux, macOS and Windows (Node 20 and 22) with Chromium, Firefox and WebKit. An
+> Status: **1.0.1.** Tested in CI on Linux, macOS and Windows (Node 20 and 22) with Chromium, Firefox and WebKit. An
 > automated run never proves WCAG conformance: see [Limitations](docs/LIMITATIONS.md) for what is not covered.
 
 ## What it does
@@ -153,6 +153,11 @@ Both are read through a small, versioned, tool-neutral contract, `jourilo.contex
 Bug reports, fixture sites with real-world UX problems and new rules are welcome. Start with
 [CONTRIBUTING.md](CONTRIBUTING.md). Every rule needs a fixture that proves it fires and a control that proves it does
 not.
+
+## Brand
+
+The Jourilo logo, symbol and plugin icon (the SVGs in [docs/assets/brand](docs/assets/brand)) were designed with
+[Markilo](https://github.com/cihantopac/markilo), a brand identity studio for Claude Code.
 
 ## License
 

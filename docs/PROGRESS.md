@@ -3,11 +3,11 @@
 Use this file to resume work in a new session: read it, then [RELEASE-1.0.md](RELEASE-1.0.md) (plan, checklist,
 evidence), [LIMITATIONS.md](LIMITATIONS.md) and [ROADMAP.md](ROADMAP.md).
 
-## State on 2026-11-01 (1.0.0 released)
+## State on 2026-11-01 (1.0.1 released)
 
-Repository: https://github.com/cihantopac/jourilo (public), branch `main`. 1.0.0 is tagged and released on GitHub
-(2026-11-01); the npm publish is run by the maintainer. After 1.0.0: brand identity and plugin icon (D16), on `main`
-under "Unreleased". Open follow-ups are in ROADMAP.md.
+Repository: https://github.com/cihantopac/jourilo (public), branch `main`. 1.0.0 and 1.0.1 are tagged and released on GitHub
+(2026-11-01); 1.0.1 is the first 1.x version on npm. 1.0.1 adds the brand identity and the plugin icon (D16); the
+detection engine is unchanged from 1.0.0. Open follow-ups are in ROADMAP.md.
 
 ### Done for 1.0 (each with tests and a real run)
 

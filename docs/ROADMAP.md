@@ -15,7 +15,7 @@ Priorities follow the rule: correctness and evidence before breadth. Items here 
 - Keyboard reachability of composite widgets (tabs, radio groups, list boxes, menu bars, trees).
 - Laravel route discovery (included route files, groups, Livewire/Inertia/Volt, Filament panels, guards).
 
-## Done after 1.0.0
+## Done in 1.0.1
 
 - **Brand identity and plugin icon.** 1.0.0 shipped without an icon (no concept from two Markilo rounds passed the
   critic's gate). A third, wordmark-led round produced the approved "Daybook" identity: wordmark, J symbol and plugin
