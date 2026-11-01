@@ -1,7 +1,7 @@
 {
   "name": "jourilo",
   "displayName": "Jourilo",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "AI-powered product experience & conversion engineering studio: discovers products and user journeys, operates real interfaces in Playwright, detects UX, accessibility (WCAG 2.2), performance and conversion problems with evidence, locates root causes, applies safe fixes and verifies them.",
   "author": {
     "name": "Cihan Topaç",

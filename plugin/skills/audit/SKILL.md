@@ -18,6 +18,6 @@ Toolchain: `node "${CLAUDE_PLUGIN_ROOT}/dist/jourilo.mjs" <command> … --json` 
    Useful options: `--pages N`, `--viewports desktop,mobile,reflow`, `--throttle`, `--url /path` (exact pages).
 3. Read `summary`, `findings` and `limitations`. Open the screenshots behind the most severe findings with Read
    and confirm they show what the finding says. If a finding looks wrong, say so — do not repeat it blindly.
-4. Answer with: the 3–7 most important problems grouped by root cause (severity, page, viewport, evidence, likely
-   source file), conversion hypotheses kept separate as untested ideas, what could not be checked (limitations,
-   manual review items), and the report path. Offer fixes (`/jourilo:optimize`) or journeys (`/jourilo:journeys`).
+4. Answer in the short format of `${CLAUDE_PLUGIN_ROOT}/skills/jourilo/SKILL.md` → Answer format (80–150 words, report path, one next step).
+   Group by root cause, keep conversion hypotheses apart from defects, and name the biggest limitation in one line.
+   Offer fixes (`/jourilo:optimize`) or journeys (`/jourilo:journeys`) as the next step.

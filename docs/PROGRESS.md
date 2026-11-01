@@ -3,11 +3,13 @@
 Use this file to resume work in a new session: read it, then [RELEASE-1.0.md](RELEASE-1.0.md) (plan, checklist,
 evidence), [LIMITATIONS.md](LIMITATIONS.md) and [ROADMAP.md](ROADMAP.md).
 
-## State on 2026-11-01 (1.0.1 released)
+## State on 2026-11-01 (1.1.0)
 
-Repository: https://github.com/cihantopac/jourilo (public), branch `main`. 1.0.0 and 1.0.1 are tagged and released on GitHub
-(2026-11-01); 1.0.1 is the first 1.x version on npm. 1.0.1 adds the brand identity and the plugin icon (D16); the
-detection engine is unchanged from 1.0.0. Open follow-ups are in ROADMAP.md.
+Repository: https://github.com/cihantopac/jourilo (public), branch `main`. 1.0.0, 1.0.1 and 1.1.0 are tagged on GitHub
+(2026-11-01). 1.1.0 redesigns the report (D17: repair prompts, fix paths, root-cause grouping, EN/TR, themes,
+journey timelines, before/after crops), shortens agent answers and turns the README into a visual product page; the
+detection engine is unchanged from 1.0.0. Release evidence: [RELEASE-1.1.md](RELEASE-1.1.md). Open follow-ups are in
+ROADMAP.md.
 
 ### Done for 1.0 (each with tests and a real run)
 
@@ -28,6 +30,7 @@ npm install && node plugin/dist/jourilo.mjs setup
 npm run ci                      # lint, typecheck, build, unit + browser tests, dist check
 npm run bench                   # detection benchmark on the fixtures
 node scripts/smoke-pack.mjs     # every command from the packed tarball
+# report QA (40 checks × Chromium/Firefox/WebKit): see RELEASE-1.1.md
 node benchmarks/act/fetch.mjs && node benchmarks/act/run.mjs   # independent ACT benchmark (about 90 minutes)
 ```
 

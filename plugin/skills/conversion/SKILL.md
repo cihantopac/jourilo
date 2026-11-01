@@ -20,3 +20,4 @@ Toolchain: `node "${CLAUDE_PLUGIN_ROOT}/dist/jourilo.mjs" <command> … --json` 
 3. Present: (a) usability defects blocking the funnel — fix first; (b) hypotheses ranked by how directly they sit on
    the key journey, each with the metric that would test it. No predicted lifts, ever.
 4. Offer `jourilo experiment plan --finding <id>` (ask for the baseline rate and daily traffic; do not guess them).
+5. Answer in the short format of `${CLAUDE_PLUGIN_ROOT}/skills/jourilo/SKILL.md` → Answer format (80–150 words, report path, one next step).

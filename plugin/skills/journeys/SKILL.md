@@ -22,3 +22,4 @@ Toolchain: `node "${CLAUDE_PLUGIN_ROOT}/dist/jourilo.mjs" <command> … --json` 
    `--allow-destructive` and explicit consent. A blocked step is a result: report it, do not work around it.
 4. For failures, open the failing step's screenshot (Read), explain where and why the user gets stuck, and point to
    the likely cause. Signed-in journeys need a Playwright storage-state file from the user (`--auth`).
+5. Answer in the short format of `${CLAUDE_PLUGIN_ROOT}/skills/jourilo/SKILL.md` → Answer format (80–150 words, report path, one next step). Blocked journeys come first, with the step where people get stuck.

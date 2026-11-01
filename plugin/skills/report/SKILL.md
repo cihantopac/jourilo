@@ -14,5 +14,6 @@ Toolchain: `node "${CLAUDE_PLUGIN_ROOT}/dist/jourilo.mjs" <command> … --json` 
 
 1. `jourilo report [run] --format html|md|sarif|json --json` (default latest run, HTML). `--baseline <run>` adds a
    before/after section.
-2. Give the file path. For stakeholders, summarize in plain language: what blocks people, what to fix first, what is
-   a hypothesis to test, and what was not checked. For developers, link findings to source files.
+2. Answer in the short format of `${CLAUDE_PLUGIN_ROOT}/skills/jourilo/SKILL.md` → Answer format (80–150 words, report path, one next step). For stakeholders, use plain language; for developers, name source files.
+   In the report, findings or root-cause groups can be selected and turned into a repair prompt (copy or download
+   as Markdown) for a coding agent; the report itself never runs anything.

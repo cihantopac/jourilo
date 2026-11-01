@@ -18,3 +18,4 @@ Toolchain: `node "${CLAUDE_PLUGIN_ROOT}/dist/jourilo.mjs" <command> … --json` 
 3. Be explicit that automated checks cover only part of WCAG 2.2: list the `needs-review` items and the criteria
    in `limitations` that require a person (e.g. 1.3.3, 2.5.7, 3.2.6, 3.3.7, 3.3.8 beyond paste, screen-reader
    announcements). Never call a site "WCAG compliant" from an automated run.
+4. Answer in the short format of `${CLAUDE_PLUGIN_ROOT}/skills/jourilo/SKILL.md` → Answer format (80–150 words, report path, one next step). Name criteria by number (e.g. 1.4.3) in the priorities.

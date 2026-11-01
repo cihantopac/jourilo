@@ -39,6 +39,11 @@ jourilo agent install claude-skill --write
 
 It writes `~/.claude/skills/jourilo/SKILL.md`, which defers to `/jourilo:jourilo` when the plugin is installed.
 
+Answers are short by design (80–150 words): the target, blocked journeys and key defects, three priorities by root
+cause, which fixes are automatic, agent-assisted or need a person, the real `report.html` path and how to open it,
+and one recommended next step. The evidence stays in the report, where findings can be selected and turned into a
+repair prompt.
+
 The plugin also ships a `ux-reviewer` agent that looks at a run's screenshots and records design judgments with
 `jourilo finding add --by agent`, tied to a screenshot and labelled as inference.
 

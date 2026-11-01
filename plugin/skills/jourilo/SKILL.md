@@ -78,11 +78,32 @@ Tell the user which stage you are in. If they asked for one thing (e.g. "just ac
    Run the project's own lint/tests after editing.
 8. **Verify** — `jourilo verify <baseline-run>`; rerun journeys. Report fixed / new / persisting with evidence. If
    something regressed, fix it or `jourilo rollback <id> --yes` (with permission; it never overwrites later edits).
-9. **Report** — Give the report path (`.jourilo/runs/<id>/report.html`), a short prioritized summary, the
-   limitations of the run, and next steps. Offer `jourilo experiment plan --finding <id>` for hypotheses.
+9. **Report** — Answer in the short format below. Offer `jourilo experiment plan --finding <id>` for hypotheses.
 
-## Good answers look like
+## Answer format
 
-- "Signup fails on mobile: the submit button is covered by the cookie banner (journey `signup-signup`, step 9,
-  screenshot …). Cause: `CookieBanner.tsx:12` sets `position: fixed` with no inset. Fix: … Verified: journey passes."
-- Not: "Your site has some accessibility issues and could convert better."
+The evidence lives in the report; the chat answer is a short brief of **80–150 words** in the user's language,
+unless they ask for more. Never paste the finding list into chat.
+
+1. **Target** — the project or website and what ran (pages × viewports, journeys).
+2. **Blocked and broken** — blocked journeys first, then the key verified defects (page, severity, evidence).
+3. **Three priorities** — numbered, one per root cause (file:line when known), not per symptom.
+4. **Fixes** — how many are automatic (`jourilo optimize` previews them), agent-assisted, or need a person;
+   conversion hypotheses are experiment briefs, never fixes or promised lifts.
+5. **Report** — the real `report.html` path from the command's JSON (`reports.html` / `report`), and how to open it
+   (`open <path>` on macOS, `xdg-open` on Linux, `start` on Windows, or any browser). It works offline, in English
+   or Turkish, light or dark, and turns selected findings into a repair prompt.
+6. **Next** — one recommended action, as an offer.
+
+Example (about 90 words):
+
+> **acme.dev** — 7 pages × desktop/mobile, 4 journeys.
+> **Blocked:** signup fails on mobile: the submit button sits under the cookie banner (journey `signup`, step 9).
+> 25 verified defects (1 critical) from 19 root causes.
+> **Priorities:** 1) covered submit button (`CookieBanner.tsx:12`); 2) hero image without alt text (critical);
+> 3) focus outline removed in `style.css:14` (6 pages).
+> **Fixes:** 7 automatic, 11 agent-assisted, 1 needs a person; 6 conversion ideas are experiment briefs.
+> **Report:** `.jourilo/runs/20261101-144012-5d4952/report.html` — `open` it in a browser.
+> **Next:** shall I preview the automatic fixes?
+
+Not: "Your site has some accessibility issues and could convert better."

@@ -10,7 +10,7 @@
       "name": "jourilo",
       "source": "./plugin",
       "description": "Real-browser user journeys, UX, WCAG 2.2, Core Web Vitals and conversion audits with evidence, root causes, safe fixes and before/after verification.",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "category": "development",
       "tags": ["ux", "accessibility", "wcag", "playwright", "conversion", "performance"]
     }

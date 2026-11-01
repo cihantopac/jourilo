@@ -40,6 +40,8 @@ Stated so nobody mistakes silence for a pass.
 
 ## Journeys and forms
 
+- `journeys suggest` picks the most emphasized control as the main call to action; on a real site (1.1.0 validation)
+  that was a theme toggle. Review suggested journeys before running them.
 - Suggested journeys are heuristics from page structure; they need review. `--repeat N` detects flaky journeys but
   cannot tell a product race from a fragile journey definition; the report says which attempts failed. No multi-tab, file upload, OAuth popup,
   CAPTCHA or e-mail verification support. Signed-in flows need a test account: run a sign-in journey with
@@ -82,6 +84,14 @@ Stated so nobody mistakes silence for a pass.
 
 ## Reports
 
+- The report interface is in English and Turkish; finding titles, descriptions and recommendations come from the
+  rules and stay in English, and page text stays as captured.
+- Repair prompts are text. Whether a coding agent follows them is outside Jourilo's control; `jourilo verify` is
+  what shows whether a fix worked.
+- Before/after crops reuse the baseline element's position on the new screenshot; if the layout moved, the "after"
+  crop shows the same place, not necessarily the same element. Baseline images load from the sibling run folder, so
+  moving a run folder elsewhere breaks them (the report still renders).
+- Root-cause grouping is lexical (rule + source line or selector), not a semantic judgment.
 - History in the report lists earlier runs of the same target with defect counts; it does not normalize for different
   page sets or viewports (use `verify` for like-for-like comparisons).
 - Screenshots are capped at 12 000 px height.

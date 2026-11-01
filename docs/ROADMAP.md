@@ -1,6 +1,6 @@
 # Roadmap
 
-Priorities follow the rule: correctness and evidence before breadth. Items here are **not** part of 1.0.0; the
+Priorities follow the rule: correctness and evidence before breadth. Items under Next are planned, not shipped; the
 1.0.0 scope and its evidence are in [RELEASE-1.0.md](RELEASE-1.0.md).
 
 ## Done for 1.0
@@ -22,6 +22,12 @@ Priorities follow the rule: correctness and evidence before breadth. Items here 
   icon ([DECISIONS.md](DECISIONS.md) D16). Submitting the plugin to the Claude Code directory is a maintainer
   decision.
 
+## Done in 1.1.0
+
+- Redesigned, accessible report in the Daybook identity; English/Turkish interface; light/dark/system theme.
+- Root-cause grouping, fix paths, repair prompts for coding agents, experiment briefs for hypotheses.
+- Journey timelines, before/after crops, short agent answers, README as a visual product page.
+
 ## Next (1.x)
 
 1. Full arrow-key patterns for menus and dialogs inside menus (Escape closes, focus returns, Home/End).
@@ -32,3 +38,5 @@ Priorities follow the rule: correctness and evidence before breadth. Items here 
 5. Read-only analytics/flag adapters for experiment plans (PostHog, GrowthBook, Amplitude); sequential testing.
 6. Multi-tab journeys and OAuth popups against test identity providers.
 7. More languages for the shared lexicon (`src/core/lexicon.ts`), each with a fixture site.
+8. `journeys suggest`: never treat toggles (`aria-pressed`, theme or language switches) as the main call to action.
+9. Translated rule texts in the report (titles, impact, recommendations) for Turkish.
