@@ -14,8 +14,8 @@
 // Tools: Jourilo (full audit, desktop viewport, keyboard walk, read-only form probe) and axe-core alone (same
 // version and tags that Jourilo runs), so the effect of Jourilo's own checks is visible.
 //
-// Usage: node benchmarks/act/run.mjs [--limit N] [--rules id,id] [--out docs/evaluation] [--reuse run.json]
-import { spawnSync } from 'node:child_process';
+// Usage: node benchmarks/act/run.mjs [--jobs 3] [--limit N] [--rules id,id] [--out docs/evaluation] [--reuse run.json]
+import { spawn } from 'node:child_process';
 import {
   createReadStream,
   existsSync,
@@ -42,6 +42,7 @@ const { values: args } = parseArgs({
     out: { type: 'string' },
     reuse: { type: 'string' },
     'skip-axe': { type: 'boolean' },
+    jobs: { type: 'string' },
   },
 });
 if (!existsSync(join(cache, 'testcases.json'))) {
@@ -109,33 +110,49 @@ const fromAxeTag = (tag) => {
 };
 
 // ---- Jourilo ----
-function runJourilo() {
-  if (args.reuse) return JSON.parse(readFileSync(args.reuse, 'utf8'));
-  const ws = join(root, 'tests', '.tmp', 'bench-act');
-  const t0 = Date.now();
-  const r = spawnSync(
-    process.execPath,
-    [
+/** One Jourilo audit over some of the cases; resolves to its run.json. */
+function auditChunk(chunk, ws) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [
       join(root, 'plugin', 'dist', 'jourilo.mjs'),
       'audit',
-      // Jourilo serves the mirrored directory itself (a server in this process could not answer while spawnSync
-      // blocks it).
       cache,
-      ...cases.flatMap((c) => ['--url', c.path]),
+      ...chunk.flatMap((c) => ['--url', c.path]),
       '--viewports',
       'desktop',
       '--workspace',
       ws,
       '--json',
       '-q',
-    ],
-    { encoding: 'utf8', maxBuffer: 1024 * 1024 * 1024 },
-  );
-  if (r.status !== 0 && r.status !== 1)
-    throw new Error(`jourilo failed (${r.status}): ${r.stderr.slice(0, 2000)}`);
-  const out = JSON.parse(r.stdout);
-  const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8'));
+    ]);
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => {
+      stdout += d;
+    });
+    child.stderr.on('data', (d) => {
+      stderr += d;
+    });
+    child.on('close', (code) => {
+      if (code !== 0 && code !== 1)
+        return reject(new Error(`jourilo failed (${code}): ${stderr.slice(0, 2000)}`));
+      const out = JSON.parse(stdout);
+      resolve(JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8')));
+    });
+  });
+}
+
+/** Jourilo over all cases, in `--jobs` parallel processes (each serves the corpus itself). */
+async function runJourilo() {
+  if (args.reuse) return JSON.parse(readFileSync(args.reuse, 'utf8'));
+  const jobs = Math.max(1, Math.min(8, Number(args.jobs ?? 1)));
+  const ws = join(root, 'tests', '.tmp', 'bench-act');
+  const t0 = Date.now();
+  const chunks = Array.from({ length: jobs }, (_, k) => cases.filter((_, i) => i % jobs === k));
+  const runs = await Promise.all(chunks.filter((c) => c.length).map((c) => auditChunk(c, ws)));
+  const run = { ...runs[0], findings: runs.flatMap((r) => r.findings), pages: runs.flatMap((r) => r.pages) };
   run.benchSeconds = Math.round((Date.now() - t0) / 1000);
+  run.jobs = jobs;
   return run;
 }
 
@@ -247,7 +264,7 @@ function score(byPage) {
 const server = await serve();
 const base = `http://127.0.0.1:${server.address().port}`;
 try {
-  const run = runJourilo();
+  const run = await runJourilo();
   const jourilo = score(jouriloFlags(run));
   const axe = args['skip-axe'] ? null : await runAxe(base);
   const axeScore = axe ? score(axe.byPage) : null;

@@ -4,6 +4,8 @@ All notable changes are documented here. The project follows [Semantic Versionin
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-01
+
 ### Security
 
 - Network guard: every browser request (subresources, redirects, iframes, WebSockets) goes through a local proxy
