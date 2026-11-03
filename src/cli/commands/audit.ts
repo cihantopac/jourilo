@@ -257,6 +257,9 @@ export const audit: Command = {
   --include PATH       Add pages to discovery (repeatable)
   --viewports LIST     desktop, laptop, tablet, mobile, reflow (320px) or WIDTHxHEIGHT (default desktop,mobile)
   --browser NAME       chromium (default), firefox, webkit, chrome, msedge
+  --headed             Show the browser window instead of running headless
+  --locale TAG         Browser locale for every page (e.g. tr-TR); sets Accept-Language and navigator.language
+  --timeout SECS       Per-page navigation timeout in seconds (default 30)
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk

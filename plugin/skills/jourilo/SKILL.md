@@ -23,7 +23,7 @@ node "${CLAUDE_PLUGIN_ROOT}/dist/jourilo.mjs" <command> [options] --json
 ```
 
 (Written below as `jourilo`.) Do not wrap it in shell variables, `cd`, `&&` chains or pipes: the plugin
-pre-approves exactly that form. Output is JSON with `--json`; errors are JSON on stderr with a stable `code`.
+pre-approves exactly that form. Output is JSON with `--json`; with `--json`, stderr is a stream of JSON lines (progress, then any error with a stable `code`).
 Command reference: `${CLAUDE_PLUGIN_ROOT}/skills/jourilo/references/cli.md` — read it once per session.
 Run data lives in `.jourilo/` in the current project (git-ignored automatically).
 

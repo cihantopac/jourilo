@@ -43,6 +43,11 @@ export const optimize: Command = {
   details: `Deterministic fixers (others are reported with source candidates for a person or agent to fix):
   axe/html-has-lang, jourilo/missing-viewport-meta, jourilo/input-purpose, jourilo/focus-visible, jourilo/paste-blocked,
   jourilo/unsized-images, jourilo/placeholder-label
+Options:
+  --repo PATH      Repository to fix (default: the run's repo, else the current directory)
+  --rule ID        Only fix findings of this rule (repeatable)
+  --finding ID     Only fix this finding, by fingerprint (repeatable)
+  --apply          Write the changes
 Without --apply nothing is written. With --apply, all files are written as one change: each file must be unchanged
 since the plan, writes are atomic, an interrupted apply is undone, and \`jourilo rollback <id>\` restores the files
 (git is not required).
@@ -155,6 +160,10 @@ export const verify: Command = {
     'fail-on-regression': { type: 'boolean' },
     repo: { type: 'string' },
   },
+  details: `Options:
+  --target URL|DIR       Where to repeat the audit (default: the baseline run's target)
+  --repo PATH            Repository for source mapping (default: the baseline run's repo)
+  --fail-on-regression   Exit 1 when new serious or critical defects appear`,
   async run(ctx) {
     const base = ctx.ws.loadRun(ctx.positionals[0] ?? 'latest').run;
     const scope = base.settings.scope as { urls: string[]; viewports: string[] } | undefined;

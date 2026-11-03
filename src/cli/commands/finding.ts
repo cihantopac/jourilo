@@ -53,6 +53,33 @@ export const finding: Command = {
     by: { type: 'string' },
     reason: { type: 'string' },
   },
+  details: `Subcommands:
+  add                  Record a judgment tied to evidence in a run
+  dismiss <id>         Mark a finding as not a problem; it is kept out of later runs and listed as dismissed
+  undismiss <id>       Remove a dismissal; the next run reports the finding again
+
+add options:
+  --run ID             Run to add to (default latest)
+  --title TEXT         Short title (required)
+  --category NAME      accessibility, usability, responsive, performance, conversion, reliability, content or design-system (required)
+  --description TEXT   What is wrong and why it matters (required)
+  --evidence FILE      Screenshot or file inside the run, e.g. screenshots/home-desktop.jpg (required, repeatable)
+  --kind KIND          defect, hypothesis or needs-review (default: hypothesis for conversion, else needs-review)
+  --severity LEVEL     critical, serious, moderate, minor or info (default minor)
+  --confidence LEVEL   low, medium or high (AI judgments are capped at medium)
+  --impact TEXT        Who is affected and how
+  --recommendation TEXT  What to change
+  --url URL            Page the finding is about (default: the run's first page)
+  --viewport NAME      Viewport the finding was seen in (e.g. desktop, mobile)
+  --by WHO             agent (default) or user
+
+dismiss options:
+  --run ID             Run to apply it to now (default latest)
+  --reason TEXT        Why this is not a problem (required)
+  --by WHO             user (default) or agent
+
+undismiss options:
+  --run ID             Also bring the finding back into this run`,
   async run(ctx) {
     if (ctx.positionals[0] === 'dismiss') return dismiss(ctx);
     if (ctx.positionals[0] === 'undismiss') return undismiss(ctx);

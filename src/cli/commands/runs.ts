@@ -26,6 +26,10 @@ export const report: Command = {
   summary: 'Re-render the report for a run (html, markdown, sarif or json) — default: latest run.',
   usage: 'jourilo report [run-id|latest|path] [--format html|md|sarif|json] [--baseline run-id]',
   options: { format: { type: 'string' }, baseline: { type: 'string' }, stdout: { type: 'boolean' } },
+  details: `Options:
+  --format FMT     html (default), md, sarif or json; sarif and json print to stdout
+  --baseline RUN   Include a comparison with this earlier run
+  --stdout         With --format md, print the Markdown instead of only writing the file`,
   async run(ctx) {
     const { run, dir } = ctx.ws.loadRun(ctx.positionals[0] ?? 'latest');
     const baseRef = str(ctx, 'baseline');

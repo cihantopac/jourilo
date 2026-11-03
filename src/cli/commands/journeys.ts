@@ -409,7 +409,17 @@ export const journeys: Command = {
   validate [files]       Check journey files against the schema
   run [ids|files]        Run journeys against --base <url|dir>
 
+Suggest options:
+  --pages N              Pages to read when deriving journeys from a site (default 8)
+  --force                Overwrite journey files that already exist (by default edited files are kept)
+  --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
+
 Run options:
+  --base URL|DIR         The site or static build to run against (required)
+  --browser NAME         chromium (default), firefox, webkit, chrome, msedge
+  --headed               Show the browser window instead of running headless
+  --timeout SECS         Per-step timeout in seconds (default 10)
+  --repo PATH            Map failed steps to likely source files in this repository (a directory --base implies it)
   --viewport LIST        desktop, mobile, … (default: the journey's own viewport or desktop)
   --var key=value        Test data for {{key}} placeholders (also JOURILO_VAR_KEY env vars)
   --allow-submit         Allow form submission on non-local hosts (authorized test environments only)
@@ -422,6 +432,7 @@ Run options:
   --clock ISO            Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
   --evidence MODE        full (default) or minimal: keep only the screenshots of the failed step, the step before it and the last step
   --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
+  --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission

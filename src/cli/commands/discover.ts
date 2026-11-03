@@ -67,12 +67,16 @@ export const discover: Command = {
   name: 'discover',
   summary:
     'Product intelligence: map a repository (frameworks, routes, design system, i18n, auth, analytics) or a website (pages, conversion points, services).',
-  usage: 'jourilo discover <path|url> [--pages 10]',
+  usage: 'jourilo discover <path|url> [--pages 10] [--ignore-robots] [--allow-private]',
   options: {
     pages: { type: 'string' },
     'allow-private': { type: 'boolean' },
     'ignore-robots': { type: 'boolean' },
   },
+  details: `Options:
+  --pages N         Pages to read when mapping a website (default 10)
+  --ignore-robots   Ignore robots.txt (only for sites you own or are authorized to test)
+  --allow-private   Allow private-network hosts (10.x, 192.168.x, ...)`,
   async run(ctx) {
     const target = requirePositional(ctx, 0, 'path|url', discover.usage);
     ctx.ws.ensure();
