@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Shutter – Overlay lab</title>
+<style>
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: #111827; background: #fff; }
+  main { max-width: 720px; margin: 0 auto; padding: 24px 16px; }
+  a { color: #1d4ed8; }
+  a:focus-visible { outline: 3px solid #1d4ed8; outline-offset: 2px; }
+  .menu { position: relative; height: 140px; }
+  /* An in-flow panel, not fixed or sticky: half of a closed shutter that still covers three tabbable links. */
+  .shutter { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 2; background: #1f2937; color: #f9fafb; padding: 12px; }
+  .menu ul { margin: 0; padding: 12px; list-style: none; }
+</style></head>
+<body>
+<main><h1>Shutter</h1>
+<nav class="menu" aria-label="Sections">
+  <ul>
+    <li><a href="#one">One</a></li>
+    <li><a href="#two">Two</a></li>
+    <li><a href="#three">Three</a></li>
+  </ul>
+  <div class="shutter">Closed</div>
+</nav>
+<section id="one"><h2>One</h2><p>First section.</p></section>
+<section id="two"><h2>Two</h2><p>Second section.</p></section>
+<section id="three"><h2>Three</h2><p>Third section.</p></section>
+</main>
+</body>
+</html>

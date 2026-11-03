@@ -214,7 +214,7 @@ export function keyboardFindings(obs: PageObservation): Finding[] {
     out.push(
       makeFinding({
         ruleId: 'jourilo/focus-obscured',
-        title: 'Focused element is hidden behind fixed or sticky content',
+        title: 'Focused element is hidden behind other content',
         category: 'accessibility',
         kind: 'defect',
         severity: 'serious',
@@ -222,10 +222,10 @@ export function keyboardFindings(obs: PageObservation): Finding[] {
         provenance: 'measured',
         url: obs.url,
         viewport: vp,
-        description: `${obscured.length} element(s) received keyboard focus while entirely covered by a fixed or sticky element (checked with elementFromPoint at five points).`,
-        impact: 'Keyboard users lose track of focus behind headers, banners or chat widgets.',
+        description: `${obscured.length} element(s) received keyboard focus while entirely covered by other content, for example \`${obscured[0]!.selector}\` covered by \`${obscured[0]!.coverSelector ?? 'another element'}\` (checked with elementFromPoint at five points).`,
+        impact: 'Keyboard users lose track of focus behind headers, banners, panels or chat widgets.',
         recommendation:
-          'Add scroll-padding-top (and scroll-padding-bottom) equal to the sticky header/footer height, or make the overlay dismissible.',
+          'Move or close the covering content when focus enters it, or use scroll-padding (top and bottom) equal to the height of sticky bars.',
         standards: [wcag('2.4.11')],
         evidence: obscured.slice(0, 10).map((s) => ({
           type: 'element' as const,

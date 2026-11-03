@@ -40381,25 +40381,40 @@ var FOCUS_INFO = `(el) => {
     }
     return parts.join(' > ');
   };
-  // Is the element entirely hidden by other content (e.g. a sticky header)?
+  // Is the element entirely hidden by other content (a sticky header, a half-closed shutter, a panel)? Content
+  // counts as a cover when it paints (background colour, image, media) and is not the element's own label or
+  // ancestor; transparent click-catchers do not.
+  const paints = (e) => {
+    const cs = getComputedStyle(e);
+    const m = /^rgba?\\(([^)]*)\\)$/.exec(cs.backgroundColor);
+    let alpha = cs.backgroundColor === 'transparent' ? 0 : 1;
+    if (m) { const p = m[1].split(/[ ,\\/]+/).filter(Boolean); alpha = p.length > 3 ? parseFloat(p[3]) * (p[3].endsWith('%') ? 0.01 : 1) : 1; }
+    return alpha > 0.1 || cs.backgroundImage !== 'none' || /^(img|video|canvas|svg)$/i.test(e.tagName);
+  };
+  const labels = el.labels ? Array.from(el.labels) : [];
+  const isCover = (hit) => {
+    if (hit === el || el.contains(hit) || hit.contains(el) || labels.some((l) => l.contains(hit))) return false;
+    for (let a = hit; a && a.nodeType === 1 && !a.contains(el); a = a.parentElement) if (paints(a)) return true;
+    return false;
+  };
+  // A control that hides itself (opacity 0, 1px) is not "obscured"; that belongs to focus-visible.
+  const selfHidden = parseFloat(getComputedStyle(el).opacity) < 0.1 || r.width <= 1 || r.height <= 1;
   const pts = [[0.5, 0.5], [0.15, 0.15], [0.85, 0.15], [0.15, 0.85], [0.85, 0.85]];
-  let visiblePts = 0, inViewport = 0, coveredByFixed = false;
+  let visiblePts = 0, inViewport = 0, cover = null;
   for (const [fx, fy] of pts) {
     const x = r.left + r.width * fx, y = r.top + r.height * fy;
     if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
     inViewport++;
     const hit = document.elementFromPoint(x, y);
     if (!hit || hit === el || el.contains(hit) || hit.contains(el)) { visiblePts++; continue; }
-    for (let a = hit; a && a.nodeType === 1; a = a.parentElement) {
-      const pos = getComputedStyle(a).position;
-      if (pos === 'fixed' || pos === 'sticky') { coveredByFixed = true; break; }
-    }
+    if (isCover(hit)) cover = cover || hit;
   }
   const name = (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('title') || '').replace(/\\s+/g, ' ').trim().slice(0, 80);
   return {
     selector: sel(el), name, tag: el.tagName.toLowerCase(),
     rect: { x: Math.round(r.left + sx), y: Math.round(r.top + sy), width: Math.round(r.width), height: Math.round(r.height) },
-    obscured: inViewport > 0 && visiblePts === 0 && coveredByFixed,
+    obscured: !selfHidden && inViewport > 0 && visiblePts === 0 && !!cover,
+    coverSelector: cover ? sel(cover) : undefined,
     inModal: !!el.closest('[aria-modal="true"], dialog[open]'),
   };
 }`;
@@ -43178,7 +43193,7 @@ function keyboardFindings(obs) {
     out.push(
       makeFinding({
         ruleId: "jourilo/focus-obscured",
-        title: "Focused element is hidden behind fixed or sticky content",
+        title: "Focused element is hidden behind other content",
         category: "accessibility",
         kind: "defect",
         severity: "serious",
@@ -43186,9 +43201,9 @@ function keyboardFindings(obs) {
         provenance: "measured",
         url: obs.url,
         viewport: vp,
-        description: `${obscured.length} element(s) received keyboard focus while entirely covered by a fixed or sticky element (checked with elementFromPoint at five points).`,
-        impact: "Keyboard users lose track of focus behind headers, banners or chat widgets.",
-        recommendation: "Add scroll-padding-top (and scroll-padding-bottom) equal to the sticky header/footer height, or make the overlay dismissible.",
+        description: `${obscured.length} element(s) received keyboard focus while entirely covered by other content, for example \`${obscured[0].selector}\` covered by \`${obscured[0].coverSelector ?? "another element"}\` (checked with elementFromPoint at five points).`,
+        impact: "Keyboard users lose track of focus behind headers, banners, panels or chat widgets.",
+        recommendation: "Move or close the covering content when focus enters it, or use scroll-padding (top and bottom) equal to the height of sticky bars.",
         standards: [wcag("2.4.11")],
         evidence: obscured.slice(0, 10).map((s) => ({
           type: "element",

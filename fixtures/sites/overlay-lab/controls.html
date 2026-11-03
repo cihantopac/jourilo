@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Controls – Overlay lab</title>
+<style>
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: #111827; background: #fff; }
+  html { scroll-padding-top: 64px; }
+  header { position: sticky; top: 0; height: 64px; box-sizing: border-box; background: #1f2937; color: #f9fafb; padding: 16px; }
+  header a { color: #f9fafb; }
+  main { max-width: 720px; margin: 0 auto; padding: 24px 16px; }
+  a { color: #1d4ed8; }
+  a:focus-visible, button:focus-visible, input:focus-visible + label { outline: 3px solid #1d4ed8; outline-offset: 2px; }
+  button { font: inherit; padding: 10px 16px; border: 1px solid #1f2937; background: #fff; color: #111827; }
+  .toggle { position: relative; display: inline-block; }
+  /* A visually hidden checkbox sits under its styled label. */
+  .toggle input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; }
+  .toggle label { display: block; padding: 10px 16px; background: #e5e7eb; color: #111827; }
+  /* A transparent link spans the whole card; the button inside stays reachable. */
+  .card { position: relative; border: 1px solid #1f2937; padding: 16px; margin: 24px 0; }
+  .card .catch { position: absolute; inset: 0; z-index: 2; }
+  .card button { position: relative; z-index: 1; }
+  .spacer { height: 900px; }
+</style></head>
+<body>
+<header><a href="/">Overlay lab</a></header>
+<main><h1>Controls</h1>
+<div class="toggle"><input type="checkbox" id="opt"><label for="opt">Email me updates</label></div>
+<div class="card">
+  <a class="catch" href="/shutter" aria-label="Open the card"></a>
+  <p>A card with an action.</p>
+  <button type="button">Save</button>
+</div>
+<div class="spacer"></div>
+<p><a href="#end">Jump to the end</a></p>
+<div class="spacer"></div>
+<h2 id="end">End</h2>
+<p><a href="/">Back to the lab</a></p>
+</main>
+</body>
+</html>
