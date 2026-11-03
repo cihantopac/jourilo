@@ -27,22 +27,22 @@ before an audit, and makes runs predictable for automation. The items are F1–F
 
 ## Evidence (2026-11-03, macOS 27, Node 22.23, Playwright 1.64.1)
 
-Rows marked TBD are filled in from the release run before tagging.
+Measured on release/1.2.0 on 2026-11-03; the ACT run is on the 1.2.0 engine before the version bump (`docs/evaluation/act-2026-11-03.md`).
 
-| Check                                                                              | Result                                                                               |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `npm run ci` (lint, typecheck, build, unit and browser tests, dist check)          | TBD: pass, TBD files, TBD tests (1.1.0: 24 files, 236 tests)                         |
-| Fixture benchmark (`npm run bench`)                                                | TBD found / TBD (1.1.0: 45 / 45), TBD false positives (1.1.0: 0), root cause TBD / 9 |
-| Independent W3C ACT benchmark, precision                                           | TBD % (1.0.0: 93.9 %)                                                                |
-| Independent W3C ACT benchmark, recall                                              | TBD % (1.0.0: 55.4 %)                                                                |
-| Independent W3C ACT benchmark, false positives                                     | TBD (1.0.0: 11)                                                                      |
-| `scripts/smoke-pack.mjs` (clean install from the packed tarball, every command)    | TBD                                                                                  |
-| `claude plugin validate` (marketplace and plugin, strict)                          | TBD                                                                                  |
-| Real project (cihanca.com, read-only), F1: focus hidden behind the shutter         | TBD (found / not found)                                                              |
-| — F3: the three disclosure false positives                                         | TBD (gone / still present)                                                           |
-| — F5: contrast and state findings locate `globals.css`                             | TBD (yes / no)                                                                       |
-| — evidence size, `--evidence minimal` vs the 1.1.0 runs (about 38 MB for two runs) | TBD MB                                                                               |
-| Frameva adapter checks (F11–F13)                                                   | TBD (run by Frameva, or not yet)                                                     |
+| Check                                                                              | Result                                                                                                      |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `npm run ci` (lint, typecheck, build, unit and browser tests, dist check)          | pass, 31 files, 295 tests (1.1.0: 24 files, 236 tests)                                                      |
+| Fixture benchmark (`npm run bench`)                                                | 47 / 47 found (1.1.0: 45 / 45; new: overlay-lab, pressed tools), 0 false positives, source location 10 / 10 |
+| Independent W3C ACT benchmark, precision                                           | 93.9 % (1.0.0: 93.9 %)                                                                                      |
+| Independent W3C ACT benchmark, recall                                              | 55.4 % (1.0.0: 55.4 %)                                                                                      |
+| Independent W3C ACT benchmark, false positives                                     | 11 (1.0.0: 11)                                                                                              |
+| `scripts/smoke-pack.mjs` (clean install from the packed tarball, every command)    | pass                                                                                                        |
+| `claude plugin validate` (marketplace and plugin, strict)                          | pass                                                                                                        |
+| Real project (cihanca.com, read-only), F1: focus hidden behind the shutter         | found: `jourilo/focus-obscured` on the three `.goods` links, "covered by `#kepenk`" (day clock)             |
+| — F3: the three disclosure false positives                                         | gone: no dialog findings by day, by night or with minimal evidence                                          |
+| — F5: contrast and state findings locate `globals.css`                             | yes: the pressed-tool focus finding lists `app/globals.css:351` first (high)                                |
+| — evidence size, `--evidence minimal` vs the 1.1.0 runs (about 38 MB for two runs) | 1.24 MB → 0.72 MB per run (−41 %; one page × two viewports, not comparable with the 1.1.0 runs)             |
+| Frameva adapter checks (F11–F13)                                                   | not yet; the measured 1.1.0 report confirmed F11 and F12, both fixed here                                   |
 
 No automated run shows WCAG conformance; every report lists what still needs a person.
 
