@@ -38,6 +38,8 @@ export function exitCodeFor(err: unknown): number {
       return 3;
     case 'BROWSER_UNAVAILABLE':
       return 4;
+    case 'NAVIGATION_FAILED':
+      return 5;
     default:
       return 1;
   }

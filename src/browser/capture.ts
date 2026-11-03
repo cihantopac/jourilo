@@ -6,6 +6,7 @@ import type { Browser, BrowserContext, Page } from 'playwright-core';
 import { toPosix } from '../core/fs-safety.js';
 import { shortHash, slug } from '../core/hash.js';
 import { lexiconSources } from '../core/lexicon.js';
+import { GUARD_UPSTREAM_ERROR_HEADER } from '../core/net-guard.js';
 import { excerpt, redactText, redactUrl } from '../core/redact.js';
 import type { PageInventory, Rect, Viewport } from '../core/types.js';
 import { type BlockedRequest, installRequestGuard } from '../journeys/request-guard.js';
@@ -380,6 +381,12 @@ export async function capturePage(
       response = await page.goto(url, { waitUntil: 'load', timeout: timeoutMs });
     } catch (err) {
       obs.errors.push(`navigation: ${(err as Error).message.split('\n')[0]}`);
+      return obs;
+    }
+    // The network guard answers 502 itself when DNS or the connection fails: nothing was loaded.
+    const upstreamError = response?.headers()[GUARD_UPSTREAM_ERROR_HEADER];
+    if (upstreamError) {
+      obs.errors.push(`navigation: could not connect: ${upstreamError}`);
       return obs;
     }
     obs.loadMs = Date.now() - t0;

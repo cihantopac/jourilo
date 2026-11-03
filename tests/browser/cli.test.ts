@@ -57,6 +57,38 @@ describe('cli', () => {
   });
 });
 
+describe('cli no page loaded', () => {
+  it('an unresolvable host exits 5 and still writes the run', () => {
+    const r = jourilo(
+      'audit',
+      'http://does-not-exist.invalid/',
+      '--pages',
+      '1',
+      '--viewports',
+      'desktop',
+      '--json',
+      '-q',
+    );
+    expect(r.status).toBe(5);
+    expect(r.stdout).toContain('"outcome":"no-page-loaded"');
+    const out = JSON.parse(r.stdout);
+    const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8'));
+    expect(run.outcome).toBe('no-page-loaded');
+    expect(run.findings.some((f: { ruleId: string }) => f.ruleId === 'jourilo/page-unreachable')).toBe(true);
+    const text = jourilo(
+      'audit',
+      'http://does-not-exist.invalid/',
+      '--pages',
+      '1',
+      '--viewports',
+      'desktop',
+      '-q',
+    );
+    expect(text.status).toBe(5);
+    expect(text.stdout).toContain('No page could be loaded from http://does-not-exist.invalid/.');
+  });
+});
+
 describe('cli state options', () => {
   it('audits with a fixed clock and time zone', async () => {
     // Served from a throwaway local server so no fixture site (and no benchmark result) is affected.

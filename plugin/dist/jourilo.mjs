@@ -58,6 +58,8 @@ function exitCodeFor(err) {
       return 3;
     case "BROWSER_UNAVAILABLE":
       return 4;
+    case "NAVIGATION_FAILED":
+      return 5;
     default:
       return 1;
   }
@@ -39495,6 +39497,493 @@ function lexiconSources() {
   return Object.fromEntries(Object.keys(LEX).map((k) => [k, lexiconSource(k)]));
 }
 
+// src/core/net-guard.ts
+import { lookup as dnsLookup } from "node:dns";
+import http from "node:http";
+import https from "node:https";
+import net, { isIP as isIP2 } from "node:net";
+
+// src/core/url-safety.ts
+init_errors();
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
+var LOCAL_SUFFIXES = [".localhost", ".test"];
+function isLocalHostname(host) {
+  const h = host.replace(/^\[|\]$/g, "").toLowerCase();
+  return h === "localhost" || h === "::1" || /^127\.\d+\.\d+\.\d+$/.test(h) || h === "0.0.0.0" || LOCAL_SUFFIXES.some((s) => h.endsWith(s));
+}
+var METADATA_V4 = /* @__PURE__ */ new Set(["169.254.169.254", "169.254.170.2", "169.254.169.123", "100.100.100.200"]);
+function classifyV4(v) {
+  const [a, b, c, d] = v.split(".").map(Number);
+  if (METADATA_V4.has(`${a}.${b}.${c}.${d}`)) return "metadata";
+  if (a === 0) return b === 0 && c === 0 && d === 0 ? "loopback" : "reserved";
+  if (a === 127) return "loopback";
+  if (a === 10 || a === 172 && b >= 16 && b <= 31 || a === 192 && b === 168) return "private";
+  if (a === 100 && b >= 64 && b <= 127) return "private";
+  if (a === 169 && b === 254) return "link-local";
+  if (a === 192 && b === 0 && (c === 0 || c === 2)) return "reserved";
+  if (a === 192 && b === 88 && c === 99) return "reserved";
+  if (a === 198 && (b === 18 || b === 19)) return "reserved";
+  if (a === 198 && b === 51 && c === 100) return "reserved";
+  if (a === 203 && b === 0 && c === 113) return "reserved";
+  if (a >= 224) return "reserved";
+  return "public";
+}
+function v6Groups(v) {
+  let s = v.split("%")[0];
+  const tail = s.match(/(\d+\.\d+\.\d+\.\d+)$/);
+  if (tail) {
+    const p = tail[1].split(".").map(Number);
+    s = `${s.slice(0, -tail[1].length)}${(p[0] << 8 | p[1]).toString(16)}:${(p[2] << 8 | p[3]).toString(16)}`;
+  }
+  const halves = s.split("::");
+  if (halves.length > 2) return null;
+  const parse2 = (h) => h ? h.split(":").map((g) => Number.parseInt(g, 16)) : [];
+  const head = parse2(halves[0]);
+  const rest = halves.length === 2 ? parse2(halves[1]) : [];
+  const fill2 = 8 - head.length - rest.length;
+  if (fill2 < 0 || halves.length === 1 && fill2 !== 0) return null;
+  const groups = [...head, ...Array(fill2).fill(0), ...rest];
+  return groups.every((g) => Number.isInteger(g) && g >= 0 && g <= 65535) ? groups : null;
+}
+var v4From = (hi, lo) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
+function classifyV6(v) {
+  const g = v6Groups(v);
+  if (!g) return "reserved";
+  const [g0, g1, g2, g3, g4, g5, g6, g7] = g;
+  const zeroTo = (n) => g.slice(0, n).every((x) => x === 0);
+  if (zeroTo(8)) return "loopback";
+  if (zeroTo(7) && g7 === 1) return "loopback";
+  if (zeroTo(5) && g5 === 65535) return classifyV4(v4From(g6, g7));
+  if (zeroTo(6)) return classifyV4(v4From(g6, g7));
+  if (g0 === 100 && g1 === 65435 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0)
+    return classifyV4(v4From(g6, g7));
+  if (g0 === 100 && g1 === 65435 && g2 === 1) return "private";
+  if (g0 === 8194) return classifyV4(v4From(g1, g2));
+  if (g0 === 8193 && g1 === 0) return "reserved";
+  if (g0 === 8193 && g1 === 3512) return "reserved";
+  if (g0 === 256 && g1 === 0 && g2 === 0 && g3 === 0) return "reserved";
+  if (g0 === 64768 && g1 === 3778 && g2 + g3 + g4 + g5 + g6 === 0 && g7 === 596) return "metadata";
+  if ((g0 & 65024) === 64512) return "private";
+  if ((g0 & 65472) === 65152) return "link-local";
+  if ((g0 & 65472) === 65216) return "private";
+  if ((g0 & 65280) === 65280) return "reserved";
+  return "public";
+}
+function classifyIp(ip) {
+  const v = ip.replace(/^\[|\]$/g, "").toLowerCase();
+  const family = isIP(v.split("%")[0]);
+  if (family === 4) return classifyV4(v);
+  if (family === 6) return classifyV6(v);
+  return "reserved";
+}
+function addressVerdict(ip, policy) {
+  const cls = classifyIp(ip);
+  switch (cls) {
+    case "public":
+      return { ok: true };
+    case "metadata":
+      return {
+        ok: false,
+        reason: `${ip} is a cloud instance-metadata endpoint; Jourilo never connects to it.`
+      };
+    case "reserved":
+      return { ok: false, reason: `${ip} is a reserved or special-purpose address.` };
+    case "loopback":
+      return policy.target === "local" || policy.allowPrivate ? { ok: true } : { ok: false, reason: `${ip} is this machine (loopback); a public target may not reach it.` };
+    default:
+      return policy.allowPrivate ? { ok: true } : {
+        ok: false,
+        reason: `${ip} is a ${cls} network address; pass --allow-private if you are authorized.`
+      };
+  }
+}
+function parseTargetUrl(raw) {
+  let url;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
+  } catch {
+    throw new JouriloError("INVALID_INPUT", `Not a valid URL: ${raw}`);
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new JouriloError("UNSAFE_URL", `Only http and https URLs are supported (got ${url.protocol}).`);
+  }
+  url.hash = "";
+  return url;
+}
+var systemResolver = (host) => lookup(host, { all: true, verbatim: true });
+var PRIVATE_HINT = "Pass --allow-private if you are authorized to test this host.";
+async function checkTarget(url, opts = {}) {
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  const literal = isIP(host) !== 0;
+  if (literal) {
+    const cls = classifyIp(host);
+    if (cls === "metadata" || cls === "reserved" && host !== "0.0.0.0")
+      throw new JouriloError("UNSAFE_URL", `${host} is a ${cls} address; Jourilo does not audit it.`);
+    if (cls === "loopback") return "local";
+    if (cls === "public") return "public";
+    if (!opts.allowPrivate)
+      throw new JouriloError("UNSAFE_URL", `${host} is a private network address.`, PRIVATE_HINT);
+    return "private";
+  }
+  if (isLocalHostname(host)) return "local";
+  if (opts.resolveDns === false) return "public";
+  let addrs;
+  try {
+    addrs = await (opts.resolver ?? systemResolver)(host);
+  } catch {
+    return "public";
+  }
+  const classes = addrs.map((a) => ({ address: a.address, cls: classifyIp(a.address) }));
+  const forbidden = classes.find((c) => c.cls === "metadata" || c.cls === "reserved");
+  if (forbidden)
+    throw new JouriloError(
+      "UNSAFE_URL",
+      `${host} resolves to ${forbidden.address}, a ${forbidden.cls} address; Jourilo does not audit it.`
+    );
+  const nonPublic = classes.filter((c) => c.cls !== "public");
+  if (!nonPublic.length) return "public";
+  if (!opts.allowPrivate) {
+    const mixed = nonPublic.length < classes.length;
+    throw new JouriloError(
+      "UNSAFE_URL",
+      mixed ? `${host} resolves to both public and private addresses (${nonPublic.map((c) => c.address).join(", ")}); this is refused because the browser could connect to either (DNS rebinding).` : `${host} resolves to a private network address (${nonPublic[0].address}).`,
+      PRIVATE_HINT
+    );
+  }
+  return "private";
+}
+function isCrawlable(candidate, origin) {
+  let u;
+  try {
+    u = new URL(candidate);
+  } catch {
+    return false;
+  }
+  if (u.origin !== origin) return false;
+  if (/\/(log-?out|sign-?out|logoff|delete|destroy|remove|unsubscribe|cancel)(\/|$|\?)/i.test(u.pathname))
+    return false;
+  if (/\.(pdf|zip|gz|dmg|exe|msi|png|jpe?g|gif|webp|svg|mp4|mp3|woff2?|ttf|ico|xml|json|txt|csv)$/i.test(
+    u.pathname
+  ))
+    return false;
+  return true;
+}
+function normalizeForCrawl(raw) {
+  const u = new URL(raw);
+  u.hash = "";
+  for (const k of [...u.searchParams.keys()])
+    if (/^utm_|^(fbclid|gclid|ref)$/i.test(k)) u.searchParams.delete(k);
+  if (u.pathname !== "/" && u.pathname.endsWith("/")) u.pathname = u.pathname.replace(/\/+$/, "");
+  return u.toString();
+}
+
+// src/core/net-guard.ts
+var GuardBlockedError = class extends Error {
+  code = "EJOURILOBLOCKED";
+};
+var systemResolve = (host) => new Promise(
+  (resolve10, reject) => dnsLookup(host, { all: true, verbatim: true }, (err, addrs) => err ? reject(err) : resolve10(addrs))
+);
+async function resolveAllowed(host, port, policy, deps = {}) {
+  const h = host.replace(/^\[|\]$/g, "");
+  const verdict = deps.verdict ?? ((ip) => addressVerdict(ip, policy));
+  let addrs;
+  if (isIP2(h)) addrs = [{ address: h, family: isIP2(h) }];
+  else {
+    try {
+      addrs = await (deps.resolve ?? systemResolve)(h);
+    } catch (err) {
+      throw Object.assign(new Error(`DNS lookup failed for ${h}`), { cause: err });
+    }
+  }
+  let reason = "";
+  for (const a of addrs) {
+    const v = verdict(a.address, port);
+    if (v.ok) return { address: a.address, family: a.family };
+    reason ||= v.reason;
+  }
+  return { blocked: reason || `${h} did not resolve to an allowed address.` };
+}
+function guardedLookup(policy, port, deps = {}) {
+  return (hostname, options, callback) => {
+    const wantAll = typeof options === "object" && options?.all === true;
+    resolveAllowed(hostname, port, policy, deps).then(
+      (r) => {
+        if ("blocked" in r) return callback(new GuardBlockedError(r.blocked), wantAll ? [] : "", 0);
+        if (wantAll) return callback(null, [{ address: r.address, family: r.family }]);
+        callback(null, r.address, r.family);
+      },
+      (err) => callback(err, wantAll ? [] : "", 0)
+    );
+  };
+}
+function splitHostPort(authority, defaultPort) {
+  const m = authority.match(/^(\[[^\]]+\]|[^:]+)(?::(\d+))?$/);
+  if (!m) return null;
+  const port = m[2] ? Number(m[2]) : defaultPort;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+  return { host: m[1].replace(/^\[|\]$/g, ""), port };
+}
+var HOP_BY_HOP = /* @__PURE__ */ new Set([
+  "proxy-connection",
+  "proxy-authorization",
+  "proxy-authenticate",
+  "connection",
+  "keep-alive",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade"
+]);
+function isLoopbackName(host) {
+  const h = host.replace(/^\[|\]$/g, "").toLowerCase();
+  return h === "localhost" || h.endsWith(".localhost") || isIP2(h) !== 0 && classifyIp(h) === "loopback";
+}
+function loopbackRedirectVerdict(location, from, policy) {
+  let to;
+  try {
+    to = new URL(location, from);
+  } catch {
+    return null;
+  }
+  if (!isLoopbackName(to.hostname)) return null;
+  if (policy.target === "local" || policy.allowPrivate) return null;
+  return `redirect from ${from.host} to ${to.host} (this machine) refused.`;
+}
+function redirectEscape(url, redirectedFrom, policy) {
+  if (!redirectedFrom) return null;
+  try {
+    return loopbackRedirectVerdict(url, new URL(redirectedFrom), policy);
+  } catch {
+    return null;
+  }
+}
+var GUARD_UPSTREAM_ERROR_HEADER = "x-jourilo-guard-upstream-error";
+var headerSafe = (s) => s.replace(/[^\x20-\x7e]/g, " ").slice(0, 200);
+async function startNetGuard(policy, deps = {}) {
+  const blocked = [];
+  const seen = /* @__PURE__ */ new Set();
+  const record = (host, port2, reason) => {
+    const key = `${host}:${port2}`;
+    if (seen.has(key) || blocked.length >= 200) return;
+    seen.add(key);
+    blocked.push({ host, port: port2, reason });
+  };
+  const sockets = /* @__PURE__ */ new Set();
+  const track = (s) => {
+    sockets.add(s);
+    s.on("close", () => sockets.delete(s));
+    return s;
+  };
+  const connectUpstream = (host, port2, onReady, onFail) => {
+    resolveAllowed(host, port2, policy, deps).then(
+      (r) => {
+        if ("blocked" in r) {
+          record(host, port2, r.blocked);
+          return onFail(403, r.blocked);
+        }
+        const upstream = track(net.connect({ host: r.address, port: port2 }));
+        upstream.once("connect", () => onReady(upstream));
+        upstream.once("error", (err) => onFail(502, err.message));
+      },
+      (err) => onFail(502, err.message)
+    );
+  };
+  const pipeBoth = (client, upstream, head) => {
+    if (head.length) upstream.write(head);
+    upstream.pipe(client);
+    client.pipe(upstream);
+    upstream.on("error", () => client.destroy());
+    client.on("error", () => upstream.destroy());
+    client.on("close", () => upstream.destroy());
+    upstream.on("close", () => client.destroy());
+  };
+  const server = http.createServer((req, res) => {
+    let target;
+    try {
+      target = new URL(req.url ?? "");
+      if (target.protocol !== "http:") throw new Error("not http");
+    } catch {
+      res.writeHead(400).end("Jourilo network guard: absolute http:// URL expected.");
+      return;
+    }
+    const host = target.hostname.replace(/^\[|\]$/g, "");
+    const port2 = Number(target.port || 80);
+    const headers = {};
+    for (const [k, v] of Object.entries(req.headers))
+      if (v !== void 0 && !HOP_BY_HOP.has(k.toLowerCase())) headers[k] = v;
+    const fail = (status, reason) => {
+      if (res.headersSent) return void res.destroy();
+      res.writeHead(status, {
+        "content-type": "text/plain",
+        ...status === 403 ? {} : { [GUARD_UPSTREAM_ERROR_HEADER]: headerSafe(reason) }
+      }).end(status === 403 ? `Blocked by Jourilo network guard: ${reason}` : "Bad gateway");
+    };
+    resolveAllowed(host, port2, policy, deps).then(
+      (r) => {
+        if ("blocked" in r) {
+          record(host, port2, r.blocked);
+          req.resume();
+          return fail(403, r.blocked);
+        }
+        const upstream = http.request({
+          host: r.address,
+          port: port2,
+          method: req.method,
+          path: `${target.pathname}${target.search}`,
+          headers,
+          setHost: false
+        });
+        upstream.on("response", (up) => {
+          const loc = (up.statusCode ?? 0) >= 300 && (up.statusCode ?? 0) < 400 ? up.headers.location : void 0;
+          const refused = loc ? loopbackRedirectVerdict(loc, target, policy) : null;
+          if (refused) {
+            up.resume();
+            record(host, port2, refused);
+            return fail(403, refused);
+          }
+          const out = {};
+          for (const [k, v] of Object.entries(up.headers))
+            if (v !== void 0 && !HOP_BY_HOP.has(k.toLowerCase())) out[k] = v;
+          res.writeHead(up.statusCode ?? 502, up.statusMessage, out);
+          up.pipe(res);
+        });
+        upstream.on("error", (err) => fail(502, err.message));
+        req.pipe(upstream);
+      },
+      (err) => fail(502, err.message)
+    );
+  });
+  server.on("connect", (req, client, head) => {
+    track(client);
+    client.on("error", () => void 0);
+    const hp = splitHostPort(req.url ?? "", 443);
+    if (!hp) {
+      client.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+      return;
+    }
+    connectUpstream(
+      hp.host,
+      hp.port,
+      (upstream) => {
+        client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+        pipeBoth(client, upstream, head);
+      },
+      (status, reason) => client.end(
+        `HTTP/1.1 ${status} ${status === 403 ? "Forbidden" : "Bad Gateway"}\r
+content-type: text/plain\r
+\r
+${status === 403 ? `Blocked by Jourilo network guard: ${reason}` : ""}`
+      )
+    );
+  });
+  server.on("upgrade", (req, client, head) => {
+    track(client);
+    client.on("error", () => void 0);
+    let target;
+    try {
+      target = new URL(req.url ?? "");
+    } catch {
+      client.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+      return;
+    }
+    connectUpstream(
+      target.hostname,
+      Number(target.port || 80),
+      (upstream) => {
+        const lines = [`${req.method} ${target.pathname}${target.search} HTTP/1.1`];
+        for (let i = 0; i < req.rawHeaders.length; i += 2) {
+          const k = req.rawHeaders[i];
+          if (/^proxy-/i.test(k)) continue;
+          lines.push(`${k}: ${req.rawHeaders[i + 1]}`);
+        }
+        upstream.write(`${lines.join("\r\n")}\r
+\r
+`);
+        pipeBoth(client, upstream, head);
+      },
+      (status) => client.end(`HTTP/1.1 ${status} ${status === 403 ? "Forbidden" : "Bad Gateway"}\r
+\r
+`)
+    );
+  });
+  server.on("connection", (s) => track(s));
+  server.on("clientError", (_err, socket) => socket.destroy());
+  await new Promise((resolve10, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => resolve10());
+  });
+  const { port } = server.address();
+  return {
+    url: `http://127.0.0.1:${port}`,
+    policy,
+    blocked,
+    close: () => new Promise((resolve10) => {
+      for (const s of sockets) s.destroy();
+      server.close(() => resolve10());
+    })
+  };
+}
+async function guardedFetchText(url, policy, opts) {
+  const origin = new URL(url).origin;
+  let current = new URL(url);
+  for (let hop = 0; hop < 6; hop++) {
+    if (current.origin !== origin) return null;
+    const port = Number(current.port || (current.protocol === "https:" ? 443 : 80));
+    const pre = await resolveAllowed(current.hostname, port, policy, opts.deps).catch(() => null);
+    if (!pre || "blocked" in pre) return null;
+    const res = await new Promise((resolve10) => {
+      const mod = current.protocol === "https:" ? https : http;
+      const req = mod.get(
+        current,
+        {
+          headers: { "user-agent": opts.userAgent, accept: "text/plain, application/xml, text/xml, */*" },
+          lookup: guardedLookup(policy, port, opts.deps),
+          timeout: opts.timeoutMs,
+          agent: false
+        },
+        (r) => {
+          const status = r.statusCode ?? 0;
+          if (status >= 300 && status < 400 && r.headers.location) {
+            r.resume();
+            return resolve10({ status, location: r.headers.location });
+          }
+          if (status < 200 || status >= 300) {
+            r.resume();
+            return resolve10({ status });
+          }
+          const max = opts.maxBytes ?? 2e6;
+          let size = 0;
+          const chunks = [];
+          r.on("data", (c) => {
+            size += c.length;
+            if (size <= max) chunks.push(c);
+            else r.destroy();
+          });
+          const done = () => resolve10({ status, body: Buffer.concat(chunks).toString("utf8") });
+          r.on("end", done);
+          r.on("close", done);
+          r.on("error", () => resolve10(null));
+        }
+      );
+      req.on("timeout", () => req.destroy());
+      req.on("error", () => resolve10(null));
+    });
+    if (!res) return null;
+    if (res.location) {
+      try {
+        current = new URL(res.location, current);
+      } catch {
+        return null;
+      }
+      continue;
+    }
+    return res.body ?? null;
+  }
+  return null;
+}
+
 // src/core/redact.ts
 var SENSITIVE_PARAM = /^(?:.*[-_])?(token|access[-_]?token|refresh[-_]?token|id[-_]?token|auth|authorization|key|api[-_]?key|apikey|secret|client[-_]?secret|password|passwd|pwd|session|sessionid|sid|jwt|code|signature|sig|otp|ssn|email|phone)$/i;
 var PATTERNS = [
@@ -40704,488 +41193,6 @@ function adviceKey(advice) {
   return parts.join("+");
 }
 
-// src/core/net-guard.ts
-import { lookup as dnsLookup } from "node:dns";
-import http from "node:http";
-import https from "node:https";
-import net, { isIP as isIP2 } from "node:net";
-
-// src/core/url-safety.ts
-init_errors();
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
-var LOCAL_SUFFIXES = [".localhost", ".test"];
-function isLocalHostname(host) {
-  const h = host.replace(/^\[|\]$/g, "").toLowerCase();
-  return h === "localhost" || h === "::1" || /^127\.\d+\.\d+\.\d+$/.test(h) || h === "0.0.0.0" || LOCAL_SUFFIXES.some((s) => h.endsWith(s));
-}
-var METADATA_V4 = /* @__PURE__ */ new Set(["169.254.169.254", "169.254.170.2", "169.254.169.123", "100.100.100.200"]);
-function classifyV4(v) {
-  const [a, b, c, d] = v.split(".").map(Number);
-  if (METADATA_V4.has(`${a}.${b}.${c}.${d}`)) return "metadata";
-  if (a === 0) return b === 0 && c === 0 && d === 0 ? "loopback" : "reserved";
-  if (a === 127) return "loopback";
-  if (a === 10 || a === 172 && b >= 16 && b <= 31 || a === 192 && b === 168) return "private";
-  if (a === 100 && b >= 64 && b <= 127) return "private";
-  if (a === 169 && b === 254) return "link-local";
-  if (a === 192 && b === 0 && (c === 0 || c === 2)) return "reserved";
-  if (a === 192 && b === 88 && c === 99) return "reserved";
-  if (a === 198 && (b === 18 || b === 19)) return "reserved";
-  if (a === 198 && b === 51 && c === 100) return "reserved";
-  if (a === 203 && b === 0 && c === 113) return "reserved";
-  if (a >= 224) return "reserved";
-  return "public";
-}
-function v6Groups(v) {
-  let s = v.split("%")[0];
-  const tail = s.match(/(\d+\.\d+\.\d+\.\d+)$/);
-  if (tail) {
-    const p = tail[1].split(".").map(Number);
-    s = `${s.slice(0, -tail[1].length)}${(p[0] << 8 | p[1]).toString(16)}:${(p[2] << 8 | p[3]).toString(16)}`;
-  }
-  const halves = s.split("::");
-  if (halves.length > 2) return null;
-  const parse2 = (h) => h ? h.split(":").map((g) => Number.parseInt(g, 16)) : [];
-  const head = parse2(halves[0]);
-  const rest = halves.length === 2 ? parse2(halves[1]) : [];
-  const fill2 = 8 - head.length - rest.length;
-  if (fill2 < 0 || halves.length === 1 && fill2 !== 0) return null;
-  const groups = [...head, ...Array(fill2).fill(0), ...rest];
-  return groups.every((g) => Number.isInteger(g) && g >= 0 && g <= 65535) ? groups : null;
-}
-var v4From = (hi, lo) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
-function classifyV6(v) {
-  const g = v6Groups(v);
-  if (!g) return "reserved";
-  const [g0, g1, g2, g3, g4, g5, g6, g7] = g;
-  const zeroTo = (n) => g.slice(0, n).every((x) => x === 0);
-  if (zeroTo(8)) return "loopback";
-  if (zeroTo(7) && g7 === 1) return "loopback";
-  if (zeroTo(5) && g5 === 65535) return classifyV4(v4From(g6, g7));
-  if (zeroTo(6)) return classifyV4(v4From(g6, g7));
-  if (g0 === 100 && g1 === 65435 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0)
-    return classifyV4(v4From(g6, g7));
-  if (g0 === 100 && g1 === 65435 && g2 === 1) return "private";
-  if (g0 === 8194) return classifyV4(v4From(g1, g2));
-  if (g0 === 8193 && g1 === 0) return "reserved";
-  if (g0 === 8193 && g1 === 3512) return "reserved";
-  if (g0 === 256 && g1 === 0 && g2 === 0 && g3 === 0) return "reserved";
-  if (g0 === 64768 && g1 === 3778 && g2 + g3 + g4 + g5 + g6 === 0 && g7 === 596) return "metadata";
-  if ((g0 & 65024) === 64512) return "private";
-  if ((g0 & 65472) === 65152) return "link-local";
-  if ((g0 & 65472) === 65216) return "private";
-  if ((g0 & 65280) === 65280) return "reserved";
-  return "public";
-}
-function classifyIp(ip) {
-  const v = ip.replace(/^\[|\]$/g, "").toLowerCase();
-  const family = isIP(v.split("%")[0]);
-  if (family === 4) return classifyV4(v);
-  if (family === 6) return classifyV6(v);
-  return "reserved";
-}
-function addressVerdict(ip, policy) {
-  const cls = classifyIp(ip);
-  switch (cls) {
-    case "public":
-      return { ok: true };
-    case "metadata":
-      return {
-        ok: false,
-        reason: `${ip} is a cloud instance-metadata endpoint; Jourilo never connects to it.`
-      };
-    case "reserved":
-      return { ok: false, reason: `${ip} is a reserved or special-purpose address.` };
-    case "loopback":
-      return policy.target === "local" || policy.allowPrivate ? { ok: true } : { ok: false, reason: `${ip} is this machine (loopback); a public target may not reach it.` };
-    default:
-      return policy.allowPrivate ? { ok: true } : {
-        ok: false,
-        reason: `${ip} is a ${cls} network address; pass --allow-private if you are authorized.`
-      };
-  }
-}
-function parseTargetUrl(raw) {
-  let url;
-  try {
-    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
-  } catch {
-    throw new JouriloError("INVALID_INPUT", `Not a valid URL: ${raw}`);
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new JouriloError("UNSAFE_URL", `Only http and https URLs are supported (got ${url.protocol}).`);
-  }
-  url.hash = "";
-  return url;
-}
-var systemResolver = (host) => lookup(host, { all: true, verbatim: true });
-var PRIVATE_HINT = "Pass --allow-private if you are authorized to test this host.";
-async function checkTarget(url, opts = {}) {
-  const host = url.hostname.replace(/^\[|\]$/g, "");
-  const literal = isIP(host) !== 0;
-  if (literal) {
-    const cls = classifyIp(host);
-    if (cls === "metadata" || cls === "reserved" && host !== "0.0.0.0")
-      throw new JouriloError("UNSAFE_URL", `${host} is a ${cls} address; Jourilo does not audit it.`);
-    if (cls === "loopback") return "local";
-    if (cls === "public") return "public";
-    if (!opts.allowPrivate)
-      throw new JouriloError("UNSAFE_URL", `${host} is a private network address.`, PRIVATE_HINT);
-    return "private";
-  }
-  if (isLocalHostname(host)) return "local";
-  if (opts.resolveDns === false) return "public";
-  let addrs;
-  try {
-    addrs = await (opts.resolver ?? systemResolver)(host);
-  } catch {
-    return "public";
-  }
-  const classes = addrs.map((a) => ({ address: a.address, cls: classifyIp(a.address) }));
-  const forbidden = classes.find((c) => c.cls === "metadata" || c.cls === "reserved");
-  if (forbidden)
-    throw new JouriloError(
-      "UNSAFE_URL",
-      `${host} resolves to ${forbidden.address}, a ${forbidden.cls} address; Jourilo does not audit it.`
-    );
-  const nonPublic = classes.filter((c) => c.cls !== "public");
-  if (!nonPublic.length) return "public";
-  if (!opts.allowPrivate) {
-    const mixed = nonPublic.length < classes.length;
-    throw new JouriloError(
-      "UNSAFE_URL",
-      mixed ? `${host} resolves to both public and private addresses (${nonPublic.map((c) => c.address).join(", ")}); this is refused because the browser could connect to either (DNS rebinding).` : `${host} resolves to a private network address (${nonPublic[0].address}).`,
-      PRIVATE_HINT
-    );
-  }
-  return "private";
-}
-function isCrawlable(candidate, origin) {
-  let u;
-  try {
-    u = new URL(candidate);
-  } catch {
-    return false;
-  }
-  if (u.origin !== origin) return false;
-  if (/\/(log-?out|sign-?out|logoff|delete|destroy|remove|unsubscribe|cancel)(\/|$|\?)/i.test(u.pathname))
-    return false;
-  if (/\.(pdf|zip|gz|dmg|exe|msi|png|jpe?g|gif|webp|svg|mp4|mp3|woff2?|ttf|ico|xml|json|txt|csv)$/i.test(
-    u.pathname
-  ))
-    return false;
-  return true;
-}
-function normalizeForCrawl(raw) {
-  const u = new URL(raw);
-  u.hash = "";
-  for (const k of [...u.searchParams.keys()])
-    if (/^utm_|^(fbclid|gclid|ref)$/i.test(k)) u.searchParams.delete(k);
-  if (u.pathname !== "/" && u.pathname.endsWith("/")) u.pathname = u.pathname.replace(/\/+$/, "");
-  return u.toString();
-}
-
-// src/core/net-guard.ts
-var GuardBlockedError = class extends Error {
-  code = "EJOURILOBLOCKED";
-};
-var systemResolve = (host) => new Promise(
-  (resolve10, reject) => dnsLookup(host, { all: true, verbatim: true }, (err, addrs) => err ? reject(err) : resolve10(addrs))
-);
-async function resolveAllowed(host, port, policy, deps = {}) {
-  const h = host.replace(/^\[|\]$/g, "");
-  const verdict = deps.verdict ?? ((ip) => addressVerdict(ip, policy));
-  let addrs;
-  if (isIP2(h)) addrs = [{ address: h, family: isIP2(h) }];
-  else {
-    try {
-      addrs = await (deps.resolve ?? systemResolve)(h);
-    } catch (err) {
-      throw Object.assign(new Error(`DNS lookup failed for ${h}`), { cause: err });
-    }
-  }
-  let reason = "";
-  for (const a of addrs) {
-    const v = verdict(a.address, port);
-    if (v.ok) return { address: a.address, family: a.family };
-    reason ||= v.reason;
-  }
-  return { blocked: reason || `${h} did not resolve to an allowed address.` };
-}
-function guardedLookup(policy, port, deps = {}) {
-  return (hostname, options, callback) => {
-    const wantAll = typeof options === "object" && options?.all === true;
-    resolveAllowed(hostname, port, policy, deps).then(
-      (r) => {
-        if ("blocked" in r) return callback(new GuardBlockedError(r.blocked), wantAll ? [] : "", 0);
-        if (wantAll) return callback(null, [{ address: r.address, family: r.family }]);
-        callback(null, r.address, r.family);
-      },
-      (err) => callback(err, wantAll ? [] : "", 0)
-    );
-  };
-}
-function splitHostPort(authority, defaultPort) {
-  const m = authority.match(/^(\[[^\]]+\]|[^:]+)(?::(\d+))?$/);
-  if (!m) return null;
-  const port = m[2] ? Number(m[2]) : defaultPort;
-  if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
-  return { host: m[1].replace(/^\[|\]$/g, ""), port };
-}
-var HOP_BY_HOP = /* @__PURE__ */ new Set([
-  "proxy-connection",
-  "proxy-authorization",
-  "proxy-authenticate",
-  "connection",
-  "keep-alive",
-  "te",
-  "trailer",
-  "transfer-encoding",
-  "upgrade"
-]);
-function isLoopbackName(host) {
-  const h = host.replace(/^\[|\]$/g, "").toLowerCase();
-  return h === "localhost" || h.endsWith(".localhost") || isIP2(h) !== 0 && classifyIp(h) === "loopback";
-}
-function loopbackRedirectVerdict(location, from, policy) {
-  let to;
-  try {
-    to = new URL(location, from);
-  } catch {
-    return null;
-  }
-  if (!isLoopbackName(to.hostname)) return null;
-  if (policy.target === "local" || policy.allowPrivate) return null;
-  return `redirect from ${from.host} to ${to.host} (this machine) refused.`;
-}
-function redirectEscape(url, redirectedFrom, policy) {
-  if (!redirectedFrom) return null;
-  try {
-    return loopbackRedirectVerdict(url, new URL(redirectedFrom), policy);
-  } catch {
-    return null;
-  }
-}
-async function startNetGuard(policy, deps = {}) {
-  const blocked = [];
-  const seen = /* @__PURE__ */ new Set();
-  const record = (host, port2, reason) => {
-    const key = `${host}:${port2}`;
-    if (seen.has(key) || blocked.length >= 200) return;
-    seen.add(key);
-    blocked.push({ host, port: port2, reason });
-  };
-  const sockets = /* @__PURE__ */ new Set();
-  const track = (s) => {
-    sockets.add(s);
-    s.on("close", () => sockets.delete(s));
-    return s;
-  };
-  const connectUpstream = (host, port2, onReady, onFail) => {
-    resolveAllowed(host, port2, policy, deps).then(
-      (r) => {
-        if ("blocked" in r) {
-          record(host, port2, r.blocked);
-          return onFail(403, r.blocked);
-        }
-        const upstream = track(net.connect({ host: r.address, port: port2 }));
-        upstream.once("connect", () => onReady(upstream));
-        upstream.once("error", (err) => onFail(502, err.message));
-      },
-      (err) => onFail(502, err.message)
-    );
-  };
-  const pipeBoth = (client, upstream, head) => {
-    if (head.length) upstream.write(head);
-    upstream.pipe(client);
-    client.pipe(upstream);
-    upstream.on("error", () => client.destroy());
-    client.on("error", () => upstream.destroy());
-    client.on("close", () => upstream.destroy());
-    upstream.on("close", () => client.destroy());
-  };
-  const server = http.createServer((req, res) => {
-    let target;
-    try {
-      target = new URL(req.url ?? "");
-      if (target.protocol !== "http:") throw new Error("not http");
-    } catch {
-      res.writeHead(400).end("Jourilo network guard: absolute http:// URL expected.");
-      return;
-    }
-    const host = target.hostname.replace(/^\[|\]$/g, "");
-    const port2 = Number(target.port || 80);
-    const headers = {};
-    for (const [k, v] of Object.entries(req.headers))
-      if (v !== void 0 && !HOP_BY_HOP.has(k.toLowerCase())) headers[k] = v;
-    const fail = (status, reason) => {
-      if (res.headersSent) return void res.destroy();
-      res.writeHead(status, { "content-type": "text/plain" }).end(status === 403 ? `Blocked by Jourilo network guard: ${reason}` : "Bad gateway");
-    };
-    resolveAllowed(host, port2, policy, deps).then(
-      (r) => {
-        if ("blocked" in r) {
-          record(host, port2, r.blocked);
-          req.resume();
-          return fail(403, r.blocked);
-        }
-        const upstream = http.request({
-          host: r.address,
-          port: port2,
-          method: req.method,
-          path: `${target.pathname}${target.search}`,
-          headers,
-          setHost: false
-        });
-        upstream.on("response", (up) => {
-          const loc = (up.statusCode ?? 0) >= 300 && (up.statusCode ?? 0) < 400 ? up.headers.location : void 0;
-          const refused = loc ? loopbackRedirectVerdict(loc, target, policy) : null;
-          if (refused) {
-            up.resume();
-            record(host, port2, refused);
-            return fail(403, refused);
-          }
-          const out = {};
-          for (const [k, v] of Object.entries(up.headers))
-            if (v !== void 0 && !HOP_BY_HOP.has(k.toLowerCase())) out[k] = v;
-          res.writeHead(up.statusCode ?? 502, up.statusMessage, out);
-          up.pipe(res);
-        });
-        upstream.on("error", (err) => fail(502, err.message));
-        req.pipe(upstream);
-      },
-      (err) => fail(502, err.message)
-    );
-  });
-  server.on("connect", (req, client, head) => {
-    track(client);
-    client.on("error", () => void 0);
-    const hp = splitHostPort(req.url ?? "", 443);
-    if (!hp) {
-      client.end("HTTP/1.1 400 Bad Request\r\n\r\n");
-      return;
-    }
-    connectUpstream(
-      hp.host,
-      hp.port,
-      (upstream) => {
-        client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
-        pipeBoth(client, upstream, head);
-      },
-      (status, reason) => client.end(
-        `HTTP/1.1 ${status} ${status === 403 ? "Forbidden" : "Bad Gateway"}\r
-content-type: text/plain\r
-\r
-${status === 403 ? `Blocked by Jourilo network guard: ${reason}` : ""}`
-      )
-    );
-  });
-  server.on("upgrade", (req, client, head) => {
-    track(client);
-    client.on("error", () => void 0);
-    let target;
-    try {
-      target = new URL(req.url ?? "");
-    } catch {
-      client.end("HTTP/1.1 400 Bad Request\r\n\r\n");
-      return;
-    }
-    connectUpstream(
-      target.hostname,
-      Number(target.port || 80),
-      (upstream) => {
-        const lines = [`${req.method} ${target.pathname}${target.search} HTTP/1.1`];
-        for (let i = 0; i < req.rawHeaders.length; i += 2) {
-          const k = req.rawHeaders[i];
-          if (/^proxy-/i.test(k)) continue;
-          lines.push(`${k}: ${req.rawHeaders[i + 1]}`);
-        }
-        upstream.write(`${lines.join("\r\n")}\r
-\r
-`);
-        pipeBoth(client, upstream, head);
-      },
-      (status) => client.end(`HTTP/1.1 ${status} ${status === 403 ? "Forbidden" : "Bad Gateway"}\r
-\r
-`)
-    );
-  });
-  server.on("connection", (s) => track(s));
-  server.on("clientError", (_err, socket) => socket.destroy());
-  await new Promise((resolve10, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => resolve10());
-  });
-  const { port } = server.address();
-  return {
-    url: `http://127.0.0.1:${port}`,
-    policy,
-    blocked,
-    close: () => new Promise((resolve10) => {
-      for (const s of sockets) s.destroy();
-      server.close(() => resolve10());
-    })
-  };
-}
-async function guardedFetchText(url, policy, opts) {
-  const origin = new URL(url).origin;
-  let current = new URL(url);
-  for (let hop = 0; hop < 6; hop++) {
-    if (current.origin !== origin) return null;
-    const port = Number(current.port || (current.protocol === "https:" ? 443 : 80));
-    const pre = await resolveAllowed(current.hostname, port, policy, opts.deps).catch(() => null);
-    if (!pre || "blocked" in pre) return null;
-    const res = await new Promise((resolve10) => {
-      const mod = current.protocol === "https:" ? https : http;
-      const req = mod.get(
-        current,
-        {
-          headers: { "user-agent": opts.userAgent, accept: "text/plain, application/xml, text/xml, */*" },
-          lookup: guardedLookup(policy, port, opts.deps),
-          timeout: opts.timeoutMs,
-          agent: false
-        },
-        (r) => {
-          const status = r.statusCode ?? 0;
-          if (status >= 300 && status < 400 && r.headers.location) {
-            r.resume();
-            return resolve10({ status, location: r.headers.location });
-          }
-          if (status < 200 || status >= 300) {
-            r.resume();
-            return resolve10({ status });
-          }
-          const max = opts.maxBytes ?? 2e6;
-          let size = 0;
-          const chunks = [];
-          r.on("data", (c) => {
-            size += c.length;
-            if (size <= max) chunks.push(c);
-            else r.destroy();
-          });
-          const done = () => resolve10({ status, body: Buffer.concat(chunks).toString("utf8") });
-          r.on("end", done);
-          r.on("close", done);
-          r.on("error", () => resolve10(null));
-        }
-      );
-      req.on("timeout", () => req.destroy());
-      req.on("error", () => resolve10(null));
-    });
-    if (!res) return null;
-    if (res.location) {
-      try {
-        current = new URL(res.location, current);
-      } catch {
-        return null;
-      }
-      continue;
-    }
-    return res.body ?? null;
-  }
-  return null;
-}
-
 // src/browser/runtime.ts
 init_errors();
 import { spawnSync } from "node:child_process";
@@ -41860,6 +41867,11 @@ async function capturePage(ctx, url, vp, opts) {
       response = await page.goto(url, { waitUntil: "load", timeout: timeoutMs });
     } catch (err) {
       obs.errors.push(`navigation: ${err.message.split("\n")[0]}`);
+      return obs;
+    }
+    const upstreamError = response?.headers()[GUARD_UPSTREAM_ERROR_HEADER];
+    if (upstreamError) {
+      obs.errors.push(`navigation: could not connect: ${upstreamError}`);
       return obs;
     }
     obs.loadMs = Date.now() - t0;
@@ -45019,6 +45031,11 @@ function emptyInventory() {
     metaDescription: null,
     hasViewportMeta: false
   };
+}
+
+// src/audit/outcome.ts
+function runOutcome(run) {
+  return run.pages.some((p) => p.status !== null) ? "complete" : "no-page-loaded";
 }
 
 // src/cli/commands/audit.ts
@@ -48670,15 +48687,18 @@ async function auditCommand(ctx, usage2, categories) {
       const located = locateFindings(run, repo);
       ctx.log(`Mapped ${located} finding(s) to likely source locations in ${repo}`);
     }
+    run.outcome = runOutcome(run);
     ctx.ws.saveRun(run);
     const reports = writeReports(runDir, run, void 0, {
       sarif: flag(ctx, "sarif"),
       history: ctx.ws.listRuns()
     });
     const gate = failOn ? run.findings.some((f) => f.kind === "defect" && severityRank(f.severity) <= severityRank(failOn)) : false;
+    const noPage = run.outcome === "no-page-loaded";
     return {
       data: {
         runId: run.id,
+        outcome: run.outcome,
         runDir,
         reports,
         summary: run.summary,
@@ -48687,7 +48707,7 @@ async function auditCommand(ctx, usage2, categories) {
         gateFailed: gate
       },
       text: summaryText(run, reports.html),
-      exitCode: gate ? 1 : 0
+      exitCode: noPage ? 5 : gate ? 1 : 0
     };
   } finally {
     await server?.close();
@@ -48697,6 +48717,7 @@ function summaryText(run, reportPath) {
   const s = run.summary;
   const lines = [
     "",
+    ...noPageLines(run),
     `Jourilo \xB7 ${run.target}`,
     `  ${s.byKind.defect} defects   critical ${s.findings.critical} \xB7 serious ${s.findings.serious} \xB7 moderate ${s.findings.moderate} \xB7 minor ${s.findings.minor}`,
     `  ${s.byKind.hypothesis} conversion hypotheses (untested) \xB7 ${s.byKind["needs-review"]} need manual review`,
@@ -48718,6 +48739,11 @@ function summaryText(run, reportPath) {
   if (run.findings.filter((f) => f.kind === "defect").length > top.length) lines.push("  \u2026");
   lines.push("", `  Report: ${reportPath}`, `  Run id: ${run.id}`, "");
   return lines.join("\n");
+}
+function noPageLines(run) {
+  if (run.outcome !== "no-page-loaded") return [];
+  const first = run.findings.find((f) => f.ruleId === "jourilo/page-unreachable");
+  return [`No page could be loaded from ${run.target}.`, ...first ? [`  ${first.description}`] : [], ""];
 }
 var audit = {
   name: "audit",
@@ -51126,7 +51152,7 @@ function cliMarkdown() {
     "",
     "Every command prints human-readable text, or JSON with `--json`. Errors go to stderr; with `--json` they are",
     '`{"error":{"code","message","hint"}}` with a stable `code`. Exit codes: 0 ok, 1 failed gate or error, 2 usage,',
-    "3 blocked by a safety rule (unsafe URL/path, robots.txt, policy), 4 browser unavailable.",
+    "3 blocked by a safety rule (unsafe URL/path, robots.txt, policy), 4 browser unavailable, 5 no page could be loaded.",
     "",
     "Global options: `--json`, `--workspace DIR` (default `.jourilo`, or `JOURILO_WORKSPACE`), `--quiet`.",
     ""

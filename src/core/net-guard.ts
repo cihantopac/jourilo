@@ -153,6 +153,11 @@ export interface NetGuard {
   close(): Promise<void>;
 }
 
+/** Set on the guard's own 502 so a page that never reached the server is not mistaken for an HTTP error page. */
+export const GUARD_UPSTREAM_ERROR_HEADER = 'x-jourilo-guard-upstream-error';
+
+const headerSafe = (s: string) => s.replace(/[^\x20-\x7e]/g, ' ').slice(0, 200);
+
 export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {}): Promise<NetGuard> {
   const blocked: BlockedConnection[] = [];
   const seen = new Set<string>();
@@ -218,7 +223,10 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
     const fail = (status: number, reason: string) => {
       if (res.headersSent) return void res.destroy();
       res
-        .writeHead(status, { 'content-type': 'text/plain' })
+        .writeHead(status, {
+          'content-type': 'text/plain',
+          ...(status === 403 ? {} : { [GUARD_UPSTREAM_ERROR_HEADER]: headerSafe(reason) }),
+        })
         .end(status === 403 ? `Blocked by Jourilo network guard: ${reason}` : 'Bad gateway');
     };
     resolveAllowed(host, port, policy, deps).then(

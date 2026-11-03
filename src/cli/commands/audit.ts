@@ -2,6 +2,7 @@ import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { type AuditOptions, runAudit } from '../../audit/engine.js';
 import { severityRank } from '../../audit/finding.js';
+import { runOutcome } from '../../audit/outcome.js';
 import type { BrowserName } from '../../browser/runtime.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { JouriloError } from '../../core/errors.js';
@@ -126,6 +127,7 @@ export async function auditCommand(
       const located = locateFindings(run, repo);
       ctx.log(`Mapped ${located} finding(s) to likely source locations in ${repo}`);
     }
+    run.outcome = runOutcome(run);
     ctx.ws.saveRun(run);
     const reports = writeReports(runDir, run, undefined, {
       sarif: flag(ctx, 'sarif'),
@@ -134,9 +136,11 @@ export async function auditCommand(
     const gate = failOn
       ? run.findings.some((f) => f.kind === 'defect' && severityRank(f.severity) <= severityRank(failOn))
       : false;
+    const noPage = run.outcome === 'no-page-loaded';
     return {
       data: {
         runId: run.id,
+        outcome: run.outcome,
         runDir,
         reports,
         summary: run.summary,
@@ -145,7 +149,7 @@ export async function auditCommand(
         gateFailed: gate,
       },
       text: summaryText(run, reports.html),
-      exitCode: gate ? 1 : 0,
+      exitCode: noPage ? 5 : gate ? 1 : 0,
     };
   } finally {
     await server?.close();
@@ -156,6 +160,7 @@ export function summaryText(run: Run, reportPath: string): string {
   const s = run.summary;
   const lines = [
     '',
+    ...noPageLines(run),
     `Jourilo · ${run.target}`,
     `  ${s.byKind.defect} defects   critical ${s.findings.critical} · serious ${s.findings.serious} · moderate ${s.findings.moderate} · minor ${s.findings.minor}`,
     `  ${s.byKind.hypothesis} conversion hypotheses (untested) · ${s.byKind['needs-review']} need manual review`,
@@ -177,6 +182,12 @@ export function summaryText(run: Run, reportPath: string): string {
   if (run.findings.filter((f) => f.kind === 'defect').length > top.length) lines.push('  …');
   lines.push('', `  Report: ${reportPath}`, `  Run id: ${run.id}`, '');
   return lines.join('\n');
+}
+
+function noPageLines(run: Run): string[] {
+  if (run.outcome !== 'no-page-loaded') return [];
+  const first = run.findings.find((f) => f.ruleId === 'jourilo/page-unreachable');
+  return [`No page could be loaded from ${run.target}.`, ...(first ? [`  ${first.description}`] : []), ''];
 }
 
 export const audit: Command = {

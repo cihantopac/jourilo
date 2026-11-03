@@ -4,7 +4,7 @@
 
 Every command prints human-readable text, or JSON with `--json`. Errors go to stderr; with `--json` they are
 `{"error":{"code","message","hint"}}` with a stable `code`. Exit codes: 0 ok, 1 failed gate or error, 2 usage,
-3 blocked by a safety rule (unsafe URL/path, robots.txt, policy), 4 browser unavailable.
+3 blocked by a safety rule (unsafe URL/path, robots.txt, policy), 4 browser unavailable, 5 no page could be loaded.
 
 Global options: `--json`, `--workspace DIR` (default `.jourilo`, or `JOURILO_WORKSPACE`), `--quiet`.
 
