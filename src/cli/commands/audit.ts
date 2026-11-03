@@ -52,10 +52,43 @@ export const AUDIT_OPTIONS: OptionSpec = {
   brand: { type: 'string' },
   runs: { type: 'string' },
   'fail-on': { type: 'string' },
+  'max-duration': { type: 'string' },
 };
 
 const SEVERITIES: Severity[] = ['critical', 'serious', 'moderate', 'minor'];
 const BROWSERS: BrowserName[] = ['chromium', 'firefox', 'webkit', 'chrome', 'msedge'];
+
+/**
+ * The first SIGINT/SIGTERM, or the end of the --max-duration budget, stops the audit with a partial run; a second
+ * signal exits at once. `dispose` removes the handlers and the timer, so they never outlive the command.
+ */
+function stopController(ctx: Context, maxDurationS: number | undefined) {
+  const controller = new AbortController();
+  let signals = 0;
+  const onSignal = () => {
+    if (++signals > 1) process.exit(130);
+    ctx.log(
+      'Stopping: the current page finishes, then a partial run is written (signal again to quit now) …',
+    );
+    controller.abort('signal');
+  };
+  process.on('SIGINT', onSignal);
+  process.on('SIGTERM', onSignal);
+  const timer = maxDurationS
+    ? setTimeout(() => {
+        ctx.log(`--max-duration ${maxDurationS}s reached: stopping after the current page …`);
+        controller.abort('max-duration');
+      }, maxDurationS * 1000)
+    : undefined;
+  return {
+    signal: controller.signal,
+    dispose: () => {
+      process.off('SIGINT', onSignal);
+      process.off('SIGTERM', onSignal);
+      clearTimeout(timer);
+    },
+  };
+}
 
 export async function auditCommand(
   ctx: Context,
@@ -73,14 +106,19 @@ export async function auditCommand(
   const auth = str(ctx, 'auth');
   if (auth && !existsSync(auth)) throw new JouriloError('NOT_FOUND', `Auth state file not found: ${auth}`);
 
+  const maxDuration = str(ctx, 'max-duration') === undefined ? undefined : num(ctx, 'max-duration', 0);
+  if (maxDuration === 0) throw new JouriloError('USAGE', '--max-duration must be more than 0 seconds.');
+
   const setupRef = str(ctx, 'setup-journey');
   const setupJourney = setupRef ? loadJourneys(ctx.ws, [setupRef])[0] : undefined;
 
-  const isDir =
-    !/^[a-z]+:\/\//i.test(targetArg) && existsSync(targetArg) && statSync(targetArg).isDirectory();
-  const server = isDir ? await serveStatic(resolve(targetArg)) : undefined;
-  const repo = str(ctx, 'repo') ?? (isDir ? resolve(targetArg) : undefined);
+  const stop = stopController(ctx, maxDuration);
+  let server: Awaited<ReturnType<typeof serveStatic>> | undefined;
   try {
+    const isDir =
+      !/^[a-z]+:\/\//i.test(targetArg) && existsSync(targetArg) && statSync(targetArg).isDirectory();
+    server = isDir ? await serveStatic(resolve(targetArg)) : undefined;
+    const repo = str(ctx, 'repo') ?? (isDir ? resolve(targetArg) : undefined);
     const opts: AuditOptions = {
       target: server ? server.url : targetArg,
       viewports: parseViewports(str(ctx, 'viewports')),
@@ -107,6 +145,7 @@ export async function auditCommand(
       forms: !flag(ctx, 'no-forms'),
       allowSubmit: flag(ctx, 'allow-submit'),
       onProgress: ctx.log,
+      signal: stop.signal,
     };
     if (
       flag(ctx, 'ignore-robots') &&
@@ -140,6 +179,7 @@ export async function auditCommand(
       data: {
         runId: run.id,
         outcome: run.outcome,
+        ...(run.stoppedBy ? { stoppedBy: run.stoppedBy } : {}),
         runDir,
         reports,
         summary: run.summary,
@@ -152,6 +192,7 @@ export async function auditCommand(
     };
   } finally {
     await server?.close();
+    stop.dispose();
   }
 }
 
@@ -159,6 +200,7 @@ export function summaryText(run: Run, reportPath: string): string {
   const s = run.summary;
   const lines = [
     '',
+    ...partialLines(run),
     ...noPageLines(run),
     `Jourilo · ${run.target}`,
     `  ${s.byKind.defect} defects   critical ${s.findings.critical} · serious ${s.findings.serious} · moderate ${s.findings.moderate} · minor ${s.findings.minor}`,
@@ -181,6 +223,12 @@ export function summaryText(run: Run, reportPath: string): string {
   if (run.findings.filter((f) => f.kind === 'defect').length > top.length) lines.push('  …');
   lines.push('', `  Report: ${reportPath}`, `  Run id: ${run.id}`, '');
   return lines.join('\n');
+}
+
+function partialLines(run: Run): string[] {
+  if (run.outcome !== 'partial') return [];
+  const stop = run.limitations.find((l) => l.startsWith('The run was stopped early'));
+  return [`Partial run: ${stop ?? 'the run was stopped early.'}`, ''];
 }
 
 function noPageLines(run: Run): string[] {
@@ -222,7 +270,9 @@ export const audit: Command = {
   --allow-submit       Really send empty submissions to test server-side validation, on local or other hosts
                        (disposable/test environments you are authorized to use only; never to delete/payment URLs)
   --sarif              Also write report.sarif for code scanning
-  --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)`,
+  --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
+  --max-duration SECS  Stop after this many seconds and write a partial run (exit 6), as SIGINT/SIGTERM do;
+                       a second signal quits at once (exit 130)`,
   run: (ctx) => auditCommand(ctx, audit.usage),
 };
 

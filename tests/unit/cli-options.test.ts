@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { type Context, parseStateOptions } from '../../src/cli/framework.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { type Command, type Context, parse, parseStateOptions } from '../../src/cli/framework.js';
 import type { JouriloError } from '../../src/core/errors.js';
 
 function ctxWith(values: Context['values']): Context {
@@ -25,5 +25,35 @@ describe('parseStateOptions', () => {
     expect(
       parseStateOptions(ctxWith({ timezone: 'Europe/Istanbul', clock: '2026-11-03T22:30:00+03:00' })),
     ).toEqual({ timezoneId: 'Europe/Istanbul', clock: '2026-11-03T22:30:00+03:00' });
+  });
+});
+
+describe('progress lines', () => {
+  const cmd: Command = {
+    name: 'x',
+    summary: '',
+    usage: 'jourilo x',
+    run: async () => ({ data: null, text: '' }),
+  };
+  afterEach(() => vi.restoreAllMocks());
+
+  function captured(argv: string[]): string {
+    let out = '';
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      out += String(chunk);
+      return true;
+    });
+    parse(cmd, argv).log('  desktop  http://127.0.0.1/');
+    return out;
+  }
+
+  it('progress lines are JSON with --json', () => {
+    const line = JSON.parse(captured(['--json']));
+    expect(line).toEqual({ type: 'progress', message: 'desktop  http://127.0.0.1/', at: expect.any(String) });
+    expect(new Date(line.at).toISOString()).toBe(line.at);
+  });
+  it('stay plain text without --json and silent with --quiet', () => {
+    expect(captured([])).toBe('  desktop  http://127.0.0.1/\n');
+    expect(captured(['--json', '-q'])).toBe('');
   });
 });

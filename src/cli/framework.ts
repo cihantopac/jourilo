@@ -9,7 +9,10 @@ export interface Context {
   positionals: string[];
   json: boolean;
   ws: Workspace;
-  /** Progress lines go to stderr so stdout stays machine-readable. */
+  /**
+   * Progress lines go to stderr so stdout stays machine-readable; with --json each one is a JSON line
+   * `{"type":"progress","message":...,"at":ISO}`.
+   */
   log: (msg: string) => void;
 }
 
@@ -52,13 +55,19 @@ export function parse(cmd: Command, argv: string[]): Context {
   }
   const values = parsed.values as Context['values'];
   const quiet = Boolean(values.quiet);
+  const json = Boolean(values.json);
   return {
     values,
     positionals: parsed.positionals,
-    json: Boolean(values.json),
+    json,
     ws: new Workspace(values.workspace as string | undefined),
     log: (msg) => {
-      if (!quiet) process.stderr.write(`${msg}\n`);
+      if (quiet) return;
+      process.stderr.write(
+        json
+          ? `${JSON.stringify({ type: 'progress', message: msg.trim(), at: new Date().toISOString() })}\n`
+          : `${msg}\n`,
+      );
     },
   };
 }

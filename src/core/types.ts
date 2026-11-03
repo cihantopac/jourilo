@@ -269,8 +269,13 @@ export interface Run {
   context?: import('../integrations/context.js').ExperienceContext;
   /** What the network guard refused or detected during the run. */
   network?: import('../browser/session.js').NetworkReport;
-  /** `no-page-loaded`: no page of the run got a response (DNS, refused connection, ...). Absent in older runs. */
+  /**
+   * `no-page-loaded`: no page of the run got a response (DNS, refused connection, ...). `partial`: the run was
+   * stopped early (see `stoppedBy`). Absent in older runs.
+   */
   outcome?: 'complete' | 'no-page-loaded' | 'partial';
+  /** Why a `partial` run stopped: a SIGINT/SIGTERM, or the `--max-duration` budget ran out. */
+  stoppedBy?: 'signal' | 'max-duration';
   /** Findings kept out of `findings` because a person or agent dismissed them (not counted in the summary). */
   dismissed?: (Finding & { dismissal: import('./dismissals.js').Dismissal })[];
 }

@@ -11,6 +11,10 @@ describe('runOutcome', () => {
     expect(runOutcome(pages(null, null))).toBe('no-page-loaded');
     expect(runOutcome(pages())).toBe('no-page-loaded');
   });
+  it('is partial when the run was stopped, even with no page loaded', () => {
+    expect(runOutcome({ pages: [{ status: 200 }], stoppedBy: 'signal' } as never)).toBe('partial');
+    expect(runOutcome({ pages: [], stoppedBy: 'max-duration' } as never)).toBe('partial');
+  });
 });
 
 describe('exitCodeForOutcome', () => {
@@ -19,5 +23,9 @@ describe('exitCodeForOutcome', () => {
     expect(exitCodeForOutcome('complete', true)).toBe(1);
     expect(exitCodeForOutcome('complete', false)).toBe(0);
     expect(exitCodeForOutcome(undefined, false)).toBe(0);
+  });
+  it('exits 6 for a partial run, whatever the gate', () => {
+    expect(exitCodeForOutcome('partial', true)).toBe(6);
+    expect(exitCodeForOutcome('partial', false)).toBe(6);
   });
 });

@@ -102,12 +102,49 @@ export interface AuditOptions {
   /** Optional brand/search context (jourilo.context/v1). */
   context?: ExperienceContext;
   onProgress?: (msg: string) => void;
+  /**
+   * Stops the run early: the page in progress finishes, nothing new starts, and the run is built from what was
+   * collected (`stoppedBy` set). Abort with the reason `'max-duration'` when a time budget ran out; any other
+   * reason counts as a signal. The caller then owns SIGINT/SIGTERM: Playwright's own handlers, which would close
+   * the browser at once, are turned off.
+   */
+  signal?: AbortSignal;
 }
 
 export interface AuditOutput {
   run: Run;
   runDir: string;
   observations: PageObservation[];
+}
+
+/** Thrown at a stop point once `AuditOptions.signal` is aborted; ends the browsing phase, not the run. */
+class AuditStopped extends Error {}
+
+/**
+ * Settles with `p`, or rejects with AuditStopped as soon as `signal` aborts. Used for steps worth abandoning
+ * midway (setup journey, discovery): the browser is closed afterwards, which ends the abandoned work.
+ */
+function untilStopped<T>(p: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return p;
+  p.catch(() => undefined);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new AuditStopped());
+    if (signal.aborted) return onAbort();
+    signal.addEventListener('abort', onAbort, { once: true });
+    p.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
+}
+
+function stopLimitation(
+  stoppedBy: NonNullable<Run['stoppedBy']>,
+  urls: { url: string }[] | undefined,
+  viewports: number,
+  captured: number,
+): string {
+  const by = stoppedBy === 'signal' ? 'by a stop signal' : 'when the --max-duration budget ran out';
+  if (!urls) return `The run was stopped early ${by}, before pages were discovered, so no page was audited.`;
+  const planned = urls.length * viewports;
+  return `The run was stopped early ${by}: ${planned - captured} of ${planned} planned page captures (${urls.length} page(s) × ${viewports} viewport(s)) were not audited, and steps after the stop (repeat metrics runs, form probes) were skipped. Findings cover only what was captured.`;
 }
 
 /** Browser state options every context of the run shares. */
@@ -128,132 +165,235 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
   const runDir = ws.createRunDir(id);
   const startedAt = new Date().toISOString();
   const limitations: string[] = [];
+  const signal = opts.signal;
+  const halt = () => {
+    if (signal?.aborted) throw new AuditStopped();
+  };
+
+  // Pages known up front (--url, or only the target) need no discovery.
+  let urls: { url: string; role?: string }[] | undefined;
+  if (opts.urls?.length) {
+    urls = opts.urls.map((u) => ({ url: new URL(u, target).toString() }));
+    for (const u of urls) {
+      if (new URL(u.url).origin !== target.origin)
+        throw new JouriloError('UNSAFE_URL', `--url ${u.url} is not on the target origin ${target.origin}.`);
+    }
+  } else if (opts.maxPages <= 1) {
+    urls = [{ url: target.toString() }];
+  }
 
   let session: GuardedSession | undefined;
+  let browserVersion = 'unknown';
+  let storageState = opts.storageState;
+  const journeys: JourneyResult[] = [];
+  const observations: PageObservation[] = [];
+  const formFindings: Finding[] = [];
+  const simulated: string[] = [];
+  const runs = Math.max(1, Math.min(9, Math.round(opts.runs ?? 1)));
+  let stoppedBy: Run['stoppedBy'];
   try {
-    session = await openGuardedBrowser(opts.browser, opts.headed, {
-      target: hostClass,
-      allowPrivate: opts.allowPrivate,
-    });
-    const browser: Browser = session.browser;
-    const browserVersion = browser.version();
-
-    // 0. Setup journey: bring the site into the state to audit. It goes through the same safety policy as
-    // `journeys run`, starts from --auth, and its resulting storage state replaces --auth for every capture.
-    let storageState = opts.storageState;
-    const journeys: JourneyResult[] = [];
-    if (opts.setupJourney) {
-      const spec = opts.setupJourney;
-      log(`Running setup journey ${spec.id} …`);
-      const setupState = join(runDir, 'setup-state.json');
-      const { result } = await runJourney(browser, spec, {
-        base: target,
-        runDir,
-        hostClass,
-        policy: { hostClass, allowSubmit: opts.allowSubmit ?? false, allowDestructive: false },
-        data: testData(id, {}),
-        trace: false,
-        stepTimeoutMs: Math.min(opts.timeoutMs, 10_000),
-        viewportOverride: opts.viewports[0]!.name,
-        saveAuth: setupState,
-        ...(opts.storageState ? { storageState: opts.storageState } : {}),
-        ...stateOptions(opts),
-        log,
-      });
-      journeys.push({ ...result, role: 'setup' });
-      if (result.status !== 'passed') {
-        const bad = result.steps.find((x) => x.status === 'failed' || x.status === 'blocked');
-        const unmet = result.successCriteria.filter((c) => !c.met).map((c) => c.description);
-        throw new JouriloError(
-          'JOURNEY_FAILED',
-          `Setup journey "${spec.id}" ${result.status}${
-            bad ? ` at step ${bad.index + 1} (${bad.description}): ${bad.error ?? bad.status}` : ''
-          }${unmet.length && !bad ? `; unmet: ${unmet.join('; ')}` : ''}. The audit was not run.`,
-          'Fix the journey with `jourilo journeys run` first.',
-        );
-      }
-      storageState = setupState;
-      limitations.push(
-        'State the setup journey left outside cookies and localStorage (for example, in-memory state) does not carry over to audited pages.',
+    try {
+      log(`Starting ${opts.browser} …`);
+      halt();
+      // Not abandoned midway: a browser still launching would be left running.
+      session = await openGuardedBrowser(
+        opts.browser,
+        opts.headed,
+        { target: hostClass, allowPrivate: opts.allowPrivate },
+        signal !== undefined,
       );
-    }
+      const browser: Browser = session.browser;
+      browserVersion = browser.version();
+      halt();
 
-    // 1. Discover pages.
-    let urls: { url: string; role?: string }[];
-    if (opts.urls?.length) {
-      urls = opts.urls.map((u) => ({ url: new URL(u, target).toString() }));
-      for (const u of urls) {
-        if (new URL(u.url).origin !== target.origin)
-          throw new JouriloError(
-            'UNSAFE_URL',
-            `--url ${u.url} is not on the target origin ${target.origin}.`,
-          );
-      }
-    } else if (opts.maxPages <= 1) {
-      urls = [{ url: target.toString() }];
-    } else {
-      log(`Discovering pages on ${target.origin} …`);
-      const ctx = await newContext(browser, opts.viewports[0]!, {
-        runDir,
-        ...(storageState ? { storageState } : {}),
-        ...stateOptions(opts),
-      });
-      const found = await crawl(ctx, target.toString(), {
-        maxPages: opts.maxPages,
-        maxDepth: opts.maxDepth,
-        respectRobots: opts.respectRobots,
-        timeoutMs: opts.timeoutMs,
-        policy: session.guard.policy,
-        ...(opts.include ? { include: opts.include } : {}),
-      });
-      await ctx.close();
-      urls = found.pages.map((p) => ({ url: p.url, role: p.role }));
-      const robotsSkips = found.skipped.filter((s) => s.reason === 'robots.txt').length;
-      if (robotsSkips)
-        limitations.push(`${robotsSkips} URL(s) were skipped because robots.txt disallows them.`);
-      if (found.sitemapRebasedFrom)
-        limitations.push(
-          `The sitemap lists ${found.sitemapRebasedFrom} URLs; their paths were audited on the local server instead.`,
-        );
-      if (!found.robots && opts.respectRobots && hostClass === 'public')
-        limitations.push('No robots.txt was found; crawling stayed on the target origin.');
-      if (!urls.length) urls = [{ url: target.toString() }];
-    }
-    log(
-      `Auditing ${urls.length} page(s) × ${opts.viewports.length} viewport(s) in ${opts.browser} ${browserVersion}`,
-    );
-
-    // 2. Capture every page in every viewport.
-    const observations: PageObservation[] = [];
-    for (const vp of opts.viewports) {
-      const ctx = await newContext(browser, vp, {
-        runDir,
-        ...(storageState ? { storageState } : {}),
-        ...stateOptions(opts),
-        ...(opts.locale ? { locale: opts.locale } : {}),
-      });
-      try {
-        for (const { url } of urls) {
-          log(`  ${vp.name.padEnd(8)} ${redactUrl(url)}`);
-          const obs = await capturePage(ctx, url, vp, {
+      // 0. Setup journey: bring the site into the state to audit. It goes through the same safety policy as
+      // `journeys run`, starts from --auth, and its resulting storage state replaces --auth for every capture.
+      if (opts.setupJourney) {
+        const spec = opts.setupJourney;
+        log(`Running setup journey ${spec.id} …`);
+        const setupState = join(runDir, 'setup-state.json');
+        const { result } = await untilStopped(
+          runJourney(browser, spec, {
+            base: target,
             runDir,
-            guardToken: session.guard.token,
-            timeoutMs: opts.timeoutMs,
-            mask: opts.mask,
-            // Keyboard walks are for keyboard devices; skip them on touch viewports unless only touch was requested.
-            keyboard:
-              !opts.inventoryOnly &&
-              opts.keyboard &&
-              (!vp.hasTouch || opts.viewports.every((v) => v.hasTouch)),
-            axe: !opts.inventoryOnly,
-            throttle: opts.throttle,
-          });
-          observations.push(obs);
+            hostClass,
+            policy: { hostClass, allowSubmit: opts.allowSubmit ?? false, allowDestructive: false },
+            data: testData(id, {}),
+            trace: false,
+            stepTimeoutMs: Math.min(opts.timeoutMs, 10_000),
+            viewportOverride: opts.viewports[0]!.name,
+            saveAuth: setupState,
+            ...(opts.storageState ? { storageState: opts.storageState } : {}),
+            ...stateOptions(opts),
+            log,
+          }),
+          signal,
+        );
+        journeys.push({ ...result, role: 'setup' });
+        if (result.status !== 'passed') {
+          const bad = result.steps.find((x) => x.status === 'failed' || x.status === 'blocked');
+          const unmet = result.successCriteria.filter((c) => !c.met).map((c) => c.description);
+          throw new JouriloError(
+            'JOURNEY_FAILED',
+            `Setup journey "${spec.id}" ${result.status}${
+              bad ? ` at step ${bad.index + 1} (${bad.description}): ${bad.error ?? bad.status}` : ''
+            }${unmet.length && !bad ? `; unmet: ${unmet.join('; ')}` : ''}. The audit was not run.`,
+            'Fix the journey with `jourilo journeys run` first.',
+          );
         }
-      } finally {
-        await ctx.close().catch(() => undefined);
+        storageState = setupState;
+        limitations.push(
+          'State the setup journey left outside cookies and localStorage (for example, in-memory state) does not carry over to audited pages.',
+        );
       }
+
+      // 1. Discover pages.
+      if (!urls) {
+        halt();
+        log(`Discovering pages on ${target.origin} …`);
+        const ctx = await newContext(browser, opts.viewports[0]!, {
+          runDir,
+          ...(storageState ? { storageState } : {}),
+          ...stateOptions(opts),
+        });
+        const found = await untilStopped(
+          crawl(ctx, target.toString(), {
+            maxPages: opts.maxPages,
+            maxDepth: opts.maxDepth,
+            respectRobots: opts.respectRobots,
+            timeoutMs: opts.timeoutMs,
+            policy: session.guard.policy,
+            ...(opts.include ? { include: opts.include } : {}),
+          }),
+          signal,
+        ).finally(() => ctx.close().catch(() => undefined));
+        const discovered = found.pages.map((p) => ({ url: p.url, role: p.role }));
+        const robotsSkips = found.skipped.filter((s) => s.reason === 'robots.txt').length;
+        if (robotsSkips)
+          limitations.push(`${robotsSkips} URL(s) were skipped because robots.txt disallows them.`);
+        if (found.sitemapRebasedFrom)
+          limitations.push(
+            `The sitemap lists ${found.sitemapRebasedFrom} URLs; their paths were audited on the local server instead.`,
+          );
+        if (!found.robots && opts.respectRobots && hostClass === 'public')
+          limitations.push('No robots.txt was found; crawling stayed on the target origin.');
+        urls = discovered.length ? discovered : [{ url: target.toString() }];
+      }
+      log(
+        `Auditing ${urls.length} page(s) × ${opts.viewports.length} viewport(s) in ${opts.browser} ${browserVersion}`,
+      );
+
+      // 2. Capture every page in every viewport. A stop lets the page in progress finish.
+      for (const vp of opts.viewports) {
+        halt();
+        const ctx = await newContext(browser, vp, {
+          runDir,
+          ...(storageState ? { storageState } : {}),
+          ...stateOptions(opts),
+          ...(opts.locale ? { locale: opts.locale } : {}),
+        });
+        try {
+          for (const { url } of urls) {
+            halt();
+            log(`  ${vp.name.padEnd(8)} ${redactUrl(url)}`);
+            const obs = await capturePage(ctx, url, vp, {
+              runDir,
+              guardToken: session.guard.token,
+              timeoutMs: opts.timeoutMs,
+              mask: opts.mask,
+              // Keyboard walks are for keyboard devices; skip them on touch viewports unless only touch was requested.
+              keyboard:
+                !opts.inventoryOnly &&
+                opts.keyboard &&
+                (!vp.hasTouch || opts.viewports.every((v) => v.hasTouch)),
+              axe: !opts.inventoryOnly,
+              throttle: opts.throttle,
+            });
+            observations.push(obs);
+          }
+        } finally {
+          await ctx.close().catch(() => undefined);
+        }
+      }
+
+      // 2b. Repeated cold-cache visits for lab metrics: report medians, not a single noisy sample.
+      if (runs > 1) {
+        for (const obs of observations) {
+          if (!obs.vitals || (obs.status ?? 200) >= 400) continue;
+          const samples = [obs.vitals];
+          for (let k = 1; k < runs; k++) {
+            halt();
+            log(`  metrics  ${obs.viewport.name.padEnd(8)} ${obs.url} (run ${k + 1}/${runs})`);
+            const v = await measureVitals(browser, obs.finalUrl, obs.viewport, {
+              runDir,
+              timeoutMs: opts.timeoutMs,
+              throttle: opts.throttle,
+              ...(storageState ? { storageState } : {}),
+              ...stateOptions(opts),
+            });
+            if (v) samples.push(v);
+          }
+          const m = medianVitals(samples);
+          obs.vitals = m.vitals;
+          obs.vitalsSpread = m.spread;
+          obs.vitalsRuns = samples.length;
+        }
+      }
+
+      // 3. Form validation probes (interactive, so gated by the safety policy).
+      const formsAllowed = hostClass === 'local' || opts.allowSubmit === true;
+      if (opts.forms !== false && !opts.inventoryOnly && formsAllowed) {
+        const vp = opts.viewports.find((v) => !v.hasTouch) ?? opts.viewports[0]!;
+        const ctx = await newContext(browser, vp, {
+          runDir,
+          ...(storageState ? { storageState } : {}),
+          ...stateOptions(opts),
+        });
+        try {
+          for (const o of observations.filter(
+            (x) => x.viewport.name === vp.name && (x.status ?? 200) < 400,
+          )) {
+            // Only forms whose input is clearly needed: a known purpose, or fields marked required. A generic form
+            // with optional fields may legitimately accept an empty submission.
+            const probeable = (o.probe?.inventory.forms ?? []).filter(
+              (f) => f.purpose !== 'search' && (f.purpose !== 'other' || f.fields.some((x) => x.required)),
+            );
+            for (const form of probeable.slice(0, 3)) {
+              halt();
+              log(`  form     ${o.url} ${form.selector}`);
+              const r = await probeFormValidation(
+                ctx,
+                o.finalUrl,
+                form,
+                vp,
+                { hostClass, allowSubmit: opts.allowSubmit ?? false, allowDestructive: false },
+                runDir,
+              );
+              formFindings.push(...r.findings);
+              if (r.result.outcome === 'blocked')
+                limitations.push(`Form ${form.selector} on ${o.url} was not submitted: ${r.result.detail}`);
+              if (r.result.outcome === 'simulated') simulated.push(`${form.selector} on ${o.url}`);
+            }
+          }
+        } finally {
+          await ctx.close().catch(() => undefined);
+        }
+        if (simulated.length)
+          limitations.push(
+            `Form validation was simulated: empty submissions were intercepted before reaching the server, so nothing was written. ${simulated.length} form(s) rely on the server for validation feedback (${simulated.slice(0, 3).join('; ')}${simulated.length > 3 ? '; …' : ''}); that feedback was not tested. Rerun with --allow-submit on a disposable environment to test it.`,
+          );
+      } else if (opts.forms !== false && observations.some((o) => o.probe?.inventory.forms.length)) {
+        limitations.push(
+          'Form validation was not tested: submitting forms on a public host requires --allow-submit (authorized test environments only).',
+        );
+      }
+    } catch (err) {
+      if (!(err instanceof AuditStopped)) throw err;
+      stoppedBy = signal?.reason === 'max-duration' ? 'max-duration' : 'signal';
+      log(`Stopped early (${stoppedBy}); writing a partial run …`);
     }
+    if (stoppedBy)
+      limitations.push(stopLimitation(stoppedBy, urls, opts.viewports.length, observations.length));
 
     // A local build often has no page at "/" (the production server redirects it, e.g. to /en/). When other pages
     // were found, that is stated rather than reported as a broken page of the site.
@@ -266,77 +406,6 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
           `${startPath} returned 404 on this local server (no start page in the build); it was not audited. The other pages were found through the sitemap and links.`,
         );
       }
-    }
-
-    // 2b. Repeated cold-cache visits for lab metrics: report medians, not a single noisy sample.
-    const runs = Math.max(1, Math.min(9, Math.round(opts.runs ?? 1)));
-    if (runs > 1) {
-      for (const obs of observations) {
-        if (!obs.vitals || (obs.status ?? 200) >= 400) continue;
-        const samples = [obs.vitals];
-        for (let k = 1; k < runs; k++) {
-          log(`  metrics  ${obs.viewport.name.padEnd(8)} ${obs.url} (run ${k + 1}/${runs})`);
-          const v = await measureVitals(browser, obs.finalUrl, obs.viewport, {
-            runDir,
-            timeoutMs: opts.timeoutMs,
-            throttle: opts.throttle,
-            ...(storageState ? { storageState } : {}),
-            ...stateOptions(opts),
-          });
-          if (v) samples.push(v);
-        }
-        const m = medianVitals(samples);
-        obs.vitals = m.vitals;
-        obs.vitalsSpread = m.spread;
-        obs.vitalsRuns = samples.length;
-      }
-    }
-
-    // 3. Form validation probes (interactive, so gated by the safety policy).
-    const formFindings: Finding[] = [];
-    const simulated: string[] = [];
-    const formsAllowed = hostClass === 'local' || opts.allowSubmit === true;
-    if (opts.forms !== false && !opts.inventoryOnly && formsAllowed) {
-      const vp = opts.viewports.find((v) => !v.hasTouch) ?? opts.viewports[0]!;
-      const ctx = await newContext(browser, vp, {
-        runDir,
-        ...(storageState ? { storageState } : {}),
-        ...stateOptions(opts),
-      });
-      try {
-        for (const o of observations.filter((x) => x.viewport.name === vp.name && (x.status ?? 200) < 400)) {
-          // Only forms whose input is clearly needed: a known purpose, or fields marked required. A generic form
-          // with optional fields may legitimately accept an empty submission.
-          const probeable = (o.probe?.inventory.forms ?? []).filter(
-            (f) => f.purpose !== 'search' && (f.purpose !== 'other' || f.fields.some((x) => x.required)),
-          );
-          for (const form of probeable.slice(0, 3)) {
-            log(`  form     ${o.url} ${form.selector}`);
-            const r = await probeFormValidation(
-              ctx,
-              o.finalUrl,
-              form,
-              vp,
-              { hostClass, allowSubmit: opts.allowSubmit ?? false, allowDestructive: false },
-              runDir,
-            );
-            formFindings.push(...r.findings);
-            if (r.result.outcome === 'blocked')
-              limitations.push(`Form ${form.selector} on ${o.url} was not submitted: ${r.result.detail}`);
-            if (r.result.outcome === 'simulated') simulated.push(`${form.selector} on ${o.url}`);
-          }
-        }
-      } finally {
-        await ctx.close().catch(() => undefined);
-      }
-      if (simulated.length)
-        limitations.push(
-          `Form validation was simulated: empty submissions were intercepted before reaching the server, so nothing was written. ${simulated.length} form(s) rely on the server for validation feedback (${simulated.slice(0, 3).join('; ')}${simulated.length > 3 ? '; …' : ''}); that feedback was not tested. Rerun with --allow-submit on a disposable environment to test it.`,
-        );
-    } else if (opts.forms !== false && observations.some((o) => o.probe?.inventory.forms.length)) {
-      limitations.push(
-        'Form validation was not tested: submitting forms on a public host requires --allow-submit (authorized test environments only).',
-      );
     }
 
     // 4. Findings.
@@ -385,7 +454,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       );
     else limitations.push('Measured without network/CPU throttling: real mobile devices are usually slower.');
 
-    const network = session.report();
+    const network = session?.report() ?? { blocked: [], escaped: [] };
     limitations.push(...networkLimitations(network));
     const stopped = observations.flatMap((o) => o.blockedActions ?? []);
     if (stopped.length)
@@ -430,12 +499,16 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         axe: observations.find((o) => o.axe)?.axe?.version ?? null,
         hostClass,
         // The exact scope, so `jourilo verify` can repeat this run after a change.
-        scope: { urls: [...new Set(urls.map((u) => u.url))], viewports: opts.viewports.map((v) => v.name) },
+        scope: {
+          urls: [...new Set((urls ?? []).map((u) => u.url))],
+          viewports: opts.viewports.map((v) => v.name),
+        },
       },
       pages,
       journeys,
       findings,
       ...(dismissed.length ? { dismissed } : {}),
+      ...(stoppedBy ? { stoppedBy } : {}),
       summary: summarize(findings, pages.length, journeys.length),
       limitations: [...new Set(limitations)],
       ...(opts.context && (opts.context.brand || opts.context.search) ? { context: opts.context } : {}),
