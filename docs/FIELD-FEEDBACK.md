@@ -90,6 +90,38 @@ One entry per problem, in this shape:
   error (JOURILO-016).
 - **F23** — A redirect-chain finding, and keyboard-trap detection that does not depend on the focus start.
 
+## Status in 1.2.0
+
+Tasks refer to [the 1.2.0 plan](superpowers/plans/2026-11-03-jourilo-1.2.0.md); what shipped is in the
+[changelog](../CHANGELOG.md) and [RELEASE-1.2.md](RELEASE-1.2.md). Deferred items are on the
+[roadmap](ROADMAP.md#deferred-from-120).
+
+| #   | Status                                                          |
+| --- | --------------------------------------------------------------- |
+| F1  | Done (task 1)                                                   |
+| F2  | Done (tasks 5, 6)                                               |
+| F3  | Done (task 2)                                                   |
+| F4  | Done (task 7)                                                   |
+| F5  | Done (task 3)                                                   |
+| F6  | Done (task 13)                                                  |
+| F7  | Done (task 4)                                                   |
+| F8  | Deferred (roadmap F8)                                           |
+| F9  | Done (task 12)                                                  |
+| F10 | Declined (D3)                                                   |
+| F11 | Done (task 8)                                                   |
+| F12 | Done (task 9)                                                   |
+| F13 | Done (task 10)                                                  |
+| F14 | Done (task 11)                                                  |
+| F15 | Deferred (roadmap F15)                                          |
+| F16 | Partly: `--timezone` done (task 5); rest deferred (roadmap F16) |
+| F17 | Covered by `--auth` and `--setup-journey` (task 6)              |
+| F18 | Done (task 14)                                                  |
+| F19 | Deferred, needs a decision (roadmap F19)                        |
+| F20 | Deferred (roadmap F20)                                          |
+| F21 | Deferred (roadmap F21)                                          |
+| F22 | Deferred (roadmap F22)                                          |
+| F23 | Deferred (roadmap F23)                                          |
+
 ## Recurrence
 
 Count each project that reports the same item again here; recurrence decides priority in the 1.2.0 plan.

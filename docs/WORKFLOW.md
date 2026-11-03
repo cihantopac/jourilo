@@ -30,12 +30,49 @@ jourilo rollback latest --yes                        # undo if needed; never ove
 
 A static build is served on 127.0.0.1 for you: `jourilo audit ./dist --repo .`. Useful audit options:
 `--viewports desktop,mobile,reflow` (WCAG 1.4.10), `--throttle` (mobile network and CPU), `--runs 5` (medians and
-ranges for lab metrics), `--url /path` (exact pages), `--browser firefox|webkit`. Add `--json` to any command for
+ranges for lab metrics), `--url /path` (exact pages), `--browser firefox|webkit`, and the state options below. Add `--json` to any command for
 machine-readable output.
 
 On the seeded demo app (`fixtures/sites/acme-saas`), `optimize --apply` followed by `verify` reports 14 findings fixed
 and 0 new; on a page with a late-loading image, the measured image size takes mobile CLS from 0.121 to 0. Fixes are
 idempotent and fully reversible ([EVALUATION.md](EVALUATION.md#2-repair-loop-testsbrowserrepairtestts)).
+
+## Audit the state you care about
+
+An audit sees the page as a first-time visitor. To audit another state, set it first:
+
+```bash
+jourilo audit http://localhost:3000 --timezone Europe/Istanbul --clock 2026-11-03T22:30:00+03:00   # night mode, by clock
+jourilo audit http://localhost:3000 --setup-journey dark-mode        # run a journey first, audit what it leaves
+jourilo audit https://example.com --evidence minimal                 # first screens + what findings need (about half the size)
+jourilo audit https://example.com --max-duration 600 --run-id nightly-2026-11-03
+```
+
+- `--timezone ZONE` sets the IANA time zone of every page; `--clock ISO` freezes `Date` at that moment (timers keep
+  running). Both also exist on `journeys run` and are replayed by `verify`.
+- `--setup-journey REF` (a journey id or a `.json` file) runs before the audit, under the same safety policy as
+  `journeys run`, and the audit starts from the cookies and `localStorage` it leaves. In-memory state does not carry
+  over ([LIMITATIONS.md](LIMITATIONS.md)). `verify` replays it, so the comparison stays like for like.
+- `--evidence minimal` keeps the first screen of every page plus the screenshots that findings and failed steps need.
+- `--max-duration SECS` stops after a time budget and writes a partial run; `--run-id ID` names the run so a retried
+  job does not create a second one.
+
+When an automated job runs Jourilo, read the exit code: 0 ok, 1 failed gate or error, 2 usage, 3 refused for safety,
+4 browser unavailable, **5 no page could be loaded** (a run is written, with outcome `no-page-loaded`), **6 stopped
+early** by SIGINT, SIGTERM or `--max-duration` (a partial run is written; the pages finished so far are in it). With
+`--json`, progress is one JSON object per stderr line. Every run also has `manifest.json` (sha256 per artifact) and
+follows [`schemas/run.schema.json`](../schemas/run.schema.json) ([RUN-FORMAT.md](RUN-FORMAT.md)).
+
+## Dismissing a false positive
+
+```bash
+jourilo finding dismiss <finding-id> --reason "Decorative text, hidden from everyone" --by user
+jourilo finding undismiss <finding-id>
+```
+
+The verdict is stored in `<workspace>/dismissed.json` with the reason and who dismissed it, and later runs list the
+finding as dismissed instead of reporting it again. Evidence is never deleted, a dismissed finding is not "fixed", and
+if the finding changes (a new fingerprint) it comes back as new ([DECISIONS.md](DECISIONS.md) D18).
 
 ## What is checked
 
