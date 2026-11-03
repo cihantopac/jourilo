@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "id": "dark",
+  "name": "Switch to the dark theme",
+  "start": "/theme.html",
+  "steps": [{ "action": "click", "target": { "role": "button", "name": "Switch to dark theme" } }],
+  "success": [{ "description": "No script errors", "noPageErrors": true }]
+}

@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "id": "dark-broken",
+  "name": "Switch to a theme that is not there",
+  "start": "/theme.html",
+  "steps": [{ "action": "click", "target": { "role": "button", "name": "Switch to sepia theme" } }],
+  "success": [{ "description": "No script errors", "noPageErrors": true }]
+}

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Theme lab</title>
+    <style>
+      body { margin: 0; padding: 24px; font: 18px/1.5 sans-serif; background: #ffffff; color: #111111; }
+      body.dark { background: #101820; color: #f2f2f2; }
+      button { font: inherit; padding: 8px 16px; }
+    </style>
+    <script>
+      try {
+        if (localStorage.getItem('theme') === 'dark') document.documentElement.classList.add('dark-pending');
+      } catch (e) {}
+      addEventListener('DOMContentLoaded', () => {
+        if (document.documentElement.classList.contains('dark-pending')) document.body.classList.add('dark');
+      });
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>Theme lab</h1>
+      <p>The theme is remembered in localStorage.</p>
+      <button type="button" id="toggle" onclick="localStorage.setItem('theme', 'dark'); document.body.classList.add('dark')">Switch to dark theme</button>
+    </main>
+  </body>
+</html>

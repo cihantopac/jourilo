@@ -23,6 +23,7 @@ import {
   requirePositional,
   str,
 } from '../framework.js';
+import { loadJourneys } from './journeys.js';
 
 export const AUDIT_OPTIONS: OptionSpec = {
   pages: { type: 'string' },
@@ -41,6 +42,7 @@ export const AUDIT_OPTIONS: OptionSpec = {
   locale: { type: 'string' },
   timezone: { type: 'string' },
   clock: { type: 'string' },
+  'setup-journey': { type: 'string' },
   timeout: { type: 'string' },
   repo: { type: 'string' },
   sarif: { type: 'boolean' },
@@ -70,6 +72,9 @@ export async function auditCommand(
   const auth = str(ctx, 'auth');
   if (auth && !existsSync(auth)) throw new JouriloError('NOT_FOUND', `Auth state file not found: ${auth}`);
 
+  const setupRef = str(ctx, 'setup-journey');
+  const setupJourney = setupRef ? loadJourneys(ctx.ws, [setupRef])[0] : undefined;
+
   const isDir =
     !/^[a-z]+:\/\//i.test(targetArg) && existsSync(targetArg) && statSync(targetArg).isDirectory();
   const server = isDir ? await serveStatic(resolve(targetArg)) : undefined;
@@ -94,6 +99,7 @@ export async function auditCommand(
       ...(auth ? { storageState: auth } : {}),
       ...(str(ctx, 'locale') ? { locale: str(ctx, 'locale')! } : {}),
       ...state,
+      ...(setupJourney ? { setupJourney } : {}),
       ...(categories ? { categories } : {}),
       context: loadContext(repo ?? process.cwd(), str(ctx, 'brand') ? { brand: str(ctx, 'brand')! } : {}),
       mode: repo ? 'repository' : 'website',
@@ -193,6 +199,8 @@ export const audit: Command = {
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
   --timezone ZONE      IANA time zone for every page (e.g. Europe/Istanbul)
   --clock ISO          Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
+  --setup-journey REF  Run this journey first (an id or a .json file) and audit the state it leaves, e.g. a chosen theme or
+                       a dismissed banner; it follows the journeys safety policy and starts from --auth
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
   --repo PATH          Map findings to likely source files in this repository (and read its brand/search context)
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)

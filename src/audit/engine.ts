@@ -1,6 +1,7 @@
 // The audit pipeline: validate target → discover pages → capture each page per viewport → apply rules →
 // merge → store a Run. Pure orchestration; measurement lives in browser/, judgment rules in audit/rules and
 // conversion/.
+import { join } from 'node:path';
 import type { Browser } from 'playwright-core';
 import {
   capturePage,
@@ -20,6 +21,7 @@ import type {
   Category,
   Finding,
   FindingKind,
+  JourneyResult,
   PageCapture,
   Run,
   RunSummary,
@@ -34,6 +36,9 @@ import { crawl } from '../discovery/crawl.js';
 import type { ExperienceContext } from '../integrations/context.js';
 import { designFindings, respectLockedBrand } from '../integrations/design-rules.js';
 import { probeFormValidation } from '../journeys/forms.js';
+import { runJourney } from '../journeys/runner.js';
+import { testData } from '../journeys/safety.js';
+import type { JourneySpec } from '../journeys/schema.js';
 import { mergeFindings } from './finding.js';
 import {
   axeFindings,
@@ -78,6 +83,11 @@ export interface AuditOptions {
   locale?: string;
   timezoneId?: string;
   clock?: string;
+  /**
+   * A journey run first, on the first viewport and under the journeys safety policy; the state it leaves (cookies,
+   * localStorage) is what every capture context starts from.
+   */
+  setupJourney?: JourneySpec;
   /** Restrict findings to these categories. */
   categories?: Category[];
   mode: Run['mode'];
@@ -125,6 +135,46 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
     const browser: Browser = session.browser;
     const browserVersion = browser.version();
 
+    // 0. Setup journey: bring the site into the state to audit. It goes through the same safety policy as
+    // `journeys run`, starts from --auth, and its resulting storage state replaces --auth for every capture.
+    let storageState = opts.storageState;
+    const journeys: JourneyResult[] = [];
+    if (opts.setupJourney) {
+      const spec = opts.setupJourney;
+      log(`Running setup journey ${spec.id} …`);
+      const setupState = join(runDir, 'setup-state.json');
+      const { result } = await runJourney(browser, spec, {
+        base: target,
+        runDir,
+        hostClass,
+        policy: { hostClass, allowSubmit: opts.allowSubmit ?? false, allowDestructive: false },
+        data: testData(id, {}),
+        trace: false,
+        stepTimeoutMs: Math.min(opts.timeoutMs, 10_000),
+        viewportOverride: opts.viewports[0]!.name,
+        saveAuth: setupState,
+        ...(opts.storageState ? { storageState: opts.storageState } : {}),
+        ...stateOptions(opts),
+        log,
+      });
+      journeys.push({ ...result, role: 'setup' });
+      if (result.status !== 'passed') {
+        const bad = result.steps.find((x) => x.status === 'failed' || x.status === 'blocked');
+        const unmet = result.successCriteria.filter((c) => !c.met).map((c) => c.description);
+        throw new JouriloError(
+          'JOURNEY_FAILED',
+          `Setup journey "${spec.id}" ${result.status}${
+            bad ? ` at step ${bad.index + 1} (${bad.description}): ${bad.error ?? bad.status}` : ''
+          }${unmet.length && !bad ? `; unmet: ${unmet.join('; ')}` : ''}. The audit was not run.`,
+          'Fix the journey with `jourilo journeys run` first.',
+        );
+      }
+      storageState = setupState;
+      limitations.push(
+        'State the setup journey left outside cookies and localStorage (for example, in-memory state) does not carry over to audited pages.',
+      );
+    }
+
     // 1. Discover pages.
     let urls: { url: string; role?: string }[];
     if (opts.urls?.length) {
@@ -142,7 +192,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       log(`Discovering pages on ${target.origin} …`);
       const ctx = await newContext(browser, opts.viewports[0]!, {
         runDir,
-        ...(opts.storageState ? { storageState: opts.storageState } : {}),
+        ...(storageState ? { storageState } : {}),
         ...stateOptions(opts),
       });
       const found = await crawl(ctx, target.toString(), {
@@ -175,7 +225,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
     for (const vp of opts.viewports) {
       const ctx = await newContext(browser, vp, {
         runDir,
-        ...(opts.storageState ? { storageState: opts.storageState } : {}),
+        ...(storageState ? { storageState } : {}),
         ...stateOptions(opts),
         ...(opts.locale ? { locale: opts.locale } : {}),
       });
@@ -226,8 +276,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
             runDir,
             timeoutMs: opts.timeoutMs,
             throttle: opts.throttle,
-            ...(opts.storageState ? { storageState: opts.storageState } : {}),
-            ...stateOptions(opts),
+            ...(storageState ? { storageState } : {}),
             ...stateOptions(opts),
           });
           if (v) samples.push(v);
@@ -247,7 +296,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       const vp = opts.viewports.find((v) => !v.hasTouch) ?? opts.viewports[0]!;
       const ctx = await newContext(browser, vp, {
         runDir,
-        ...(opts.storageState ? { storageState: opts.storageState } : {}),
+        ...(storageState ? { storageState } : {}),
         ...stateOptions(opts),
       });
       try {
@@ -368,6 +417,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         keyboard: opts.keyboard,
         throttle: opts.throttle,
         runs,
+        ...(opts.setupJourney ? { setupJourney: opts.setupJourney.id } : {}),
         ...(opts.timezoneId ? { timezoneId: opts.timezoneId } : {}),
         ...(opts.clock ? { clock: opts.clock } : {}),
         axe: observations.find((o) => o.axe)?.axe?.version ?? null,
@@ -376,9 +426,9 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         scope: { urls: [...new Set(urls.map((u) => u.url))], viewports: opts.viewports.map((v) => v.name) },
       },
       pages,
-      journeys: [],
+      journeys,
       findings,
-      summary: summarize(findings, pages.length, 0),
+      summary: summarize(findings, pages.length, journeys.length),
       limitations: [...new Set(limitations)],
       ...(opts.context && (opts.context.brand || opts.context.search) ? { context: opts.context } : {}),
       ...(network.blocked.length || network.escaped.length ? { network } : {}),

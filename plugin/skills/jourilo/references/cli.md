@@ -42,6 +42,8 @@ Options:
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
   --timezone ZONE      IANA time zone for every page (e.g. Europe/Istanbul)
   --clock ISO          Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
+  --setup-journey REF  Run this journey first (an id or a .json file) and audit the state it leaves, e.g. a chosen theme or
+                       a dismissed banner; it follows the journeys safety policy and starts from --auth
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
   --repo PATH          Map findings to likely source files in this repository (and read its brand/search context)
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
@@ -78,6 +80,8 @@ Options:
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
   --timezone ZONE      IANA time zone for every page (e.g. Europe/Istanbul)
   --clock ISO          Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
+  --setup-journey REF  Run this journey first (an id or a .json file) and audit the state it leaves, e.g. a chosen theme or
+                       a dismissed banner; it follows the journeys safety policy and starts from --auth
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
   --repo PATH          Map findings to likely source files in this repository (and read its brand/search context)
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
@@ -114,6 +118,8 @@ Options:
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
   --timezone ZONE      IANA time zone for every page (e.g. Europe/Istanbul)
   --clock ISO          Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
+  --setup-journey REF  Run this journey first (an id or a .json file) and audit the state it leaves, e.g. a chosen theme or
+                       a dismissed banner; it follows the journeys safety policy and starts from --auth
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
   --repo PATH          Map findings to likely source files in this repository (and read its brand/search context)
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)

@@ -1,7 +1,7 @@
 // Journeys end-to-end on the acme-saas fixture: suggestion derives the expected journeys from real pages, the
 // runner reports real outcomes, and the safety policy blocks risky steps.
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -140,6 +140,68 @@ describe('journeys', () => {
     expect(step.status).toBe('failed');
     expect(step.error).toMatch(/covered by #panel/);
     expect(step.error).not.toMatch(/^Timeout \d+ms exceeded/);
+  });
+
+  it('applies the state a setup journey leaves before auditing', async () => {
+    const r = jourilo(
+      'audit',
+      'fixtures/apps/journey-lab',
+      '--url',
+      '/theme.html',
+      '--viewports',
+      'desktop',
+      '--no-keyboard',
+      '--setup-journey',
+      'fixtures/apps/journey-lab/dark.json',
+    );
+    expect(r.status, r.stderr).toBe(0);
+    const out = JSON.parse(r.stdout);
+    const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8'));
+    expect(run.settings.setupJourney).toBe('dark');
+    const setup = run.journeys.find((j: { role?: string }) => j.role === 'setup');
+    expect(setup).toMatchObject({ id: 'dark', status: 'passed' });
+    // The fold screenshot of the audited page shows the dark background.
+    const jpg = readFileSync(join(out.runDir, run.pages[0].screenshot.replace('.jpg', '-fold.jpg')));
+    const { chromium } = await import('playwright-core');
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage();
+      await page.setContent(
+        `<canvas id=c></canvas><img id=i src="data:image/jpeg;base64,${jpg.toString('base64')}">`,
+      );
+      const px = await page.evaluate(async () => {
+        const img = document.getElementById('i') as HTMLImageElement;
+        await img.decode();
+        const c = document.getElementById('c') as HTMLCanvasElement;
+        c.width = img.width;
+        c.height = img.height;
+        const g = c.getContext('2d')!;
+        g.drawImage(img, 0, 0);
+        return Array.from(g.getImageData(img.width - 20, img.height - 20, 1, 1).data);
+      });
+      expect(px[0]! + px[1]! + px[2]!).toBeLessThan(150);
+    } finally {
+      await browser.close();
+    }
+  });
+
+  it('stops the audit when the setup journey fails', () => {
+    const r = jourilo(
+      'audit',
+      'fixtures/apps/journey-lab',
+      '--url',
+      '/theme.html',
+      '--viewports',
+      'desktop',
+      '--timeout',
+      '3',
+      '--setup-journey',
+      'fixtures/apps/journey-lab/dark-broken.json',
+    );
+    expect(r.status).toBe(1);
+    const err = JSON.parse(r.stderr).error;
+    expect(err.code).toBe('JOURNEY_FAILED');
+    expect(err.message).toMatch(/sepia theme/);
   });
 
   it('rejects invalid journey files with clear messages', () => {

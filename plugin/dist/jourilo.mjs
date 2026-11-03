@@ -39059,8 +39059,11 @@ Re-run with --write to install.`
 };
 
 // src/cli/commands/audit.ts
-import { existsSync as existsSync7, statSync as statSync4 } from "node:fs";
-import { resolve as resolve5 } from "node:path";
+import { existsSync as existsSync10, statSync as statSync5 } from "node:fs";
+import { resolve as resolve6 } from "node:path";
+
+// src/audit/engine.ts
+import { join as join8 } from "node:path";
 
 // src/browser/capture.ts
 var import_axe_core = __toESM(require_axe(), 1);
@@ -43050,6 +43053,640 @@ async function probeFormValidation(ctx, url, form, vp, policy, runDir) {
   }
 }
 
+// src/journeys/runner.ts
+import { join as join7 } from "node:path";
+
+// src/browser/viewports.ts
+init_errors();
+var VIEWPORTS = {
+  desktop: {
+    name: "desktop",
+    width: 1440,
+    height: 900,
+    deviceScaleFactor: 1,
+    isMobile: false,
+    hasTouch: false
+  },
+  laptop: {
+    name: "laptop",
+    width: 1280,
+    height: 800,
+    deviceScaleFactor: 1,
+    isMobile: false,
+    hasTouch: false
+  },
+  tablet: { name: "tablet", width: 768, height: 1024, deviceScaleFactor: 1, isMobile: true, hasTouch: true },
+  mobile: { name: "mobile", width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true },
+  // WCAG 1.4.10 Reflow: content must work at 320 CSS px wide without two-dimensional scrolling.
+  reflow: { name: "reflow", width: 320, height: 640, deviceScaleFactor: 1, isMobile: true, hasTouch: true }
+};
+function parseViewports(spec) {
+  const names = (spec ?? "desktop,mobile").split(",").map((s) => s.trim()).filter(Boolean);
+  return names.map((n) => {
+    const preset = VIEWPORTS[n];
+    if (preset) return preset;
+    const m = n.match(/^(\d{3,4})x(\d{3,4})$/);
+    if (m) {
+      const width = Number(m[1]);
+      const mobile = width < 768;
+      return {
+        name: n,
+        width,
+        height: Number(m[2]),
+        deviceScaleFactor: 1,
+        isMobile: mobile,
+        hasTouch: mobile
+      };
+    }
+    throw new JouriloError(
+      "INVALID_INPUT",
+      `Unknown viewport "${n}". Use ${Object.keys(VIEWPORTS).join(", ")} or WIDTHxHEIGHT.`
+    );
+  });
+}
+
+// src/journeys/runner.ts
+init_fs_safety();
+
+// src/journeys/cover.ts
+var COVER_AT = `(el) => {
+  const short = (e) => {
+    if (e.id) return '#' + CSS.escape(e.id);
+    const c = (e.getAttribute('class') || '').trim().split(/\\s+/)[0];
+    return e.tagName.toLowerCase() + (c ? '.' + CSS.escape(c) : '');
+  };
+  const r = el.getBoundingClientRect();
+  const pts = [[0.5, 0.5], [0.15, 0.15], [0.85, 0.15], [0.15, 0.85], [0.85, 0.85]];
+  let cover = null, visible = null, inViewport = 0, center = true;
+  for (const [fx, fy] of pts) {
+    const x = r.left + r.width * fx, y = r.top + r.height * fy;
+    if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+    inViewport++;
+    const hit = document.elementFromPoint(x, y);
+    if (hit && (hit === el || el.contains(hit))) {
+      if (!visible) visible = { x: r.width * fx, y: r.height * fy };
+    } else if (fx === 0.5) {
+      center = false;
+      cover = hit ? short(hit) : null;
+    }
+  }
+  return { inViewport, center, cover, visible };
+}`;
+async function coverAt(handle) {
+  await handle.scrollIntoViewIfNeeded().catch(() => void 0);
+  const r = await handle.evaluate(
+    new Function(`return (${COVER_AT})(arguments[0])`)
+  );
+  if (!r || !r.inViewport || r.center) return { covered: false, cover: null, visiblePoint: null };
+  return { covered: true, cover: r.cover, visiblePoint: r.visible };
+}
+
+// src/journeys/schema.ts
+init_errors();
+var ACTIONS = /* @__PURE__ */ new Set([
+  "goto",
+  "click",
+  "fill",
+  "select",
+  "check",
+  "press",
+  "hover",
+  "wait",
+  "back",
+  "expect",
+  "screenshot"
+]);
+var NEEDS_TARGET = /* @__PURE__ */ new Set(["click", "fill", "select", "check", "hover"]);
+function validTarget(t) {
+  if (!t || typeof t !== "object") return false;
+  const o = t;
+  const keys = ["role", "label", "text", "placeholder", "testId", "css"].filter(
+    (k) => typeof o[k] === "string" && o[k]
+  );
+  return keys.length >= 1;
+}
+function validateJourney(raw, source = "journey") {
+  const errs = [];
+  if (!raw || typeof raw !== "object")
+    throw new JouriloError("INVALID_INPUT", `${source}: not a JSON object.`);
+  const j = raw;
+  if (j.version !== 1) errs.push("version must be 1");
+  if (!j.id || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(j.id))
+    errs.push("id must be lowercase letters, digits and dashes");
+  if (!j.name) errs.push("name is required");
+  if (!j.start || typeof j.start !== "string") errs.push("start (path or URL) is required");
+  if (!Array.isArray(j.steps) || !j.steps.length) errs.push("steps must be a non-empty array");
+  if (!Array.isArray(j.success) || !j.success.length)
+    errs.push("success must list at least one explicit criterion");
+  (j.steps ?? []).forEach((s, i) => {
+    const step = s;
+    if (!step || !ACTIONS.has(step.action))
+      errs.push(`steps[${i}]: unknown action "${step?.action}"`);
+    else if (NEEDS_TARGET.has(step.action) && !validTarget(step.target))
+      errs.push(`steps[${i}] (${step.action}): target is required`);
+    else if ((step.action === "fill" || step.action === "select") && typeof step.value !== "string")
+      errs.push(`steps[${i}] (${step.action}): value must be a string`);
+    else if (step.action === "goto" && typeof step.url !== "string")
+      errs.push(`steps[${i}] (goto): url is required`);
+    else if (step.action === "press" && typeof step.key !== "string")
+      errs.push(`steps[${i}] (press): key is required`);
+  });
+  (j.success ?? []).forEach((c, i) => {
+    if (!c?.description) errs.push(`success[${i}]: description is required`);
+    if (c && !c.url && !c.urlNot && !c.visible && !c.noPageErrors && !c.noFailedRequests)
+      errs.push(`success[${i}]: needs url, urlNot, visible, noPageErrors or noFailedRequests`);
+    if (c?.visible && !validTarget(c.visible)) errs.push(`success[${i}]: visible must be a target`);
+  });
+  if (errs.length)
+    throw new JouriloError("INVALID_INPUT", `${source} is invalid:
+  - ${errs.join("\n  - ")}`);
+  return j;
+}
+function describeTarget(t) {
+  if ("role" in t) return `${t.role}${t.name ? ` "${t.name}"` : ""}`;
+  if ("label" in t) return `field labelled "${t.label}"`;
+  if ("text" in t) return `text "${t.text}"`;
+  if ("placeholder" in t) return `field with placeholder "${t.placeholder}"`;
+  if ("testId" in t) return `test id "${t.testId}"`;
+  return `\`${t.css}\``;
+}
+function describeStep(s, secret = false) {
+  switch (s.action) {
+    case "goto":
+      return `Go to ${s.url}`;
+    case "click":
+      return `Click ${describeTarget(s.target)}`;
+    case "fill":
+      return `Type ${secret ? "\u2022\u2022\u2022\u2022\u2022\u2022" : `"${s.value}"`} into ${describeTarget(s.target)}`;
+    case "select":
+      return `Choose "${s.value}" in ${describeTarget(s.target)}`;
+    case "check":
+      return `Check ${describeTarget(s.target)}`;
+    case "press":
+      return `Press ${s.key}${s.target ? ` in ${describeTarget(s.target)}` : ""}`;
+    case "hover":
+      return `Hover ${describeTarget(s.target)}`;
+    case "wait":
+      return s.target ? `Wait for ${describeTarget(s.target)}` : `Wait ${s.ms ?? 500} ms`;
+    case "back":
+      return "Go back";
+    case "expect":
+      return `Expect ${[s.url ? `URL ~ ${s.url}` : "", s.visible ? `${describeTarget(s.visible)} visible` : "", s.hidden ? `${describeTarget(s.hidden)} hidden` : "", s.title ? `title ~ "${s.title}"` : ""].filter(Boolean).join(", ")}`;
+    case "screenshot":
+      return `Screenshot${s.name ? ` "${s.name}"` : ""}`;
+  }
+}
+
+// src/journeys/runner.ts
+function locatorFor(page, t) {
+  if ("role" in t)
+    return page.getByRole(t.role, {
+      ...t.name ? { name: t.name } : {},
+      ...t.exact ? { exact: true } : {}
+    });
+  if ("label" in t) return page.getByLabel(t.label, { exact: t.exact ?? false });
+  if ("text" in t) return page.getByText(t.text, { exact: t.exact ?? false });
+  if ("placeholder" in t) return page.getByPlaceholder(t.placeholder);
+  if ("testId" in t) return page.getByTestId(t.testId);
+  return page.locator(t.css);
+}
+var ELEMENT_FACTS = `(el) => {
+  if (!el || el === document.body || el === document.documentElement) return null;
+  const act = el.closest('a[href],button,input,select,textarea,summary,[role=button],[role=link],[role=menuitem],[role=tab],[role=option],[role=checkbox],[role=switch]') || el;
+  const form = act.form || act.closest('form');
+  const tag = act.tagName;
+  const type = (act.getAttribute('type') || '').toLowerCase();
+  const role = (act.getAttribute('role') || '').toLowerCase();
+  const submits = !!form && ((tag === 'BUTTON' && (type === '' || type === 'submit')) || (tag === 'INPUT' && (type === 'submit' || type === 'image')));
+  const inField = !!form && ((tag === 'INPUT' && !['button','submit','reset','checkbox','radio','image','file','range','color'].includes(type)) || tag === 'SELECT');
+  const textarea = tag === 'TEXTAREA' || act.isContentEditable;
+  const buttonLike = tag === 'BUTTON' || tag === 'SUMMARY' || (tag === 'INPUT' && ['button','submit','reset','image'].includes(type)) || ['button','menuitem','tab','option','switch','checkbox'].includes(role);
+  const linkLike = (tag === 'A' && act.hasAttribute('href')) || role === 'link';
+  const payment = !!form && !!form.querySelector('input[autocomplete^="cc-"], input[name*="card" i], input[name*="cvc" i], input[name*="cvv" i], input[data-stripe], iframe[src*="stripe"], iframe[name*="card" i], iframe[title*="card" i]');
+  const byIds = (attr) => (act.getAttribute(attr) || '').split(/\\s+/).map((id) => id && document.getElementById(id)).filter(Boolean).map((n) => n.innerText || n.textContent || '').join(' ');
+  const inner = Array.from(act.querySelectorAll('img[alt], [aria-label], svg title')).map((n) => n.getAttribute('alt') || n.getAttribute('aria-label') || n.textContent || '').join(' ');
+  const name = (act.getAttribute('aria-label') || byIds('aria-labelledby') || act.innerText || act.value || act.getAttribute('title') || act.getAttribute('alt') || inner || '').replace(/\\s+/g, ' ').trim().slice(0, 120);
+  const attrs = [];
+  for (const n of [act, ...Array.from(act.querySelectorAll('*')).slice(0, 20)])
+    for (const a of Array.from(n.attributes))
+      if (/^(id|class|name|title|data-[\\w-]+)$/.test(a.name) || ((a.name === 'href' || a.name === 'xlink:href') && n.tagName.toLowerCase() === 'use'))
+        attrs.push(a.value);
+  const targets = [];
+  if (linkLike && act.getAttribute('href')) targets.push(act.href || act.getAttribute('href'));
+  if (act.getAttribute('formaction')) targets.push(act.formAction || act.getAttribute('formaction'));
+  if (form && (submits || inField)) targets.push(form.getAttribute('action') || '');
+  return { submits, inField, textarea, buttonLike, linkLike, payment, name, signals: attrs.join(' ').slice(0, 1500), targets: targets.join(' ') };
+}`;
+function keyEffect(key, f) {
+  if (!f) return "none";
+  const k = key.split("+").pop();
+  const mods = key.includes("+");
+  const enter = k === "Enter" || k === "NumpadEnter";
+  const space = k === " " || k === "Space";
+  if (enter) {
+    if (f.textarea) return mods ? "submit" : "none";
+    if (f.inField) return "submit";
+    if (f.buttonLike || f.linkLike) return f.submits ? "submit" : "activate";
+    return "activate";
+  }
+  if (space && f.buttonLike) return f.submits ? "submit" : "activate";
+  return "none";
+}
+function verdictFor(f, effect, action, policy) {
+  const submitsForm = effect === "submit" || f.submits;
+  return checkAction(
+    {
+      action,
+      name: f.name,
+      signals: f.signals,
+      targets: f.targets,
+      submitsForm,
+      paymentForm: f.payment && submitsForm
+    },
+    policy
+  );
+}
+var facts = (src) => new Function(`return (${src})(arguments[0])`);
+function matchesUrl(actual, expected) {
+  if (expected.startsWith("re:")) {
+    try {
+      return new RegExp(expected.slice(3)).test(actual);
+    } catch {
+      return false;
+    }
+  }
+  if (expected.startsWith("/")) {
+    try {
+      const norm = (p) => p.replace(/\/+$/, "").replace(/\.html?$/, "") || "/";
+      const u = new URL(actual);
+      const [path2, query] = expected.split("?");
+      return norm(u.pathname) === norm(path2) && (!query || u.search.includes(query));
+    } catch {
+      return false;
+    }
+  }
+  return actual.includes(expected);
+}
+var Blocked = class extends Error {
+};
+async function act(page, step, opts) {
+  const t = opts.stepTimeoutMs;
+  const value = (v) => interpolate(v, opts.data);
+  switch (step.action) {
+    case "goto": {
+      const url = new URL(value(step.url), opts.base);
+      if (url.origin !== opts.base.origin && !(opts.allowOrigins ?? []).includes(url.origin))
+        throw new Blocked(`goto ${url.origin} leaves the target origin ${opts.base.origin}`);
+      await page.goto(url.toString(), { waitUntil: "load", timeout: t * 3 });
+      await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
+      return;
+    }
+    case "click":
+    case "press": {
+      const loc = step.target ? locatorFor(page, step.target).first() : null;
+      let handle = null;
+      if (loc) {
+        await loc.waitFor({ state: "visible", timeout: t });
+        handle = await loc.elementHandle({ timeout: t });
+      } else {
+        handle = (await page.evaluateHandle("document.activeElement")).asElement();
+      }
+      const f = handle ? await handle.evaluate(facts(ELEMENT_FACTS)) : null;
+      const effect = step.action === "click" ? f?.submits ? "submit" : "activate" : keyEffect(step.key, f);
+      if (f && effect !== "none") {
+        const verdict = verdictFor(f, effect, step.action, opts.policy);
+        if (!verdict.allowed) throw new Blocked(verdict.reason);
+      }
+      let note;
+      if (step.action === "click") {
+        const c = await coverAt(handle);
+        if (c.covered && c.visiblePoint) {
+          note = `center covered by ${c.cover ?? "another element"}; clicked the visible part`;
+          await handle.click({ timeout: t, position: c.visiblePoint });
+        } else if (c.covered) {
+          throw new Error(
+            `${describeTarget(step.target)} is covered by ${c.cover ?? "another element"}; nothing of it is visible to click.`
+          );
+        } else await handle.click({ timeout: t });
+      } else if (loc && handle) await handle.press(step.key, { timeout: t });
+      else await page.keyboard.press(step.key);
+      await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
+      return note;
+    }
+    case "fill":
+      await locatorFor(page, step.target).first().fill(value(step.value), { timeout: t });
+      return;
+    case "select":
+      await locatorFor(page, step.target).first().selectOption(value(step.value), { timeout: t });
+      return;
+    case "check":
+      await locatorFor(page, step.target).first().check({ timeout: t });
+      return;
+    case "hover":
+      await locatorFor(page, step.target).first().hover({ timeout: t });
+      return;
+    case "wait":
+      if (step.target)
+        await locatorFor(page, step.target).first().waitFor({ state: "visible", timeout: step.ms ?? t });
+      else await page.waitForTimeout(Math.min(step.ms ?? 500, 1e4));
+      return;
+    case "back":
+      await page.goBack({ timeout: t });
+      return;
+    case "expect": {
+      if (step.url) {
+        const deadline = Date.now() + t;
+        while (!matchesUrl(page.url(), step.url) && Date.now() < deadline) await page.waitForTimeout(100);
+        if (!matchesUrl(page.url(), step.url))
+          throw new Error(`URL is ${redactUrl(page.url())}, expected ~ ${step.url}`);
+      }
+      if (step.visible)
+        await locatorFor(page, step.visible).first().waitFor({ state: "visible", timeout: t });
+      if (step.hidden) await locatorFor(page, step.hidden).first().waitFor({ state: "hidden", timeout: t });
+      if (step.title) {
+        const title = await page.title();
+        if (!title.includes(step.title))
+          throw new Error(`Title is "${excerpt(title, 80)}", expected ~ "${step.title}"`);
+      }
+      return;
+    }
+    case "screenshot":
+      return;
+  }
+}
+var TRANSIENT = /detached|not stable|intercepts pointer events|Execution context was destroyed|navigation/i;
+async function runJourney(browser, spec, opts) {
+  const vp = parseViewports(opts.viewportOverride ?? spec.viewport ?? "desktop")[0];
+  const ctx = await newContext(browser, vp, {
+    runDir: opts.runDir,
+    ...opts.storageState ? { storageState: opts.storageState } : {},
+    ...opts.timezoneId ? { timezoneId: opts.timezoneId } : {},
+    ...opts.clock ? { clock: opts.clock } : {}
+  });
+  const tracePath = opts.trace ? join7("traces", `${spec.id}-${vp.name}.zip`) : void 0;
+  if (tracePath) await ctx.tracing.start({ screenshots: true, snapshots: true, title: spec.name });
+  const guard = await installRequestGuard(ctx, {
+    ...opts.policy,
+    origin: opts.base.origin,
+    ...opts.allowOrigins ? { allowOrigins: opts.allowOrigins } : {},
+    mode: "journey"
+  });
+  const page = await ctx.newPage();
+  const live = observe(page, opts.base.origin);
+  live.ignore(guard.isBlocked);
+  const steps = [];
+  const findings = [];
+  const t0 = Date.now();
+  let status = "passed";
+  const startUrl = new URL(interpolate(spec.start, opts.data), opts.base);
+  const allSteps = [{ action: "goto", url: startUrl.toString() }, ...spec.steps];
+  const shot = async (i) => {
+    const file = join7("screenshots", `journey-${spec.id}-${vp.name}-${String(i).padStart(2, "0")}.jpg`);
+    try {
+      await page.screenshot({
+        path: join7(opts.runDir, file),
+        type: "jpeg",
+        quality: 70,
+        animations: "disabled",
+        caret: "hide",
+        mask: DEFAULT_MASK.map((s) => page.locator(s)),
+        maskColor: "#FF00FF"
+      });
+      return toPosix(file);
+    } catch {
+      return void 0;
+    }
+  };
+  try {
+    for (let i = 0; i < allSteps.length; i++) {
+      const step = allSteps[i];
+      const secret = "value" in step && (isSecretValue(step.value) || /password|card|cvc/i.test(JSON.stringify(step.target ?? "")));
+      const s0 = Date.now();
+      const res = {
+        index: i,
+        action: step.action,
+        description: describeStep(step, secret),
+        status: "passed",
+        durationMs: 0,
+        url: ""
+      };
+      opts.log?.(`    ${i + 1}. ${res.description}`);
+      let note;
+      try {
+        try {
+          note = await act(page, step, opts);
+        } catch (err) {
+          if (err instanceof Blocked || !TRANSIENT.test(err.message)) throw err;
+          await page.waitForTimeout(500);
+          note = await act(page, step, opts);
+        }
+        if (note) res.description = `${res.description} (${note})`;
+      } catch (err) {
+        res.status = err instanceof Blocked ? "blocked" : "failed";
+        res.error = excerpt(err.message.split("\n")[0], 300);
+      }
+      const stopped = guard.since(s0).filter((b) => b.navigation || b.kind !== "submit");
+      if (stopped.length && res.status !== "blocked") {
+        res.status = "blocked";
+        res.error = excerpt(
+          `${stopped[0].reason}${stopped.length > 1 ? ` (+${stopped.length - 1} more)` : ""}`,
+          300
+        );
+      }
+      res.durationMs = Date.now() - s0;
+      res.url = redactUrl(page.url());
+      const s = await shot(i);
+      if (s) res.screenshot = s;
+      steps.push(res);
+      if (res.status !== "passed") {
+        status = res.status === "blocked" ? "blocked" : "failed";
+        for (let k = i + 1; k < allSteps.length; k++)
+          steps.push({
+            index: k,
+            action: allSteps[k].action,
+            description: describeStep(allSteps[k]),
+            status: "skipped",
+            durationMs: 0,
+            url: ""
+          });
+        break;
+      }
+    }
+    const pageErrors = live.console.filter((c) => c.type === "pageerror");
+    const failedFirstParty = live.network.filter((n) => n.firstParty);
+    const criteria = [];
+    for (const c of spec.success) {
+      let met = true;
+      const details = [];
+      if (c.url && !matchesUrl(page.url(), c.url)) {
+        met = false;
+        details.push(`ended at ${redactUrl(page.url())}`);
+      }
+      if (c.urlNot && matchesUrl(page.url(), c.urlNot)) {
+        met = false;
+        details.push(`still at ${redactUrl(page.url())}`);
+      }
+      if (c.visible) {
+        const vis = await locatorFor(page, c.visible).first().isVisible().catch(() => false);
+        if (!vis) {
+          met = false;
+          details.push(`${describeTarget(c.visible)} not visible`);
+        }
+      }
+      if (c.noPageErrors && pageErrors.length) {
+        met = false;
+        details.push(`${pageErrors.length} uncaught exception(s)`);
+      }
+      if (c.noFailedRequests && failedFirstParty.length) {
+        met = false;
+        details.push(`${failedFirstParty.length} failed request(s)`);
+      }
+      criteria.push({
+        description: c.description,
+        met,
+        ...details.length ? { detail: details.join("; ") } : {}
+      });
+    }
+    if (status === "passed" && criteria.some((c) => !c.met)) status = "failed";
+    const vitals = await page.evaluate(READ_VITALS_SCRIPT).catch(() => null);
+    const durationMs = Date.now() - t0;
+    if (tracePath) {
+      await ctx.tracing.stop({ path: join7(opts.runDir, tracePath) });
+    }
+    if (opts.saveAuth && status === "passed") {
+      writeFileSafe(opts.saveAuth, JSON.stringify(await ctx.storageState(), null, 2), { private: true });
+    }
+    const result = {
+      id: spec.id,
+      name: spec.name,
+      viewport: vp.name,
+      status,
+      steps,
+      successCriteria: criteria,
+      durationMs,
+      ...tracePath ? { trace: toPosix(tracePath) } : {},
+      ...guard.blocked.length ? { blockedRequests: guard.blocked.map(({ method, url: url2, reason }) => ({ method, url: url2, reason })) } : {}
+    };
+    const blockedNote = guard.blocked.length ? ` The safety policy stopped ${guard.blocked.length} request(s) during this journey (e.g. ${guard.blocked[0].method} ${guard.blocked[0].url}), which may be why.` : "";
+    const reproduction = steps.filter((s) => s.status !== "skipped").map((s) => s.description);
+    const failedStep = steps.find((s) => s.status === "failed");
+    const blockedStep = steps.find((s) => s.status === "blocked");
+    const url = redactUrl(page.url());
+    if (failedStep || criteria.some((c) => !c.met)) {
+      const unmet = criteria.filter((c) => !c.met);
+      findings.push(
+        makeFinding({
+          ruleId: "journey/failed",
+          key: spec.id,
+          journey: spec.id,
+          title: `Journey "${spec.name}" does not reach its goal`,
+          category: "usability",
+          kind: "defect",
+          severity: "serious",
+          confidence: spec.source === "suggested" ? "medium" : "high",
+          provenance: "observed",
+          url,
+          viewport: vp.name,
+          description: `${failedStep ? `Step ${failedStep.index + 1} (${failedStep.description}) failed: ${failedStep.error}` : `All steps ran, but ${unmet.length} success criterion/criteria were not met: ${unmet.map((c) => `${c.description}${c.detail ? ` (${c.detail})` : ""}`).join("; ")}.`}${blockedNote}`,
+          // A goal missed because Jourilo itself stopped a request is not evidence that the site is broken.
+          ...blockedNote ? { confidence: "low" } : {},
+          impact: spec.goal ? `People trying to ${spec.goal} cannot complete it.` : "People cannot complete this task.",
+          recommendation: spec.source === "suggested" ? "Check whether the journey definition matches the intended flow (it was generated); if it does, fix the step that failed." : "Fix the step that failed, then rerun the journey.",
+          standards: [nielsen(9)],
+          evidence: [
+            ...failedStep?.screenshot ? [
+              {
+                type: "screenshot",
+                file: failedStep.screenshot,
+                note: `After step ${failedStep.index + 1}`
+              }
+            ] : [],
+            { type: "step", snippet: failedStep?.error ?? unmet.map((c) => c.detail).join("; ") }
+          ],
+          reproduction
+        })
+      );
+    }
+    if (blockedStep) {
+      findings.push(
+        makeFinding({
+          ruleId: "journey/blocked-by-policy",
+          key: spec.id,
+          journey: spec.id,
+          title: `Journey "${spec.name}" stopped by the safety policy`,
+          category: "usability",
+          kind: "needs-review",
+          severity: "info",
+          confidence: "high",
+          provenance: "observed",
+          url,
+          viewport: vp.name,
+          description: blockedStep.error ?? "Blocked.",
+          impact: "The rest of this journey was not tested.",
+          recommendation: "Run it against a local or sandbox environment with test accounts if it needs to be covered.",
+          standards: [],
+          evidence: [{ type: "step", snippet: blockedStep.description }],
+          reproduction
+        })
+      );
+    }
+    if (pageErrors.length) {
+      findings.push(
+        makeFinding({
+          ruleId: "journey/page-errors",
+          key: spec.id,
+          journey: spec.id,
+          title: `Uncaught exceptions during "${spec.name}"`,
+          category: "reliability",
+          kind: "defect",
+          severity: "serious",
+          confidence: "high",
+          provenance: "observed",
+          url,
+          viewport: vp.name,
+          description: `${pageErrors.length} uncaught exception(s) while performing the journey.`,
+          impact: "Interactive features may silently fail for real users.",
+          recommendation: "Reproduce the steps and fix the exceptions listed in the evidence.",
+          standards: [],
+          evidence: pageErrors.slice(0, 8).map((e) => ({ type: "console", snippet: e.text })),
+          reproduction
+        })
+      );
+    }
+    if (vitals?.inp != null && vitals.interactions > 0) {
+      const r = rate("INP", vitals.inp);
+      if (r && r !== "good") {
+        findings.push(
+          makeFinding({
+            ruleId: "perf/inp",
+            key: spec.id,
+            journey: spec.id,
+            title: `Slow response to interaction during "${spec.name}" (${Math.round(vitals.inp)} ms, lab)`,
+            category: "performance",
+            kind: "defect",
+            severity: r === "poor" ? "serious" : "minor",
+            confidence: "medium",
+            provenance: "measured",
+            url,
+            viewport: vp.name,
+            description: `The slowest of ${vitals.interactions} scripted interaction(s) took ${Math.round(vitals.inp)} ms to paint the next frame. This is a lab approximation of INP, not field data.`,
+            impact: "The interface feels unresponsive; people click again or give up.",
+            recommendation: "Profile the interaction in DevTools Performance; break up long tasks in the event handlers and defer non-urgent work.",
+            standards: [CWV.INP],
+            evidence: [
+              { type: "metric", data: { inp: Math.round(vitals.inp), interactions: vitals.interactions } }
+            ],
+            reproduction
+          })
+        );
+      }
+    }
+    return { result, findings };
+  } finally {
+    await ctx.close().catch(() => void 0);
+  }
+}
+
 // src/audit/rules/accessibility.ts
 var AXE_ADVICE = {
   "color-contrast": "Raise the contrast between text and its background to at least 4.5:1 (3:1 for large text: 24 px, or 18.66 px bold). Prefer adjusting the design token rather than one-off overrides.",
@@ -44013,6 +44650,41 @@ async function runAudit(ws, opts) {
     });
     const browser = session.browser;
     const browserVersion = browser.version();
+    let storageState = opts.storageState;
+    const journeys2 = [];
+    if (opts.setupJourney) {
+      const spec = opts.setupJourney;
+      log(`Running setup journey ${spec.id} \u2026`);
+      const setupState = join8(runDir, "setup-state.json");
+      const { result } = await runJourney(browser, spec, {
+        base: target,
+        runDir,
+        hostClass,
+        policy: { hostClass, allowSubmit: opts.allowSubmit ?? false, allowDestructive: false },
+        data: testData(id, {}),
+        trace: false,
+        stepTimeoutMs: Math.min(opts.timeoutMs, 1e4),
+        viewportOverride: opts.viewports[0].name,
+        saveAuth: setupState,
+        ...opts.storageState ? { storageState: opts.storageState } : {},
+        ...stateOptions(opts),
+        log
+      });
+      journeys2.push({ ...result, role: "setup" });
+      if (result.status !== "passed") {
+        const bad = result.steps.find((x) => x.status === "failed" || x.status === "blocked");
+        const unmet = result.successCriteria.filter((c) => !c.met).map((c) => c.description);
+        throw new JouriloError(
+          "JOURNEY_FAILED",
+          `Setup journey "${spec.id}" ${result.status}${bad ? ` at step ${bad.index + 1} (${bad.description}): ${bad.error ?? bad.status}` : ""}${unmet.length && !bad ? `; unmet: ${unmet.join("; ")}` : ""}. The audit was not run.`,
+          "Fix the journey with `jourilo journeys run` first."
+        );
+      }
+      storageState = setupState;
+      limitations.push(
+        "State the setup journey left outside cookies and localStorage (for example, in-memory state) does not carry over to audited pages."
+      );
+    }
     let urls;
     if (opts.urls?.length) {
       urls = opts.urls.map((u) => ({ url: new URL(u, target).toString() }));
@@ -44029,7 +44701,7 @@ async function runAudit(ws, opts) {
       log(`Discovering pages on ${target.origin} \u2026`);
       const ctx = await newContext(browser, opts.viewports[0], {
         runDir,
-        ...opts.storageState ? { storageState: opts.storageState } : {},
+        ...storageState ? { storageState } : {},
         ...stateOptions(opts)
       });
       const found = await crawl(ctx, target.toString(), {
@@ -44060,7 +44732,7 @@ async function runAudit(ws, opts) {
     for (const vp of opts.viewports) {
       const ctx = await newContext(browser, vp, {
         runDir,
-        ...opts.storageState ? { storageState: opts.storageState } : {},
+        ...storageState ? { storageState } : {},
         ...stateOptions(opts),
         ...opts.locale ? { locale: opts.locale } : {}
       });
@@ -44103,8 +44775,7 @@ async function runAudit(ws, opts) {
             runDir,
             timeoutMs: opts.timeoutMs,
             throttle: opts.throttle,
-            ...opts.storageState ? { storageState: opts.storageState } : {},
-            ...stateOptions(opts),
+            ...storageState ? { storageState } : {},
             ...stateOptions(opts)
           });
           if (v) samples.push(v);
@@ -44122,7 +44793,7 @@ async function runAudit(ws, opts) {
       const vp = opts.viewports.find((v) => !v.hasTouch) ?? opts.viewports[0];
       const ctx = await newContext(browser, vp, {
         runDir,
-        ...opts.storageState ? { storageState: opts.storageState } : {},
+        ...storageState ? { storageState } : {},
         ...stateOptions(opts)
       });
       try {
@@ -44231,6 +44902,7 @@ async function runAudit(ws, opts) {
         keyboard: opts.keyboard,
         throttle: opts.throttle,
         runs: runs2,
+        ...opts.setupJourney ? { setupJourney: opts.setupJourney.id } : {},
         ...opts.timezoneId ? { timezoneId: opts.timezoneId } : {},
         ...opts.clock ? { clock: opts.clock } : {},
         axe: observations.find((o) => o.axe)?.axe?.version ?? null,
@@ -44239,9 +44911,9 @@ async function runAudit(ws, opts) {
         scope: { urls: [...new Set(urls.map((u) => u.url))], viewports: opts.viewports.map((v) => v.name) }
       },
       pages,
-      journeys: [],
+      journeys: journeys2,
       findings,
-      summary: summarize(findings, pages.length, 0),
+      summary: summarize(findings, pages.length, journeys2.length),
       limitations: [...new Set(limitations)],
       ...opts.context && (opts.context.brand || opts.context.search) ? { context: opts.context } : {},
       ...network.blocked.length || network.escaped.length ? { network } : {}
@@ -44281,55 +44953,6 @@ function emptyInventory() {
   };
 }
 
-// src/browser/viewports.ts
-init_errors();
-var VIEWPORTS = {
-  desktop: {
-    name: "desktop",
-    width: 1440,
-    height: 900,
-    deviceScaleFactor: 1,
-    isMobile: false,
-    hasTouch: false
-  },
-  laptop: {
-    name: "laptop",
-    width: 1280,
-    height: 800,
-    deviceScaleFactor: 1,
-    isMobile: false,
-    hasTouch: false
-  },
-  tablet: { name: "tablet", width: 768, height: 1024, deviceScaleFactor: 1, isMobile: true, hasTouch: true },
-  mobile: { name: "mobile", width: 390, height: 844, deviceScaleFactor: 1, isMobile: true, hasTouch: true },
-  // WCAG 1.4.10 Reflow: content must work at 320 CSS px wide without two-dimensional scrolling.
-  reflow: { name: "reflow", width: 320, height: 640, deviceScaleFactor: 1, isMobile: true, hasTouch: true }
-};
-function parseViewports(spec) {
-  const names = (spec ?? "desktop,mobile").split(",").map((s) => s.trim()).filter(Boolean);
-  return names.map((n) => {
-    const preset = VIEWPORTS[n];
-    if (preset) return preset;
-    const m = n.match(/^(\d{3,4})x(\d{3,4})$/);
-    if (m) {
-      const width = Number(m[1]);
-      const mobile = width < 768;
-      return {
-        name: n,
-        width,
-        height: Number(m[2]),
-        deviceScaleFactor: 1,
-        isMobile: mobile,
-        hasTouch: mobile
-      };
-    }
-    throw new JouriloError(
-      "INVALID_INPUT",
-      `Unknown viewport "${n}". Use ${Object.keys(VIEWPORTS).join(", ")} or WIDTHxHEIGHT.`
-    );
-  });
-}
-
 // src/cli/commands/audit.ts
 init_errors();
 init_fs_safety();
@@ -44339,7 +44962,7 @@ init_errors();
 init_fs_safety();
 import { existsSync as existsSync5, readdirSync as readdirSync3, readFileSync as readFileSync4, statSync as statSync2 } from "node:fs";
 import { createServer } from "node:http";
-import { extname, join as join7, resolve as resolve4 } from "node:path";
+import { extname, join as join9, resolve as resolve4 } from "node:path";
 var TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -44372,7 +44995,7 @@ function stablePort(root) {
 async function serveStatic(root, port = 0, opts = {}) {
   if (!existsSync5(root) || !statSync2(root).isDirectory())
     throw new JouriloError("NOT_FOUND", `Not a directory: ${root}`);
-  const cfgFile = join7(root, "jourilo-fixture.json");
+  const cfgFile = join9(root, "jourilo-fixture.json");
   const cfg = existsSync5(cfgFile) ? JSON.parse(readFileSync4(cfgFile, "utf8")) : {};
   const spa = opts.spa ?? cfg.spa ?? looksLikeSpa(root);
   const server = createServer((req, res) => {
@@ -44392,14 +45015,14 @@ async function serveStatic(root, port = 0, opts = {}) {
     const send = () => {
       try {
         let file = resolveInside(root, `.${pathname2}`);
-        if (existsSync5(file) && statSync2(file).isDirectory()) file = join7(file, "index.html");
+        if (existsSync5(file) && statSync2(file).isDirectory()) file = join9(file, "index.html");
         if (!existsSync5(file) && !extname(pathname2)) {
           const html = resolveInside(root, `.${pathname2}.html`);
           if (existsSync5(html)) file = html;
         }
-        if (!existsSync5(file) && spa && !extname(pathname2)) file = join7(root, "index.html");
+        if (!existsSync5(file) && spa && !extname(pathname2)) file = join9(root, "index.html");
         if (!existsSync5(file)) {
-          const notFound = join7(root, "404.html");
+          const notFound = join9(root, "404.html");
           res.writeHead(404, { "content-type": TYPES[".html"] });
           res.end(existsSync5(notFound) ? readFileSync4(notFound) : "Not found");
           return;
@@ -44445,7 +45068,7 @@ async function serveStatic(root, port = 0, opts = {}) {
 // src/repair/locate.ts
 init_fs_safety();
 import { readdirSync as readdirSync4, readFileSync as readFileSync5, statSync as statSync3 } from "node:fs";
-import { extname as extname2, join as join8, relative as relative3 } from "node:path";
+import { extname as extname2, join as join10, relative as relative3 } from "node:path";
 var SOURCE_EXT = /* @__PURE__ */ new Set([
   ".html",
   ".htm",
@@ -44504,7 +45127,7 @@ function indexRepository(root, maxFiles = 6e3) {
     for (const name of entries) {
       if (out.length >= maxFiles) return;
       if (name.startsWith(".") && name !== ".vitepress") continue;
-      const full = join8(dir, name);
+      const full = join10(dir, name);
       let st;
       try {
         st = statSync3(full);
@@ -44821,7 +45444,7 @@ function locateFindings(run, repoRoot) {
 
 // src/report/index.ts
 import { writeFileSync as writeFileSync4 } from "node:fs";
-import { join as join9 } from "node:path";
+import { join as join11 } from "node:path";
 
 // src/report/brand.ts
 var WORDMARK_VIEWBOX = "-18 -74 320 107";
@@ -46966,18 +47589,885 @@ function renderSarif(run) {
 
 // src/report/index.ts
 function writeReports(dir, run, cmp, opts = {}) {
-  const html = join9(dir, "report.html");
-  const markdown = join9(dir, "report.md");
+  const html = join11(dir, "report.html");
+  const markdown = join11(dir, "report.md");
   writeFileSync4(html, renderHtml(run, cmp, opts.history));
   writeFileSync4(markdown, renderMarkdown(run, cmp));
   const out = { html, markdown };
   if (opts.sarif) {
-    out.sarif = join9(dir, "report.sarif");
+    out.sarif = join11(dir, "report.sarif");
     writeFileSync4(out.sarif, `${JSON.stringify(renderSarif(run), null, 2)}
 `);
   }
   return out;
 }
+
+// src/cli/commands/journeys.ts
+import { existsSync as existsSync9, mkdirSync as mkdirSync6, readdirSync as readdirSync7, readFileSync as readFileSync9, writeFileSync as writeFileSync6 } from "node:fs";
+import { basename as basename3, join as join14, resolve as resolve5 } from "node:path";
+init_errors();
+init_fs_safety();
+init_types();
+
+// src/journeys/suggest.ts
+function fieldTarget(f) {
+  if (f.label) return { label: f.label, exact: true };
+  if (f.placeholder) return { placeholder: f.placeholder };
+  if (f.name) return { css: `[name="${f.name.replace(/"/g, '\\"')}"]` };
+  return { css: f.selector };
+}
+function valueFor(f) {
+  const s = `${f.type} ${f.name ?? ""} ${f.label ?? ""} ${f.autocomplete ?? ""}`.toLowerCase();
+  if (f.type === "checkbox" || f.type === "radio" || f.type === "file" || f.type === "hidden") return null;
+  if (f.type === "password") return "{{password}}";
+  if (f.type === "email" || /e-?mail|e-?posta|correo|courriel/.test(s)) return "{{email}}";
+  if (f.type === "tel" || /phone|tel|mobile|cep|handy|móvil/.test(s)) return "{{phone}}";
+  if (f.type === "search" || /search|query|\bq\b|arama|suche|buscar|recherche/.test(s)) return "{{search}}";
+  if (/first|given|vorname|prénom|given-name/.test(s)) return "{{firstName}}";
+  if (/last|family|surname|soyad|nachname|apellido/.test(s)) return "{{lastName}}";
+  if (/company|organi[sz]ation|şirket|firma|empresa|entreprise/.test(s)) return "{{company}}";
+  if (/zip|postal|posta kodu|plz/.test(s)) return "{{zip}}";
+  if (/card|cc-number|kart|karte|tarjeta|carte/.test(s)) return "{{testCard}}";
+  if (/name|user|isim|\bad\b|nombre|\bnom\b|kullanıcı/.test(s)) return "{{name}}";
+  if (f.type === "textarea" || f.type === "text") return "Jourilo test message";
+  if (f.type === "number") return "1";
+  return null;
+}
+function formJourney(page, form) {
+  const path2 = pathOf(page.url).split("?")[0];
+  const steps = [];
+  for (const f of form.fields) {
+    if (f.type === "select") continue;
+    if (f.type === "checkbox") {
+      if (f.required) steps.push({ action: "check", target: fieldTarget(f) });
+      continue;
+    }
+    const v = valueFor(f);
+    if (v) steps.push({ action: "fill", target: fieldTarget(f), value: v });
+  }
+  if (!steps.length) return null;
+  const submit = form.submitText ? { action: "click", target: { role: "button", name: form.submitText, exact: true } } : { action: "press", key: "Enter", target: fieldTarget(form.fields.find((f) => valueFor(f))) };
+  steps.push(submit);
+  const names = {
+    signup: "Create an account",
+    login: "Sign in",
+    search: "Search the site",
+    checkout: "Complete checkout (sandbox)",
+    contact: "Send a contact message",
+    newsletter: "Subscribe to the newsletter",
+    recovery: "Request a password reset",
+    other: "Submit the form"
+  };
+  const id = slug(`${form.purpose}-${path2 === "/" ? "home" : path2}`, 60);
+  return {
+    version: 1,
+    id,
+    name: `${names[form.purpose]} (${path2})`,
+    goal: names[form.purpose].toLowerCase(),
+    start: path2,
+    steps,
+    success: [
+      ...form.purpose === "login" ? [] : [{ description: "Leaves the form page or shows a result", urlNot: path2 === "/" ? "/" : path2 }],
+      { description: "No uncaught exceptions", noPageErrors: true },
+      { description: "No failed first-party requests", noFailedRequests: true }
+    ].filter((c) => !(form.purpose === "search" && "urlNot" in c)),
+    safety: { submitsForms: true, destructive: form.purpose === "checkout" },
+    source: "suggested",
+    tags: ["form", form.purpose]
+  };
+}
+function suggestJourneys(run) {
+  const out = [];
+  const desktop = run.pages.filter((p) => p.viewport === run.viewports[0]?.name && (p.status ?? 200) < 400);
+  const seen = /* @__PURE__ */ new Set();
+  const push = (j) => {
+    if (!j || seen.has(j.id)) return;
+    seen.add(j.id);
+    out.push(j);
+  };
+  const home = desktop.find((p) => pathOf(p.url).split("?")[0] === "/") ?? desktop[0];
+  const cta = home?.inventory.ctas.find((c) => c.emphasis === "primary" && c.aboveFold);
+  if (home && cta) {
+    const href = cta.href && !cta.href.startsWith("#") ? cta.href : null;
+    const dest = href ? pathOf(new URL(href, home.url).toString()).split("?")[0] : null;
+    push({
+      version: 1,
+      id: "landing-primary-cta",
+      name: `Follow the main call to action ("${cta.text}")`,
+      goal: "move from the landing page to the next step of the funnel",
+      start: pathOf(home.url),
+      steps: [{ action: "click", target: { role: href ? "link" : "button", name: cta.text, exact: true } }],
+      success: [
+        dest && dest !== "/" ? { description: `Arrives at ${dest}`, url: dest } : { description: "Leaves the landing page", urlNot: "/" },
+        { description: "No uncaught exceptions", noPageErrors: true }
+      ],
+      safety: { submitsForms: false },
+      source: "suggested",
+      tags: ["conversion", "cta"]
+    });
+  }
+  const counts = /* @__PURE__ */ new Map();
+  for (const p of desktop) {
+    const uniq = new Map(
+      p.inventory.links.filter((l) => l.internal && l.text).map((l) => [`${l.text}|${pathOf(l.href)}`, l])
+    );
+    for (const [k, l] of uniq) {
+      const c = counts.get(k) ?? { text: l.text, href: l.href, n: 0 };
+      c.n++;
+      counts.set(k, c);
+    }
+  }
+  const nav = [...counts.values()].filter((c) => c.n >= Math.max(2, Math.ceil(desktop.length * 0.6)) && pathOf(c.href) !== "/").slice(0, 6);
+  if (home && nav.length) {
+    push({
+      version: 1,
+      id: "global-navigation",
+      name: "Reach each main section from the navigation",
+      goal: "find the main sections of the product",
+      start: pathOf(home.url),
+      steps: nav.flatMap((n) => [
+        { action: "click", target: { role: "link", name: n.text, exact: true } },
+        { action: "expect", url: pathOf(n.href).split("?")[0] },
+        { action: "goto", url: pathOf(home.url) }
+      ]),
+      success: [
+        { description: "No uncaught exceptions", noPageErrors: true },
+        { description: "No failed first-party requests", noFailedRequests: true }
+      ],
+      safety: { submitsForms: false },
+      source: "suggested",
+      tags: ["navigation"]
+    });
+  }
+  for (const p of desktop) for (const f of p.inventory.forms) push(formJourney(p, f));
+  const pricing = desktop.find((p) => /pric|plans/i.test(pathOf(p.url)));
+  const planCta = pricing?.inventory.ctas.find(
+    (c) => c.emphasis === "primary" && c.href && !c.href.startsWith("#")
+  );
+  if (pricing && planCta) {
+    push({
+      version: 1,
+      id: "pricing-to-signup",
+      name: `Choose a plan on ${pathOf(pricing.url)} ("${planCta.text}")`,
+      goal: "choose a plan and continue",
+      start: pathOf(pricing.url),
+      steps: [{ action: "click", target: { role: "link", name: planCta.text, exact: true } }],
+      success: [
+        { description: "Leaves the pricing page", urlNot: pathOf(pricing.url).split("?")[0] },
+        { description: "No uncaught exceptions", noPageErrors: true }
+      ],
+      safety: { submitsForms: false },
+      source: "suggested",
+      tags: ["conversion", "pricing"]
+    });
+  }
+  return out;
+}
+
+// src/repair/git.ts
+init_errors();
+init_fs_safety();
+import { spawnSync as spawnSync2 } from "node:child_process";
+import { existsSync as existsSync8, mkdirSync as mkdirSync5, readdirSync as readdirSync6, readFileSync as readFileSync8, writeFileSync as writeFileSync5 } from "node:fs";
+import { dirname as dirname6, join as join13 } from "node:path";
+
+// src/repair/transaction.ts
+init_errors();
+init_fs_safety();
+import { createHash as createHash2, randomBytes as randomBytes2 } from "node:crypto";
+import {
+  closeSync,
+  existsSync as existsSync7,
+  fsyncSync,
+  lstatSync,
+  mkdirSync as mkdirSync4,
+  openSync,
+  readdirSync as readdirSync5,
+  readFileSync as readFileSync7,
+  renameSync,
+  rmSync,
+  statSync as statSync4,
+  unlinkSync,
+  writeSync
+} from "node:fs";
+import { basename as basename2, dirname as dirname5, join as join12 } from "node:path";
+var sha256 = (b) => createHash2("sha256").update(b).digest("hex");
+var recordsDir = (wsRoot) => join12(wsRoot, "checkpoints");
+var txDir = (wsRoot, id) => join12(recordsDir(wsRoot), id);
+function atomicWrite(path2, data, mode) {
+  mkdirSync4(dirname5(path2), { recursive: true });
+  const tmp = join12(dirname5(path2), `.${basename2(path2)}.jourilo-${randomBytes2(4).toString("hex")}.tmp`);
+  const fd = openSync(tmp, "wx", mode ?? 420);
+  try {
+    let off = 0;
+    while (off < data.length) off += writeSync(fd, data, off, data.length - off);
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  for (let attempt = 0; ; attempt++) {
+    try {
+      renameSync(tmp, path2);
+      return;
+    } catch (err) {
+      if (attempt >= 5 || !["EPERM", "EBUSY", "EACCES"].includes(err.code ?? "")) {
+        rmSync(tmp, { force: true });
+        throw err;
+      }
+      const until = Date.now() + 50 * (attempt + 1);
+      while (Date.now() < until) ;
+    }
+  }
+}
+function saveRecord(wsRoot, tx) {
+  mkdirSync4(recordsDir(wsRoot), { recursive: true });
+  atomicWrite(join12(recordsDir(wsRoot), `${tx.id}.json`), Buffer.from(`${JSON.stringify(tx, null, 2)}
+`));
+}
+function writablePath(root, file) {
+  const abs = resolveInside(root, file);
+  const lexical = join12(root, file);
+  if (existsSync7(lexical) && lstatSync(lexical).isSymbolicLink())
+    throw new JouriloError(
+      "UNSAFE_PATH",
+      `${file} is a symbolic link; Jourilo does not write through links. Make this change by hand.`
+    );
+  return abs;
+}
+function readOrNull(path2) {
+  return existsSync7(path2) ? readFileSync7(path2) : null;
+}
+function applyTransaction(root, wsRoot, edits, opts = {}) {
+  const pending = activeTransactions(wsRoot).filter((t) => t.state === "pending");
+  if (pending.length)
+    throw new JouriloError(
+      "INVALID_INPUT",
+      `An earlier change (${pending[0].id}) was interrupted before it finished.`,
+      `Run \`jourilo rollback ${pending[0].id} --yes\` to restore those files first.`
+    );
+  const names = edits.map((e) => e.file);
+  const dup = names.find((n, i) => names.indexOf(n) !== i);
+  if (dup) throw new JouriloError("INTERNAL", `${dup} appears twice in one change; combine its edits first.`);
+  const prepared = edits.map((e) => {
+    const abs = writablePath(root, e.file);
+    const current = readOrNull(abs);
+    const same = e.before === null ? current === null : current?.equals(e.before);
+    if (!same)
+      throw new JouriloError(
+        "INVALID_INPUT",
+        `${e.file} changed after the fix was planned; nothing was written.`,
+        "Run the command again so the plan is computed from the current file."
+      );
+    return { ...e, abs, mode: current ? statSync4(abs).mode & 511 : null };
+  });
+  const tx = {
+    kind: "fix-transaction",
+    id: newRunId(),
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    root,
+    note: opts.note ?? "",
+    ...opts.undoes ? { undoes: opts.undoes } : {},
+    state: "pending",
+    files: prepared.map((p) => ({
+      file: p.file,
+      beforeSha: p.before ? sha256(p.before) : null,
+      afterSha: p.after ? sha256(p.after) : null,
+      mode: p.mode,
+      state: "pending"
+    }))
+  };
+  for (const p of prepared)
+    if (p.before) atomicWrite(resolveInside(join12(txDir(wsRoot, tx.id), "before"), p.file), p.before);
+  saveRecord(wsRoot, tx);
+  try {
+    prepared.forEach((p, i) => {
+      opts.beforeWrite?.(p.file, i);
+      if (p.after) atomicWrite(p.abs, p.after, p.mode);
+      else if (existsSync7(p.abs)) unlinkSync(p.abs);
+      tx.files[i].state = "written";
+      saveRecord(wsRoot, tx);
+    });
+  } catch (err) {
+    const undo = rollbackTransaction(wsRoot, tx, { force: false });
+    tx.state = "failed";
+    saveRecord(wsRoot, tx);
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new JouriloError(
+      "INTERNAL",
+      `Writing the changes failed (${msg}); ${undo.restored.length} file(s) already written were restored.${undo.conflicts.length ? ` Not restored: ${undo.conflicts.map((c) => c.file).join(", ")}.` : ""}`
+    );
+  }
+  tx.state = "applied";
+  saveRecord(wsRoot, tx);
+  return tx;
+}
+function rollbackTransaction(wsRoot, tx, opts = {}) {
+  const result = { restored: [], alreadyRestored: [], conflicts: [] };
+  const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
+  for (const f of tx.files) {
+    if (opts.files?.length && !opts.files.includes(f.file)) continue;
+    if (f.state === "restored") {
+      result.alreadyRestored.push(f.file);
+      continue;
+    }
+    const abs = writablePath(tx.root, f.file);
+    const current = readOrNull(abs);
+    const currentSha = current ? sha256(current) : null;
+    if (currentSha === f.beforeSha) {
+      f.state = "restored";
+      delete f.conflict;
+      result.alreadyRestored.push(f.file);
+      continue;
+    }
+    if (currentSha !== f.afterSha) {
+      const reason = current === null ? "deleted after the change was applied" : "modified after the change was applied (not by Jourilo)";
+      if (!opts.force) {
+        f.state = "conflict";
+        f.conflict = reason;
+        result.conflicts.push({ file: f.file, reason });
+        continue;
+      }
+      let savedCopy;
+      if (current) {
+        savedCopy = resolveInside(join12(txDir(wsRoot, tx.id), "conflicts", stamp), f.file);
+        atomicWrite(savedCopy, current);
+      }
+      result.conflicts.push({ file: f.file, reason, ...savedCopy ? { savedCopy } : {} });
+    }
+    if (f.beforeSha === null) {
+      if (existsSync7(abs)) unlinkSync(abs);
+    } else {
+      const backup = resolveInside(join12(txDir(wsRoot, tx.id), "before"), f.file);
+      if (!existsSync7(backup)) {
+        f.state = "conflict";
+        f.conflict = "backup missing";
+        result.conflicts.push({ file: f.file, reason: "backup missing; cannot restore" });
+        continue;
+      }
+      const bytes = readFileSync7(backup);
+      if (sha256(bytes) !== f.beforeSha) {
+        result.conflicts.push({ file: f.file, reason: "backup does not match its recorded hash" });
+        continue;
+      }
+      atomicWrite(abs, bytes, f.mode);
+    }
+    f.state = "restored";
+    delete f.conflict;
+    result.restored.push(f.file);
+  }
+  const allBack = tx.files.every((f) => f.state === "restored");
+  if (tx.state !== "pending" || allBack) tx.state = allBack ? "rolled-back" : "partially-rolled-back";
+  saveRecord(wsRoot, tx);
+  return result;
+}
+function isTransaction(x) {
+  return !!x && typeof x === "object" && x.kind === "fix-transaction";
+}
+function activeTransactions(wsRoot) {
+  const dir = recordsDir(wsRoot);
+  if (!existsSync7(dir)) return [];
+  const out = [];
+  for (const f of readdirSync5(dir).filter((n) => n.endsWith(".json")).sort()) {
+    try {
+      const rec = JSON.parse(readFileSync7(join12(dir, f), "utf8"));
+      if (isTransaction(rec) && ["pending", "applied", "partially-rolled-back"].includes(rec.state))
+        out.push(rec);
+    } catch {
+    }
+  }
+  return out;
+}
+function previewRollback(tx) {
+  return tx.files.map((f) => {
+    if (f.state === "restored") return { file: f.file, action: "unchanged" };
+    const abs = writablePath(tx.root, f.file);
+    const current = readOrNull(abs);
+    const sha = current ? sha256(current) : null;
+    if (sha === f.beforeSha) return { file: f.file, action: "unchanged" };
+    if (sha === f.afterSha) return { file: f.file, action: "restore" };
+    return {
+      file: f.file,
+      action: "conflict",
+      reason: current === null ? "deleted after the change" : "modified after the change"
+    };
+  });
+}
+
+// src/repair/git.ts
+function git(cwd, args) {
+  const r = spawnSync2("git", args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  return { ok: r.status === 0, out: (r.stdout ?? "").trim(), err: (r.stderr ?? "").trim() };
+}
+function isGitRepo(root) {
+  return git(root, ["rev-parse", "--is-inside-work-tree"]).out === "true";
+}
+function untrackedFiles(root) {
+  return git(root, ["ls-files", "--others", "--exclude-standard"]).out.split("\n").filter(Boolean);
+}
+function createCheckpoint(root, wsRoot, note = "") {
+  if (!isGitRepo(root))
+    throw new JouriloError(
+      "INVALID_INPUT",
+      `${root} is not a git repository; checkpoints need git.`,
+      "Run `git init` and commit, or keep your own backup before applying fixes."
+    );
+  const head = git(root, ["rev-parse", "HEAD"]);
+  if (!head.ok)
+    throw new JouriloError(
+      "INVALID_INPUT",
+      "The repository has no commits yet; commit once before using checkpoints."
+    );
+  const stash = git(root, ["stash", "create", `jourilo checkpoint ${note}`.trim()]);
+  const cp = {
+    id: newRunId(),
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    head: head.out,
+    snapshot: stash.out || head.out,
+    untracked: untrackedFiles(root),
+    note
+  };
+  git(root, ["update-ref", `refs/jourilo/checkpoints/${cp.id}`, cp.snapshot]);
+  const dir = join13(wsRoot, "checkpoints");
+  mkdirSync5(dir, { recursive: true });
+  writeFileSync5(join13(dir, `${cp.id}.json`), `${JSON.stringify(cp, null, 2)}
+`);
+  return cp;
+}
+function loadCheckpoint(wsRoot, id) {
+  const dir = join13(wsRoot, "checkpoints");
+  const read3 = (name) => JSON.parse(readFileSync8(join13(dir, `${name}.json`), "utf8"));
+  let pick2 = id;
+  if (id === "latest") {
+    const names = existsSync8(dir) ? readdirSync6(dir).filter((f) => f.endsWith(".json")).map((f) => f.replace(/\.json$/, "")).sort().reverse() : [];
+    pick2 = names.find((n) => {
+      try {
+        const rec = read3(n);
+        if (!isTransaction(rec)) return !rec.rolledBack;
+        return !rec.undoes && ["applied", "pending", "partially-rolled-back"].includes(rec.state);
+      } catch {
+        return false;
+      }
+    });
+  }
+  if (!pick2 || !/^[\w-]+$/.test(pick2) || !existsSync8(join13(dir, `${pick2}.json`)))
+    throw new JouriloError("NOT_FOUND", `Checkpoint not found: ${id}`);
+  return read3(pick2);
+}
+function diffSince(root, cp) {
+  const stat = git(root, ["diff", "--stat", cp.snapshot]).out;
+  const patch = git(root, ["diff", cp.snapshot]).out;
+  const newFiles = untrackedFiles(root).filter((f) => !cp.untracked.includes(f));
+  return { stat, patch, newFiles };
+}
+function backupDir(wsRoot, cp) {
+  return join13(wsRoot, "checkpoints", cp.id);
+}
+function blob(root, rev, file) {
+  const r = spawnSync2("git", ["cat-file", "blob", `${rev}:${file}`], {
+    cwd: root,
+    maxBuffer: 64 * 1024 * 1024
+  });
+  return r.status === 0 ? r.stdout : null;
+}
+function rollbackCheckpoint(root, cp, wsRoot, opts = {}) {
+  const changed = git(root, ["diff", "--name-only", "--no-renames", cp.snapshot]).out.split("\n").filter(Boolean).filter((f) => !opts.files?.length || opts.files.includes(f));
+  const edits = [];
+  const notRestorable = [];
+  for (const f of changed) {
+    const target = resolveInside(root, f);
+    const current = existsSync8(target) ? readFileSync8(target) : null;
+    const saved = resolveInside(backupDir(wsRoot, cp), f);
+    let wanted = existsSync8(saved) ? readFileSync8(saved) : null;
+    if (!wanted) {
+      const content = blob(root, cp.snapshot, f);
+      if (!content) {
+        notRestorable.push(f);
+        continue;
+      }
+      wanted = current?.includes("\r\n") && !content.includes("\r\n") ? Buffer.from(content.toString("utf8").replace(/\n/g, "\r\n"), "utf8") : content;
+    }
+    if (current?.equals(wanted)) continue;
+    edits.push({ file: f, before: current, after: wanted });
+  }
+  const transaction = edits.length ? applyTransaction(root, wsRoot, edits, { note: `rollback to checkpoint ${cp.id}`, undoes: cp.id }) : null;
+  return {
+    transaction,
+    restored: edits.map((e) => e.file),
+    // Files that did not exist at checkpoint time are listed, never deleted.
+    leftUntracked: [
+      ...notRestorable,
+      ...untrackedFiles(root).filter((f) => !cp.untracked.includes(f) && !notRestorable.includes(f))
+    ]
+  };
+}
+function markRolledBack(wsRoot, cp, transactionId) {
+  const file = join13(wsRoot, "checkpoints", `${cp.id}.json`);
+  writeFileSync5(file, `${JSON.stringify({ ...cp, rolledBack: transactionId }, null, 2)}
+`);
+}
+function wouldBeCommitted(file) {
+  let dir = dirname6(file);
+  while (!existsSync8(dir) && dirname6(dir) !== dir) dir = dirname6(dir);
+  if (!isGitRepo(dir)) return false;
+  const r = spawnSync2("git", ["check-ignore", "-q", "--no-index", file], { cwd: dir });
+  return r.status === 1;
+}
+
+// src/cli/commands/journeys.ts
+function journeysDir(ws) {
+  return join14(ws.root, "journeys");
+}
+function loadJourneys(ws, refs) {
+  const dir = journeysDir(ws);
+  const files = [];
+  if (!refs.length) {
+    if (!existsSync9(dir)) return [];
+    files.push(
+      ...readdirSync7(dir).filter((f) => f.endsWith(".json")).sort().map((f) => join14(dir, f))
+    );
+  } else {
+    for (const r of refs) {
+      if (r.endsWith(".json") && existsSync9(r)) files.push(resolve5(r));
+      else if (existsSync9(join14(dir, `${r}.json`))) files.push(join14(dir, `${r}.json`));
+      else throw new JouriloError("NOT_FOUND", `Journey not found: ${r} (looked in ${dir})`);
+    }
+  }
+  return files.map((f) => {
+    let raw;
+    try {
+      raw = JSON.parse(readFileSync9(f, "utf8"));
+    } catch (err) {
+      throw new JouriloError("INVALID_INPUT", `${basename3(f)} is not valid JSON: ${err.message}`);
+    }
+    return validateJourney(raw, basename3(f));
+  });
+}
+function parseVars(ctx) {
+  const out = {};
+  for (const [k, v] of Object.entries(process.env))
+    if (k.startsWith("JOURILO_VAR_") && v) out[k.slice(12).toLowerCase()] = v;
+  for (const kv of list(ctx, "var")) {
+    const i = kv.indexOf("=");
+    if (i < 1) throw new JouriloError("USAGE", `--var must be key=value (got ${kv})`);
+    out[kv.slice(0, i)] = kv.slice(i + 1);
+  }
+  return out;
+}
+async function suggest(ctx) {
+  const target = ctx.positionals[1];
+  let run;
+  if (!target || ctx.ws.listRuns().some((r) => r.id === target) || target === "latest") {
+    run = ctx.ws.loadRun(target ?? "latest").run;
+  } else {
+    const isDir = existsSync9(target) && !target.includes("://");
+    const server = isDir ? await serveStatic(resolve5(target)) : void 0;
+    try {
+      ctx.log("Discovering pages to derive journeys (no audit rules applied) \u2026");
+      run = (await runAudit(ctx.ws, {
+        target: server?.url ?? target,
+        viewports: parseViewports("desktop"),
+        maxPages: num(ctx, "pages", 8),
+        maxDepth: 3,
+        browser: "chromium",
+        headed: false,
+        respectRobots: true,
+        allowPrivate: flag(ctx, "allow-private"),
+        keyboard: false,
+        throttle: false,
+        timeoutMs: 3e4,
+        mask: [],
+        forms: false,
+        mode: isDir ? "repository" : "website",
+        onProgress: ctx.log
+      })).run;
+    } finally {
+      await server?.close();
+    }
+  }
+  const specs = suggestJourneys(run);
+  const dir = journeysDir(ctx.ws);
+  mkdirSync6(dir, { recursive: true });
+  const written = [];
+  const kept = [];
+  for (const s of specs) {
+    const file = join14(dir, `${s.id}.json`);
+    if (existsSync9(file) && !flag(ctx, "force")) {
+      kept.push(s.id);
+      continue;
+    }
+    writeFileSync6(file, `${JSON.stringify(s, null, 2)}
+`);
+    written.push(file);
+  }
+  return {
+    data: { journeys: specs, written, kept, dir },
+    text: [
+      `Suggested ${specs.length} journey(s) from run ${run.id} \u2192 ${dir}`,
+      ...specs.map(
+        (s) => `  ${s.id.padEnd(32)} ${s.name}${s.safety?.submitsForms ? "  [submits forms]" : ""}${s.safety?.destructive ? "  [destructive]" : ""}`
+      ),
+      kept.length ? `  (kept ${kept.length} existing file(s); --force to overwrite)` : "",
+      "Review and edit them, then: jourilo journeys run --base <url>"
+    ].filter(Boolean).join("\n")
+  };
+}
+function summarizeAttempts(spec, attempts) {
+  if (attempts.length === 1) return attempts[0];
+  const passed = attempts.filter((a) => a.result.status === "passed").length;
+  const rep = attempts.find((a) => a.result.status !== "passed") ?? attempts[0];
+  const result = {
+    ...rep.result,
+    attempts: attempts.map((a) => ({ status: a.result.status, durationMs: a.result.durationMs })),
+    stability: passed === 0 || passed === attempts.length ? "stable" : "flaky"
+  };
+  if (result.stability === "stable") return { result, findings: rep.findings };
+  const findings = [
+    ...rep.findings.map((f) => ({ ...f, confidence: "low" })),
+    makeFinding({
+      ruleId: "journey/flaky",
+      key: spec.id,
+      journey: spec.id,
+      title: `Journey "${spec.name}" passed ${passed} of ${attempts.length} times`,
+      category: "reliability",
+      kind: "needs-review",
+      severity: "moderate",
+      confidence: "high",
+      provenance: "observed",
+      url: rep.result.steps.at(-1)?.url || spec.start,
+      viewport: rep.result.viewport,
+      description: `The same steps gave different outcomes across ${attempts.length} runs (${attempts.map((a) => a.result.status).join(", ")}). Either the product behaves inconsistently (race conditions, timing, data dependence) or the journey depends on timing; the failing run's evidence is attached to the journey.`,
+      impact: "Intermittent failures reach real users and make before/after comparisons unreliable.",
+      recommendation: "Compare the failing attempt with a passing one: look for requests that finish in a different order, elements that render late, or data created by an earlier run. Fix the product if it is a race; otherwise make the journey wait for the right state.",
+      standards: [],
+      evidence: [{ type: "step", snippet: rep.result.steps.find((s) => s.status !== "passed")?.error ?? "" }],
+      reproduction: [
+        `Run the journey ${attempts.length} times: jourilo journeys run ${spec.id} --repeat ${attempts.length}`
+      ]
+    })
+  ];
+  return { result, findings };
+}
+async function runCmd(ctx) {
+  const baseArg = str(ctx, "base");
+  if (!baseArg)
+    throw new JouriloError("USAGE", "--base <url|dir> is required (the site to run journeys against).");
+  const specs = loadJourneys(ctx.ws, ctx.positionals.slice(1));
+  if (!specs.length)
+    throw new JouriloError(
+      "NOT_FOUND",
+      "No journeys to run.",
+      "Create some with `jourilo journeys suggest <url>`."
+    );
+  const state = parseStateOptions(ctx);
+  const isDir = existsSync9(baseArg) && !baseArg.includes("://");
+  const server = isDir ? await serveStatic(resolve5(baseArg)) : void 0;
+  try {
+    const base2 = parseTargetUrl(server?.url ?? baseArg);
+    const hostClass = await checkTarget(base2, { allowPrivate: flag(ctx, "allow-private") });
+    const id = newRunId();
+    const runDir = ctx.ws.createRunDir(id);
+    const browserName = str(ctx, "browser") ?? "chromium";
+    const session = await openGuardedBrowser(browserName, flag(ctx, "headed"), {
+      target: hostClass,
+      allowPrivate: flag(ctx, "allow-private")
+    });
+    const browser = session.browser;
+    const browserVersion = browser.version();
+    const startedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const journeys2 = [];
+    let findings = [];
+    const limitations = [];
+    const data = testData(id, parseVars(ctx));
+    const policy = {
+      hostClass,
+      allowSubmit: flag(ctx, "allow-submit"),
+      allowDestructive: flag(ctx, "allow-destructive")
+    };
+    if (policy.allowDestructive && hostClass !== "local")
+      limitations.push(
+        "--allow-destructive is ignored on non-local hosts: irreversible and payment actions were blocked."
+      );
+    const allowOrigins = list(ctx, "allow-origin").map((o) => {
+      const u = parseTargetUrl(o);
+      return u.origin;
+    });
+    const repeat = Math.max(1, Math.min(10, num(ctx, "repeat", 1)));
+    const saveAuthArg = str(ctx, "save-auth");
+    if (saveAuthArg && repeat > 1)
+      throw new JouriloError("USAGE", "--save-auth cannot be combined with --repeat.");
+    if (saveAuthArg && specs.length !== 1)
+      throw new JouriloError("USAGE", "--save-auth needs exactly one journey (the sign-in journey).");
+    const saveAuth = saveAuthArg ? resolve5(saveAuthArg) : void 0;
+    if (saveAuth) {
+      limitations.push(
+        `Signed-in state saved to ${displayPath(saveAuth)} (owner-only permissions). Treat it like a password; it is a test-account session.`
+      );
+      if (wouldBeCommitted(saveAuth)) {
+        const warning = `WARNING: ${displayPath(saveAuth)} is inside a git repository and not ignored, so it could be committed with its session cookies. Add it to .gitignore or save it under .jourilo/.`;
+        limitations.push(warning);
+        ctx.log(warning);
+      }
+    }
+    if (flag(ctx, "trace")) {
+      mkdirSync6(join14(runDir, "traces"), { recursive: true });
+      limitations.push(
+        "Playwright traces contain DOM snapshots and typed values: keep them private (they are excluded from git)."
+      );
+    }
+    try {
+      const viewports = str(ctx, "viewport") ? list(ctx, "viewport") : [void 0];
+      for (const spec of specs) {
+        for (const vp of viewports) {
+          ctx.log(`journey ${spec.id}${vp ? ` (${vp})` : ""}`);
+          const attempts = [];
+          for (let k = 0; k < repeat; k++) {
+            const r = await runJourney(browser, spec, {
+              base: base2,
+              runDir,
+              hostClass,
+              policy,
+              data: repeat > 1 ? testData(`${id}${k}`, parseVars(ctx)) : data,
+              trace: flag(ctx, "trace") && k === 0,
+              stepTimeoutMs: num(ctx, "timeout", 10) * 1e3,
+              ...vp ? { viewportOverride: vp } : {},
+              ...str(ctx, "auth") ? { storageState: str(ctx, "auth") } : {},
+              ...state,
+              ...saveAuth ? { saveAuth } : {},
+              ...allowOrigins.length ? { allowOrigins } : {},
+              log: k === 0 ? ctx.log : void 0
+            });
+            if (repeat > 1) ctx.log(`  attempt ${k + 1}/${repeat}: ${r.result.status}`);
+            attempts.push(r);
+          }
+          const { result, findings: jf } = summarizeAttempts(spec, attempts);
+          ctx.log(
+            `  \u2192 ${result.status}${result.stability ? ` (${result.stability})` : ""} (${(result.durationMs / 1e3).toFixed(1)} s)`
+          );
+          journeys2.push(result);
+          findings.push(...jf);
+        }
+      }
+    } finally {
+      await session.close();
+    }
+    const network = session.report();
+    limitations.push(...networkLimitations(network));
+    findings = mergeFindings(findings);
+    const run = {
+      schemaVersion: RUN_SCHEMA_VERSION,
+      id,
+      tool: { name: "jourilo", version: VERSION },
+      mode: isDir || str(ctx, "repo") ? "repository" : "website",
+      target: server ? `${displayPath(resolve5(baseArg))} (served at ${server.url})` : base2.toString(),
+      startedAt,
+      finishedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      browser: { name: browserName, version: browserVersion },
+      viewports: parseViewports([...new Set(journeys2.map((j) => j.viewport))].join(",") || "desktop"),
+      settings: {
+        journeys: specs.map((s) => s.id),
+        allowSubmit: policy.allowSubmit,
+        allowDestructive: policy.allowDestructive,
+        hostClass,
+        ...state
+      },
+      pages: [],
+      journeys: journeys2,
+      findings,
+      summary: summarize(findings, 0, journeys2.length),
+      limitations: [
+        ...limitations,
+        "Journeys prove that a scripted path works (or not) in one browser; they do not measure how real people choose paths."
+      ],
+      ...network.blocked.length || network.escaped.length ? { network } : {}
+    };
+    const repo = str(ctx, "repo") ?? (isDir ? resolve5(baseArg) : void 0);
+    if (repo) locateFindings(run, repo);
+    ctx.ws.saveRun(run);
+    const reports = writeReports(runDir, run, void 0, { history: ctx.ws.listRuns() });
+    const failed = journeys2.filter((j) => j.status === "failed").length;
+    return {
+      data: { runId: id, runDir, reports, journeys: journeys2, findings },
+      text: [
+        "",
+        ...journeys2.map(
+          (j) => `  ${j.status === "passed" ? "\u2713" : j.status === "blocked" ? "\u26D4" : "\u2717"} ${j.name} [${j.viewport}] ${j.status}${j.status !== "passed" ? ` \u2014 ${j.steps.find((s) => s.status === "failed" || s.status === "blocked")?.error ?? j.successCriteria.filter((c) => !c.met).map((c) => `${c.description}: ${c.detail ?? ""}`).join("; ")}` : ""}`
+        ),
+        "",
+        `  Report: ${reports.html}`,
+        `  Run id: ${id}`
+      ].join("\n"),
+      exitCode: failed && flag(ctx, "fail-on-failure") ? 1 : 0
+    };
+  } finally {
+    await server?.close();
+  }
+}
+var journeys = {
+  name: "journeys",
+  summary: "Discover, list, validate and run user journeys (reusable scenarios with explicit success criteria).",
+  usage: "jourilo journeys <suggest [url|dir|run]|list|validate [files]|run [ids] --base <url|dir>>",
+  options: {
+    base: { type: "string" },
+    viewport: { type: "string" },
+    var: { type: "string", multiple: true },
+    trace: { type: "boolean" },
+    "allow-submit": { type: "boolean" },
+    "allow-destructive": { type: "boolean" },
+    "allow-private": { type: "boolean" },
+    "allow-origin": { type: "string", multiple: true },
+    "fail-on-failure": { type: "boolean" },
+    browser: { type: "string" },
+    headed: { type: "boolean" },
+    auth: { type: "string" },
+    repo: { type: "string" },
+    timeout: { type: "string" },
+    pages: { type: "string" },
+    force: { type: "boolean" },
+    "save-auth": { type: "string" },
+    repeat: { type: "string" },
+    timezone: { type: "string" },
+    clock: { type: "string" }
+  },
+  details: `Subcommands:
+  suggest [url|dir|run]  Derive journeys from a site (or an existing run) into .jourilo/journeys/*.json
+  list                   List journey files
+  validate [files]       Check journey files against the schema
+  run [ids|files]        Run journeys against --base <url|dir>
+
+Run options:
+  --viewport LIST        desktop, mobile, \u2026 (default: the journey's own viewport or desktop)
+  --var key=value        Test data for {{key}} placeholders (also JOURILO_VAR_KEY env vars)
+  --allow-submit         Allow form submission on non-local hosts (authorized test environments only)
+  --allow-destructive    Allow irreversible/payment actions \u2014 local hosts with sandbox data only
+  --allow-origin ORIGIN  Let the page navigate to another origin you are authorized to test (e.g. a test IdP)
+  --trace                Record a Playwright trace per journey (contains typed values; keep private)
+  --auth FILE            Playwright storage state for signed-in journeys
+  --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
+  --timezone ZONE        IANA time zone for the page (e.g. Europe/Istanbul)
+  --clock ISO            Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
+  --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
+  --fail-on-failure      Exit 1 when a journey fails
+
+Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission
+on non-local hosts needs --allow-submit. The policy is checked twice: on the element about to be clicked or
+pressed (its name, link target, form action and identifiers \u2014 icon-only buttons included), and on every request
+the page then sends (form posts, DELETE, requests to delete/cancel/payment endpoints, navigation to other
+origins). Blocked steps are reported, not skipped silently.`,
+  async run(ctx) {
+    const sub = ctx.positionals[0] ?? "list";
+    if (sub === "suggest") return suggest(ctx);
+    if (sub === "run") return runCmd(ctx);
+    if (sub === "list" || sub === "validate") {
+      const specs = loadJourneys(ctx.ws, ctx.positionals.slice(1));
+      return {
+        data: specs,
+        text: specs.length ? `${specs.length} valid journey(s):
+${specs.map((s) => `  ${s.id.padEnd(32)} ${s.steps.length} steps, ${s.success.length} criteria  ${s.name}`).join("\n")}` : `No journeys in ${journeysDir(ctx.ws)}. Create some with \`jourilo journeys suggest <url>\`.`
+      };
+    }
+    throw new JouriloError("USAGE", `Unknown subcommand "${sub}".`, `Usage: ${journeys.usage}`);
+  }
+};
 
 // src/cli/commands/audit.ts
 var AUDIT_OPTIONS = {
@@ -46997,6 +48487,7 @@ var AUDIT_OPTIONS = {
   locale: { type: "string" },
   timezone: { type: "string" },
   clock: { type: "string" },
+  "setup-journey": { type: "string" },
   timeout: { type: "string" },
   repo: { type: "string" },
   sarif: { type: "boolean" },
@@ -47018,10 +48509,12 @@ async function auditCommand(ctx, usage2, categories) {
     throw new JouriloError("USAGE", `--fail-on must be one of ${SEVERITIES.join(", ")}.`);
   const state = parseStateOptions(ctx);
   const auth = str(ctx, "auth");
-  if (auth && !existsSync7(auth)) throw new JouriloError("NOT_FOUND", `Auth state file not found: ${auth}`);
-  const isDir = !/^[a-z]+:\/\//i.test(targetArg) && existsSync7(targetArg) && statSync4(targetArg).isDirectory();
-  const server = isDir ? await serveStatic(resolve5(targetArg)) : void 0;
-  const repo = str(ctx, "repo") ?? (isDir ? resolve5(targetArg) : void 0);
+  if (auth && !existsSync10(auth)) throw new JouriloError("NOT_FOUND", `Auth state file not found: ${auth}`);
+  const setupRef = str(ctx, "setup-journey");
+  const setupJourney = setupRef ? loadJourneys(ctx.ws, [setupRef])[0] : void 0;
+  const isDir = !/^[a-z]+:\/\//i.test(targetArg) && existsSync10(targetArg) && statSync5(targetArg).isDirectory();
+  const server = isDir ? await serveStatic(resolve6(targetArg)) : void 0;
+  const repo = str(ctx, "repo") ?? (isDir ? resolve6(targetArg) : void 0);
   try {
     const opts = {
       target: server ? server.url : targetArg,
@@ -47042,6 +48535,7 @@ async function auditCommand(ctx, usage2, categories) {
       ...auth ? { storageState: auth } : {},
       ...str(ctx, "locale") ? { locale: str(ctx, "locale") } : {},
       ...state,
+      ...setupJourney ? { setupJourney } : {},
       ...categories ? { categories } : {},
       context: loadContext(repo ?? process.cwd(), str(ctx, "brand") ? { brand: str(ctx, "brand") } : {}),
       mode: repo ? "repository" : "website",
@@ -47056,8 +48550,8 @@ async function auditCommand(ctx, usage2, categories) {
     }
     const { run, runDir } = await runAudit(ctx.ws, opts);
     if (server) {
-      run.target = `${displayPath(resolve5(targetArg))} (served at ${server.url})`;
-      run.settings.servedDir = resolve5(targetArg);
+      run.target = `${displayPath(resolve6(targetArg))} (served at ${server.url})`;
+      run.settings.servedDir = resolve6(targetArg);
     }
     if (repo) run.settings.repo = repo;
     if (repo) {
@@ -47131,6 +48625,8 @@ var audit = {
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
   --timezone ZONE      IANA time zone for every page (e.g. Europe/Istanbul)
   --clock ISO          Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
+  --setup-journey REF  Run this journey first (an id or a .json file) and audit the state it leaves, e.g. a chosen theme or
+                       a dismissed banner; it follows the journeys safety policy and starts from --auth
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
   --repo PATH          Map findings to likely source files in this repository (and read its brand/search context)
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
@@ -47161,12 +48657,12 @@ var conversion = {
 };
 
 // src/cli/commands/bench.ts
-import { existsSync as existsSync8, readdirSync as readdirSync5, readFileSync as readFileSync7, writeFileSync as writeFileSync5 } from "node:fs";
-import { join as join10, resolve as resolve6 } from "node:path";
+import { existsSync as existsSync11, readdirSync as readdirSync8, readFileSync as readFileSync10, writeFileSync as writeFileSync7 } from "node:fs";
+import { join as join15, resolve as resolve7 } from "node:path";
 init_errors();
 var matches = (f, e) => f.ruleId === e.rule && (!e.kind || f.kind === e.kind) && pathOf(f.url).split("?")[0].replace(/\/$/, "") === e.path.replace(/\/$/, "") && (!e.viewport || (f.viewport ?? "").split(", ").includes(e.viewport));
 async function benchFixture(dir, wsRoot) {
-  const expected = JSON.parse(readFileSync7(join10(dir, "expected.json"), "utf8"));
+  const expected = JSON.parse(readFileSync10(join15(dir, "expected.json"), "utf8"));
   const server = await serveStatic(dir);
   const t0 = Date.now();
   try {
@@ -47234,15 +48730,15 @@ var bench = {
   usage: "jourilo bench [fixtures-dir=fixtures/sites] [--only name] [--record docs/evaluation/bench-history.jsonl]",
   options: { only: { type: "string" }, record: { type: "string" } },
   async run(ctx) {
-    const root = resolve6(ctx.positionals[0] ?? "fixtures/sites");
-    if (!existsSync8(root)) throw new JouriloError("NOT_FOUND", `No fixtures at ${root}`);
+    const root = resolve7(ctx.positionals[0] ?? "fixtures/sites");
+    if (!existsSync11(root)) throw new JouriloError("NOT_FOUND", `No fixtures at ${root}`);
     const only = str(ctx, "only");
-    const dirs = readdirSync5(root).filter((d) => existsSync8(join10(root, d, "expected.json"))).filter((d) => !only || d === only);
+    const dirs = readdirSync8(root).filter((d) => existsSync11(join15(root, d, "expected.json"))).filter((d) => !only || d === only);
     if (!dirs.length) throw new JouriloError("NOT_FOUND", `No fixtures with expected.json in ${root}`);
     const results = [];
     for (const d of dirs) {
       ctx.log(`bench: ${d}`);
-      results.push(await benchFixture(join10(root, d), join10(ctx.ws.root, "bench")));
+      results.push(await benchFixture(join15(root, d), join15(ctx.ws.root, "bench")));
     }
     const found = results.reduce((a, r) => a + r.found, 0);
     const expected = results.reduce((a, r) => a + r.expected, 0);
@@ -47261,8 +48757,8 @@ var bench = {
     };
     const record = str(ctx, "record");
     if (record) {
-      const prev = existsSync8(record) ? readFileSync7(record, "utf8") : "";
-      writeFileSync5(
+      const prev = existsSync11(record) ? readFileSync10(record, "utf8") : "";
+      writeFileSync7(
         record,
         `${prev}${JSON.stringify({ ...summary, fixtures: results.map((r) => ({ fixture: r.fixture, found: r.found, expected: r.expected, fp: r.falsePositives.length + r.excessDefects.length, seconds: r.seconds })) })}
 `
@@ -47292,21 +48788,21 @@ var bench = {
 };
 
 // src/cli/commands/discover.ts
-import { existsSync as existsSync11, statSync as statSync7, writeFileSync as writeFileSync6 } from "node:fs";
-import { join as join13, resolve as resolve7 } from "node:path";
+import { existsSync as existsSync14, statSync as statSync8, writeFileSync as writeFileSync8 } from "node:fs";
+import { join as join18, resolve as resolve8 } from "node:path";
 
 // src/discovery/repo.ts
 init_fs_safety();
-import { existsSync as existsSync10, readdirSync as readdirSync7, readFileSync as readFileSync9, statSync as statSync6 } from "node:fs";
-import { basename as basename3, dirname as dirname6, join as join12, relative as relative5 } from "node:path";
+import { existsSync as existsSync13, readdirSync as readdirSync10, readFileSync as readFileSync12, statSync as statSync7 } from "node:fs";
+import { basename as basename5, dirname as dirname8, join as join17, relative as relative5 } from "node:path";
 
 // src/discovery/laravel.ts
 init_fs_safety();
-import { existsSync as existsSync9, readdirSync as readdirSync6, readFileSync as readFileSync8, statSync as statSync5 } from "node:fs";
-import { basename as basename2, dirname as dirname5, join as join11, relative as relative4 } from "node:path";
+import { existsSync as existsSync12, readdirSync as readdirSync9, readFileSync as readFileSync11, statSync as statSync6 } from "node:fs";
+import { basename as basename4, dirname as dirname7, join as join16, relative as relative4 } from "node:path";
 function read(file) {
   try {
-    return statSync5(file).size > 4e5 ? "" : readFileSync8(file, "utf8");
+    return statSync6(file).size > 4e5 ? "" : readFileSync11(file, "utf8");
   } catch {
     return "";
   }
@@ -47335,13 +48831,13 @@ function middlewares(chain) {
 function entryFiles(appRoot) {
   const out = /* @__PURE__ */ new Set();
   const add = (rel) => {
-    const abs = join11(appRoot, rel);
-    if (existsSync9(abs)) out.add(toPosix(relative4(appRoot, abs)));
+    const abs = join16(appRoot, rel);
+    if (existsSync12(abs)) out.add(toPosix(relative4(appRoot, abs)));
   };
   add("routes/web.php");
   for (const f of ["bootstrap/app.php", "app/Providers/RouteServiceProvider.php"]) {
-    const t = read(join11(appRoot, f));
-    for (const m of t.matchAll(/web\s*:\s*__DIR__\s*\.\s*['"]([^'"]+)['"]/g)) add(join11(dirname5(f), m[1]));
+    const t = read(join16(appRoot, f));
+    for (const m of t.matchAll(/web\s*:\s*__DIR__\s*\.\s*['"]([^'"]+)['"]/g)) add(join16(dirname7(f), m[1]));
     for (const m of t.matchAll(/base_path\(\s*['"](routes\/[^'"]+\.php)['"]\s*\)/g))
       if (!/routes\/(api|console|channels)\.php$/.test(m[1])) add(m[1]);
   }
@@ -47350,7 +48846,7 @@ function entryFiles(appRoot) {
 function scanFile(appRoot, rel, inherited, routes, seen) {
   if (seen.has(rel)) return;
   seen.add(rel);
-  const text = stripComments(read(join11(appRoot, rel)));
+  const text = stripComments(read(join16(appRoot, rel)));
   if (!text) return;
   const stack = [{ prefix: inherited.prefix, auth: inherited.auth, depth: -1 }];
   let depth = 0;
@@ -47393,7 +48889,7 @@ function scanFile(appRoot, rel, inherited, routes, seen) {
       );
       const g = groupOf(chain);
       if (included) {
-        const target = included[1] ? join11(dirname5(rel), included[1]) : included[2];
+        const target = included[1] ? join16(dirname7(rel), included[1]) : included[2];
         scanFile(appRoot, toPosix(target), g, routes, seen);
       } else if (/^group\(\s*(?:static\s+)?function/.test(rest)) pendingGroup = g;
     }
@@ -47410,7 +48906,7 @@ function scanFile(appRoot, rel, inherited, routes, seen) {
   function handleStatement(stmt) {
     const req = stmt.match(/^\s*(?:require|include)(?:_once)?\s*\(?\s*__DIR__\s*\.\s*['"]([^'"]+\.php)['"]/);
     if (req) {
-      scanFile(appRoot, toPosix(join11(dirname5(rel), req[1])), top(), routes, seen);
+      scanFile(appRoot, toPosix(join16(dirname7(rel), req[1])), top(), routes, seen);
       return;
     }
     const m = stmt.match(
@@ -47435,22 +48931,22 @@ function plural(word) {
   return `${word}s`;
 }
 function phpFiles(dir, depth) {
-  if (!existsSync9(dir)) return [];
+  if (!existsSync12(dir)) return [];
   const out = [];
-  for (const e of readdirSync6(dir, { withFileTypes: true })) {
-    const full = join11(dir, e.name);
+  for (const e of readdirSync9(dir, { withFileTypes: true })) {
+    const full = join16(dir, e.name);
     if (e.isDirectory() && depth > 1) out.push(...phpFiles(full, depth - 1));
     else if (e.isFile() && e.name.endsWith(".php")) out.push(full);
   }
   return out.sort();
 }
 function filamentPanels(appRoot, routes) {
-  const dir = join11(appRoot, "app/Providers/Filament");
-  const files = existsSync9(dir) ? readdirSync6(dir).filter((f) => f.endsWith("PanelProvider.php")) : [];
+  const dir = join16(appRoot, "app/Providers/Filament");
+  const files = existsSync12(dir) ? readdirSync9(dir).filter((f) => f.endsWith("PanelProvider.php")) : [];
   const panels = [];
   for (const f of files) {
     const rel = `app/Providers/Filament/${f}`;
-    const t = stripComments(read(join11(appRoot, rel)));
+    const t = stripComments(read(join16(appRoot, rel)));
     const id = t.match(/->id\(\s*['"]([^'"]+)['"]/)?.[1] ?? kebab(f.replace(/PanelProvider\.php$/, ""));
     const pathArg = t.match(/->path\(([^)]*\)?)\)/)?.[1];
     const path2 = joinPath("", (pathArg !== void 0 ? argValue(pathArg) : null) ?? id);
@@ -47464,10 +48960,10 @@ function filamentPanels(appRoot, routes) {
       ["app/Filament/Resources", true],
       ["app/Filament/Pages", false]
     ]) {
-      for (const file of phpFiles(join11(appRoot, sub), 2)) {
-        const name = basename2(file, ".php");
+      for (const file of phpFiles(join16(appRoot, sub), 2)) {
+        const name = basename4(file, ".php");
         if (isResource ? !name.endsWith("Resource") : name === "Dashboard") continue;
-        const relFile = toPosix(join11(sub, relative4(join11(appRoot, sub), file)));
+        const relFile = toPosix(join16(sub, relative4(join16(appRoot, sub), file)));
         if (!isResource && /\/(Concerns|Widgets)\//.test(relFile)) continue;
         const own = read(file).match(/static\s+(?:\?string\s+)?\$slug\s*=\s*['"]([^'"]+)['"]/)?.[1];
         const slug3 = own ?? (isResource ? plural(kebab(name.replace(/Resource$/, ""))) : kebab(name));
@@ -47501,14 +48997,14 @@ function laravelProfile(appRoot) {
   const routes = [];
   const seen = /* @__PURE__ */ new Set();
   for (const f of entryFiles(appRoot)) scanFile(appRoot, f, { prefix: "", auth: [] }, routes, seen);
-  const routesDir = join11(appRoot, "routes");
-  if (existsSync9(routesDir)) {
-    for (const f of readdirSync6(routesDir))
+  const routesDir = join16(appRoot, "routes");
+  if (existsSync12(routesDir)) {
+    for (const f of readdirSync9(routesDir))
       if (f.endsWith(".php") && !/^(api|console|channels)\.php$/.test(f))
         scanFile(appRoot, `routes/${f}`, { prefix: "", auth: [] }, routes, seen);
   }
   const panels = filamentPanels(appRoot, routes);
-  const authConfig = stripComments(read(join11(appRoot, "config/auth.php")));
+  const authConfig = stripComments(read(join16(appRoot, "config/auth.php")));
   const guards = topLevelKeys(authConfig, "guards");
   const unique = /* @__PURE__ */ new Map();
   for (const r of routes) if (!unique.has(r.path)) unique.set(r.path, r);
@@ -47540,16 +49036,16 @@ function walk(root, max = 2e4) {
     if (out.length >= max || depth > 14) return;
     let entries;
     try {
-      entries = readdirSync7(dir);
+      entries = readdirSync10(dir);
     } catch {
       return;
     }
     for (const n of entries) {
       if (SKIP.has(n) || n.startsWith(".") && n !== ".github") continue;
-      const full = join12(dir, n);
+      const full = join17(dir, n);
       let st;
       try {
-        st = statSync6(full);
+        st = statSync7(full);
       } catch {
         continue;
       }
@@ -47562,16 +49058,16 @@ function walk(root, max = 2e4) {
 }
 function readJson2(file) {
   try {
-    return JSON.parse(readFileSync9(file, "utf8"));
+    return JSON.parse(readFileSync12(file, "utf8"));
   } catch {
     return null;
   }
 }
 function read2(file, max = 4e5) {
   try {
-    const st = statSync6(file);
+    const st = statSync7(file);
     if (st.size > max) return "";
-    return readFileSync9(file, "utf8");
+    return readFileSync12(file, "utf8");
   } catch {
     return "";
   }
@@ -47679,7 +49175,7 @@ function fileRoutes(appRoot, files, frameworks) {
     [
       "Next.js",
       /^(?:src\/)?pages\/(.+)\.(tsx|jsx|ts|js|mdx|md)$/,
-      (m) => /^_(app|document|error)/.test(basename3(m[1])) ? null : { segs: m[1].split("/"), kind: m[1].startsWith("api/") ? "api" : "page" }
+      (m) => /^_(app|document|error)/.test(basename5(m[1])) ? null : { segs: m[1].split("/"), kind: m[1].startsWith("api/") ? "api" : "page" }
     ],
     ["Nuxt", /^(?:app\/)?pages\/(.+)\.vue$/, (m) => ({ segs: m[1].split("/"), kind: "page" })],
     [
@@ -47737,7 +49233,7 @@ function fileRoutes(appRoot, files, frameworks) {
   for (const f of files) {
     for (const [fileRe, re, label] of codeRoute) {
       if (!fileRe.test(f)) continue;
-      const text = read2(join12(appRoot, f));
+      const text = read2(join17(appRoot, f));
       if (!text) continue;
       for (const m of text.matchAll(re)) {
         const raw = m[1].trim();
@@ -47772,7 +49268,7 @@ function devCommand(appRoot, pkg, frameworks, rel) {
   };
   const def = frameworks.map((f) => defaults[f]).find(Boolean) ?? null;
   if (script) {
-    const lock = existsSync10(join12(appRoot, "pnpm-lock.yaml")) ? "pnpm" : existsSync10(join12(appRoot, "yarn.lock")) ? "yarn" : existsSync10(join12(appRoot, "bun.lockb")) || existsSync10(join12(appRoot, "bun.lock")) ? "bun" : "npm";
+    const lock = existsSync13(join17(appRoot, "pnpm-lock.yaml")) ? "pnpm" : existsSync13(join17(appRoot, "yarn.lock")) ? "yarn" : existsSync13(join17(appRoot, "bun.lockb")) || existsSync13(join17(appRoot, "bun.lock")) ? "bun" : "npm";
     return {
       command: lock,
       args: ["run", script],
@@ -47780,9 +49276,9 @@ function devCommand(appRoot, pkg, frameworks, rel) {
       source: `${rel || "."}/package.json`
     };
   }
-  if (existsSync10(join12(appRoot, "artisan")))
+  if (existsSync13(join17(appRoot, "artisan")))
     return { command: "php", args: ["artisan", "serve"], port: 8e3, source: `${rel || "."}/artisan` };
-  if (existsSync10(join12(appRoot, "pubspec.yaml")) && existsSync10(join12(appRoot, "web")))
+  if (existsSync13(join17(appRoot, "pubspec.yaml")) && existsSync13(join17(appRoot, "web")))
     return {
       command: "flutter",
       args: ["run", "-d", "web-server", "--web-port", "8080"],
@@ -47793,8 +49289,8 @@ function devCommand(appRoot, pkg, frameworks, rel) {
 }
 function profileApp(repoRoot, appRoot, files) {
   const rel = toPosix(relative5(repoRoot, appRoot));
-  const pkgFile = join12(appRoot, "package.json");
-  const pkg = existsSync10(pkgFile) ? readJson2(pkgFile) : null;
+  const pkgFile = join17(appRoot, "package.json");
+  const pkg = existsSync13(pkgFile) ? readJson2(pkgFile) : null;
   const deps = {
     ...pkg?.dependencies ?? {},
     ...pkg?.devDependencies ?? {}
@@ -47805,14 +49301,14 @@ function profileApp(repoRoot, appRoot, files) {
       if (s.group === "framework" && s.dep.test(d) && !frameworks.some((f) => f.value === s.label))
         frameworks.push(fact(s.label, `${rel || "."}/package.json`));
   }
-  const composer = existsSync10(join12(appRoot, "composer.json")) ? readJson2(join12(appRoot, "composer.json")) : null;
+  const composer = existsSync13(join17(appRoot, "composer.json")) ? readJson2(join17(appRoot, "composer.json")) : null;
   if (composer && JSON.stringify(composer.require ?? {}).includes("laravel/framework"))
     frameworks.push(fact("Laravel", `${rel || "."}/composer.json`));
-  const pubspec = read2(join12(appRoot, "pubspec.yaml"));
+  const pubspec = read2(join17(appRoot, "pubspec.yaml"));
   if (/\bflutter:\s*\n\s+sdk:\s*flutter/.test(pubspec))
     frameworks.push(
       fact(
-        existsSync10(join12(appRoot, "web")) ? "Flutter (web enabled)" : "Flutter",
+        existsSync13(join17(appRoot, "web")) ? "Flutter (web enabled)" : "Flutter",
         `${rel || "."}/pubspec.yaml`
       )
     );
@@ -47828,39 +49324,39 @@ function profileApp(repoRoot, appRoot, files) {
   );
   return {
     root: rel || ".",
-    name: pkg?.name ?? basename3(appRoot),
+    name: pkg?.name ?? basename5(appRoot),
     frameworks,
     routes,
     devCommand: devCommand(appRoot, pkg, names, rel),
     components: {
       count: componentFiles.length,
-      dirs: [...new Set(componentFiles.map((f) => dirname6(f)))].slice(0, 12)
+      dirs: [...new Set(componentFiles.map((f) => dirname8(f)))].slice(0, 12)
     }
   };
 }
 function discoverRepository(root) {
   const files = walk(root);
   const gaps = [];
-  const rootPkg = existsSync10(join12(root, "package.json")) ? readJson2(join12(root, "package.json")) : null;
+  const rootPkg = existsSync13(join17(root, "package.json")) ? readJson2(join17(root, "package.json")) : null;
   let monorepo = null;
   const appRoots = [];
   const ws = rootPkg?.workspaces;
   const wsGlobs = Array.isArray(ws) ? ws : Array.isArray(ws?.packages) ? ws.packages : [];
-  const pnpm = read2(join12(root, "pnpm-workspace.yaml"));
+  const pnpm = read2(join17(root, "pnpm-workspace.yaml"));
   for (const m of pnpm.matchAll(/^\s*-\s*['"]?([^'"\n]+)['"]?\s*$/gm)) wsGlobs.push(m[1]);
   if (wsGlobs.length)
     monorepo = fact(
       `workspaces: ${wsGlobs.join(", ")}`,
-      existsSync10(join12(root, "pnpm-workspace.yaml")) ? "pnpm-workspace.yaml" : "package.json"
+      existsSync13(join17(root, "pnpm-workspace.yaml")) ? "pnpm-workspace.yaml" : "package.json"
     );
   for (const g of wsGlobs) {
     const base2 = g.replace(/\/\*\*?$/, "");
     if (g.endsWith("*")) {
-      const dir = join12(root, base2);
-      if (!existsSync10(dir)) continue;
-      for (const n of readdirSync7(dir))
-        if (existsSync10(join12(dir, n, "package.json"))) appRoots.push(join12(dir, n));
-    } else if (existsSync10(join12(root, base2, "package.json"))) appRoots.push(join12(root, base2));
+      const dir = join17(root, base2);
+      if (!existsSync13(dir)) continue;
+      for (const n of readdirSync10(dir))
+        if (existsSync13(join17(dir, n, "package.json"))) appRoots.push(join17(dir, n));
+    } else if (existsSync13(join17(root, base2, "package.json"))) appRoots.push(join17(root, base2));
   }
   const apps = (appRoots.length ? appRoots : [root]).map((r) => profileApp(root, r, files)).filter(
     (a, _, all) => all.length === 1 || a.routes.length > 0 || a.frameworks.some((f) => !["React", "Vue", "Svelte", "Vite"].includes(f.value))
@@ -47870,7 +49366,7 @@ function discoverRepository(root) {
   const allPkgs = files.filter((f) => f.endsWith("package.json")).slice(0, 60);
   const signals = /* @__PURE__ */ new Map();
   for (const p of allPkgs) {
-    const j = readJson2(join12(root, p));
+    const j = readJson2(join17(root, p));
     const deps = Object.keys({
       ...j?.dependencies ?? {},
       ...j?.devDependencies ?? {}
@@ -47883,13 +49379,13 @@ function discoverRepository(root) {
         signals.set(s.group, list2);
       }
   }
-  const composer = existsSync10(join12(root, "composer.json")) ? JSON.stringify(readJson2(join12(root, "composer.json"))?.require ?? {}) : "";
+  const composer = existsSync13(join17(root, "composer.json")) ? JSON.stringify(readJson2(join17(root, "composer.json"))?.require ?? {}) : "";
   if (/laravel\/(breeze|fortify|jetstream|sanctum)/.test(composer))
     (signals.get("auth") ?? signals.set("auth", []).get("auth")).push(
       fact(composer.match(/laravel\/(breeze|fortify|jetstream|sanctum)/)[0], "composer.json")
     );
   for (const app of apps.filter((a) => a.frameworks.some((f) => f.value === "Laravel"))) {
-    const lp = laravelProfile(join12(root, app.root));
+    const lp = laravelProfile(join17(root, app.root));
     const at = (f) => app.root === "." ? f : `${app.root}/${f}`;
     const authList = signals.get("auth") ?? signals.set("auth", []).get("auth");
     if (lp.guards.length)
@@ -47917,9 +49413,9 @@ function discoverRepository(root) {
   let cssVariables = 0;
   for (const f of files) {
     if (/(^|\/)(tokens?|design-tokens|theme)\.(json|ts|js|css)$/i.test(f) || /\.tokens\.json$/.test(f))
-      tokens.push(fact(basename3(f), f));
+      tokens.push(fact(basename5(f), f));
     if (/\.(css|scss)$/.test(f)) {
-      const t = read2(join12(root, f), 3e5);
+      const t = read2(join17(root, f), 3e5);
       cssVariables += (t.match(/--[a-z0-9-]+\s*:/gi) ?? []).length;
       for (const m of t.matchAll(/font-family\s*:\s*["']?([A-Za-z][\w -]+?)["']?\s*[,;]/g)) {
         const name = m[1].trim();
@@ -47928,7 +49424,7 @@ function discoverRepository(root) {
       }
     }
     if (/\.(tsx|jsx|ts|js)$/.test(f) && /layout|_app|_document/.test(f)) {
-      const t = read2(join12(root, f));
+      const t = read2(join17(root, f));
       for (const m of t.matchAll(/import\s*\{\s*([A-Z][\w,\s]+)\}\s*from\s*['"]next\/font\/google['"]/g))
         for (const n of m[1].split(",").map((s) => s.trim()).filter(Boolean))
           if (!fonts.some((x) => x.value === n)) fonts.push(fact(n.replace(/_/g, " "), f));
@@ -47954,7 +49450,7 @@ function discoverRepository(root) {
   roles.unshift(fact("visitor", "public routes"));
   for (const r of laravelRoles) if (!roles.some((x) => x.value === r.value)) roles.push(r);
   for (const f of files.filter((x) => /\.(ts|tsx|js|php|dart|rb|py)$/.test(x)).slice(0, 3e3)) {
-    const t = read2(join12(root, f), 12e4);
+    const t = read2(join17(root, f), 12e4);
     for (const m of t.matchAll(
       /\brole\s*(?:===?|==|:)\s*['"](owner|admin|editor|viewer|member|manager|customer|seller|vendor|teacher|student)['"]/gi
     )) {
@@ -47987,7 +49483,7 @@ function discoverRepository(root) {
   let readmeSummary = null;
   const readmeFile = files.find((f) => /^readme\.md$/i.test(f));
   if (readmeFile) {
-    const para = read2(join12(root, readmeFile)).split(/\n\s*\n/).map((p) => p.replace(/<[^>]+>|!\[[^\]]*\]\([^)]*\)|\[!\[[^\]]*\]\([^)]*\)\]\([^)]*\)/g, "").trim()).find((p) => p.length > 60 && !p.startsWith("#") && !p.startsWith("```") && !p.startsWith("|"));
+    const para = read2(join17(root, readmeFile)).split(/\n\s*\n/).map((p) => p.replace(/<[^>]+>|!\[[^\]]*\]\([^)]*\)|\[!\[[^\]]*\]\([^)]*\)\]\([^)]*\)/g, "").trim()).find((p) => p.length > 60 && !p.startsWith("#") && !p.startsWith("```") && !p.startsWith("|"));
     if (para) readmeSummary = fact(para.replace(/\s+/g, " ").slice(0, 400), readmeFile);
   }
   const description = typeof rootPkg?.description === "string" ? fact(rootPkg.description, "package.json") : null;
@@ -48011,7 +49507,7 @@ function discoverRepository(root) {
     schemaVersion: 1,
     kind: "repository",
     root,
-    name: rootPkg?.name ?? basename3(root),
+    name: rootPkg?.name ?? basename5(root),
     description,
     readmeSummary,
     monorepo,
@@ -48184,10 +49680,10 @@ var discover = {
   async run(ctx) {
     const target = requirePositional(ctx, 0, "path|url", discover.usage);
     ctx.ws.ensure();
-    if (!target.includes("://") && existsSync11(target) && statSync7(target).isDirectory()) {
-      const profile2 = discoverRepository(resolve7(target));
-      const file2 = join13(ctx.ws.root, "product.json");
-      writeFileSync6(file2, `${JSON.stringify(profile2, null, 2)}
+    if (!target.includes("://") && existsSync14(target) && statSync8(target).isDirectory()) {
+      const profile2 = discoverRepository(resolve8(target));
+      const file2 = join18(ctx.ws.root, "product.json");
+      writeFileSync8(file2, `${JSON.stringify(profile2, null, 2)}
 `);
       return { data: { file: file2, profile: profile2 }, text: `${repoText(profile2)}
 
@@ -48211,8 +49707,8 @@ var discover = {
       onProgress: ctx.log
     });
     const profile = buildSiteProfile(run, observations);
-    const file = join13(ctx.ws.root, "site.json");
-    writeFileSync6(file, `${JSON.stringify(profile, null, 2)}
+    const file = join18(ctx.ws.root, "site.json");
+    writeFileSync8(file, `${JSON.stringify(profile, null, 2)}
 `);
     return { data: { file, profile }, text: `${siteText(profile)}
 
@@ -48222,8 +49718,8 @@ var discover = {
 
 // src/cli/commands/experiment.ts
 init_errors();
-import { existsSync as existsSync12, mkdirSync as mkdirSync4, readFileSync as readFileSync10, writeFileSync as writeFileSync7 } from "node:fs";
-import { join as join14 } from "node:path";
+import { existsSync as existsSync15, mkdirSync as mkdirSync7, readFileSync as readFileSync13, writeFileSync as writeFileSync9 } from "node:fs";
+import { join as join19 } from "node:path";
 
 // src/experiment/stats.ts
 function normCdf(z) {
@@ -48645,19 +50141,19 @@ Jourilo never invents traffic, conversions or effects: every number comes from y
       if (!f) throw new JouriloError("NOT_FOUND", `Finding ${fp} is not in run ${run.id}.`);
       if (f.kind !== "hypothesis")
         ctx.log(`Note: ${f.ruleId} is a ${f.kind}; defects should usually be fixed, not A/B tested.`);
-      const productFile = join14(ctx.ws.root, "product.json");
-      const product = existsSync12(productFile) ? JSON.parse(readFileSync10(productFile, "utf8")) : null;
+      const productFile = join19(ctx.ws.root, "product.json");
+      const product = existsSync15(productFile) ? JSON.parse(readFileSync13(productFile, "utf8")) : null;
       const plan = planExperiment(run.id, f, {
         ...numOpt(ctx, "baseline") !== void 0 ? { baseline: numOpt(ctx, "baseline") } : {},
         ...numOpt(ctx, "mde") !== void 0 ? { mde: numOpt(ctx, "mde") } : {},
         ...numOpt(ctx, "daily-traffic") !== void 0 ? { dailyTraffic: numOpt(ctx, "daily-traffic") } : {},
         product
       });
-      const outDir = join14(ctx.ws.root, "experiments");
-      mkdirSync4(outDir, { recursive: true });
-      const md2 = join14(outDir, `${plan.id}.md`);
-      writeFileSync7(md2, planMarkdown(plan));
-      writeFileSync7(join14(outDir, `${plan.id}.json`), `${JSON.stringify(plan, null, 2)}
+      const outDir = join19(ctx.ws.root, "experiments");
+      mkdirSync7(outDir, { recursive: true });
+      const md2 = join19(outDir, `${plan.id}.md`);
+      writeFileSync9(md2, planMarkdown(plan));
+      writeFileSync9(join19(outDir, `${plan.id}.json`), `${JSON.stringify(plan, null, 2)}
 `);
       return { data: { plan, file: md2 }, text: `${planMarkdown(plan)}
 Saved: ${md2}` };
@@ -48680,8 +50176,8 @@ Saved: ${md2}` };
 };
 
 // src/cli/commands/finding.ts
-import { existsSync as existsSync13 } from "node:fs";
-import { join as join15 } from "node:path";
+import { existsSync as existsSync16 } from "node:fs";
+import { join as join20 } from "node:path";
 init_errors();
 init_fs_safety();
 var CATEGORIES = [
@@ -48739,7 +50235,7 @@ var finding = {
         "At least one --evidence file from the run (e.g. screenshots/home-\u2026-desktop.jpg) is required: judgments must point at what they judge."
       );
     for (const e of evidenceFiles)
-      if (!existsSync13(resolveInside(dir, e)))
+      if (!existsSync16(resolveInside(dir, e)))
         throw new JouriloError("NOT_FOUND", `Evidence ${e} is not in run ${run.id}.`);
     const url = str(ctx, "url") ?? run.pages[0]?.url ?? run.target;
     const f = makeFinding({
@@ -48776,1464 +50272,14 @@ var finding = {
     writeReports(dir, run, void 0, { history: ctx.ws.listRuns() });
     return {
       data: f,
-      text: `Added ${f.provenance} finding ${f.fingerprint} to run ${run.id} (${join15(dir, "report.html")}).`
+      text: `Added ${f.provenance} finding ${f.fingerprint} to run ${run.id} (${join20(dir, "report.html")}).`
     };
-  }
-};
-
-// src/cli/commands/journeys.ts
-import { existsSync as existsSync16, mkdirSync as mkdirSync7, readdirSync as readdirSync10, readFileSync as readFileSync13, writeFileSync as writeFileSync9 } from "node:fs";
-import { basename as basename5, join as join19, resolve as resolve8 } from "node:path";
-init_errors();
-init_fs_safety();
-init_types();
-
-// src/journeys/runner.ts
-import { join as join16 } from "node:path";
-init_fs_safety();
-
-// src/journeys/cover.ts
-var COVER_AT = `(el) => {
-  const short = (e) => {
-    if (e.id) return '#' + CSS.escape(e.id);
-    const c = (e.getAttribute('class') || '').trim().split(/\\s+/)[0];
-    return e.tagName.toLowerCase() + (c ? '.' + CSS.escape(c) : '');
-  };
-  const r = el.getBoundingClientRect();
-  const pts = [[0.5, 0.5], [0.15, 0.15], [0.85, 0.15], [0.15, 0.85], [0.85, 0.85]];
-  let cover = null, visible = null, inViewport = 0, center = true;
-  for (const [fx, fy] of pts) {
-    const x = r.left + r.width * fx, y = r.top + r.height * fy;
-    if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
-    inViewport++;
-    const hit = document.elementFromPoint(x, y);
-    if (hit && (hit === el || el.contains(hit))) {
-      if (!visible) visible = { x: r.width * fx, y: r.height * fy };
-    } else if (fx === 0.5) {
-      center = false;
-      cover = hit ? short(hit) : null;
-    }
-  }
-  return { inViewport, center, cover, visible };
-}`;
-async function coverAt(handle) {
-  await handle.scrollIntoViewIfNeeded().catch(() => void 0);
-  const r = await handle.evaluate(
-    new Function(`return (${COVER_AT})(arguments[0])`)
-  );
-  if (!r || !r.inViewport || r.center) return { covered: false, cover: null, visiblePoint: null };
-  return { covered: true, cover: r.cover, visiblePoint: r.visible };
-}
-
-// src/journeys/schema.ts
-init_errors();
-var ACTIONS = /* @__PURE__ */ new Set([
-  "goto",
-  "click",
-  "fill",
-  "select",
-  "check",
-  "press",
-  "hover",
-  "wait",
-  "back",
-  "expect",
-  "screenshot"
-]);
-var NEEDS_TARGET = /* @__PURE__ */ new Set(["click", "fill", "select", "check", "hover"]);
-function validTarget(t) {
-  if (!t || typeof t !== "object") return false;
-  const o = t;
-  const keys = ["role", "label", "text", "placeholder", "testId", "css"].filter(
-    (k) => typeof o[k] === "string" && o[k]
-  );
-  return keys.length >= 1;
-}
-function validateJourney(raw, source = "journey") {
-  const errs = [];
-  if (!raw || typeof raw !== "object")
-    throw new JouriloError("INVALID_INPUT", `${source}: not a JSON object.`);
-  const j = raw;
-  if (j.version !== 1) errs.push("version must be 1");
-  if (!j.id || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(j.id))
-    errs.push("id must be lowercase letters, digits and dashes");
-  if (!j.name) errs.push("name is required");
-  if (!j.start || typeof j.start !== "string") errs.push("start (path or URL) is required");
-  if (!Array.isArray(j.steps) || !j.steps.length) errs.push("steps must be a non-empty array");
-  if (!Array.isArray(j.success) || !j.success.length)
-    errs.push("success must list at least one explicit criterion");
-  (j.steps ?? []).forEach((s, i) => {
-    const step = s;
-    if (!step || !ACTIONS.has(step.action))
-      errs.push(`steps[${i}]: unknown action "${step?.action}"`);
-    else if (NEEDS_TARGET.has(step.action) && !validTarget(step.target))
-      errs.push(`steps[${i}] (${step.action}): target is required`);
-    else if ((step.action === "fill" || step.action === "select") && typeof step.value !== "string")
-      errs.push(`steps[${i}] (${step.action}): value must be a string`);
-    else if (step.action === "goto" && typeof step.url !== "string")
-      errs.push(`steps[${i}] (goto): url is required`);
-    else if (step.action === "press" && typeof step.key !== "string")
-      errs.push(`steps[${i}] (press): key is required`);
-  });
-  (j.success ?? []).forEach((c, i) => {
-    if (!c?.description) errs.push(`success[${i}]: description is required`);
-    if (c && !c.url && !c.urlNot && !c.visible && !c.noPageErrors && !c.noFailedRequests)
-      errs.push(`success[${i}]: needs url, urlNot, visible, noPageErrors or noFailedRequests`);
-    if (c?.visible && !validTarget(c.visible)) errs.push(`success[${i}]: visible must be a target`);
-  });
-  if (errs.length)
-    throw new JouriloError("INVALID_INPUT", `${source} is invalid:
-  - ${errs.join("\n  - ")}`);
-  return j;
-}
-function describeTarget(t) {
-  if ("role" in t) return `${t.role}${t.name ? ` "${t.name}"` : ""}`;
-  if ("label" in t) return `field labelled "${t.label}"`;
-  if ("text" in t) return `text "${t.text}"`;
-  if ("placeholder" in t) return `field with placeholder "${t.placeholder}"`;
-  if ("testId" in t) return `test id "${t.testId}"`;
-  return `\`${t.css}\``;
-}
-function describeStep(s, secret = false) {
-  switch (s.action) {
-    case "goto":
-      return `Go to ${s.url}`;
-    case "click":
-      return `Click ${describeTarget(s.target)}`;
-    case "fill":
-      return `Type ${secret ? "\u2022\u2022\u2022\u2022\u2022\u2022" : `"${s.value}"`} into ${describeTarget(s.target)}`;
-    case "select":
-      return `Choose "${s.value}" in ${describeTarget(s.target)}`;
-    case "check":
-      return `Check ${describeTarget(s.target)}`;
-    case "press":
-      return `Press ${s.key}${s.target ? ` in ${describeTarget(s.target)}` : ""}`;
-    case "hover":
-      return `Hover ${describeTarget(s.target)}`;
-    case "wait":
-      return s.target ? `Wait for ${describeTarget(s.target)}` : `Wait ${s.ms ?? 500} ms`;
-    case "back":
-      return "Go back";
-    case "expect":
-      return `Expect ${[s.url ? `URL ~ ${s.url}` : "", s.visible ? `${describeTarget(s.visible)} visible` : "", s.hidden ? `${describeTarget(s.hidden)} hidden` : "", s.title ? `title ~ "${s.title}"` : ""].filter(Boolean).join(", ")}`;
-    case "screenshot":
-      return `Screenshot${s.name ? ` "${s.name}"` : ""}`;
-  }
-}
-
-// src/journeys/runner.ts
-function locatorFor(page, t) {
-  if ("role" in t)
-    return page.getByRole(t.role, {
-      ...t.name ? { name: t.name } : {},
-      ...t.exact ? { exact: true } : {}
-    });
-  if ("label" in t) return page.getByLabel(t.label, { exact: t.exact ?? false });
-  if ("text" in t) return page.getByText(t.text, { exact: t.exact ?? false });
-  if ("placeholder" in t) return page.getByPlaceholder(t.placeholder);
-  if ("testId" in t) return page.getByTestId(t.testId);
-  return page.locator(t.css);
-}
-var ELEMENT_FACTS = `(el) => {
-  if (!el || el === document.body || el === document.documentElement) return null;
-  const act = el.closest('a[href],button,input,select,textarea,summary,[role=button],[role=link],[role=menuitem],[role=tab],[role=option],[role=checkbox],[role=switch]') || el;
-  const form = act.form || act.closest('form');
-  const tag = act.tagName;
-  const type = (act.getAttribute('type') || '').toLowerCase();
-  const role = (act.getAttribute('role') || '').toLowerCase();
-  const submits = !!form && ((tag === 'BUTTON' && (type === '' || type === 'submit')) || (tag === 'INPUT' && (type === 'submit' || type === 'image')));
-  const inField = !!form && ((tag === 'INPUT' && !['button','submit','reset','checkbox','radio','image','file','range','color'].includes(type)) || tag === 'SELECT');
-  const textarea = tag === 'TEXTAREA' || act.isContentEditable;
-  const buttonLike = tag === 'BUTTON' || tag === 'SUMMARY' || (tag === 'INPUT' && ['button','submit','reset','image'].includes(type)) || ['button','menuitem','tab','option','switch','checkbox'].includes(role);
-  const linkLike = (tag === 'A' && act.hasAttribute('href')) || role === 'link';
-  const payment = !!form && !!form.querySelector('input[autocomplete^="cc-"], input[name*="card" i], input[name*="cvc" i], input[name*="cvv" i], input[data-stripe], iframe[src*="stripe"], iframe[name*="card" i], iframe[title*="card" i]');
-  const byIds = (attr) => (act.getAttribute(attr) || '').split(/\\s+/).map((id) => id && document.getElementById(id)).filter(Boolean).map((n) => n.innerText || n.textContent || '').join(' ');
-  const inner = Array.from(act.querySelectorAll('img[alt], [aria-label], svg title')).map((n) => n.getAttribute('alt') || n.getAttribute('aria-label') || n.textContent || '').join(' ');
-  const name = (act.getAttribute('aria-label') || byIds('aria-labelledby') || act.innerText || act.value || act.getAttribute('title') || act.getAttribute('alt') || inner || '').replace(/\\s+/g, ' ').trim().slice(0, 120);
-  const attrs = [];
-  for (const n of [act, ...Array.from(act.querySelectorAll('*')).slice(0, 20)])
-    for (const a of Array.from(n.attributes))
-      if (/^(id|class|name|title|data-[\\w-]+)$/.test(a.name) || ((a.name === 'href' || a.name === 'xlink:href') && n.tagName.toLowerCase() === 'use'))
-        attrs.push(a.value);
-  const targets = [];
-  if (linkLike && act.getAttribute('href')) targets.push(act.href || act.getAttribute('href'));
-  if (act.getAttribute('formaction')) targets.push(act.formAction || act.getAttribute('formaction'));
-  if (form && (submits || inField)) targets.push(form.getAttribute('action') || '');
-  return { submits, inField, textarea, buttonLike, linkLike, payment, name, signals: attrs.join(' ').slice(0, 1500), targets: targets.join(' ') };
-}`;
-function keyEffect(key, f) {
-  if (!f) return "none";
-  const k = key.split("+").pop();
-  const mods = key.includes("+");
-  const enter = k === "Enter" || k === "NumpadEnter";
-  const space = k === " " || k === "Space";
-  if (enter) {
-    if (f.textarea) return mods ? "submit" : "none";
-    if (f.inField) return "submit";
-    if (f.buttonLike || f.linkLike) return f.submits ? "submit" : "activate";
-    return "activate";
-  }
-  if (space && f.buttonLike) return f.submits ? "submit" : "activate";
-  return "none";
-}
-function verdictFor(f, effect, action, policy) {
-  const submitsForm = effect === "submit" || f.submits;
-  return checkAction(
-    {
-      action,
-      name: f.name,
-      signals: f.signals,
-      targets: f.targets,
-      submitsForm,
-      paymentForm: f.payment && submitsForm
-    },
-    policy
-  );
-}
-var facts = (src) => new Function(`return (${src})(arguments[0])`);
-function matchesUrl(actual, expected) {
-  if (expected.startsWith("re:")) {
-    try {
-      return new RegExp(expected.slice(3)).test(actual);
-    } catch {
-      return false;
-    }
-  }
-  if (expected.startsWith("/")) {
-    try {
-      const norm = (p) => p.replace(/\/+$/, "").replace(/\.html?$/, "") || "/";
-      const u = new URL(actual);
-      const [path2, query] = expected.split("?");
-      return norm(u.pathname) === norm(path2) && (!query || u.search.includes(query));
-    } catch {
-      return false;
-    }
-  }
-  return actual.includes(expected);
-}
-var Blocked = class extends Error {
-};
-async function act(page, step, opts) {
-  const t = opts.stepTimeoutMs;
-  const value = (v) => interpolate(v, opts.data);
-  switch (step.action) {
-    case "goto": {
-      const url = new URL(value(step.url), opts.base);
-      if (url.origin !== opts.base.origin && !(opts.allowOrigins ?? []).includes(url.origin))
-        throw new Blocked(`goto ${url.origin} leaves the target origin ${opts.base.origin}`);
-      await page.goto(url.toString(), { waitUntil: "load", timeout: t * 3 });
-      await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
-      return;
-    }
-    case "click":
-    case "press": {
-      const loc = step.target ? locatorFor(page, step.target).first() : null;
-      let handle = null;
-      if (loc) {
-        await loc.waitFor({ state: "visible", timeout: t });
-        handle = await loc.elementHandle({ timeout: t });
-      } else {
-        handle = (await page.evaluateHandle("document.activeElement")).asElement();
-      }
-      const f = handle ? await handle.evaluate(facts(ELEMENT_FACTS)) : null;
-      const effect = step.action === "click" ? f?.submits ? "submit" : "activate" : keyEffect(step.key, f);
-      if (f && effect !== "none") {
-        const verdict = verdictFor(f, effect, step.action, opts.policy);
-        if (!verdict.allowed) throw new Blocked(verdict.reason);
-      }
-      let note;
-      if (step.action === "click") {
-        const c = await coverAt(handle);
-        if (c.covered && c.visiblePoint) {
-          note = `center covered by ${c.cover ?? "another element"}; clicked the visible part`;
-          await handle.click({ timeout: t, position: c.visiblePoint });
-        } else if (c.covered) {
-          throw new Error(
-            `${describeTarget(step.target)} is covered by ${c.cover ?? "another element"}; nothing of it is visible to click.`
-          );
-        } else await handle.click({ timeout: t });
-      } else if (loc && handle) await handle.press(step.key, { timeout: t });
-      else await page.keyboard.press(step.key);
-      await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
-      return note;
-    }
-    case "fill":
-      await locatorFor(page, step.target).first().fill(value(step.value), { timeout: t });
-      return;
-    case "select":
-      await locatorFor(page, step.target).first().selectOption(value(step.value), { timeout: t });
-      return;
-    case "check":
-      await locatorFor(page, step.target).first().check({ timeout: t });
-      return;
-    case "hover":
-      await locatorFor(page, step.target).first().hover({ timeout: t });
-      return;
-    case "wait":
-      if (step.target)
-        await locatorFor(page, step.target).first().waitFor({ state: "visible", timeout: step.ms ?? t });
-      else await page.waitForTimeout(Math.min(step.ms ?? 500, 1e4));
-      return;
-    case "back":
-      await page.goBack({ timeout: t });
-      return;
-    case "expect": {
-      if (step.url) {
-        const deadline = Date.now() + t;
-        while (!matchesUrl(page.url(), step.url) && Date.now() < deadline) await page.waitForTimeout(100);
-        if (!matchesUrl(page.url(), step.url))
-          throw new Error(`URL is ${redactUrl(page.url())}, expected ~ ${step.url}`);
-      }
-      if (step.visible)
-        await locatorFor(page, step.visible).first().waitFor({ state: "visible", timeout: t });
-      if (step.hidden) await locatorFor(page, step.hidden).first().waitFor({ state: "hidden", timeout: t });
-      if (step.title) {
-        const title = await page.title();
-        if (!title.includes(step.title))
-          throw new Error(`Title is "${excerpt(title, 80)}", expected ~ "${step.title}"`);
-      }
-      return;
-    }
-    case "screenshot":
-      return;
-  }
-}
-var TRANSIENT = /detached|not stable|intercepts pointer events|Execution context was destroyed|navigation/i;
-async function runJourney(browser, spec, opts) {
-  const vp = parseViewports(opts.viewportOverride ?? spec.viewport ?? "desktop")[0];
-  const ctx = await newContext(browser, vp, {
-    runDir: opts.runDir,
-    ...opts.storageState ? { storageState: opts.storageState } : {},
-    ...opts.timezoneId ? { timezoneId: opts.timezoneId } : {},
-    ...opts.clock ? { clock: opts.clock } : {}
-  });
-  const tracePath = opts.trace ? join16("traces", `${spec.id}-${vp.name}.zip`) : void 0;
-  if (tracePath) await ctx.tracing.start({ screenshots: true, snapshots: true, title: spec.name });
-  const guard = await installRequestGuard(ctx, {
-    ...opts.policy,
-    origin: opts.base.origin,
-    ...opts.allowOrigins ? { allowOrigins: opts.allowOrigins } : {},
-    mode: "journey"
-  });
-  const page = await ctx.newPage();
-  const live = observe(page, opts.base.origin);
-  live.ignore(guard.isBlocked);
-  const steps = [];
-  const findings = [];
-  const t0 = Date.now();
-  let status = "passed";
-  const startUrl = new URL(interpolate(spec.start, opts.data), opts.base);
-  const allSteps = [{ action: "goto", url: startUrl.toString() }, ...spec.steps];
-  const shot = async (i) => {
-    const file = join16("screenshots", `journey-${spec.id}-${vp.name}-${String(i).padStart(2, "0")}.jpg`);
-    try {
-      await page.screenshot({
-        path: join16(opts.runDir, file),
-        type: "jpeg",
-        quality: 70,
-        animations: "disabled",
-        caret: "hide",
-        mask: DEFAULT_MASK.map((s) => page.locator(s)),
-        maskColor: "#FF00FF"
-      });
-      return toPosix(file);
-    } catch {
-      return void 0;
-    }
-  };
-  try {
-    for (let i = 0; i < allSteps.length; i++) {
-      const step = allSteps[i];
-      const secret = "value" in step && (isSecretValue(step.value) || /password|card|cvc/i.test(JSON.stringify(step.target ?? "")));
-      const s0 = Date.now();
-      const res = {
-        index: i,
-        action: step.action,
-        description: describeStep(step, secret),
-        status: "passed",
-        durationMs: 0,
-        url: ""
-      };
-      opts.log?.(`    ${i + 1}. ${res.description}`);
-      let note;
-      try {
-        try {
-          note = await act(page, step, opts);
-        } catch (err) {
-          if (err instanceof Blocked || !TRANSIENT.test(err.message)) throw err;
-          await page.waitForTimeout(500);
-          note = await act(page, step, opts);
-        }
-        if (note) res.description = `${res.description} (${note})`;
-      } catch (err) {
-        res.status = err instanceof Blocked ? "blocked" : "failed";
-        res.error = excerpt(err.message.split("\n")[0], 300);
-      }
-      const stopped = guard.since(s0).filter((b) => b.navigation || b.kind !== "submit");
-      if (stopped.length && res.status !== "blocked") {
-        res.status = "blocked";
-        res.error = excerpt(
-          `${stopped[0].reason}${stopped.length > 1 ? ` (+${stopped.length - 1} more)` : ""}`,
-          300
-        );
-      }
-      res.durationMs = Date.now() - s0;
-      res.url = redactUrl(page.url());
-      const s = await shot(i);
-      if (s) res.screenshot = s;
-      steps.push(res);
-      if (res.status !== "passed") {
-        status = res.status === "blocked" ? "blocked" : "failed";
-        for (let k = i + 1; k < allSteps.length; k++)
-          steps.push({
-            index: k,
-            action: allSteps[k].action,
-            description: describeStep(allSteps[k]),
-            status: "skipped",
-            durationMs: 0,
-            url: ""
-          });
-        break;
-      }
-    }
-    const pageErrors = live.console.filter((c) => c.type === "pageerror");
-    const failedFirstParty = live.network.filter((n) => n.firstParty);
-    const criteria = [];
-    for (const c of spec.success) {
-      let met = true;
-      const details = [];
-      if (c.url && !matchesUrl(page.url(), c.url)) {
-        met = false;
-        details.push(`ended at ${redactUrl(page.url())}`);
-      }
-      if (c.urlNot && matchesUrl(page.url(), c.urlNot)) {
-        met = false;
-        details.push(`still at ${redactUrl(page.url())}`);
-      }
-      if (c.visible) {
-        const vis = await locatorFor(page, c.visible).first().isVisible().catch(() => false);
-        if (!vis) {
-          met = false;
-          details.push(`${describeTarget(c.visible)} not visible`);
-        }
-      }
-      if (c.noPageErrors && pageErrors.length) {
-        met = false;
-        details.push(`${pageErrors.length} uncaught exception(s)`);
-      }
-      if (c.noFailedRequests && failedFirstParty.length) {
-        met = false;
-        details.push(`${failedFirstParty.length} failed request(s)`);
-      }
-      criteria.push({
-        description: c.description,
-        met,
-        ...details.length ? { detail: details.join("; ") } : {}
-      });
-    }
-    if (status === "passed" && criteria.some((c) => !c.met)) status = "failed";
-    const vitals = await page.evaluate(READ_VITALS_SCRIPT).catch(() => null);
-    const durationMs = Date.now() - t0;
-    if (tracePath) {
-      await ctx.tracing.stop({ path: join16(opts.runDir, tracePath) });
-    }
-    if (opts.saveAuth && status === "passed") {
-      writeFileSafe(opts.saveAuth, JSON.stringify(await ctx.storageState(), null, 2), { private: true });
-    }
-    const result = {
-      id: spec.id,
-      name: spec.name,
-      viewport: vp.name,
-      status,
-      steps,
-      successCriteria: criteria,
-      durationMs,
-      ...tracePath ? { trace: toPosix(tracePath) } : {},
-      ...guard.blocked.length ? { blockedRequests: guard.blocked.map(({ method, url: url2, reason }) => ({ method, url: url2, reason })) } : {}
-    };
-    const blockedNote = guard.blocked.length ? ` The safety policy stopped ${guard.blocked.length} request(s) during this journey (e.g. ${guard.blocked[0].method} ${guard.blocked[0].url}), which may be why.` : "";
-    const reproduction = steps.filter((s) => s.status !== "skipped").map((s) => s.description);
-    const failedStep = steps.find((s) => s.status === "failed");
-    const blockedStep = steps.find((s) => s.status === "blocked");
-    const url = redactUrl(page.url());
-    if (failedStep || criteria.some((c) => !c.met)) {
-      const unmet = criteria.filter((c) => !c.met);
-      findings.push(
-        makeFinding({
-          ruleId: "journey/failed",
-          key: spec.id,
-          journey: spec.id,
-          title: `Journey "${spec.name}" does not reach its goal`,
-          category: "usability",
-          kind: "defect",
-          severity: "serious",
-          confidence: spec.source === "suggested" ? "medium" : "high",
-          provenance: "observed",
-          url,
-          viewport: vp.name,
-          description: `${failedStep ? `Step ${failedStep.index + 1} (${failedStep.description}) failed: ${failedStep.error}` : `All steps ran, but ${unmet.length} success criterion/criteria were not met: ${unmet.map((c) => `${c.description}${c.detail ? ` (${c.detail})` : ""}`).join("; ")}.`}${blockedNote}`,
-          // A goal missed because Jourilo itself stopped a request is not evidence that the site is broken.
-          ...blockedNote ? { confidence: "low" } : {},
-          impact: spec.goal ? `People trying to ${spec.goal} cannot complete it.` : "People cannot complete this task.",
-          recommendation: spec.source === "suggested" ? "Check whether the journey definition matches the intended flow (it was generated); if it does, fix the step that failed." : "Fix the step that failed, then rerun the journey.",
-          standards: [nielsen(9)],
-          evidence: [
-            ...failedStep?.screenshot ? [
-              {
-                type: "screenshot",
-                file: failedStep.screenshot,
-                note: `After step ${failedStep.index + 1}`
-              }
-            ] : [],
-            { type: "step", snippet: failedStep?.error ?? unmet.map((c) => c.detail).join("; ") }
-          ],
-          reproduction
-        })
-      );
-    }
-    if (blockedStep) {
-      findings.push(
-        makeFinding({
-          ruleId: "journey/blocked-by-policy",
-          key: spec.id,
-          journey: spec.id,
-          title: `Journey "${spec.name}" stopped by the safety policy`,
-          category: "usability",
-          kind: "needs-review",
-          severity: "info",
-          confidence: "high",
-          provenance: "observed",
-          url,
-          viewport: vp.name,
-          description: blockedStep.error ?? "Blocked.",
-          impact: "The rest of this journey was not tested.",
-          recommendation: "Run it against a local or sandbox environment with test accounts if it needs to be covered.",
-          standards: [],
-          evidence: [{ type: "step", snippet: blockedStep.description }],
-          reproduction
-        })
-      );
-    }
-    if (pageErrors.length) {
-      findings.push(
-        makeFinding({
-          ruleId: "journey/page-errors",
-          key: spec.id,
-          journey: spec.id,
-          title: `Uncaught exceptions during "${spec.name}"`,
-          category: "reliability",
-          kind: "defect",
-          severity: "serious",
-          confidence: "high",
-          provenance: "observed",
-          url,
-          viewport: vp.name,
-          description: `${pageErrors.length} uncaught exception(s) while performing the journey.`,
-          impact: "Interactive features may silently fail for real users.",
-          recommendation: "Reproduce the steps and fix the exceptions listed in the evidence.",
-          standards: [],
-          evidence: pageErrors.slice(0, 8).map((e) => ({ type: "console", snippet: e.text })),
-          reproduction
-        })
-      );
-    }
-    if (vitals?.inp != null && vitals.interactions > 0) {
-      const r = rate("INP", vitals.inp);
-      if (r && r !== "good") {
-        findings.push(
-          makeFinding({
-            ruleId: "perf/inp",
-            key: spec.id,
-            journey: spec.id,
-            title: `Slow response to interaction during "${spec.name}" (${Math.round(vitals.inp)} ms, lab)`,
-            category: "performance",
-            kind: "defect",
-            severity: r === "poor" ? "serious" : "minor",
-            confidence: "medium",
-            provenance: "measured",
-            url,
-            viewport: vp.name,
-            description: `The slowest of ${vitals.interactions} scripted interaction(s) took ${Math.round(vitals.inp)} ms to paint the next frame. This is a lab approximation of INP, not field data.`,
-            impact: "The interface feels unresponsive; people click again or give up.",
-            recommendation: "Profile the interaction in DevTools Performance; break up long tasks in the event handlers and defer non-urgent work.",
-            standards: [CWV.INP],
-            evidence: [
-              { type: "metric", data: { inp: Math.round(vitals.inp), interactions: vitals.interactions } }
-            ],
-            reproduction
-          })
-        );
-      }
-    }
-    return { result, findings };
-  } finally {
-    await ctx.close().catch(() => void 0);
-  }
-}
-
-// src/journeys/suggest.ts
-function fieldTarget(f) {
-  if (f.label) return { label: f.label, exact: true };
-  if (f.placeholder) return { placeholder: f.placeholder };
-  if (f.name) return { css: `[name="${f.name.replace(/"/g, '\\"')}"]` };
-  return { css: f.selector };
-}
-function valueFor(f) {
-  const s = `${f.type} ${f.name ?? ""} ${f.label ?? ""} ${f.autocomplete ?? ""}`.toLowerCase();
-  if (f.type === "checkbox" || f.type === "radio" || f.type === "file" || f.type === "hidden") return null;
-  if (f.type === "password") return "{{password}}";
-  if (f.type === "email" || /e-?mail|e-?posta|correo|courriel/.test(s)) return "{{email}}";
-  if (f.type === "tel" || /phone|tel|mobile|cep|handy|móvil/.test(s)) return "{{phone}}";
-  if (f.type === "search" || /search|query|\bq\b|arama|suche|buscar|recherche/.test(s)) return "{{search}}";
-  if (/first|given|vorname|prénom|given-name/.test(s)) return "{{firstName}}";
-  if (/last|family|surname|soyad|nachname|apellido/.test(s)) return "{{lastName}}";
-  if (/company|organi[sz]ation|şirket|firma|empresa|entreprise/.test(s)) return "{{company}}";
-  if (/zip|postal|posta kodu|plz/.test(s)) return "{{zip}}";
-  if (/card|cc-number|kart|karte|tarjeta|carte/.test(s)) return "{{testCard}}";
-  if (/name|user|isim|\bad\b|nombre|\bnom\b|kullanıcı/.test(s)) return "{{name}}";
-  if (f.type === "textarea" || f.type === "text") return "Jourilo test message";
-  if (f.type === "number") return "1";
-  return null;
-}
-function formJourney(page, form) {
-  const path2 = pathOf(page.url).split("?")[0];
-  const steps = [];
-  for (const f of form.fields) {
-    if (f.type === "select") continue;
-    if (f.type === "checkbox") {
-      if (f.required) steps.push({ action: "check", target: fieldTarget(f) });
-      continue;
-    }
-    const v = valueFor(f);
-    if (v) steps.push({ action: "fill", target: fieldTarget(f), value: v });
-  }
-  if (!steps.length) return null;
-  const submit = form.submitText ? { action: "click", target: { role: "button", name: form.submitText, exact: true } } : { action: "press", key: "Enter", target: fieldTarget(form.fields.find((f) => valueFor(f))) };
-  steps.push(submit);
-  const names = {
-    signup: "Create an account",
-    login: "Sign in",
-    search: "Search the site",
-    checkout: "Complete checkout (sandbox)",
-    contact: "Send a contact message",
-    newsletter: "Subscribe to the newsletter",
-    recovery: "Request a password reset",
-    other: "Submit the form"
-  };
-  const id = slug(`${form.purpose}-${path2 === "/" ? "home" : path2}`, 60);
-  return {
-    version: 1,
-    id,
-    name: `${names[form.purpose]} (${path2})`,
-    goal: names[form.purpose].toLowerCase(),
-    start: path2,
-    steps,
-    success: [
-      ...form.purpose === "login" ? [] : [{ description: "Leaves the form page or shows a result", urlNot: path2 === "/" ? "/" : path2 }],
-      { description: "No uncaught exceptions", noPageErrors: true },
-      { description: "No failed first-party requests", noFailedRequests: true }
-    ].filter((c) => !(form.purpose === "search" && "urlNot" in c)),
-    safety: { submitsForms: true, destructive: form.purpose === "checkout" },
-    source: "suggested",
-    tags: ["form", form.purpose]
-  };
-}
-function suggestJourneys(run) {
-  const out = [];
-  const desktop = run.pages.filter((p) => p.viewport === run.viewports[0]?.name && (p.status ?? 200) < 400);
-  const seen = /* @__PURE__ */ new Set();
-  const push = (j) => {
-    if (!j || seen.has(j.id)) return;
-    seen.add(j.id);
-    out.push(j);
-  };
-  const home = desktop.find((p) => pathOf(p.url).split("?")[0] === "/") ?? desktop[0];
-  const cta = home?.inventory.ctas.find((c) => c.emphasis === "primary" && c.aboveFold);
-  if (home && cta) {
-    const href = cta.href && !cta.href.startsWith("#") ? cta.href : null;
-    const dest = href ? pathOf(new URL(href, home.url).toString()).split("?")[0] : null;
-    push({
-      version: 1,
-      id: "landing-primary-cta",
-      name: `Follow the main call to action ("${cta.text}")`,
-      goal: "move from the landing page to the next step of the funnel",
-      start: pathOf(home.url),
-      steps: [{ action: "click", target: { role: href ? "link" : "button", name: cta.text, exact: true } }],
-      success: [
-        dest && dest !== "/" ? { description: `Arrives at ${dest}`, url: dest } : { description: "Leaves the landing page", urlNot: "/" },
-        { description: "No uncaught exceptions", noPageErrors: true }
-      ],
-      safety: { submitsForms: false },
-      source: "suggested",
-      tags: ["conversion", "cta"]
-    });
-  }
-  const counts = /* @__PURE__ */ new Map();
-  for (const p of desktop) {
-    const uniq = new Map(
-      p.inventory.links.filter((l) => l.internal && l.text).map((l) => [`${l.text}|${pathOf(l.href)}`, l])
-    );
-    for (const [k, l] of uniq) {
-      const c = counts.get(k) ?? { text: l.text, href: l.href, n: 0 };
-      c.n++;
-      counts.set(k, c);
-    }
-  }
-  const nav = [...counts.values()].filter((c) => c.n >= Math.max(2, Math.ceil(desktop.length * 0.6)) && pathOf(c.href) !== "/").slice(0, 6);
-  if (home && nav.length) {
-    push({
-      version: 1,
-      id: "global-navigation",
-      name: "Reach each main section from the navigation",
-      goal: "find the main sections of the product",
-      start: pathOf(home.url),
-      steps: nav.flatMap((n) => [
-        { action: "click", target: { role: "link", name: n.text, exact: true } },
-        { action: "expect", url: pathOf(n.href).split("?")[0] },
-        { action: "goto", url: pathOf(home.url) }
-      ]),
-      success: [
-        { description: "No uncaught exceptions", noPageErrors: true },
-        { description: "No failed first-party requests", noFailedRequests: true }
-      ],
-      safety: { submitsForms: false },
-      source: "suggested",
-      tags: ["navigation"]
-    });
-  }
-  for (const p of desktop) for (const f of p.inventory.forms) push(formJourney(p, f));
-  const pricing = desktop.find((p) => /pric|plans/i.test(pathOf(p.url)));
-  const planCta = pricing?.inventory.ctas.find(
-    (c) => c.emphasis === "primary" && c.href && !c.href.startsWith("#")
-  );
-  if (pricing && planCta) {
-    push({
-      version: 1,
-      id: "pricing-to-signup",
-      name: `Choose a plan on ${pathOf(pricing.url)} ("${planCta.text}")`,
-      goal: "choose a plan and continue",
-      start: pathOf(pricing.url),
-      steps: [{ action: "click", target: { role: "link", name: planCta.text, exact: true } }],
-      success: [
-        { description: "Leaves the pricing page", urlNot: pathOf(pricing.url).split("?")[0] },
-        { description: "No uncaught exceptions", noPageErrors: true }
-      ],
-      safety: { submitsForms: false },
-      source: "suggested",
-      tags: ["conversion", "pricing"]
-    });
-  }
-  return out;
-}
-
-// src/repair/git.ts
-init_errors();
-init_fs_safety();
-import { spawnSync as spawnSync2 } from "node:child_process";
-import { existsSync as existsSync15, mkdirSync as mkdirSync6, readdirSync as readdirSync9, readFileSync as readFileSync12, writeFileSync as writeFileSync8 } from "node:fs";
-import { dirname as dirname8, join as join18 } from "node:path";
-
-// src/repair/transaction.ts
-init_errors();
-init_fs_safety();
-import { createHash as createHash2, randomBytes as randomBytes2 } from "node:crypto";
-import {
-  closeSync,
-  existsSync as existsSync14,
-  fsyncSync,
-  lstatSync,
-  mkdirSync as mkdirSync5,
-  openSync,
-  readdirSync as readdirSync8,
-  readFileSync as readFileSync11,
-  renameSync,
-  rmSync,
-  statSync as statSync8,
-  unlinkSync,
-  writeSync
-} from "node:fs";
-import { basename as basename4, dirname as dirname7, join as join17 } from "node:path";
-var sha256 = (b) => createHash2("sha256").update(b).digest("hex");
-var recordsDir = (wsRoot) => join17(wsRoot, "checkpoints");
-var txDir = (wsRoot, id) => join17(recordsDir(wsRoot), id);
-function atomicWrite(path2, data, mode) {
-  mkdirSync5(dirname7(path2), { recursive: true });
-  const tmp = join17(dirname7(path2), `.${basename4(path2)}.jourilo-${randomBytes2(4).toString("hex")}.tmp`);
-  const fd = openSync(tmp, "wx", mode ?? 420);
-  try {
-    let off = 0;
-    while (off < data.length) off += writeSync(fd, data, off, data.length - off);
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
-  for (let attempt = 0; ; attempt++) {
-    try {
-      renameSync(tmp, path2);
-      return;
-    } catch (err) {
-      if (attempt >= 5 || !["EPERM", "EBUSY", "EACCES"].includes(err.code ?? "")) {
-        rmSync(tmp, { force: true });
-        throw err;
-      }
-      const until = Date.now() + 50 * (attempt + 1);
-      while (Date.now() < until) ;
-    }
-  }
-}
-function saveRecord(wsRoot, tx) {
-  mkdirSync5(recordsDir(wsRoot), { recursive: true });
-  atomicWrite(join17(recordsDir(wsRoot), `${tx.id}.json`), Buffer.from(`${JSON.stringify(tx, null, 2)}
-`));
-}
-function writablePath(root, file) {
-  const abs = resolveInside(root, file);
-  const lexical = join17(root, file);
-  if (existsSync14(lexical) && lstatSync(lexical).isSymbolicLink())
-    throw new JouriloError(
-      "UNSAFE_PATH",
-      `${file} is a symbolic link; Jourilo does not write through links. Make this change by hand.`
-    );
-  return abs;
-}
-function readOrNull(path2) {
-  return existsSync14(path2) ? readFileSync11(path2) : null;
-}
-function applyTransaction(root, wsRoot, edits, opts = {}) {
-  const pending = activeTransactions(wsRoot).filter((t) => t.state === "pending");
-  if (pending.length)
-    throw new JouriloError(
-      "INVALID_INPUT",
-      `An earlier change (${pending[0].id}) was interrupted before it finished.`,
-      `Run \`jourilo rollback ${pending[0].id} --yes\` to restore those files first.`
-    );
-  const names = edits.map((e) => e.file);
-  const dup = names.find((n, i) => names.indexOf(n) !== i);
-  if (dup) throw new JouriloError("INTERNAL", `${dup} appears twice in one change; combine its edits first.`);
-  const prepared = edits.map((e) => {
-    const abs = writablePath(root, e.file);
-    const current = readOrNull(abs);
-    const same = e.before === null ? current === null : current?.equals(e.before);
-    if (!same)
-      throw new JouriloError(
-        "INVALID_INPUT",
-        `${e.file} changed after the fix was planned; nothing was written.`,
-        "Run the command again so the plan is computed from the current file."
-      );
-    return { ...e, abs, mode: current ? statSync8(abs).mode & 511 : null };
-  });
-  const tx = {
-    kind: "fix-transaction",
-    id: newRunId(),
-    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-    root,
-    note: opts.note ?? "",
-    ...opts.undoes ? { undoes: opts.undoes } : {},
-    state: "pending",
-    files: prepared.map((p) => ({
-      file: p.file,
-      beforeSha: p.before ? sha256(p.before) : null,
-      afterSha: p.after ? sha256(p.after) : null,
-      mode: p.mode,
-      state: "pending"
-    }))
-  };
-  for (const p of prepared)
-    if (p.before) atomicWrite(resolveInside(join17(txDir(wsRoot, tx.id), "before"), p.file), p.before);
-  saveRecord(wsRoot, tx);
-  try {
-    prepared.forEach((p, i) => {
-      opts.beforeWrite?.(p.file, i);
-      if (p.after) atomicWrite(p.abs, p.after, p.mode);
-      else if (existsSync14(p.abs)) unlinkSync(p.abs);
-      tx.files[i].state = "written";
-      saveRecord(wsRoot, tx);
-    });
-  } catch (err) {
-    const undo = rollbackTransaction(wsRoot, tx, { force: false });
-    tx.state = "failed";
-    saveRecord(wsRoot, tx);
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new JouriloError(
-      "INTERNAL",
-      `Writing the changes failed (${msg}); ${undo.restored.length} file(s) already written were restored.${undo.conflicts.length ? ` Not restored: ${undo.conflicts.map((c) => c.file).join(", ")}.` : ""}`
-    );
-  }
-  tx.state = "applied";
-  saveRecord(wsRoot, tx);
-  return tx;
-}
-function rollbackTransaction(wsRoot, tx, opts = {}) {
-  const result = { restored: [], alreadyRestored: [], conflicts: [] };
-  const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
-  for (const f of tx.files) {
-    if (opts.files?.length && !opts.files.includes(f.file)) continue;
-    if (f.state === "restored") {
-      result.alreadyRestored.push(f.file);
-      continue;
-    }
-    const abs = writablePath(tx.root, f.file);
-    const current = readOrNull(abs);
-    const currentSha = current ? sha256(current) : null;
-    if (currentSha === f.beforeSha) {
-      f.state = "restored";
-      delete f.conflict;
-      result.alreadyRestored.push(f.file);
-      continue;
-    }
-    if (currentSha !== f.afterSha) {
-      const reason = current === null ? "deleted after the change was applied" : "modified after the change was applied (not by Jourilo)";
-      if (!opts.force) {
-        f.state = "conflict";
-        f.conflict = reason;
-        result.conflicts.push({ file: f.file, reason });
-        continue;
-      }
-      let savedCopy;
-      if (current) {
-        savedCopy = resolveInside(join17(txDir(wsRoot, tx.id), "conflicts", stamp), f.file);
-        atomicWrite(savedCopy, current);
-      }
-      result.conflicts.push({ file: f.file, reason, ...savedCopy ? { savedCopy } : {} });
-    }
-    if (f.beforeSha === null) {
-      if (existsSync14(abs)) unlinkSync(abs);
-    } else {
-      const backup = resolveInside(join17(txDir(wsRoot, tx.id), "before"), f.file);
-      if (!existsSync14(backup)) {
-        f.state = "conflict";
-        f.conflict = "backup missing";
-        result.conflicts.push({ file: f.file, reason: "backup missing; cannot restore" });
-        continue;
-      }
-      const bytes = readFileSync11(backup);
-      if (sha256(bytes) !== f.beforeSha) {
-        result.conflicts.push({ file: f.file, reason: "backup does not match its recorded hash" });
-        continue;
-      }
-      atomicWrite(abs, bytes, f.mode);
-    }
-    f.state = "restored";
-    delete f.conflict;
-    result.restored.push(f.file);
-  }
-  const allBack = tx.files.every((f) => f.state === "restored");
-  if (tx.state !== "pending" || allBack) tx.state = allBack ? "rolled-back" : "partially-rolled-back";
-  saveRecord(wsRoot, tx);
-  return result;
-}
-function isTransaction(x) {
-  return !!x && typeof x === "object" && x.kind === "fix-transaction";
-}
-function activeTransactions(wsRoot) {
-  const dir = recordsDir(wsRoot);
-  if (!existsSync14(dir)) return [];
-  const out = [];
-  for (const f of readdirSync8(dir).filter((n) => n.endsWith(".json")).sort()) {
-    try {
-      const rec = JSON.parse(readFileSync11(join17(dir, f), "utf8"));
-      if (isTransaction(rec) && ["pending", "applied", "partially-rolled-back"].includes(rec.state))
-        out.push(rec);
-    } catch {
-    }
-  }
-  return out;
-}
-function previewRollback(tx) {
-  return tx.files.map((f) => {
-    if (f.state === "restored") return { file: f.file, action: "unchanged" };
-    const abs = writablePath(tx.root, f.file);
-    const current = readOrNull(abs);
-    const sha = current ? sha256(current) : null;
-    if (sha === f.beforeSha) return { file: f.file, action: "unchanged" };
-    if (sha === f.afterSha) return { file: f.file, action: "restore" };
-    return {
-      file: f.file,
-      action: "conflict",
-      reason: current === null ? "deleted after the change" : "modified after the change"
-    };
-  });
-}
-
-// src/repair/git.ts
-function git(cwd, args) {
-  const r = spawnSync2("git", args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-  return { ok: r.status === 0, out: (r.stdout ?? "").trim(), err: (r.stderr ?? "").trim() };
-}
-function isGitRepo(root) {
-  return git(root, ["rev-parse", "--is-inside-work-tree"]).out === "true";
-}
-function untrackedFiles(root) {
-  return git(root, ["ls-files", "--others", "--exclude-standard"]).out.split("\n").filter(Boolean);
-}
-function createCheckpoint(root, wsRoot, note = "") {
-  if (!isGitRepo(root))
-    throw new JouriloError(
-      "INVALID_INPUT",
-      `${root} is not a git repository; checkpoints need git.`,
-      "Run `git init` and commit, or keep your own backup before applying fixes."
-    );
-  const head = git(root, ["rev-parse", "HEAD"]);
-  if (!head.ok)
-    throw new JouriloError(
-      "INVALID_INPUT",
-      "The repository has no commits yet; commit once before using checkpoints."
-    );
-  const stash = git(root, ["stash", "create", `jourilo checkpoint ${note}`.trim()]);
-  const cp = {
-    id: newRunId(),
-    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-    head: head.out,
-    snapshot: stash.out || head.out,
-    untracked: untrackedFiles(root),
-    note
-  };
-  git(root, ["update-ref", `refs/jourilo/checkpoints/${cp.id}`, cp.snapshot]);
-  const dir = join18(wsRoot, "checkpoints");
-  mkdirSync6(dir, { recursive: true });
-  writeFileSync8(join18(dir, `${cp.id}.json`), `${JSON.stringify(cp, null, 2)}
-`);
-  return cp;
-}
-function loadCheckpoint(wsRoot, id) {
-  const dir = join18(wsRoot, "checkpoints");
-  const read3 = (name) => JSON.parse(readFileSync12(join18(dir, `${name}.json`), "utf8"));
-  let pick2 = id;
-  if (id === "latest") {
-    const names = existsSync15(dir) ? readdirSync9(dir).filter((f) => f.endsWith(".json")).map((f) => f.replace(/\.json$/, "")).sort().reverse() : [];
-    pick2 = names.find((n) => {
-      try {
-        const rec = read3(n);
-        if (!isTransaction(rec)) return !rec.rolledBack;
-        return !rec.undoes && ["applied", "pending", "partially-rolled-back"].includes(rec.state);
-      } catch {
-        return false;
-      }
-    });
-  }
-  if (!pick2 || !/^[\w-]+$/.test(pick2) || !existsSync15(join18(dir, `${pick2}.json`)))
-    throw new JouriloError("NOT_FOUND", `Checkpoint not found: ${id}`);
-  return read3(pick2);
-}
-function diffSince(root, cp) {
-  const stat = git(root, ["diff", "--stat", cp.snapshot]).out;
-  const patch = git(root, ["diff", cp.snapshot]).out;
-  const newFiles = untrackedFiles(root).filter((f) => !cp.untracked.includes(f));
-  return { stat, patch, newFiles };
-}
-function backupDir(wsRoot, cp) {
-  return join18(wsRoot, "checkpoints", cp.id);
-}
-function blob(root, rev, file) {
-  const r = spawnSync2("git", ["cat-file", "blob", `${rev}:${file}`], {
-    cwd: root,
-    maxBuffer: 64 * 1024 * 1024
-  });
-  return r.status === 0 ? r.stdout : null;
-}
-function rollbackCheckpoint(root, cp, wsRoot, opts = {}) {
-  const changed = git(root, ["diff", "--name-only", "--no-renames", cp.snapshot]).out.split("\n").filter(Boolean).filter((f) => !opts.files?.length || opts.files.includes(f));
-  const edits = [];
-  const notRestorable = [];
-  for (const f of changed) {
-    const target = resolveInside(root, f);
-    const current = existsSync15(target) ? readFileSync12(target) : null;
-    const saved = resolveInside(backupDir(wsRoot, cp), f);
-    let wanted = existsSync15(saved) ? readFileSync12(saved) : null;
-    if (!wanted) {
-      const content = blob(root, cp.snapshot, f);
-      if (!content) {
-        notRestorable.push(f);
-        continue;
-      }
-      wanted = current?.includes("\r\n") && !content.includes("\r\n") ? Buffer.from(content.toString("utf8").replace(/\n/g, "\r\n"), "utf8") : content;
-    }
-    if (current?.equals(wanted)) continue;
-    edits.push({ file: f, before: current, after: wanted });
-  }
-  const transaction = edits.length ? applyTransaction(root, wsRoot, edits, { note: `rollback to checkpoint ${cp.id}`, undoes: cp.id }) : null;
-  return {
-    transaction,
-    restored: edits.map((e) => e.file),
-    // Files that did not exist at checkpoint time are listed, never deleted.
-    leftUntracked: [
-      ...notRestorable,
-      ...untrackedFiles(root).filter((f) => !cp.untracked.includes(f) && !notRestorable.includes(f))
-    ]
-  };
-}
-function markRolledBack(wsRoot, cp, transactionId) {
-  const file = join18(wsRoot, "checkpoints", `${cp.id}.json`);
-  writeFileSync8(file, `${JSON.stringify({ ...cp, rolledBack: transactionId }, null, 2)}
-`);
-}
-function wouldBeCommitted(file) {
-  let dir = dirname8(file);
-  while (!existsSync15(dir) && dirname8(dir) !== dir) dir = dirname8(dir);
-  if (!isGitRepo(dir)) return false;
-  const r = spawnSync2("git", ["check-ignore", "-q", "--no-index", file], { cwd: dir });
-  return r.status === 1;
-}
-
-// src/cli/commands/journeys.ts
-function journeysDir(ws) {
-  return join19(ws.root, "journeys");
-}
-function loadJourneys(ws, refs) {
-  const dir = journeysDir(ws);
-  const files = [];
-  if (!refs.length) {
-    if (!existsSync16(dir)) return [];
-    files.push(
-      ...readdirSync10(dir).filter((f) => f.endsWith(".json")).sort().map((f) => join19(dir, f))
-    );
-  } else {
-    for (const r of refs) {
-      if (r.endsWith(".json") && existsSync16(r)) files.push(resolve8(r));
-      else if (existsSync16(join19(dir, `${r}.json`))) files.push(join19(dir, `${r}.json`));
-      else throw new JouriloError("NOT_FOUND", `Journey not found: ${r} (looked in ${dir})`);
-    }
-  }
-  return files.map((f) => {
-    let raw;
-    try {
-      raw = JSON.parse(readFileSync13(f, "utf8"));
-    } catch (err) {
-      throw new JouriloError("INVALID_INPUT", `${basename5(f)} is not valid JSON: ${err.message}`);
-    }
-    return validateJourney(raw, basename5(f));
-  });
-}
-function parseVars(ctx) {
-  const out = {};
-  for (const [k, v] of Object.entries(process.env))
-    if (k.startsWith("JOURILO_VAR_") && v) out[k.slice(12).toLowerCase()] = v;
-  for (const kv of list(ctx, "var")) {
-    const i = kv.indexOf("=");
-    if (i < 1) throw new JouriloError("USAGE", `--var must be key=value (got ${kv})`);
-    out[kv.slice(0, i)] = kv.slice(i + 1);
-  }
-  return out;
-}
-async function suggest(ctx) {
-  const target = ctx.positionals[1];
-  let run;
-  if (!target || ctx.ws.listRuns().some((r) => r.id === target) || target === "latest") {
-    run = ctx.ws.loadRun(target ?? "latest").run;
-  } else {
-    const isDir = existsSync16(target) && !target.includes("://");
-    const server = isDir ? await serveStatic(resolve8(target)) : void 0;
-    try {
-      ctx.log("Discovering pages to derive journeys (no audit rules applied) \u2026");
-      run = (await runAudit(ctx.ws, {
-        target: server?.url ?? target,
-        viewports: parseViewports("desktop"),
-        maxPages: num(ctx, "pages", 8),
-        maxDepth: 3,
-        browser: "chromium",
-        headed: false,
-        respectRobots: true,
-        allowPrivate: flag(ctx, "allow-private"),
-        keyboard: false,
-        throttle: false,
-        timeoutMs: 3e4,
-        mask: [],
-        forms: false,
-        mode: isDir ? "repository" : "website",
-        onProgress: ctx.log
-      })).run;
-    } finally {
-      await server?.close();
-    }
-  }
-  const specs = suggestJourneys(run);
-  const dir = journeysDir(ctx.ws);
-  mkdirSync7(dir, { recursive: true });
-  const written = [];
-  const kept = [];
-  for (const s of specs) {
-    const file = join19(dir, `${s.id}.json`);
-    if (existsSync16(file) && !flag(ctx, "force")) {
-      kept.push(s.id);
-      continue;
-    }
-    writeFileSync9(file, `${JSON.stringify(s, null, 2)}
-`);
-    written.push(file);
-  }
-  return {
-    data: { journeys: specs, written, kept, dir },
-    text: [
-      `Suggested ${specs.length} journey(s) from run ${run.id} \u2192 ${dir}`,
-      ...specs.map(
-        (s) => `  ${s.id.padEnd(32)} ${s.name}${s.safety?.submitsForms ? "  [submits forms]" : ""}${s.safety?.destructive ? "  [destructive]" : ""}`
-      ),
-      kept.length ? `  (kept ${kept.length} existing file(s); --force to overwrite)` : "",
-      "Review and edit them, then: jourilo journeys run --base <url>"
-    ].filter(Boolean).join("\n")
-  };
-}
-function summarizeAttempts(spec, attempts) {
-  if (attempts.length === 1) return attempts[0];
-  const passed = attempts.filter((a) => a.result.status === "passed").length;
-  const rep = attempts.find((a) => a.result.status !== "passed") ?? attempts[0];
-  const result = {
-    ...rep.result,
-    attempts: attempts.map((a) => ({ status: a.result.status, durationMs: a.result.durationMs })),
-    stability: passed === 0 || passed === attempts.length ? "stable" : "flaky"
-  };
-  if (result.stability === "stable") return { result, findings: rep.findings };
-  const findings = [
-    ...rep.findings.map((f) => ({ ...f, confidence: "low" })),
-    makeFinding({
-      ruleId: "journey/flaky",
-      key: spec.id,
-      journey: spec.id,
-      title: `Journey "${spec.name}" passed ${passed} of ${attempts.length} times`,
-      category: "reliability",
-      kind: "needs-review",
-      severity: "moderate",
-      confidence: "high",
-      provenance: "observed",
-      url: rep.result.steps.at(-1)?.url || spec.start,
-      viewport: rep.result.viewport,
-      description: `The same steps gave different outcomes across ${attempts.length} runs (${attempts.map((a) => a.result.status).join(", ")}). Either the product behaves inconsistently (race conditions, timing, data dependence) or the journey depends on timing; the failing run's evidence is attached to the journey.`,
-      impact: "Intermittent failures reach real users and make before/after comparisons unreliable.",
-      recommendation: "Compare the failing attempt with a passing one: look for requests that finish in a different order, elements that render late, or data created by an earlier run. Fix the product if it is a race; otherwise make the journey wait for the right state.",
-      standards: [],
-      evidence: [{ type: "step", snippet: rep.result.steps.find((s) => s.status !== "passed")?.error ?? "" }],
-      reproduction: [
-        `Run the journey ${attempts.length} times: jourilo journeys run ${spec.id} --repeat ${attempts.length}`
-      ]
-    })
-  ];
-  return { result, findings };
-}
-async function runCmd(ctx) {
-  const baseArg = str(ctx, "base");
-  if (!baseArg)
-    throw new JouriloError("USAGE", "--base <url|dir> is required (the site to run journeys against).");
-  const specs = loadJourneys(ctx.ws, ctx.positionals.slice(1));
-  if (!specs.length)
-    throw new JouriloError(
-      "NOT_FOUND",
-      "No journeys to run.",
-      "Create some with `jourilo journeys suggest <url>`."
-    );
-  const state = parseStateOptions(ctx);
-  const isDir = existsSync16(baseArg) && !baseArg.includes("://");
-  const server = isDir ? await serveStatic(resolve8(baseArg)) : void 0;
-  try {
-    const base2 = parseTargetUrl(server?.url ?? baseArg);
-    const hostClass = await checkTarget(base2, { allowPrivate: flag(ctx, "allow-private") });
-    const id = newRunId();
-    const runDir = ctx.ws.createRunDir(id);
-    const browserName = str(ctx, "browser") ?? "chromium";
-    const session = await openGuardedBrowser(browserName, flag(ctx, "headed"), {
-      target: hostClass,
-      allowPrivate: flag(ctx, "allow-private")
-    });
-    const browser = session.browser;
-    const browserVersion = browser.version();
-    const startedAt = (/* @__PURE__ */ new Date()).toISOString();
-    const journeys2 = [];
-    let findings = [];
-    const limitations = [];
-    const data = testData(id, parseVars(ctx));
-    const policy = {
-      hostClass,
-      allowSubmit: flag(ctx, "allow-submit"),
-      allowDestructive: flag(ctx, "allow-destructive")
-    };
-    if (policy.allowDestructive && hostClass !== "local")
-      limitations.push(
-        "--allow-destructive is ignored on non-local hosts: irreversible and payment actions were blocked."
-      );
-    const allowOrigins = list(ctx, "allow-origin").map((o) => {
-      const u = parseTargetUrl(o);
-      return u.origin;
-    });
-    const repeat = Math.max(1, Math.min(10, num(ctx, "repeat", 1)));
-    const saveAuthArg = str(ctx, "save-auth");
-    if (saveAuthArg && repeat > 1)
-      throw new JouriloError("USAGE", "--save-auth cannot be combined with --repeat.");
-    if (saveAuthArg && specs.length !== 1)
-      throw new JouriloError("USAGE", "--save-auth needs exactly one journey (the sign-in journey).");
-    const saveAuth = saveAuthArg ? resolve8(saveAuthArg) : void 0;
-    if (saveAuth) {
-      limitations.push(
-        `Signed-in state saved to ${displayPath(saveAuth)} (owner-only permissions). Treat it like a password; it is a test-account session.`
-      );
-      if (wouldBeCommitted(saveAuth)) {
-        const warning = `WARNING: ${displayPath(saveAuth)} is inside a git repository and not ignored, so it could be committed with its session cookies. Add it to .gitignore or save it under .jourilo/.`;
-        limitations.push(warning);
-        ctx.log(warning);
-      }
-    }
-    if (flag(ctx, "trace")) {
-      mkdirSync7(join19(runDir, "traces"), { recursive: true });
-      limitations.push(
-        "Playwright traces contain DOM snapshots and typed values: keep them private (they are excluded from git)."
-      );
-    }
-    try {
-      const viewports = str(ctx, "viewport") ? list(ctx, "viewport") : [void 0];
-      for (const spec of specs) {
-        for (const vp of viewports) {
-          ctx.log(`journey ${spec.id}${vp ? ` (${vp})` : ""}`);
-          const attempts = [];
-          for (let k = 0; k < repeat; k++) {
-            const r = await runJourney(browser, spec, {
-              base: base2,
-              runDir,
-              hostClass,
-              policy,
-              data: repeat > 1 ? testData(`${id}${k}`, parseVars(ctx)) : data,
-              trace: flag(ctx, "trace") && k === 0,
-              stepTimeoutMs: num(ctx, "timeout", 10) * 1e3,
-              ...vp ? { viewportOverride: vp } : {},
-              ...str(ctx, "auth") ? { storageState: str(ctx, "auth") } : {},
-              ...state,
-              ...saveAuth ? { saveAuth } : {},
-              ...allowOrigins.length ? { allowOrigins } : {},
-              log: k === 0 ? ctx.log : void 0
-            });
-            if (repeat > 1) ctx.log(`  attempt ${k + 1}/${repeat}: ${r.result.status}`);
-            attempts.push(r);
-          }
-          const { result, findings: jf } = summarizeAttempts(spec, attempts);
-          ctx.log(
-            `  \u2192 ${result.status}${result.stability ? ` (${result.stability})` : ""} (${(result.durationMs / 1e3).toFixed(1)} s)`
-          );
-          journeys2.push(result);
-          findings.push(...jf);
-        }
-      }
-    } finally {
-      await session.close();
-    }
-    const network = session.report();
-    limitations.push(...networkLimitations(network));
-    findings = mergeFindings(findings);
-    const run = {
-      schemaVersion: RUN_SCHEMA_VERSION,
-      id,
-      tool: { name: "jourilo", version: VERSION },
-      mode: isDir || str(ctx, "repo") ? "repository" : "website",
-      target: server ? `${displayPath(resolve8(baseArg))} (served at ${server.url})` : base2.toString(),
-      startedAt,
-      finishedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      browser: { name: browserName, version: browserVersion },
-      viewports: parseViewports([...new Set(journeys2.map((j) => j.viewport))].join(",") || "desktop"),
-      settings: {
-        journeys: specs.map((s) => s.id),
-        allowSubmit: policy.allowSubmit,
-        allowDestructive: policy.allowDestructive,
-        hostClass,
-        ...state
-      },
-      pages: [],
-      journeys: journeys2,
-      findings,
-      summary: summarize(findings, 0, journeys2.length),
-      limitations: [
-        ...limitations,
-        "Journeys prove that a scripted path works (or not) in one browser; they do not measure how real people choose paths."
-      ],
-      ...network.blocked.length || network.escaped.length ? { network } : {}
-    };
-    const repo = str(ctx, "repo") ?? (isDir ? resolve8(baseArg) : void 0);
-    if (repo) locateFindings(run, repo);
-    ctx.ws.saveRun(run);
-    const reports = writeReports(runDir, run, void 0, { history: ctx.ws.listRuns() });
-    const failed = journeys2.filter((j) => j.status === "failed").length;
-    return {
-      data: { runId: id, runDir, reports, journeys: journeys2, findings },
-      text: [
-        "",
-        ...journeys2.map(
-          (j) => `  ${j.status === "passed" ? "\u2713" : j.status === "blocked" ? "\u26D4" : "\u2717"} ${j.name} [${j.viewport}] ${j.status}${j.status !== "passed" ? ` \u2014 ${j.steps.find((s) => s.status === "failed" || s.status === "blocked")?.error ?? j.successCriteria.filter((c) => !c.met).map((c) => `${c.description}: ${c.detail ?? ""}`).join("; ")}` : ""}`
-        ),
-        "",
-        `  Report: ${reports.html}`,
-        `  Run id: ${id}`
-      ].join("\n"),
-      exitCode: failed && flag(ctx, "fail-on-failure") ? 1 : 0
-    };
-  } finally {
-    await server?.close();
-  }
-}
-var journeys = {
-  name: "journeys",
-  summary: "Discover, list, validate and run user journeys (reusable scenarios with explicit success criteria).",
-  usage: "jourilo journeys <suggest [url|dir|run]|list|validate [files]|run [ids] --base <url|dir>>",
-  options: {
-    base: { type: "string" },
-    viewport: { type: "string" },
-    var: { type: "string", multiple: true },
-    trace: { type: "boolean" },
-    "allow-submit": { type: "boolean" },
-    "allow-destructive": { type: "boolean" },
-    "allow-private": { type: "boolean" },
-    "allow-origin": { type: "string", multiple: true },
-    "fail-on-failure": { type: "boolean" },
-    browser: { type: "string" },
-    headed: { type: "boolean" },
-    auth: { type: "string" },
-    repo: { type: "string" },
-    timeout: { type: "string" },
-    pages: { type: "string" },
-    force: { type: "boolean" },
-    "save-auth": { type: "string" },
-    repeat: { type: "string" },
-    timezone: { type: "string" },
-    clock: { type: "string" }
-  },
-  details: `Subcommands:
-  suggest [url|dir|run]  Derive journeys from a site (or an existing run) into .jourilo/journeys/*.json
-  list                   List journey files
-  validate [files]       Check journey files against the schema
-  run [ids|files]        Run journeys against --base <url|dir>
-
-Run options:
-  --viewport LIST        desktop, mobile, \u2026 (default: the journey's own viewport or desktop)
-  --var key=value        Test data for {{key}} placeholders (also JOURILO_VAR_KEY env vars)
-  --allow-submit         Allow form submission on non-local hosts (authorized test environments only)
-  --allow-destructive    Allow irreversible/payment actions \u2014 local hosts with sandbox data only
-  --allow-origin ORIGIN  Let the page navigate to another origin you are authorized to test (e.g. a test IdP)
-  --trace                Record a Playwright trace per journey (contains typed values; keep private)
-  --auth FILE            Playwright storage state for signed-in journeys
-  --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
-  --timezone ZONE        IANA time zone for the page (e.g. Europe/Istanbul)
-  --clock ISO            Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
-  --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
-  --fail-on-failure      Exit 1 when a journey fails
-
-Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission
-on non-local hosts needs --allow-submit. The policy is checked twice: on the element about to be clicked or
-pressed (its name, link target, form action and identifiers \u2014 icon-only buttons included), and on every request
-the page then sends (form posts, DELETE, requests to delete/cancel/payment endpoints, navigation to other
-origins). Blocked steps are reported, not skipped silently.`,
-  async run(ctx) {
-    const sub = ctx.positionals[0] ?? "list";
-    if (sub === "suggest") return suggest(ctx);
-    if (sub === "run") return runCmd(ctx);
-    if (sub === "list" || sub === "validate") {
-      const specs = loadJourneys(ctx.ws, ctx.positionals.slice(1));
-      return {
-        data: specs,
-        text: specs.length ? `${specs.length} valid journey(s):
-${specs.map((s) => `  ${s.id.padEnd(32)} ${s.steps.length} steps, ${s.success.length} criteria  ${s.name}`).join("\n")}` : `No journeys in ${journeysDir(ctx.ws)}. Create some with \`jourilo journeys suggest <url>\`.`
-      };
-    }
-    throw new JouriloError("USAGE", `Unknown subcommand "${sub}".`, `Usage: ${journeys.usage}`);
   }
 };
 
 // src/cli/commands/optimize.ts
 import { existsSync as existsSync17, mkdirSync as mkdirSync8, writeFileSync as writeFileSync10 } from "node:fs";
-import { join as join20, resolve as resolve9 } from "node:path";
+import { join as join21, resolve as resolve9 } from "node:path";
 init_errors();
 init_fs_safety();
 
@@ -50422,10 +50468,10 @@ Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
         }
       );
       checkpoint2 = tx.id;
-      const outDir = join20(ctx.ws.root, "fixes");
+      const outDir = join21(ctx.ws.root, "fixes");
       mkdirSync8(outDir, { recursive: true });
       writeFileSync10(
-        join20(outDir, `${run.id}.json`),
+        join21(outDir, `${run.id}.json`),
         `${JSON.stringify({ run: run.id, checkpoint: checkpoint2, applied: plans.map((p) => ({ fingerprint: p.fingerprint, ruleId: p.ruleId, title: p.title, files: p.edits.map((e) => e.file) })) }, null, 2)}
 `
       );
@@ -50438,7 +50484,7 @@ Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
     }
     lines.push(
       "",
-      `${manual.length} other defect(s) need a person or agent; source candidates are in the report (${join20(dir, "report.html")}).`
+      `${manual.length} other defect(s) need a person or agent; source candidates are in the report (${join21(dir, "report.html")}).`
     );
     return {
       data: {

@@ -231,6 +231,8 @@ export interface JourneyResult {
   /** With --repeat: every attempt, and whether the outcome was the same each time. */
   attempts?: { status: JourneyResult['status']; durationMs: number }[];
   stability?: 'stable' | 'flaky';
+  /** `setup`: the journey ran before the audit to put the site into the state that was audited. */
+  role?: 'setup';
 }
 
 export type RunMode = 'website' | 'repository';
