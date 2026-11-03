@@ -35,6 +35,11 @@ One entry per problem, in this shape:
 | F16 | Frameva     | Run setup     | No `--user-agent`, `--extra-header`, `--ignore-https-errors`; no `--output-dir`                                    | Feature           |
 | F17 | Frameva     | Run setup     | Audits cannot get past cookie walls; only journeys can                                                             | Partly (see note) |
 | F18 | Frameva     | Docs          | Implemented flags missing from docs/CLI.md: `--timeout`, `--locale`, `--headed`, `report --stdout`, journeys flags | Bug               |
+| F19 | Frameva     | Network       | Loopback targets (`localhost`, `127.0.0.1`, `[::1]`) are audited with no flag; only private ranges exit 3          | Needs decision    |
+| F20 | Frameva     | Crawl         | The start URL ignores robots.txt, and trailing-slash normalisation audited `/staff/` as `/staff` (a 404)           | Bug               |
+| F21 | Frameva     | Browser       | Chromium always runs with `--no-sandbox` and outside Jourilo's process group                                       | Feature           |
+| F22 | Frameva     | Report        | `summary.pages` counts captures; no signal when pages are left out of a sample; `--pages 0` silently becomes 1     | Bug               |
+| F23 | Frameva     | Detection     | A redirect chain gives no finding; a keyboard trap is found only with focusable elements outside it                | Feature           |
 
 ## Notes per item
 
@@ -72,6 +77,18 @@ One entry per problem, in this shape:
 - **F17** — `audit --auth <storage-state>` already exists, so a saved consent state works. A consent click before each
   page is the setup journey of F2.
 - **F18** — The generated reference does not list these flags; check the generator against every command's options.
+- **Frameva measured report (2026-11-03)** — 12 real runs of 1.1.0 on a local fixture site with planted issues, plus an
+  image check in GitHub Actions (`frameva/docs/tool-feedback/jourilo/2026-11-03-m1-a-06-fixture-runs.md`). It confirms
+  F11 (plain-http DNS failure and connection reset reported as an HTTP 502 with exit 0), F12 (SIGTERM: no `run.json`,
+  exit 1) and F18 (`--timeout`, `--locale` missing from `--help`). Two runs of the same site had identical fingerprints.
+- **F19** — Auditing a local dev server is the main use, so loopback stays allowed by default. An integrator that audits
+  on behalf of others needs an opt-in deny (a flag or an environment variable). Decision for after 1.2.0 (JOURILO-012).
+- **F20** — The explicit start URL is not checked against robots.txt, and the URL is rewritten without its trailing
+  slash (JOURILO-014).
+- **F21** — Security-sensitive; needs a sandbox option tested in containers and a documented cleanup (JOURILO-015).
+- **F22** — Report pages and captures separately, say how many pages a sample left out, and make `--pages 0` a usage
+  error (JOURILO-016).
+- **F23** — A redirect-chain finding, and keyboard-trap detection that does not depend on the focus start.
 
 ## Recurrence
 
@@ -89,11 +106,16 @@ Count each project that reports the same item again here; recurrence decides pri
 | F8   | cihanca.com                         |
 | F9   | cihanca.com                         |
 | F10  | cihanca.com                         |
-| F11  | Frameva                             |
-| F12  | Frameva                             |
+| F11  | Frameva (planning, then measured)   |
+| F12  | Frameva (planning, then measured)   |
 | F13  | Frameva                             |
 | F14  | Frameva                             |
 | F15  | Frameva                             |
 | F16  | Frameva                             |
 | F17  | Frameva                             |
-| F18  | Frameva                             |
+| F18  | Frameva (planning, then measured)   |
+| F19  | Frameva                             |
+| F20  | Frameva                             |
+| F21  | Frameva                             |
+| F22  | Frameva                             |
+| F23  | Frameva                             |
