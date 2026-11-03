@@ -1,7 +1,7 @@
 // The audit pipeline: validate target → discover pages → capture each page per viewport → apply rules →
 // merge → store a Run. Pure orchestration; measurement lives in browser/, judgment rules in audit/rules and
 // conversion/.
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Browser } from 'playwright-core';
 import {
@@ -12,7 +12,12 @@ import {
   type PageObservation,
 } from '../browser/capture.js';
 import type { BrowserName } from '../browser/runtime.js';
-import { type GuardedSession, networkLimitations, openGuardedBrowser } from '../browser/session.js';
+import {
+  type GuardedSession,
+  type NetworkReport,
+  networkLimitations,
+  openGuardedBrowser,
+} from '../browser/session.js';
 import { toMetrics } from '../browser/vitals.js';
 import { conversionFindings } from '../conversion/rules.js';
 import { applyDismissals, loadDismissals } from '../core/dismissals.js';
@@ -213,6 +218,16 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
   const simulated: string[] = [];
   const runs = Math.max(1, Math.min(9, Math.round(opts.runs ?? 1)));
   let stoppedBy: Run['stoppedBy'];
+  // The session cookies a setup journey saves; never left in the run directory once browsing is over.
+  const setupState = join(runDir, 'setup-state.json');
+  let network: NetworkReport = { blocked: [], escaped: [] };
+  // Closes the browser first, so a setup journey abandoned by a stop cannot write its state after the removal.
+  const endBrowsing = async () => {
+    if (session) network = session.report();
+    await session?.close();
+    session = undefined;
+    rmSync(setupState, { force: true });
+  };
   try {
     try {
       log(`Starting ${opts.browser} …`);
@@ -233,7 +248,6 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       if (opts.setupJourney) {
         const spec = opts.setupJourney;
         log(`Running setup journey ${spec.id} …`);
-        const setupState = join(runDir, 'setup-state.json');
         const { result } = await untilStopped(
           runJourney(browser, spec, {
             base: target,
@@ -416,6 +430,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       stoppedBy = signal?.reason === 'max-duration' ? 'max-duration' : 'signal';
       log(`Stopped early (${stoppedBy}); writing a partial run …`);
     }
+    await endBrowsing();
     if (stoppedBy)
       limitations.push(stopLimitation(stoppedBy, urls, opts.viewports.length, observations.length));
 
@@ -478,7 +493,6 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       );
     else limitations.push('Measured without network/CPU throttling: real mobile devices are usually slower.');
 
-    const network = session?.report() ?? { blocked: [], escaped: [] };
     limitations.push(...networkLimitations(network));
     const stopped = observations.flatMap((o) => o.blockedActions ?? []);
     if (stopped.length)
@@ -552,7 +566,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
     ws.saveRun(run);
     return { run, runDir, observations };
   } finally {
-    await session?.close();
+    await endBrowsing();
   }
 }
 

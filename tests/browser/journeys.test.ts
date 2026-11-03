@@ -186,6 +186,35 @@ describe('journeys', () => {
     const setup = run.journeys.find((j: { role?: string }) => j.role === 'setup');
     expect(setup).toMatchObject({ id: 'dark', status: 'passed' });
     expect(await foldIsDark(out.runDir, run)).toBe(true);
+    // The session cookies the setup journey saved are not left in the run directory.
+    expect(existsSync(join(out.runDir, 'setup-state.json'))).toBe(false);
+    expect(readFileSync(join(out.runDir, 'manifest.json'), 'utf8')).not.toContain('setup-state');
+  });
+
+  it('a stopped audit with a setup journey and minimal evidence is partial and leaves no session state', () => {
+    const r = jourilo(
+      'audit',
+      'fixtures/apps/journey-lab',
+      '--pages',
+      '10',
+      '--viewports',
+      'desktop,mobile',
+      '--runs',
+      '3',
+      '--evidence',
+      'minimal',
+      '--max-duration',
+      '2',
+      '--setup-journey',
+      'fixtures/apps/journey-lab/dark.json',
+    );
+    expect(r.status, r.stderr).toBe(6);
+    const out = JSON.parse(r.stdout);
+    const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8'));
+    expect(run.outcome).toBe('partial');
+    expect(run.stoppedBy).toBe('max-duration');
+    expect(existsSync(join(out.runDir, 'setup-state.json'))).toBe(false);
+    expect(readFileSync(join(out.runDir, 'manifest.json'), 'utf8')).not.toContain('setup-state');
   });
 
   it('verify replays the setup journey of its baseline', async () => {
