@@ -1,0 +1,533 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/cihantopac/jourilo/main/schemas/run.schema.json",
+  "title": "Jourilo run",
+  "description": "run.json, schemaVersion 1. Within a schemaVersion fields are only added, and added fields are optional, so readers must ignore unknown fields. See docs/RUN-FORMAT.md.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "tool",
+    "mode",
+    "target",
+    "startedAt",
+    "finishedAt",
+    "browser",
+    "viewports",
+    "settings",
+    "pages",
+    "journeys",
+    "findings",
+    "summary",
+    "limitations"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string" },
+    "tool": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": { "name": { "const": "jourilo" }, "version": { "type": "string" } }
+    },
+    "mode": { "enum": ["website", "repository"] },
+    "target": { "type": "string" },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "browser": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": { "name": { "type": "string" }, "version": { "type": "string" } }
+    },
+    "viewports": { "type": "array", "items": { "$ref": "#/$defs/viewport" } },
+    "settings": {
+      "description": "How the run was configured. Keys vary by version; every key listed here is optional.",
+      "type": "object",
+      "properties": {
+        "maxPages": { "type": "integer" },
+        "maxDepth": { "type": "integer" },
+        "respectRobots": { "type": "boolean" },
+        "keyboard": { "type": "boolean" },
+        "throttle": {},
+        "runs": { "type": "integer" },
+        "setupJourney": { "type": "string", "description": "Id of the journey that ran before the audit." },
+        "timezoneId": { "type": "string" },
+        "clock": { "type": "string" },
+        "axe": { "type": ["string", "null"] },
+        "hostClass": { "type": "string" },
+        "scope": {
+          "type": "object",
+          "properties": {
+            "urls": { "type": "array", "items": { "type": "string" } },
+            "viewports": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "pages": { "type": "array", "items": { "$ref": "#/$defs/page" } },
+    "journeys": { "type": "array", "items": { "$ref": "#/$defs/journeyResult" } },
+    "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+    "summary": { "$ref": "#/$defs/summary" },
+    "limitations": {
+      "description": "Things Jourilo could not check in this run.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "product": { "description": "Product intelligence attached by `discover`." },
+    "context": {
+      "description": "Brand and search context (jourilo.context/v1) used by this run.",
+      "type": "object",
+      "properties": {
+        "schema": { "type": "string" },
+        "brand": { "type": ["object", "null"] },
+        "search": { "type": ["object", "null"] },
+        "notes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "network": {
+      "description": "What the network guard refused or detected during the run.",
+      "type": "object",
+      "required": ["blocked", "escaped"],
+      "properties": {
+        "blocked": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["host", "port", "reason"],
+            "properties": {
+              "host": { "type": "string" },
+              "port": { "type": "integer" },
+              "reason": { "type": "string" }
+            }
+          }
+        },
+        "escaped": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["url", "reason"],
+            "properties": { "url": { "type": "string" }, "reason": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "outcome": {
+      "description": "`no-page-loaded`: no page got a response. `partial`: the run was stopped early (see stoppedBy). Absent in older runs.",
+      "enum": ["complete", "no-page-loaded", "partial"]
+    },
+    "stoppedBy": {
+      "description": "Why a partial run stopped.",
+      "enum": ["signal", "max-duration"]
+    },
+    "dismissed": {
+      "description": "Findings a person or agent dismissed. Not counted in summary.",
+      "type": "array",
+      "items": {
+        "allOf": [
+          { "$ref": "#/$defs/finding" },
+          {
+            "type": "object",
+            "required": ["dismissal"],
+            "properties": { "dismissal": { "$ref": "#/$defs/dismissal" } }
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "severity": { "enum": ["critical", "serious", "moderate", "minor", "info"] },
+    "confidence": { "enum": ["high", "medium", "low"] },
+    "category": {
+      "enum": [
+        "accessibility",
+        "usability",
+        "responsive",
+        "performance",
+        "conversion",
+        "reliability",
+        "content",
+        "design-system"
+      ]
+    },
+    "kind": { "enum": ["defect", "hypothesis", "needs-review"] },
+    "rect": {
+      "type": "object",
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number" },
+        "height": { "type": "number" }
+      }
+    },
+    "viewport": {
+      "type": "object",
+      "required": ["name", "width", "height", "deviceScaleFactor", "isMobile", "hasTouch"],
+      "properties": {
+        "name": { "type": "string" },
+        "width": { "type": "number" },
+        "height": { "type": "number" },
+        "deviceScaleFactor": { "type": "number" },
+        "isMobile": { "type": "boolean" },
+        "hasTouch": { "type": "boolean" }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["pages", "journeys", "findings", "byCategory", "byKind"],
+      "properties": {
+        "pages": { "type": "integer" },
+        "journeys": { "type": "integer" },
+        "findings": { "type": "object", "additionalProperties": { "type": "integer" } },
+        "byCategory": { "type": "object", "additionalProperties": { "type": "integer" } },
+        "byKind": { "type": "object", "additionalProperties": { "type": "integer" } }
+      }
+    },
+    "standardRef": {
+      "type": "object",
+      "required": ["standard", "id", "title"],
+      "properties": {
+        "standard": { "type": "string" },
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "url": { "type": "string" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": [
+            "screenshot",
+            "element",
+            "console",
+            "network",
+            "metric",
+            "axe",
+            "step",
+            "trace",
+            "source",
+            "dom"
+          ]
+        },
+        "file": { "type": "string", "description": "Path relative to the run directory." },
+        "rect": { "$ref": "#/$defs/rect" },
+        "selector": { "type": "string" },
+        "snippet": { "type": "string" },
+        "data": { "type": "object" },
+        "note": { "type": "string" }
+      }
+    },
+    "sourceLocation": {
+      "type": "object",
+      "required": ["file", "line", "reason", "confidence"],
+      "properties": {
+        "file": { "type": "string" },
+        "line": { "type": "integer" },
+        "column": { "type": "integer" },
+        "excerpt": { "type": "string" },
+        "reason": { "type": "string" },
+        "confidence": { "$ref": "#/$defs/confidence" }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": [
+        "fingerprint",
+        "ruleId",
+        "title",
+        "category",
+        "kind",
+        "severity",
+        "confidence",
+        "provenance",
+        "url",
+        "description",
+        "impact",
+        "recommendation",
+        "standards",
+        "evidence",
+        "reproduction",
+        "occurrences"
+      ],
+      "properties": {
+        "fingerprint": { "type": "string" },
+        "ruleId": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "$ref": "#/$defs/category" },
+        "kind": { "$ref": "#/$defs/kind" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "provenance": { "enum": ["measured", "observed", "heuristic", "inferred", "user"] },
+        "url": { "type": "string" },
+        "viewport": { "type": "string" },
+        "journey": { "type": "string" },
+        "description": { "type": "string" },
+        "impact": { "type": "string" },
+        "recommendation": { "type": "string" },
+        "standards": { "type": "array", "items": { "$ref": "#/$defs/standardRef" } },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+        "reproduction": { "type": "array", "items": { "type": "string" } },
+        "sources": { "type": "array", "items": { "$ref": "#/$defs/sourceLocation" } },
+        "occurrences": { "type": "integer" }
+      }
+    },
+    "dismissal": {
+      "type": "object",
+      "required": ["fingerprint", "ruleId", "url", "reason", "by", "at"],
+      "properties": {
+        "fingerprint": { "type": "string" },
+        "ruleId": { "type": "string" },
+        "url": { "type": "string" },
+        "reason": { "type": "string" },
+        "by": { "enum": ["user", "agent"] },
+        "at": { "type": "string" }
+      }
+    },
+    "metric": {
+      "type": "object",
+      "required": ["name", "value", "unit", "source"],
+      "properties": {
+        "name": { "type": "string" },
+        "value": { "type": "number" },
+        "unit": { "enum": ["ms", "score", "bytes", "count"] },
+        "source": { "const": "lab" },
+        "rating": { "enum": ["good", "needs-improvement", "poor"] },
+        "note": { "type": "string" },
+        "runs": { "type": "integer" },
+        "range": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }
+      }
+    },
+    "page": {
+      "type": "object",
+      "required": [
+        "url",
+        "finalUrl",
+        "status",
+        "title",
+        "viewport",
+        "loadMs",
+        "metrics",
+        "consoleErrors",
+        "failedRequests",
+        "inventory"
+      ],
+      "properties": {
+        "url": { "type": "string" },
+        "finalUrl": { "type": "string" },
+        "status": { "type": ["integer", "null"] },
+        "title": { "type": "string" },
+        "viewport": { "type": "string" },
+        "screenshot": { "type": "string", "description": "Path relative to the run directory." },
+        "loadMs": { "type": "number" },
+        "metrics": { "type": "array", "items": { "$ref": "#/$defs/metric" } },
+        "consoleErrors": { "type": "integer" },
+        "failedRequests": { "type": "integer" },
+        "inventory": { "$ref": "#/$defs/inventory" }
+      }
+    },
+    "inventory": {
+      "description": "Product-facing inventory of a page. Nested ctas, forms and links are loosely described on purpose.",
+      "type": "object",
+      "required": [
+        "lang",
+        "h1",
+        "headings",
+        "landmarks",
+        "ctas",
+        "forms",
+        "links",
+        "images",
+        "trustSignals",
+        "pricingSignals",
+        "wordCount",
+        "metaDescription",
+        "hasViewportMeta"
+      ],
+      "properties": {
+        "lang": { "type": ["string", "null"] },
+        "h1": { "type": "array", "items": { "type": "string" } },
+        "headings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["level", "text"],
+            "properties": { "level": { "type": "integer" }, "text": { "type": "string" } }
+          }
+        },
+        "landmarks": { "type": "array", "items": { "type": "string" } },
+        "ctas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["text", "selector", "href", "rect", "aboveFold", "emphasis"],
+            "properties": {
+              "text": { "type": "string" },
+              "selector": { "type": "string" },
+              "href": { "type": ["string", "null"] },
+              "rect": { "$ref": "#/$defs/rect" },
+              "aboveFold": { "type": "boolean" },
+              "emphasis": { "enum": ["primary", "secondary", "link"] }
+            }
+          }
+        },
+        "forms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["selector", "purpose", "action", "method", "fields", "submitText"],
+            "properties": {
+              "selector": { "type": "string" },
+              "purpose": {
+                "enum": [
+                  "signup",
+                  "login",
+                  "search",
+                  "checkout",
+                  "contact",
+                  "newsletter",
+                  "recovery",
+                  "other"
+                ]
+              },
+              "action": { "type": ["string", "null"] },
+              "method": { "type": "string" },
+              "fields": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["selector", "type", "name", "label", "required", "autocomplete"],
+                  "properties": {
+                    "selector": { "type": "string" },
+                    "type": { "type": "string" },
+                    "name": { "type": ["string", "null"] },
+                    "label": { "type": ["string", "null"] },
+                    "placeholder": { "type": ["string", "null"] },
+                    "required": { "type": "boolean" },
+                    "autocomplete": { "type": ["string", "null"] }
+                  }
+                }
+              },
+              "submitText": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["href", "text", "internal"],
+            "properties": {
+              "href": { "type": "string" },
+              "text": { "type": "string" },
+              "internal": { "type": "boolean" }
+            }
+          }
+        },
+        "images": {
+          "type": "object",
+          "required": ["total", "withoutAlt", "withoutDimensions"],
+          "properties": {
+            "total": { "type": "integer" },
+            "withoutAlt": { "type": "integer" },
+            "withoutDimensions": { "type": "integer" }
+          }
+        },
+        "trustSignals": { "type": "array", "items": { "type": "string" } },
+        "pricingSignals": { "type": "array", "items": { "type": "string" } },
+        "wordCount": { "type": "integer" },
+        "metaDescription": { "type": ["string", "null"] },
+        "hasViewportMeta": { "type": "boolean" }
+      }
+    },
+    "journeyStepResult": {
+      "type": "object",
+      "required": ["index", "action", "description", "status", "durationMs", "url"],
+      "properties": {
+        "index": { "type": "integer" },
+        "action": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "enum": ["passed", "failed", "skipped", "blocked"] },
+        "durationMs": { "type": "number" },
+        "screenshot": { "type": "string" },
+        "url": { "type": "string" },
+        "error": { "type": "string" }
+      }
+    },
+    "journeyResult": {
+      "type": "object",
+      "required": ["id", "name", "viewport", "status", "steps", "successCriteria", "durationMs"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "viewport": { "type": "string" },
+        "status": { "enum": ["passed", "failed", "blocked"] },
+        "steps": { "type": "array", "items": { "$ref": "#/$defs/journeyStepResult" } },
+        "successCriteria": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["description", "met"],
+            "properties": {
+              "description": { "type": "string" },
+              "met": { "type": "boolean" },
+              "detail": { "type": "string" }
+            }
+          }
+        },
+        "durationMs": { "type": "number" },
+        "trace": { "type": "string" },
+        "blockedRequests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["method", "url", "reason"],
+            "properties": {
+              "method": { "type": "string" },
+              "url": { "type": "string" },
+              "reason": { "type": "string" }
+            }
+          }
+        },
+        "attempts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["status", "durationMs"],
+            "properties": {
+              "status": { "enum": ["passed", "failed", "blocked"] },
+              "durationMs": { "type": "number" }
+            }
+          }
+        },
+        "stability": { "enum": ["stable", "flaky"] },
+        "role": {
+          "const": "setup",
+          "description": "The journey ran before the audit to put the site into the audited state."
+        }
+      }
+    },
+    "manifest": {
+      "description": "manifest.json, written next to run.json: every artifact of the run with its size and sha256.",
+      "type": "object",
+      "required": ["schemaVersion", "runId", "files"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "runId": { "type": "string" },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "bytes", "sha256"],
+            "properties": {
+              "path": { "type": "string" },
+              "bytes": { "type": "integer" },
+              "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

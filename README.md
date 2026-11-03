@@ -143,7 +143,7 @@ Jourilo works on its own and pairs with its siblings through a small, optional c
 
 ## Documentation
 
-[Guide](docs/WORKFLOW.md) · [CLI](docs/CLI.md) · [Plugin](docs/PLUGIN.md) · [Journeys](docs/JOURNEYS.md) ·
+[Guide](docs/WORKFLOW.md) · [CLI](docs/CLI.md) · [Plugin](docs/PLUGIN.md) · [Journeys](docs/JOURNEYS.md) · [Run format](docs/RUN-FORMAT.md) ·
 [Evaluation](docs/EVALUATION.md) · [Limitations](docs/LIMITATIONS.md) · [Architecture](docs/ARCHITECTURE.md) ·
 [Decisions](docs/DECISIONS.md) · [Roadmap](docs/ROADMAP.md) · [Changelog](CHANGELOG.md)
 
