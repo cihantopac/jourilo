@@ -41583,7 +41583,8 @@ async function checkWidgets(page) {
     }
     const after = await state(t.controls);
     const expandedAfter = await loc.getAttribute("aria-expanded").catch(() => null);
-    if (after.dialogOpen && !before.dialogOpen) {
+    const disclosure = t.expanded !== null && !!t.controls && after.controlledVisible !== null;
+    if (after.dialogOpen && !before.dialogOpen && !(after.unlabelled && disclosure)) {
       out.dialogs++;
       const issue = (kind, detail) => out.issues.push({ kind, trigger: t.selector, name: t.name, rect: t.rect, detail });
       if (after.unlabelled)
@@ -41621,7 +41622,7 @@ async function checkWidgets(page) {
         );
       continue;
     }
-    if (t.expanded !== null && t.controls && after.controlledVisible !== null) {
+    if (disclosure) {
       out.disclosures++;
       if (after.controlledVisible !== before.controlledVisible && String(after.controlledVisible) !== expandedAfter)
         out.issues.push({
@@ -47097,7 +47098,7 @@ async function benchFixture(dir, wsRoot) {
     const { run } = await runAudit(ws, {
       target: server.url,
       viewports: parseViewports("desktop,mobile"),
-      maxPages: 8,
+      maxPages: expected.audit?.maxPages ?? 8,
       maxDepth: 3,
       browser: "chromium",
       headed: false,

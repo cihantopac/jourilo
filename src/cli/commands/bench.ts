@@ -34,7 +34,7 @@ interface Expected {
   /** Expected source file for a rule (root-cause location accuracy). */
   sources?: { rule: string; path: string; file: string }[];
   /** Audit settings for this fixture (a static fixture is disposable, so real submissions are allowed). */
-  audit?: { allowSubmit?: boolean };
+  audit?: { allowSubmit?: boolean; maxPages?: number };
 }
 
 export interface FixtureResult {
@@ -67,7 +67,7 @@ export async function benchFixture(dir: string, wsRoot: string): Promise<Fixture
     const { run } = await runAudit(ws, {
       target: server.url,
       viewports: parseViewports('desktop,mobile'),
-      maxPages: 8,
+      maxPages: expected.audit?.maxPages ?? 8,
       maxDepth: 3,
       browser: 'chromium',
       headed: false,

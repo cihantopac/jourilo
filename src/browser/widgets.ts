@@ -273,7 +273,11 @@ export async function checkWidgets(page: Page): Promise<WidgetCheck> {
     const after = await state(t.controls);
     const expandedAfter = await loc.getAttribute('aria-expanded').catch(() => null);
 
-    if (after.dialogOpen && !before.dialogOpen) {
+    // A trigger with aria-expanded and aria-controls whose controlled element toggles is a disclosure, even when its
+    // panel is a large positioned layer. Only an opened element with a dialog role, <dialog> or aria-modal
+    // (unlabelled === false) is still judged as a dialog.
+    const disclosure = t.expanded !== null && !!t.controls && after.controlledVisible !== null;
+    if (after.dialogOpen && !before.dialogOpen && !(after.unlabelled && disclosure)) {
       out.dialogs++;
       const issue = (kind: WidgetIssue['kind'], detail: string) =>
         out.issues.push({ kind, trigger: t.selector, name: t.name, rect: t.rect, detail });
@@ -315,7 +319,7 @@ export async function checkWidgets(page: Page): Promise<WidgetCheck> {
       continue;
     }
 
-    if (t.expanded !== null && t.controls && after.controlledVisible !== null) {
+    if (disclosure) {
       out.disclosures++;
       // The controlled content changed visibility: aria-expanded must say so.
       if (
