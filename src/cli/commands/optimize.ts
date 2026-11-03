@@ -6,6 +6,7 @@ import { JouriloError } from '../../core/errors.js';
 import { displayPath } from '../../core/fs-safety.js';
 import { serveStatic } from '../../core/static-server.js';
 import { loadContext } from '../../integrations/context.js';
+import type { JourneySpec } from '../../journeys/schema.js';
 import { unifiedDiff } from '../../repair/diff.js';
 import { composeEdits, planFixes } from '../../repair/fixes.js';
 import {
@@ -26,6 +27,7 @@ import {
 import { compareRuns, type MetricDelta } from '../../report/compare.js';
 import { writeReports } from '../../report/index.js';
 import { type Command, flag, list, str } from '../framework.js';
+import { loadJourneys } from './journeys.js';
 
 export const optimize: Command = {
   name: 'optimize',
@@ -172,6 +174,20 @@ export const verify: Command = {
         return `${x.pathname}${x.search}`;
       });
       const repo = str(ctx, 'repo') ?? (base.settings.repo as string | undefined);
+      // Replay the state the baseline was audited in, or the comparison would be against the default state.
+      const setupId = base.settings.setupJourney as string | undefined;
+      let setupJourney: JourneySpec | undefined;
+      if (setupId) {
+        try {
+          setupJourney = loadJourneys(ctx.ws, [setupId])[0];
+        } catch (err) {
+          throw new JouriloError(
+            'INVALID_INPUT',
+            `Run ${base.id} was audited after setup journey "${setupId}", which cannot be loaded now: ${(err as Error).message}`,
+            'Restore the journey file, or audit again without it.',
+          );
+        }
+      }
       const { run, runDir } = await runAudit(ctx.ws, {
         target: origin,
         urls,
@@ -189,6 +205,9 @@ export const verify: Command = {
         timeoutMs: 30_000,
         mask: [],
         mode: base.mode,
+        ...(typeof base.settings.timezoneId === 'string' ? { timezoneId: base.settings.timezoneId } : {}),
+        ...(typeof base.settings.clock === 'string' ? { clock: base.settings.clock } : {}),
+        ...(setupJourney ? { setupJourney } : {}),
         ...(repo ? { context: loadContext(repo) } : {}),
         onProgress: ctx.log,
       });

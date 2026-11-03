@@ -50546,6 +50546,19 @@ var verify = {
         return `${x.pathname}${x.search}`;
       });
       const repo = str(ctx, "repo") ?? base2.settings.repo;
+      const setupId = base2.settings.setupJourney;
+      let setupJourney;
+      if (setupId) {
+        try {
+          setupJourney = loadJourneys(ctx.ws, [setupId])[0];
+        } catch (err) {
+          throw new JouriloError(
+            "INVALID_INPUT",
+            `Run ${base2.id} was audited after setup journey "${setupId}", which cannot be loaded now: ${err.message}`,
+            "Restore the journey file, or audit again without it."
+          );
+        }
+      }
       const { run, runDir } = await runAudit(ctx.ws, {
         target: origin,
         urls,
@@ -50563,6 +50576,9 @@ var verify = {
         timeoutMs: 3e4,
         mask: [],
         mode: base2.mode,
+        ...typeof base2.settings.timezoneId === "string" ? { timezoneId: base2.settings.timezoneId } : {},
+        ...typeof base2.settings.clock === "string" ? { clock: base2.settings.clock } : {},
+        ...setupJourney ? { setupJourney } : {},
         ...repo ? { context: loadContext(repo) } : {},
         onProgress: ctx.log
       });

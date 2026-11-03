@@ -1,7 +1,7 @@
 // Journeys end-to-end on the acme-saas fixture: suggestion derives the expected journeys from real pages, the
 // runner reports real outcomes, and the safety policy blocks risky steps.
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -19,6 +19,31 @@ beforeAll(() => {
   rmSync(ws, { recursive: true, force: true });
   spawnSync(process.execPath, [join(root, 'scripts', 'build.mjs')]);
 });
+
+async function foldIsDark(runDir: string, run: { pages: { screenshot: string }[] }): Promise<boolean> {
+  const jpg = readFileSync(join(runDir, run.pages[0]!.screenshot.replace('.jpg', '-fold.jpg')));
+  const { chromium } = await import('playwright-core');
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.setContent(
+      `<canvas id=c></canvas><img id=i src="data:image/jpeg;base64,${jpg.toString('base64')}">`,
+    );
+    const px = await page.evaluate(async () => {
+      const img = document.getElementById('i') as HTMLImageElement;
+      await img.decode();
+      const c = document.getElementById('c') as HTMLCanvasElement;
+      c.width = img.width;
+      c.height = img.height;
+      const g = c.getContext('2d')!;
+      g.drawImage(img, 0, 0);
+      return Array.from(g.getImageData(img.width - 20, img.height - 20, 1, 1).data);
+    });
+    return px[0]! + px[1]! + px[2]! < 150;
+  } finally {
+    await browser.close();
+  }
+}
 
 describe('journeys', () => {
   it('suggests journeys from the pages it found', () => {
@@ -160,29 +185,37 @@ describe('journeys', () => {
     expect(run.settings.setupJourney).toBe('dark');
     const setup = run.journeys.find((j: { role?: string }) => j.role === 'setup');
     expect(setup).toMatchObject({ id: 'dark', status: 'passed' });
-    // The fold screenshot of the audited page shows the dark background.
-    const jpg = readFileSync(join(out.runDir, run.pages[0].screenshot.replace('.jpg', '-fold.jpg')));
-    const { chromium } = await import('playwright-core');
-    const browser = await chromium.launch();
-    try {
-      const page = await browser.newPage();
-      await page.setContent(
-        `<canvas id=c></canvas><img id=i src="data:image/jpeg;base64,${jpg.toString('base64')}">`,
-      );
-      const px = await page.evaluate(async () => {
-        const img = document.getElementById('i') as HTMLImageElement;
-        await img.decode();
-        const c = document.getElementById('c') as HTMLCanvasElement;
-        c.width = img.width;
-        c.height = img.height;
-        const g = c.getContext('2d')!;
-        g.drawImage(img, 0, 0);
-        return Array.from(g.getImageData(img.width - 20, img.height - 20, 1, 1).data);
-      });
-      expect(px[0]! + px[1]! + px[2]!).toBeLessThan(150);
-    } finally {
-      await browser.close();
-    }
+    expect(await foldIsDark(out.runDir, run)).toBe(true);
+  });
+
+  it('verify replays the setup journey of its baseline', async () => {
+    mkdirSync(join(ws, 'journeys'), { recursive: true });
+    copyFileSync(join(root, 'fixtures/apps/journey-lab/dark.json'), join(ws, 'journeys', 'dark.json'));
+    const a = JSON.parse(
+      jourilo(
+        'audit',
+        'fixtures/apps/journey-lab',
+        '--url',
+        '/theme.html',
+        '--viewports',
+        'desktop',
+        '--no-keyboard',
+        '--setup-journey',
+        'dark',
+      ).stdout,
+    );
+    const v = jourilo('verify', a.runId);
+    expect(v.status, v.stderr).toBe(0);
+    const vr = JSON.parse(v.stdout);
+    const dir = join(ws, 'runs', vr.run);
+    const run = JSON.parse(readFileSync(join(dir, 'run.json'), 'utf8'));
+    expect(run.settings.setupJourney).toBe('dark');
+    expect(await foldIsDark(dir, run)).toBe(true);
+    // A baseline whose setup journey is gone is not silently audited in the default state.
+    rmSync(join(ws, 'journeys', 'dark.json'));
+    const gone = jourilo('verify', a.runId);
+    expect(gone.status).toBe(2);
+    expect(JSON.parse(gone.stderr).error.message).toMatch(/dark/);
   });
 
   it('stops the audit when the setup journey fails', () => {
