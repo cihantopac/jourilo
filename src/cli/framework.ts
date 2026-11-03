@@ -92,6 +92,30 @@ export function list(ctx: Context, key: string): string[] {
   return [];
 }
 
+/** `--timezone` and `--clock`, validated up front so a typo fails before the browser starts. */
+export function parseStateOptions(ctx: Context): { timezoneId?: string; clock?: string } {
+  const timezoneId = str(ctx, 'timezone');
+  const clock = str(ctx, 'clock');
+  if (timezoneId) {
+    try {
+      new Intl.DateTimeFormat(undefined, { timeZone: timezoneId });
+    } catch {
+      throw new JouriloError(
+        'USAGE',
+        `--timezone ${timezoneId} is not a known IANA time zone.`,
+        'Example: --timezone Europe/Istanbul',
+      );
+    }
+  }
+  if (clock && Number.isNaN(new Date(clock).getTime()))
+    throw new JouriloError(
+      'USAGE',
+      `--clock ${clock} is not a valid date-time.`,
+      'Example: --clock 2026-11-03T22:30:00+03:00',
+    );
+  return { ...(timezoneId ? { timezoneId } : {}), ...(clock ? { clock } : {}) };
+}
+
 export function flag(ctx: Context, key: string): boolean {
   return ctx.values[key] === true;
 }

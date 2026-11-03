@@ -40,6 +40,8 @@ Options:
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
+  --timezone ZONE      IANA time zone for every page (e.g. Europe/Istanbul)
+  --clock ISO          Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
   --repo PATH          Map findings to likely source files in this repository (and read its brand/search context)
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
@@ -74,6 +76,8 @@ Options:
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
+  --timezone ZONE      IANA time zone for every page (e.g. Europe/Istanbul)
+  --clock ISO          Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
   --repo PATH          Map findings to likely source files in this repository (and read its brand/search context)
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
@@ -108,6 +112,8 @@ Options:
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
+  --timezone ZONE      IANA time zone for every page (e.g. Europe/Istanbul)
+  --clock ISO          Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
   --repo PATH          Map findings to likely source files in this repository (and read its brand/search context)
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
@@ -148,6 +154,8 @@ Run options:
   --trace                Record a Playwright trace per journey (contains typed values; keep private)
   --auth FILE            Playwright storage state for signed-in journeys
   --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
+  --timezone ZONE        IANA time zone for the page (e.g. Europe/Istanbul)
+  --clock ISO            Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
   --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
   --fail-on-failure      Exit 1 when a journey fails
 

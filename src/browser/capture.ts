@@ -141,6 +141,10 @@ export interface CaptureOptions {
   screenshots?: boolean;
   locale?: string;
   storageState?: string;
+  /** IANA time zone for the page (e.g. Europe/Istanbul). */
+  timezoneId?: string;
+  /** ISO 8601 date-time the page's Date is frozen at; timers keep running. */
+  clock?: string;
   /** Simulated mobile network + CPU (Chromium only). */
   throttle?: boolean;
 }
@@ -159,9 +163,12 @@ export async function newContext(
     locale: opts.locale ?? 'en-US',
     ignoreHTTPSErrors: false,
     serviceWorkers: 'block',
+    ...(opts.timezoneId ? { timezoneId: opts.timezoneId } : {}),
     ...(opts.storageState ? { storageState: opts.storageState } : {}),
   });
   watchContext(browser, ctx);
+  // Freezes Date only; timers and animations keep running.
+  if (opts.clock) await ctx.clock.setFixedTime(new Date(opts.clock));
   await ctx.addInitScript({ content: NAME_SHIM });
   await ctx.addInitScript({ content: VITALS_INIT_SCRIPT });
   return ctx;

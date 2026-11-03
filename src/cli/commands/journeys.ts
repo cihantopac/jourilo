@@ -21,7 +21,7 @@ import { suggestJourneys } from '../../journeys/suggest.js';
 import { wouldBeCommitted } from '../../repair/git.js';
 import { locateFindings } from '../../repair/locate.js';
 import { writeReports } from '../../report/index.js';
-import { type Command, type Context, flag, list, num, str } from '../framework.js';
+import { type Command, type Context, flag, list, num, parseStateOptions, str } from '../framework.js';
 
 export function journeysDir(ws: Workspace): string {
   return join(ws.root, 'journeys');
@@ -188,6 +188,7 @@ async function runCmd(ctx: Context) {
       'No journeys to run.',
       'Create some with `jourilo journeys suggest <url>`.',
     );
+  const state = parseStateOptions(ctx);
   const isDir = existsSync(baseArg) && !baseArg.includes('://');
   const server = isDir ? await serveStatic(resolve(baseArg)) : undefined;
   try {
@@ -262,6 +263,7 @@ async function runCmd(ctx: Context) {
               stepTimeoutMs: num(ctx, 'timeout', 10) * 1000,
               ...(vp ? { viewportOverride: vp } : {}),
               ...(str(ctx, 'auth') ? { storageState: str(ctx, 'auth')! } : {}),
+              ...state,
               ...(saveAuth ? { saveAuth } : {}),
               ...(allowOrigins.length ? { allowOrigins } : {}),
               log: k === 0 ? ctx.log : undefined,
@@ -298,6 +300,7 @@ async function runCmd(ctx: Context) {
         allowSubmit: policy.allowSubmit,
         allowDestructive: policy.allowDestructive,
         hostClass,
+        ...state,
       },
       pages: [],
       journeys,
@@ -367,6 +370,8 @@ export const journeys: Command = {
     force: { type: 'boolean' },
     'save-auth': { type: 'string' },
     repeat: { type: 'string' },
+    timezone: { type: 'string' },
+    clock: { type: 'string' },
   },
   details: `Subcommands:
   suggest [url|dir|run]  Derive journeys from a site (or an existing run) into .jourilo/journeys/*.json
@@ -383,6 +388,8 @@ Run options:
   --trace                Record a Playwright trace per journey (contains typed values; keep private)
   --auth FILE            Playwright storage state for signed-in journeys
   --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
+  --timezone ZONE        IANA time zone for the page (e.g. Europe/Istanbul)
+  --clock ISO            Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
   --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
   --fail-on-failure      Exit 1 when a journey fails
 

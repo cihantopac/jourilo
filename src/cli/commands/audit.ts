@@ -19,6 +19,7 @@ import {
   list,
   num,
   type OptionSpec,
+  parseStateOptions,
   requirePositional,
   str,
 } from '../framework.js';
@@ -38,6 +39,8 @@ export const AUDIT_OPTIONS: OptionSpec = {
   mask: { type: 'string', multiple: true },
   auth: { type: 'string' },
   locale: { type: 'string' },
+  timezone: { type: 'string' },
+  clock: { type: 'string' },
   timeout: { type: 'string' },
   repo: { type: 'string' },
   sarif: { type: 'boolean' },
@@ -63,6 +66,7 @@ export async function auditCommand(
   const failOn = str(ctx, 'fail-on') as Severity | undefined;
   if (failOn && !SEVERITIES.includes(failOn))
     throw new JouriloError('USAGE', `--fail-on must be one of ${SEVERITIES.join(', ')}.`);
+  const state = parseStateOptions(ctx);
   const auth = str(ctx, 'auth');
   if (auth && !existsSync(auth)) throw new JouriloError('NOT_FOUND', `Auth state file not found: ${auth}`);
 
@@ -89,6 +93,7 @@ export async function auditCommand(
       include: list(ctx, 'include'),
       ...(auth ? { storageState: auth } : {}),
       ...(str(ctx, 'locale') ? { locale: str(ctx, 'locale')! } : {}),
+      ...state,
       ...(categories ? { categories } : {}),
       context: loadContext(repo ?? process.cwd(), str(ctx, 'brand') ? { brand: str(ctx, 'brand')! } : {}),
       mode: repo ? 'repository' : 'website',
@@ -186,6 +191,8 @@ export const audit: Command = {
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
+  --timezone ZONE      IANA time zone for every page (e.g. Europe/Istanbul)
+  --clock ISO          Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
   --repo PATH          Map findings to likely source files in this repository (and read its brand/search context)
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)

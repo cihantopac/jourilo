@@ -38878,6 +38878,28 @@ function list(ctx, key) {
     return v.split(",").map((s) => s.trim()).filter(Boolean);
   return [];
 }
+function parseStateOptions(ctx) {
+  const timezoneId = str(ctx, "timezone");
+  const clock = str(ctx, "clock");
+  if (timezoneId) {
+    try {
+      new Intl.DateTimeFormat(void 0, { timeZone: timezoneId });
+    } catch {
+      throw new JouriloError(
+        "USAGE",
+        `--timezone ${timezoneId} is not a known IANA time zone.`,
+        "Example: --timezone Europe/Istanbul"
+      );
+    }
+  }
+  if (clock && Number.isNaN(new Date(clock).getTime()))
+    throw new JouriloError(
+      "USAGE",
+      `--clock ${clock} is not a valid date-time.`,
+      "Example: --clock 2026-11-03T22:30:00+03:00"
+    );
+  return { ...timezoneId ? { timezoneId } : {}, ...clock ? { clock } : {} };
+}
 function flag(ctx, key) {
   return ctx.values[key] === true;
 }
@@ -41662,9 +41684,11 @@ async function newContext(browser, vp, opts) {
     locale: opts.locale ?? "en-US",
     ignoreHTTPSErrors: false,
     serviceWorkers: "block",
+    ...opts.timezoneId ? { timezoneId: opts.timezoneId } : {},
     ...opts.storageState ? { storageState: opts.storageState } : {}
   });
   watchContext(browser, ctx);
+  if (opts.clock) await ctx.clock.setFixedTime(new Date(opts.clock));
   await ctx.addInitScript({ content: NAME_SHIM });
   await ctx.addInitScript({ content: VITALS_INIT_SCRIPT });
   return ctx;
@@ -43967,6 +43991,12 @@ var PAGE_RULES = {
   performance: performanceFindings,
   conversion: conversionFindings
 };
+function stateOptions(opts) {
+  return {
+    ...opts.timezoneId ? { timezoneId: opts.timezoneId } : {},
+    ...opts.clock ? { clock: opts.clock } : {}
+  };
+}
 async function runAudit(ws, opts) {
   const target = parseTargetUrl(opts.target);
   const hostClass = await checkTarget(target, { allowPrivate: opts.allowPrivate });
@@ -43999,7 +44029,8 @@ async function runAudit(ws, opts) {
       log(`Discovering pages on ${target.origin} \u2026`);
       const ctx = await newContext(browser, opts.viewports[0], {
         runDir,
-        ...opts.storageState ? { storageState: opts.storageState } : {}
+        ...opts.storageState ? { storageState: opts.storageState } : {},
+        ...stateOptions(opts)
       });
       const found = await crawl(ctx, target.toString(), {
         maxPages: opts.maxPages,
@@ -44030,6 +44061,7 @@ async function runAudit(ws, opts) {
       const ctx = await newContext(browser, vp, {
         runDir,
         ...opts.storageState ? { storageState: opts.storageState } : {},
+        ...stateOptions(opts),
         ...opts.locale ? { locale: opts.locale } : {}
       });
       try {
@@ -44071,7 +44103,9 @@ async function runAudit(ws, opts) {
             runDir,
             timeoutMs: opts.timeoutMs,
             throttle: opts.throttle,
-            ...opts.storageState ? { storageState: opts.storageState } : {}
+            ...opts.storageState ? { storageState: opts.storageState } : {},
+            ...stateOptions(opts),
+            ...stateOptions(opts)
           });
           if (v) samples.push(v);
         }
@@ -44088,7 +44122,8 @@ async function runAudit(ws, opts) {
       const vp = opts.viewports.find((v) => !v.hasTouch) ?? opts.viewports[0];
       const ctx = await newContext(browser, vp, {
         runDir,
-        ...opts.storageState ? { storageState: opts.storageState } : {}
+        ...opts.storageState ? { storageState: opts.storageState } : {},
+        ...stateOptions(opts)
       });
       try {
         for (const o of observations.filter((x) => x.viewport.name === vp.name && (x.status ?? 200) < 400)) {
@@ -44196,6 +44231,8 @@ async function runAudit(ws, opts) {
         keyboard: opts.keyboard,
         throttle: opts.throttle,
         runs: runs2,
+        ...opts.timezoneId ? { timezoneId: opts.timezoneId } : {},
+        ...opts.clock ? { clock: opts.clock } : {},
         axe: observations.find((o) => o.axe)?.axe?.version ?? null,
         hostClass,
         // The exact scope, so `jourilo verify` can repeat this run after a change.
@@ -46958,6 +46995,8 @@ var AUDIT_OPTIONS = {
   mask: { type: "string", multiple: true },
   auth: { type: "string" },
   locale: { type: "string" },
+  timezone: { type: "string" },
+  clock: { type: "string" },
   timeout: { type: "string" },
   repo: { type: "string" },
   sarif: { type: "boolean" },
@@ -46977,6 +47016,7 @@ async function auditCommand(ctx, usage2, categories) {
   const failOn = str(ctx, "fail-on");
   if (failOn && !SEVERITIES.includes(failOn))
     throw new JouriloError("USAGE", `--fail-on must be one of ${SEVERITIES.join(", ")}.`);
+  const state = parseStateOptions(ctx);
   const auth = str(ctx, "auth");
   if (auth && !existsSync7(auth)) throw new JouriloError("NOT_FOUND", `Auth state file not found: ${auth}`);
   const isDir = !/^[a-z]+:\/\//i.test(targetArg) && existsSync7(targetArg) && statSync4(targetArg).isDirectory();
@@ -47001,6 +47041,7 @@ async function auditCommand(ctx, usage2, categories) {
       include: list(ctx, "include"),
       ...auth ? { storageState: auth } : {},
       ...str(ctx, "locale") ? { locale: str(ctx, "locale") } : {},
+      ...state,
       ...categories ? { categories } : {},
       context: loadContext(repo ?? process.cwd(), str(ctx, "brand") ? { brand: str(ctx, "brand") } : {}),
       mode: repo ? "repository" : "website",
@@ -47088,6 +47129,8 @@ var audit = {
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
+  --timezone ZONE      IANA time zone for every page (e.g. Europe/Istanbul)
+  --clock ISO          Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
   --repo PATH          Map findings to likely source files in this repository (and read its brand/search context)
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
@@ -49060,7 +49103,9 @@ async function runJourney(browser, spec, opts) {
   const vp = parseViewports(opts.viewportOverride ?? spec.viewport ?? "desktop")[0];
   const ctx = await newContext(browser, vp, {
     runDir: opts.runDir,
-    ...opts.storageState ? { storageState: opts.storageState } : {}
+    ...opts.storageState ? { storageState: opts.storageState } : {},
+    ...opts.timezoneId ? { timezoneId: opts.timezoneId } : {},
+    ...opts.clock ? { clock: opts.clock } : {}
   });
   const tracePath = opts.trace ? join16("traces", `${spec.id}-${vp.name}.zip`) : void 0;
   if (tracePath) await ctx.tracing.start({ screenshots: true, snapshots: true, title: spec.name });
@@ -49975,6 +50020,7 @@ async function runCmd(ctx) {
       "No journeys to run.",
       "Create some with `jourilo journeys suggest <url>`."
     );
+  const state = parseStateOptions(ctx);
   const isDir = existsSync16(baseArg) && !baseArg.includes("://");
   const server = isDir ? await serveStatic(resolve8(baseArg)) : void 0;
   try {
@@ -50047,6 +50093,7 @@ async function runCmd(ctx) {
               stepTimeoutMs: num(ctx, "timeout", 10) * 1e3,
               ...vp ? { viewportOverride: vp } : {},
               ...str(ctx, "auth") ? { storageState: str(ctx, "auth") } : {},
+              ...state,
               ...saveAuth ? { saveAuth } : {},
               ...allowOrigins.length ? { allowOrigins } : {},
               log: k === 0 ? ctx.log : void 0
@@ -50082,7 +50129,8 @@ async function runCmd(ctx) {
         journeys: specs.map((s) => s.id),
         allowSubmit: policy.allowSubmit,
         allowDestructive: policy.allowDestructive,
-        hostClass
+        hostClass,
+        ...state
       },
       pages: [],
       journeys: journeys2,
@@ -50138,7 +50186,9 @@ var journeys = {
     pages: { type: "string" },
     force: { type: "boolean" },
     "save-auth": { type: "string" },
-    repeat: { type: "string" }
+    repeat: { type: "string" },
+    timezone: { type: "string" },
+    clock: { type: "string" }
   },
   details: `Subcommands:
   suggest [url|dir|run]  Derive journeys from a site (or an existing run) into .jourilo/journeys/*.json
@@ -50155,6 +50205,8 @@ Run options:
   --trace                Record a Playwright trace per journey (contains typed values; keep private)
   --auth FILE            Playwright storage state for signed-in journeys
   --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
+  --timezone ZONE        IANA time zone for the page (e.g. Europe/Istanbul)
+  --clock ISO            Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
   --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
   --fail-on-failure      Exit 1 when a journey fails
 

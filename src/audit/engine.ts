@@ -76,6 +76,8 @@ export interface AuditOptions {
   include?: string[];
   storageState?: string;
   locale?: string;
+  timezoneId?: string;
+  clock?: string;
   /** Restrict findings to these categories. */
   categories?: Category[];
   mode: Run['mode'];
@@ -95,6 +97,14 @@ export interface AuditOutput {
   run: Run;
   runDir: string;
   observations: PageObservation[];
+}
+
+/** Browser state options every context of the run shares. */
+function stateOptions(opts: AuditOptions): { timezoneId?: string; clock?: string } {
+  return {
+    ...(opts.timezoneId ? { timezoneId: opts.timezoneId } : {}),
+    ...(opts.clock ? { clock: opts.clock } : {}),
+  };
 }
 
 export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<AuditOutput> {
@@ -133,6 +143,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       const ctx = await newContext(browser, opts.viewports[0]!, {
         runDir,
         ...(opts.storageState ? { storageState: opts.storageState } : {}),
+        ...stateOptions(opts),
       });
       const found = await crawl(ctx, target.toString(), {
         maxPages: opts.maxPages,
@@ -165,6 +176,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       const ctx = await newContext(browser, vp, {
         runDir,
         ...(opts.storageState ? { storageState: opts.storageState } : {}),
+        ...stateOptions(opts),
         ...(opts.locale ? { locale: opts.locale } : {}),
       });
       try {
@@ -215,6 +227,8 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
             timeoutMs: opts.timeoutMs,
             throttle: opts.throttle,
             ...(opts.storageState ? { storageState: opts.storageState } : {}),
+            ...stateOptions(opts),
+            ...stateOptions(opts),
           });
           if (v) samples.push(v);
         }
@@ -234,6 +248,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       const ctx = await newContext(browser, vp, {
         runDir,
         ...(opts.storageState ? { storageState: opts.storageState } : {}),
+        ...stateOptions(opts),
       });
       try {
         for (const o of observations.filter((x) => x.viewport.name === vp.name && (x.status ?? 200) < 400)) {
@@ -353,6 +368,8 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         keyboard: opts.keyboard,
         throttle: opts.throttle,
         runs,
+        ...(opts.timezoneId ? { timezoneId: opts.timezoneId } : {}),
+        ...(opts.clock ? { clock: opts.clock } : {}),
         axe: observations.find((o) => o.axe)?.axe?.version ?? null,
         hostClass,
         // The exact scope, so `jourilo verify` can repeat this run after a change.

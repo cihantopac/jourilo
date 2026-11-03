@@ -25,6 +25,8 @@ export interface JourneyRunOptions {
   data: Record<string, string>;
   trace: boolean;
   storageState?: string;
+  timezoneId?: string;
+  clock?: string;
   stepTimeoutMs: number;
   viewportOverride?: string;
   /** Save the browser's storage state (cookies, localStorage) after the journey, for signed-in audits. */
@@ -264,6 +266,8 @@ export async function runJourney(
   const ctx = await newContext(browser, vp, {
     runDir: opts.runDir,
     ...(opts.storageState ? { storageState: opts.storageState } : {}),
+    ...(opts.timezoneId ? { timezoneId: opts.timezoneId } : {}),
+    ...(opts.clock ? { clock: opts.clock } : {}),
   });
   const tracePath = opts.trace ? join('traces', `${spec.id}-${vp.name}.zip`) : undefined;
   if (tracePath) await ctx.tracing.start({ screenshots: true, snapshots: true, title: spec.name });

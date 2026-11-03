@@ -1,5 +1,7 @@
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -53,4 +55,54 @@ describe('cli', () => {
     const runs = JSON.parse(jourilo('runs', '--json').stdout);
     expect(runs.length).toBeGreaterThan(0);
   });
+});
+
+describe('cli state options', () => {
+  it('audits with a fixed clock and time zone', async () => {
+    // Served from a throwaway local server so no fixture site (and no benchmark result) is affected.
+    const server = http.createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/html' }).end(`<!doctype html><html lang="en"><title>x</title>
+<main><h1>Clock</h1></main>
+<script>document.title = new Date().getHours() + '|' + Intl.DateTimeFormat().resolvedOptions().timeZone;</script>`);
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    try {
+      const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
+      const child = spawn(
+        process.execPath,
+        [
+          cli,
+          'audit',
+          url,
+          '--pages',
+          '1',
+          '--viewports',
+          'desktop',
+          '--no-keyboard',
+          '--no-forms',
+          '--clock',
+          '2026-11-03T22:30:00+03:00',
+          '--timezone',
+          'Europe/Istanbul',
+          '--workspace',
+          ws,
+          '--json',
+          '-q',
+        ],
+        { cwd: root },
+      );
+      let stdout = '';
+      child.stdout.on('data', (d) => {
+        stdout += d;
+      });
+      await new Promise((r) => child.on('close', r));
+      const out = JSON.parse(stdout);
+      const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8'));
+      expect(run.pages[0].title).toBe('22|Europe/Istanbul');
+      expect(run.settings.timezoneId).toBe('Europe/Istanbul');
+      expect(run.settings.clock).toBe('2026-11-03T22:30:00+03:00');
+    } finally {
+      await new Promise((r) => server.close(r));
+    }
+  }, 120_000);
 });
