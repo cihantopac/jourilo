@@ -119,6 +119,8 @@ function stateOptions(opts: AuditOptions): { timezoneId?: string; clock?: string
 }
 
 export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<AuditOutput> {
+  // Read before any browser work, so a corrupt dismissed.json fails fast instead of losing a finished audit.
+  const dismissals = loadDismissals(ws);
   const target = parseTargetUrl(opts.target);
   const hostClass: HostClass = await checkTarget(target, { allowPrivate: opts.allowPrivate });
   const log = opts.onProgress ?? (() => undefined);
@@ -351,7 +353,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
     respectLockedBrand(findings, opts.context?.brand ?? null);
     if (opts.categories?.length) findings = findings.filter((f) => opts.categories!.includes(f.category));
     // Findings a person already dismissed stay out of the run (and the summary), listed apart with their reason.
-    const { kept, dismissed } = applyDismissals(findings, loadDismissals(ws));
+    const { kept, dismissed } = applyDismissals(findings, dismissals);
     findings = kept;
 
     limitations.push(

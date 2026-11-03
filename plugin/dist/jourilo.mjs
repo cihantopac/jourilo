@@ -42423,12 +42423,24 @@ import { join as join6 } from "node:path";
 var file = (ws) => join6(ws.root, "dismissed.json");
 function loadDismissals(ws) {
   if (!existsSync4(file(ws))) return [];
+  const bad = () => new JouriloError(
+    "INVALID_INPUT",
+    `${file(ws)} is not a valid dismissal list (a JSON array of entries with fingerprint, reason and at); fix or remove it.`
+  );
+  let parsed;
   try {
-    const parsed = JSON.parse(readFileSync3(file(ws), "utf8"));
-    return Array.isArray(parsed) ? parsed : [];
+    parsed = JSON.parse(readFileSync3(file(ws), "utf8"));
   } catch {
-    throw new JouriloError("INVALID_INPUT", `${file(ws)} is not valid JSON; fix or remove it.`);
+    throw bad();
   }
+  const text = (v) => typeof v === "string" && v.length > 0;
+  if (!Array.isArray(parsed)) throw bad();
+  for (const e of parsed) {
+    if (!e || typeof e !== "object") throw bad();
+    const x = e;
+    if (!text(x.fingerprint) || !text(x.reason) || !text(x.at)) throw bad();
+  }
+  return parsed;
 }
 function write(ws, list2) {
   ws.ensure();
@@ -44687,6 +44699,7 @@ function stateOptions(opts) {
   };
 }
 async function runAudit(ws, opts) {
+  const dismissals = loadDismissals(ws);
   const target = parseTargetUrl(opts.target);
   const hostClass = await checkTarget(target, { allowPrivate: opts.allowPrivate });
   const log = opts.onProgress ?? (() => void 0);
@@ -44892,7 +44905,7 @@ async function runAudit(ws, opts) {
     findings = mergeFindings(findings);
     respectLockedBrand(findings, opts.context?.brand ?? null);
     if (opts.categories?.length) findings = findings.filter((f) => opts.categories.includes(f.category));
-    const { kept, dismissed } = applyDismissals(findings, loadDismissals(ws));
+    const { kept, dismissed } = applyDismissals(findings, dismissals);
     findings = kept;
     limitations.push(
       "Automated accessibility checks cover only part of WCAG 2.2; criteria such as 1.3.3, 2.5.7, 3.2.6, 3.3.7 and 3.3.8 and most content quality questions need manual review.",
@@ -48343,6 +48356,7 @@ function summarizeAttempts(spec, attempts) {
   return { result, findings };
 }
 async function runCmd(ctx) {
+  const dismissals = loadDismissals(ctx.ws);
   const baseArg = str(ctx, "base");
   if (!baseArg)
     throw new JouriloError("USAGE", "--base <url|dir> is required (the site to run journeys against).");
@@ -48448,7 +48462,7 @@ async function runCmd(ctx) {
     const network = session.report();
     limitations.push(...networkLimitations(network));
     findings = mergeFindings(findings);
-    const { kept, dismissed } = applyDismissals(findings, loadDismissals(ctx.ws));
+    const { kept, dismissed } = applyDismissals(findings, dismissals);
     findings = kept;
     const run = {
       schemaVersion: RUN_SCHEMA_VERSION,

@@ -22,12 +22,26 @@ const file = (ws: Workspace) => join(ws.root, 'dismissed.json');
 
 export function loadDismissals(ws: Workspace): Dismissal[] {
   if (!existsSync(file(ws))) return [];
+  // Never fall back to [] on a bad file: the next save would overwrite what the user wrote.
+  const bad = () =>
+    new JouriloError(
+      'INVALID_INPUT',
+      `${file(ws)} is not a valid dismissal list (a JSON array of entries with fingerprint, reason and at); fix or remove it.`,
+    );
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(readFileSync(file(ws), 'utf8')) as unknown;
-    return Array.isArray(parsed) ? (parsed as Dismissal[]) : [];
+    parsed = JSON.parse(readFileSync(file(ws), 'utf8'));
   } catch {
-    throw new JouriloError('INVALID_INPUT', `${file(ws)} is not valid JSON; fix or remove it.`);
+    throw bad();
   }
+  const text = (v: unknown) => typeof v === 'string' && v.length > 0;
+  if (!Array.isArray(parsed)) throw bad();
+  for (const e of parsed) {
+    if (!e || typeof e !== 'object') throw bad();
+    const x = e as Record<string, unknown>;
+    if (!text(x.fingerprint) || !text(x.reason) || !text(x.at)) throw bad();
+  }
+  return parsed as Dismissal[];
 }
 
 function write(ws: Workspace, list: Dismissal[]): void {

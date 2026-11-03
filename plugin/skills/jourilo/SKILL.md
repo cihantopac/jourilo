@@ -69,7 +69,9 @@ Tell the user which stage you are in. If they asked for one thing (e.g. "just ac
    match the real goals (explicit success criteria), then `jourilo journeys run --base <url>`.
 5. **Judge** — Look at the fold and full-page screenshots of key pages. Record design/usability judgments that
    the rules cannot measure (hierarchy, clarity of the value proposition, confusing copy) with `finding add`,
-   each tied to a screenshot, labelled as yours.
+   each tied to a screenshot, labelled as yours. When a finding is a confirmed false positive, record it with
+   `jourilo finding dismiss <id> --run <run> --reason "<why>" --by agent`: the reason is required, a dismissed
+   finding is never counted as "fixed", and you dismiss only when the user agrees or the evidence is clear.
 6. **Prioritize** — Group by root cause, not by symptom. Order: blocked journeys and critical/serious defects on key
    journeys → serious accessibility defects → performance on key pages → conversion hypotheses.
 7. **Fix (repository mode, with permission)** — `jourilo optimize <run> --repo <path>` previews deterministic fixes

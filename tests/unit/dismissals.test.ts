@@ -1,11 +1,12 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { runAudit } from '../../src/audit/engine.js';
 import { makeFinding } from '../../src/audit/finding.js';
 import { finding } from '../../src/cli/commands/finding.js';
 import { parse } from '../../src/cli/framework.js';
-import { applyDismissals, type Dismissal } from '../../src/core/dismissals.js';
+import { applyDismissals, type Dismissal, loadDismissals } from '../../src/core/dismissals.js';
 import type { JouriloError } from '../../src/core/errors.js';
 import type { Finding } from '../../src/core/types.js';
 import { Workspace } from '../../src/core/workspace.js';
@@ -66,6 +67,31 @@ describe('dismissals', () => {
     const cmp = compareRuns(base, head);
     expect(cmp.fixed.map((x) => x.fingerprint)).toEqual([gone.fingerprint]);
     expect(cmp.dismissed.map((x) => x.fingerprint)).toEqual([a.fingerprint]);
+  });
+
+  it('a finding with the same rule at a new URL is kept and comes back as new', () => {
+    const old = f('axe/a', '/');
+    const moved = f('axe/a', '/new-page');
+    expect(moved.fingerprint).not.toBe(old.fingerprint);
+    const { kept, dismissed } = applyDismissals([moved], [dismissal(old)]);
+    expect(kept).toHaveLength(1);
+    expect(dismissed).toHaveLength(0);
+    const page = { url: 'https://example.test/', viewport: 'desktop', metrics: [] } as never;
+    const cmp = compareRuns(run([old], { pages: [page] }), run(kept, { pages: [page], dismissed: [] }));
+    expect(cmp.introduced.map((x) => x.fingerprint)).toEqual([moved.fingerprint]);
+    expect(cmp.dismissed).toEqual([]);
+  });
+
+  it('a corrupt dismissed.json fails fast, before any browser launches', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'jourilo-bad-'));
+    const ws = new Workspace(dir);
+    const opts = { target: 'https://example.test/' } as never;
+    for (const content of ['{not json', '{"a":1}', '[{"fingerprint":"x","reason":"r"}]', '[null]']) {
+      writeFileSync(join(dir, 'dismissed.json'), content);
+      expect(() => loadDismissals(ws), content).toThrow(/not a valid dismissal list/);
+      // runAudit reads the list before parsing the target or opening a browser.
+      await expect(runAudit(ws, opts), content).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    }
   });
 
   it('dismiss requires a reason and an unambiguous id', async () => {

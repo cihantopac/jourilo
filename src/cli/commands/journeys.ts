@@ -179,6 +179,8 @@ export function summarizeAttempts(
 }
 
 async function runCmd(ctx: Context) {
+  // Read before any browser work, so a corrupt dismissed.json fails fast instead of losing a finished run.
+  const dismissals = loadDismissals(ctx.ws);
   const baseArg = str(ctx, 'base');
   if (!baseArg)
     throw new JouriloError('USAGE', '--base <url|dir> is required (the site to run journeys against).');
@@ -286,7 +288,7 @@ async function runCmd(ctx: Context) {
     const network = session.report();
     limitations.push(...networkLimitations(network));
     findings = mergeFindings(findings);
-    const { kept, dismissed } = applyDismissals(findings, loadDismissals(ctx.ws));
+    const { kept, dismissed } = applyDismissals(findings, dismissals);
     findings = kept;
     const run: Run = {
       schemaVersion: RUN_SCHEMA_VERSION,
