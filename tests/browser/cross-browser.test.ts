@@ -90,7 +90,9 @@ describe.each(['firefox', 'webkit'])('%s', (browser) => {
     // WebKit on Windows has no key that focuses links: the link-only check is reported as not run, not as passed.
     const linksSkipped = audit.limitations.some((l) => l.includes('does not move keyboard focus to links'));
     expect(linksSkipped).toBe(browser === 'webkit' && process.platform === 'win32');
-    expect(audit.findings.map((f) => `${f.ruleId} ${new URL(f.url).pathname}`).sort()).toEqual(
+    // Lab timings depend on the runner's speed, so performance findings are left out of the comparison.
+    const behaviour = audit.findings.filter((f) => !f.ruleId.startsWith('perf/'));
+    expect(behaviour.map((f) => `${f.ruleId} ${new URL(f.url).pathname}`).sort()).toEqual(
       linksSkipped
         ? ['jourilo/keyboard-trap /analytics']
         : ['jourilo/focus-obscured /analytics', 'jourilo/keyboard-trap /analytics'],

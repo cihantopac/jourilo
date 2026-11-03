@@ -248,20 +248,25 @@ async function auditUntil(
 describe('cli stop early', () => {
   const site = ['fixtures/sites/acme-saas', '--pages', '6', '--viewports', 'desktop', '--no-forms'];
 
-  it('SIGTERM during an audit writes a partial run and exits 6', async () => {
-    const r = await auditUntil(site, (m) => m.startsWith('desktop') && m.includes('http'));
-    expect(r.code).toBe(6);
-    expect(r.out.outcome).toBe('partial');
-    expect(r.run.outcome).toBe('partial');
-    expect(r.run.stoppedBy).toBe('signal');
-    expect(r.run.pages.length).toBeGreaterThanOrEqual(1);
-    expect(r.run.pages.length).toBeLessThan(6);
-    const stop = r.run.limitations.find((l) => l.startsWith('The run was stopped early'));
-    const planned = (r.run.settings.scope as { urls: string[] }).urls.length;
-    expect(planned).toBe(6);
-    expect(stop).toMatch(new RegExp(`${planned - r.run.pages.length} of ${planned} planned page captures`));
-    expect(existsSync(join(r.out.runDir, 'report.html'))).toBe(true);
-  }, 120_000);
+  // Windows has no POSIX signals: a SIGTERM from another process ends it at once, with no handler.
+  it.skipIf(process.platform === 'win32')(
+    'SIGTERM during an audit writes a partial run and exits 6',
+    async () => {
+      const r = await auditUntil(site, (m) => m.startsWith('desktop') && m.includes('http'));
+      expect(r.code).toBe(6);
+      expect(r.out.outcome).toBe('partial');
+      expect(r.run.outcome).toBe('partial');
+      expect(r.run.stoppedBy).toBe('signal');
+      expect(r.run.pages.length).toBeGreaterThanOrEqual(1);
+      expect(r.run.pages.length).toBeLessThan(6);
+      const stop = r.run.limitations.find((l) => l.startsWith('The run was stopped early'));
+      const planned = (r.run.settings.scope as { urls: string[] }).urls.length;
+      expect(planned).toBe(6);
+      expect(stop).toMatch(new RegExp(`${planned - r.run.pages.length} of ${planned} planned page captures`));
+      expect(existsSync(join(r.out.runDir, 'report.html'))).toBe(true);
+    },
+    120_000,
+  );
 
   it('--max-duration stops the run', async () => {
     const r = await auditUntil([...site, '--max-duration', '1'], null);
@@ -270,16 +275,20 @@ describe('cli stop early', () => {
     expect(r.run.stoppedBy).toBe('max-duration');
   }, 120_000);
 
-  it('stop before the first page', async () => {
-    // The first progress line comes once the stop handlers are in place, before the browser is up.
-    const r = await auditUntil(site, () => true);
-    expect(r.code).toBe(6);
-    expect(r.run.outcome).toBe('partial');
-    expect(r.run.stoppedBy).toBe('signal');
-    expect(r.run.pages).toHaveLength(0);
-    expect(r.run.limitations.some((l) => /before pages were discovered/.test(l))).toBe(true);
-    expect(r.afterSignalMs).toBeLessThan(10_000);
-  }, 120_000);
+  it.skipIf(process.platform === 'win32')(
+    'stop before the first page',
+    async () => {
+      // The first progress line comes once the stop handlers are in place, before the browser is up.
+      const r = await auditUntil(site, () => true);
+      expect(r.code).toBe(6);
+      expect(r.run.outcome).toBe('partial');
+      expect(r.run.stoppedBy).toBe('signal');
+      expect(r.run.pages).toHaveLength(0);
+      expect(r.run.limitations.some((l) => /before pages were discovered/.test(l))).toBe(true);
+      expect(r.afterSignalMs).toBeLessThan(10_000);
+    },
+    120_000,
+  );
 });
 
 describe('cli --evidence minimal', () => {
