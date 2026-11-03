@@ -244,7 +244,7 @@ export function tokensFor(f: Finding): Token[] {
           reason: `state rule .${c}[…]`,
           scope: 'style',
           regex: new RegExp(
-            `\\.${escapeRe(c)}\\b[^{,]*(\\[(aria-(pressed|expanded|selected|checked|current)|data-state)|:(focus|focus-visible|hover|active|checked))`,
+            `\\.${escapeRe(c)}(?![\\w-])[^{,]*(\\[(aria-(pressed|expanded|selected|checked|current)|data-state)|:(focus|focus-visible|hover|active|checked))`,
             'i',
           ),
         });
@@ -254,7 +254,7 @@ export function tokensFor(f: Finding): Token[] {
             weight: 6,
             reason: `removes the outline in a .${c} rule`,
             scope: 'style',
-            regex: new RegExp(`\\.${escapeRe(c)}\\b[^{]*\\{[^}]*outline\\s*:\\s*(none|0)\\b`, 'i'),
+            regex: new RegExp(`\\.${escapeRe(c)}(?![\\w-])[^{]*\\{[^}]*outline\\s*:\\s*(none|0)\\b`, 'i'),
           });
       }
     }

@@ -65,7 +65,8 @@ Options:
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
   --allow-submit       Really send empty submissions to test server-side validation, on local or other hosts
-                       (disposable/test environments you are authorized to use only; never to delete/payment URLs)
+                       (disposable/test environments you are authorized to use only; never to delete/payment URLs);
+                       also lets a --setup-journey submit forms
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
@@ -110,7 +111,8 @@ Options:
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
   --allow-submit       Really send empty submissions to test server-side validation, on local or other hosts
-                       (disposable/test environments you are authorized to use only; never to delete/payment URLs)
+                       (disposable/test environments you are authorized to use only; never to delete/payment URLs);
+                       also lets a --setup-journey submit forms
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
@@ -155,7 +157,8 @@ Options:
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
   --allow-submit       Really send empty submissions to test server-side validation, on local or other hosts
-                       (disposable/test environments you are authorized to use only; never to delete/payment URLs)
+                       (disposable/test environments you are authorized to use only; never to delete/payment URLs);
+                       also lets a --setup-journey submit forms
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
@@ -183,7 +186,7 @@ Subcommands:
 
 Suggest options:
   --pages N              Pages to read when deriving journeys from a site (default 8)
-  --force                Overwrite journey files that already exist (by default edited files are kept)
+  --force                Overwrite journey files that already exist (by default existing files are kept)
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
 
 Run options:

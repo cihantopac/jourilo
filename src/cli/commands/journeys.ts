@@ -411,7 +411,7 @@ export const journeys: Command = {
 
 Suggest options:
   --pages N              Pages to read when deriving journeys from a site (default 8)
-  --force                Overwrite journey files that already exist (by default edited files are kept)
+  --force                Overwrite journey files that already exist (by default existing files are kept)
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
 
 Run options:

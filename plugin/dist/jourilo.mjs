@@ -39077,7 +39077,7 @@ import { existsSync as existsSync12, statSync as statSync5 } from "node:fs";
 import { resolve as resolve6 } from "node:path";
 
 // src/audit/engine.ts
-import { existsSync as existsSync6 } from "node:fs";
+import { existsSync as existsSync6, rmSync as rmSync2 } from "node:fs";
 import { join as join10 } from "node:path";
 
 // src/browser/capture.ts
@@ -43349,6 +43349,15 @@ var COVER_AT = `(el) => {
     const c = (e.getAttribute('class') || '').trim().split(/\\s+/)[0];
     return e.tagName.toLowerCase() + (c ? '.' + CSS.escape(c) : '');
   };
+  // Hit-test in the target's own tree: from the document, a target inside a shadow root hits its shadow host.
+  const root = el.getRootNode();
+  const tree = typeof root.elementFromPoint === 'function' ? root : document;
+  // The target itself, its content, or a shadow host whose shadow tree holds it does not cover it.
+  const own = (hit) => {
+    if (hit === el || el.contains(hit)) return true;
+    for (let n = root; n && n.host; n = n.host.getRootNode()) if (n.host === hit) return true;
+    return false;
+  };
   const r = el.getBoundingClientRect();
   const pts = [[0.5, 0.5], [0.15, 0.15], [0.85, 0.15], [0.15, 0.85], [0.85, 0.85]];
   let cover = null, visible = null, inViewport = 0, center = true;
@@ -43356,8 +43365,8 @@ var COVER_AT = `(el) => {
     const x = r.left + r.width * fx, y = r.top + r.height * fy;
     if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
     inViewport++;
-    const hit = document.elementFromPoint(x, y);
-    if (hit && (hit === el || el.contains(hit))) {
+    const hit = tree.elementFromPoint(x, y);
+    if (hit && own(hit)) {
       if (!visible) visible = { x: r.width * fx, y: r.height * fy };
     } else if (fx === 0.5) {
       center = false;
@@ -44931,6 +44940,14 @@ async function runAudit(ws, opts) {
   const simulated = [];
   const runs2 = Math.max(1, Math.min(9, Math.round(opts.runs ?? 1)));
   let stoppedBy;
+  const setupState = join10(runDir, "setup-state.json");
+  let network = { blocked: [], escaped: [] };
+  const endBrowsing = async () => {
+    if (session) network = session.report();
+    await session?.close();
+    session = void 0;
+    rmSync2(setupState, { force: true });
+  };
   try {
     try {
       log(`Starting ${opts.browser} \u2026`);
@@ -44947,7 +44964,6 @@ async function runAudit(ws, opts) {
       if (opts.setupJourney) {
         const spec = opts.setupJourney;
         log(`Running setup journey ${spec.id} \u2026`);
-        const setupState = join10(runDir, "setup-state.json");
         const { result } = await untilStopped(
           runJourney(browser, spec, {
             base: target,
@@ -45115,6 +45131,7 @@ async function runAudit(ws, opts) {
       stoppedBy = signal?.reason === "max-duration" ? "max-duration" : "signal";
       log(`Stopped early (${stoppedBy}); writing a partial run \u2026`);
     }
+    await endBrowsing();
     if (stoppedBy)
       limitations.push(stopLimitation(stoppedBy, urls, opts.viewports.length, observations.length));
     if (hostClass === "local" && !opts.urls?.length) {
@@ -45165,7 +45182,6 @@ async function runAudit(ws, opts) {
         "Throttling simulated a mid-range mobile network and 4\xD7 CPU slowdown (Chromium only)."
       );
     else limitations.push("Measured without network/CPU throttling: real mobile devices are usually slower.");
-    const network = session?.report() ?? { blocked: [], escaped: [] };
     limitations.push(...networkLimitations(network));
     const stopped = observations.flatMap((o) => o.blockedActions ?? []);
     if (stopped.length)
@@ -45236,7 +45252,7 @@ async function runAudit(ws, opts) {
     ws.saveRun(run);
     return { run, runDir, observations };
   } finally {
-    await session?.close();
+    await endBrowsing();
   }
 }
 function summarize(findings, pages, journeys2) {
@@ -45583,7 +45599,7 @@ function tokensFor(f) {
           reason: `state rule .${c}[\u2026]`,
           scope: "style",
           regex: new RegExp(
-            `\\.${escapeRe(c)}\\b[^{,]*(\\[(aria-(pressed|expanded|selected|checked|current)|data-state)|:(focus|focus-visible|hover|active|checked))`,
+            `\\.${escapeRe(c)}(?![\\w-])[^{,]*(\\[(aria-(pressed|expanded|selected|checked|current)|data-state)|:(focus|focus-visible|hover|active|checked))`,
             "i"
           )
         });
@@ -45593,7 +45609,7 @@ function tokensFor(f) {
             weight: 6,
             reason: `removes the outline in a .${c} rule`,
             scope: "style",
-            regex: new RegExp(`\\.${escapeRe(c)}\\b[^{]*\\{[^}]*outline\\s*:\\s*(none|0)\\b`, "i")
+            regex: new RegExp(`\\.${escapeRe(c)}(?![\\w-])[^{]*\\{[^}]*outline\\s*:\\s*(none|0)\\b`, "i")
           });
       }
     }
@@ -48220,7 +48236,7 @@ import {
   readdirSync as readdirSync6,
   readFileSync as readFileSync9,
   renameSync,
-  rmSync as rmSync2,
+  rmSync as rmSync3,
   statSync as statSync4,
   unlinkSync,
   writeSync
@@ -48246,7 +48262,7 @@ function atomicWrite(path2, data, mode) {
       return;
     } catch (err) {
       if (attempt >= 5 || !["EPERM", "EBUSY", "EACCES"].includes(err.code ?? "")) {
-        rmSync2(tmp, { force: true });
+        rmSync3(tmp, { force: true });
         throw err;
       }
       const until = Date.now() + 50 * (attempt + 1);
@@ -48889,7 +48905,7 @@ var journeys = {
 
 Suggest options:
   --pages N              Pages to read when deriving journeys from a site (default 8)
-  --force                Overwrite journey files that already exist (by default edited files are kept)
+  --force                Overwrite journey files that already exist (by default existing files are kept)
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
 
 Run options:
@@ -49082,8 +49098,8 @@ async function auditCommand(ctx, usage2, categories) {
       exitCode: exitCodeForOutcome(run.outcome, gate)
     };
   } finally {
-    await server?.close();
     stop.dispose();
+    await server?.close();
   }
 }
 function summaryText(run, reportPath) {
@@ -49156,7 +49172,8 @@ var audit = {
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
   --allow-submit       Really send empty submissions to test server-side validation, on local or other hosts
-                       (disposable/test environments you are authorized to use only; never to delete/payment URLs)
+                       (disposable/test environments you are authorized to use only; never to delete/payment URLs);
+                       also lets a --setup-journey submit forms
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
@@ -51000,7 +51017,7 @@ function pathKey(u) {
 function compareRuns(base2, head) {
   const before = new Map(base2.findings.map((f) => [f.fingerprint, f]));
   const after = new Map(head.findings.map((f) => [f.fingerprint, f]));
-  const headPages = new Set(head.pages.map((p) => pathKey(p.url)));
+  const headPages = new Set(head.pages.filter((p) => p.status !== null).map((p) => pathKey(p.url)));
   const dismissedFps = new Set((head.dismissed ?? []).map((f) => f.fingerprint));
   const dismissed = base2.findings.filter((f) => dismissedFps.has(f.fingerprint));
   const fixed = base2.findings.filter(
@@ -51175,10 +51192,11 @@ var verify = {
         "INVALID_INPUT",
         `Run ${base2.id} has no recorded scope (created by an older version or by journeys).`
       );
-    const servedDir = (str(ctx, "target") && existsSync19(str(ctx, "target")) ? resolve9(str(ctx, "target")) : void 0) ?? base2.settings.servedDir;
+    const target = str(ctx, "target");
+    const servedDir = target ? existsSync19(target) ? resolve9(target) : void 0 : base2.settings.servedDir;
     const server = servedDir ? await serveStatic(servedDir) : void 0;
     try {
-      const origin = server?.url ?? new URL(str(ctx, "target") ?? scope.urls[0]).origin;
+      const origin = server?.url ?? new URL(target ?? scope.urls[0]).origin;
       const urls = scope.urls.map((u) => {
         const x = new URL(u);
         return `${x.pathname}${x.search}`;
@@ -51230,14 +51248,17 @@ var verify = {
         locateFindings(run, repo);
       }
       run.settings.baseline = base2.id;
+      run.outcome = runOutcome(run);
       ctx.ws.saveRun(run);
       const cmp = compareRuns(base2, run);
       const reports = writeReports(runDir, run, cmp, { history: ctx.ws.listRuns() });
       const failed = flag(ctx, "fail-on-regression") && !cmp.regressionFree;
+      const caveat = run.outcome === "no-page-loaded" ? `  No page could be loaded from ${origin}, so no comparison was possible: no finding is counted as fixed.` : run.outcome === "partial" ? "  The run was stopped early: the comparison is partial, and findings on pages not re-checked are not counted as fixed." : void 0;
       return {
         data: {
           baseline: base2.id,
           run: run.id,
+          outcome: run.outcome,
           fixed: cmp.fixed.map((f) => ({ fingerprint: f.fingerprint, title: f.title })),
           dismissed: cmp.dismissed.map((f) => ({ fingerprint: f.fingerprint, title: f.title })),
           introduced: cmp.introduced,
@@ -51248,7 +51269,10 @@ var verify = {
         },
         text: [
           `Verified ${run.id} against ${base2.id}`,
-          `  fixed ${cmp.fixed.length} \xB7 new ${cmp.introduced.length} \xB7 still present ${cmp.persisting.length}`,
+          ...caveat ? [caveat] : [],
+          ...run.outcome === "no-page-loaded" ? [] : [
+            `  fixed ${cmp.fixed.length} \xB7 new ${cmp.introduced.length} \xB7 still present ${cmp.persisting.length}`
+          ],
           ...cmp.fixed.map((f) => `  \u2713 fixed  ${f.title} (${new URL(f.url).pathname})`),
           ...cmp.dismissed.map((f) => `  \u2013 dismissed (not fixed)  ${f.title} (${new URL(f.url).pathname})`),
           ...cmp.introduced.map((f) => `  \u2717 new    ${f.severity} ${f.title} (${new URL(f.url).pathname})`),
@@ -51256,7 +51280,7 @@ var verify = {
           cmp.regressionFree ? "  No new serious/critical defects." : "  \u26A0 Regression: new serious/critical defects.",
           `  Report: ${reports.html}`
         ].join("\n"),
-        exitCode: failed ? 1 : 0
+        exitCode: exitCodeForOutcome(run.outcome, failed)
       };
     } finally {
       await server?.close();

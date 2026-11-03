@@ -16,6 +16,15 @@ const COVER_AT = `(el) => {
     const c = (e.getAttribute('class') || '').trim().split(/\\s+/)[0];
     return e.tagName.toLowerCase() + (c ? '.' + CSS.escape(c) : '');
   };
+  // Hit-test in the target's own tree: from the document, a target inside a shadow root hits its shadow host.
+  const root = el.getRootNode();
+  const tree = typeof root.elementFromPoint === 'function' ? root : document;
+  // The target itself, its content, or a shadow host whose shadow tree holds it does not cover it.
+  const own = (hit) => {
+    if (hit === el || el.contains(hit)) return true;
+    for (let n = root; n && n.host; n = n.host.getRootNode()) if (n.host === hit) return true;
+    return false;
+  };
   const r = el.getBoundingClientRect();
   const pts = [[0.5, 0.5], [0.15, 0.15], [0.85, 0.15], [0.15, 0.85], [0.85, 0.85]];
   let cover = null, visible = null, inViewport = 0, center = true;
@@ -23,8 +32,8 @@ const COVER_AT = `(el) => {
     const x = r.left + r.width * fx, y = r.top + r.height * fy;
     if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
     inViewport++;
-    const hit = document.elementFromPoint(x, y);
-    if (hit && (hit === el || el.contains(hit))) {
+    const hit = tree.elementFromPoint(x, y);
+    if (hit && own(hit)) {
       if (!visible) visible = { x: r.width * fx, y: r.height * fy };
     } else if (fx === 0.5) {
       center = false;

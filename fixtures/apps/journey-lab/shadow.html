@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Target inside a shadow root</title>
+    <style>
+      body { margin: 0; font: 16px sans-serif; }
+    </style>
+  </head>
+  <body>
+    <x-cta></x-cta>
+    <script>
+      customElements.define(
+        'x-cta',
+        class extends HTMLElement {
+          connectedCallback() {
+            const root = this.attachShadow({ mode: 'open' });
+            root.innerHTML =
+              '<style>button { margin: 20px; width: 200px; height: 40px; }</style>' +
+              '<button type="button"><span>Continue</span></button>';
+            root.querySelector('button').addEventListener('click', () => {
+              document.title = 'Clicked';
+            });
+          }
+        },
+      );
+    </script>
+  </body>
+</html>

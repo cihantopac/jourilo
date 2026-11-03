@@ -110,6 +110,11 @@ describe('state CSS rules', () => {
     const src = locate(finding('jourilo/focus-visible', '/', evidence), files);
     expect(src[0]).toMatchObject({ file: 'app/globals.css', line: 1, confidence: 'high' });
   });
+  it('does not take a state rule of a longer class name (.tool-bar) for .tool', () => {
+    const files = stateRepo('.tool-bar[aria-pressed="true"] {\n  outline-color: transparent;\n}\n');
+    const src = locate(finding('jourilo/focus-visible', '/', evidence), files);
+    expect(src.filter((s) => s.file === 'app/globals.css')).toEqual([]);
+  });
   it('locates a contrast finding in a pressed-state rule', () => {
     const files = stateRepo('.tool[aria-pressed="true"]{color:#999}\n');
     const src = locate(finding('axe/color-contrast', '/', evidence), files);

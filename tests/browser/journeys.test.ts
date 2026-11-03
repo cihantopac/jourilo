@@ -159,6 +159,13 @@ describe('journeys', () => {
     expect(step.description).toContain('clicked the visible part');
   });
 
+  it('clicks a target inside an open shadow root, which its own host does not cover', () => {
+    const j = clickJourney('shadow-target', 'shadow.html');
+    const step = j.steps[1];
+    expect(step.status, step.error).toBe('passed');
+    expect(step.description).not.toContain('covered');
+  });
+
   it('fails with the covering element when no part is visible', () => {
     const j = clickJourney('covered-fully', 'covered-full.html');
     const step = j.steps[1];
