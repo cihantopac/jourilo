@@ -20,6 +20,9 @@ optional and old runs still load. No run shows WCAG conformance.
   longer reported as a dialog without a name or focus trap, unless the opened element is a dialog.
 - **State CSS rules are the source.** Findings about `:hover`, `:focus` and attribute states (`[aria-pressed]`,
   `[aria-expanded]`, `[data-state]`) point at the CSS rule, not the component that renders the element.
+  Keyboard-walk findings now record the element's opening tag (class, id, role, state attributes) before its
+  name, so a rule like `.tool[aria-pressed="true"] { outline: … }` is found even when the focus selector has no
+  class.
 - **Covered click targets in journeys** are explained (which element is on top) and worked around by clicking the
   visible part, instead of a bare timeout. Targets inside shadow roots are hit-tested correctly.
 - **No page loaded is no longer a quiet success.** An unresolvable host or a refused connection ends the run with

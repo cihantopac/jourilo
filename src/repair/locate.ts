@@ -235,9 +235,43 @@ export function tokensFor(f: Finding): Token[] {
   if (VISUAL_STATE_RULES.has(f.ruleId)) {
     for (const e of f.evidence) {
       const sel = (e.selector ?? '').replace(/(?<!\\)\[(?:\\.|[^\]\\])*\]/g, ' ');
-      for (const m of sel.matchAll(/\.((?:\\.|[\w-])+)/g)) {
-        const c = m[1]!.replace(/\\(.)/g, '$1');
+      const snip = e.snippet ?? '';
+      // The element's classes come from the selector and from its markup: a keyboard-walk selector is often a
+      // class-less path (#shop > div > button:nth-of-type(2)) while the snippet is <button class="tool" …>.
+      const tag = snip.match(/^<[a-z][\w-]*\b[^>]*>/i)?.[0] ?? '';
+      const classes = [
+        ...[...sel.matchAll(/\.((?:\\.|[\w-])+)/g)].map((m) => m[1]!.replace(/\\(.)/g, '$1')),
+        ...(tag.match(/\bclass="([^"]*)"/)?.[1]?.split(/\s+/) ?? []),
+      ];
+      const states = [
+        ...tag.matchAll(/\s(aria-(?:pressed|expanded|selected|checked|current)|data-state)="([^"]*)"/g),
+      ].map((m) => ({ attr: m[1]!, value: m[2]! }));
+      for (const c of new Set(classes)) {
         if (c.length <= 2 || !/^[A-Za-z]/.test(c)) continue;
+        // The element is in this state, and a rule for its class and that state exists ([attr] or [attr="value"]).
+        for (const s of states)
+          add({
+            value: `.${c}[${s.attr}]`,
+            weight: 4,
+            reason: `state rule .${c}[${s.attr}] matches the element's ${s.attr}="${s.value}"`,
+            scope: 'style',
+            regex: new RegExp(
+              `\\.${escapeRe(c)}(?![\\w-])[^{,]*\\[${escapeRe(s.attr)}(\\s*=\\s*["']?${escapeRe(s.value)}["']?)?\\s*\\]`,
+              'i',
+            ),
+          });
+        // Any outline or box-shadow in an [aria-*]/[data-state] rule overrides the :focus-visible style.
+        if (f.ruleId === 'jourilo/focus-visible' && states.length)
+          add({
+            value: `.${c}[state]{outline}`,
+            weight: 4,
+            reason: `sets the outline in a .${c} state rule`,
+            scope: 'style',
+            regex: new RegExp(
+              `\\.${escapeRe(c)}(?![\\w-])[^{,]*\\[(aria-(pressed|expanded|selected|checked|current)|data-state)[^{]*\\{[^}]*\\b(outline|box-shadow)\\s*:`,
+              'i',
+            ),
+          });
         add({
           value: `.${c}[state]`,
           weight: 8,

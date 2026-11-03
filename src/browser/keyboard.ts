@@ -8,6 +8,8 @@ export interface FocusStop {
   selector: string;
   name: string;
   tag: string;
+  /** Opening tag with the attributes that identify the element and its state, e.g. `<button class="tool" aria-pressed="true">`. */
+  markup?: string;
   rect: Rect;
   /** Style differences between focused and unfocused state; empty means no visible focus indicator. */
   indicatorChanges: string[];
@@ -90,8 +92,13 @@ const FOCUS_INFO = `(el) => {
     if (isCover(hit)) cover = cover || hit;
   }
   const name = (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('title') || '').replace(/\\s+/g, ' ').trim().slice(0, 80);
+  // The element's identity as markup (like an axe node's html), so a state rule (.tool[aria-pressed]) can be found.
+  const attrs = ['id', 'class', 'role', 'aria-pressed', 'aria-expanded', 'aria-selected', 'aria-checked', 'aria-current', 'data-state']
+    .filter((a) => el.hasAttribute(a))
+    .map((a) => ' ' + a + '="' + el.getAttribute(a).replace(/\\s+/g, ' ').trim().slice(0, 80).replace(/"/g, '&quot;') + '"');
+  const markup = '<' + el.tagName.toLowerCase() + attrs.join('') + '>';
   return {
-    selector: sel(el), name, tag: el.tagName.toLowerCase(),
+    selector: sel(el), name, tag: el.tagName.toLowerCase(), markup: markup.length > 200 ? markup.slice(0, 198) + '…>' : markup,
     rect: { x: Math.round(r.left + sx), y: Math.round(r.top + sy), width: Math.round(r.width), height: Math.round(r.height) },
     obscured: !selfHidden && inViewport > 0 && visiblePts === 0 && !!cover,
     coverSelector: cover ? sel(cover) : undefined,

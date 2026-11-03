@@ -120,6 +120,46 @@ describe('state CSS rules', () => {
     const src = locate(finding('axe/color-contrast', '/', evidence), files);
     expect(src[0]).toMatchObject({ file: 'app/globals.css', confidence: 'high' });
   });
+  // Field case (cihanca.com a49b46a): the keyboard walk's selector has no class; only the element's markup
+  // names the class and the pressed state, and the state rule sets an outline instead of removing it.
+  it('finds a pressed-state outline rule from the markup of a class-less keyboard selector', () => {
+    const root = mkdtempSync(join(tmpdir(), 'jourilo-field-'));
+    mkdirSync(join(root, 'app'), { recursive: true });
+    mkdirSync(join(root, 'components'), { recursive: true });
+    const lines = (n: number, f: (i: number) => string) =>
+      Array.from({ length: n }, (_, i) => f(i)).join('\n');
+    writeFileSync(
+      join(root, 'app/page.tsx'),
+      `${lines(35, (i) => `// line ${i + 1}`)}\n      <ShopSection\n        id="hirdavat"\n        sign="AÇIK KAYNAK HIRDAVAT"\n      />\n`,
+    );
+    writeFileSync(
+      join(root, 'components/HardwareShop.tsx'),
+      '<div className="peg" role="group" aria-label="Aletler">\n  <button type="button" className="tool" aria-pressed={k === picked}>\n',
+    );
+    writeFileSync(
+      join(root, 'app/globals.css'),
+      `${lines(39, (i) => `.r${i} { color: #111; }`)}\n:focus-visible { outline: 3px solid var(--lamp); outline-offset: 3px; }\n${lines(310, (i) => `.s${i} { margin: 0; }`)}\n.tool[aria-pressed="true"] { outline: 3px solid var(--tint); outline-offset: 3px; }\n`,
+    );
+    const files = indexRepository(root);
+    // The bare tag, and the tag followed by the visible name as the keyboard walk records it.
+    for (const snippet of [
+      '<button class="tool" aria-pressed="true">',
+      '<button class="tool" aria-pressed="true">bedava Jourilo v1.1.0',
+    ]) {
+      const src = locate(
+        finding('jourilo/focus-visible', '/', [
+          {
+            type: 'element',
+            selector: '#hirdavat > div > div > div:nth-of-type(1) > button:nth-of-type(2)',
+            snippet,
+            note: 'Tab stop #39',
+          },
+        ]),
+        files,
+      );
+      expect(src[0]).toMatchObject({ file: 'app/globals.css', line: 351, confidence: 'high' });
+    }
+  });
 });
 
 describe('design tokens and documentation', () => {

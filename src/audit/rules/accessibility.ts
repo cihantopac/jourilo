@@ -1,6 +1,7 @@
 // Accessibility rules: axe-core results mapped to findings, plus Jourilo's own measured checks for things axe
 // does not cover from a static DOM scan (keyboard focus behavior, real tab order, input purpose).
 import type { PageObservation } from '../../browser/capture.js';
+import { excerpt } from '../../core/redact.js';
 import type { Evidence, Finding, Rect, Severity } from '../../core/types.js';
 import { makeFinding } from '../finding.js';
 import { nielsen, wcag, wcagFromAxeTags } from '../standards.js';
@@ -166,6 +167,11 @@ function pickData(d: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
+// A tab stop as an axe-style excerpt: the opening tag (class, id, role, state attributes) followed by its name, so
+// the report stays readable and source location can match state rules. Older walks only recorded the name.
+const stopSnippet = (s: { markup?: string; name: string }) =>
+  s.markup ? excerpt(`${s.markup}${s.name}`, 240) : s.name;
+
 export function keyboardFindings(obs: PageObservation): Finding[] {
   const kb = obs.keyboard;
   if (!kb) return [];
@@ -195,7 +201,7 @@ export function keyboardFindings(obs: PageObservation): Finding[] {
           type: 'element' as const,
           selector: s.selector,
           rect: s.rect,
-          snippet: s.name,
+          snippet: stopSnippet(s),
           note: `Tab stop #${s.index + 1}`,
           ...shot,
         })),
@@ -231,7 +237,7 @@ export function keyboardFindings(obs: PageObservation): Finding[] {
           type: 'element' as const,
           selector: s.selector,
           rect: s.rect,
-          snippet: s.name,
+          snippet: stopSnippet(s),
           ...shot,
         })),
         occurrences: obscured.length,
