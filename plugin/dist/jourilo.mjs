@@ -44491,6 +44491,13 @@ function indexRepository(root, maxFiles = 6e3) {
   walk2(root, 0);
   return out;
 }
+var VISUAL_STATE_RULES = /* @__PURE__ */ new Set([
+  "jourilo/focus-visible",
+  "axe/color-contrast",
+  "axe/color-contrast-enhanced",
+  "axe/link-in-text-block",
+  "jourilo/target-size"
+]);
 var escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 var attrRe = (attr, value) => new RegExp(`\\b${attr}\\s*[=:]\\s*\\{?\\s*["'\`]${escapeRe(value)}["'\`]`, "i");
 function tokensFor(f) {
@@ -44576,6 +44583,33 @@ function tokensFor(f) {
         regex: colorRegex(fg),
         primary: true
       });
+    }
+  }
+  if (VISUAL_STATE_RULES.has(f.ruleId)) {
+    for (const e of f.evidence) {
+      const sel = (e.selector ?? "").replace(/(?<!\\)\[(?:\\.|[^\]\\])*\]/g, " ");
+      for (const m of sel.matchAll(/\.((?:\\.|[\w-])+)/g)) {
+        const c = m[1].replace(/\\(.)/g, "$1");
+        if (c.length <= 2 || !/^[A-Za-z]/.test(c)) continue;
+        add({
+          value: `.${c}[state]`,
+          weight: 8,
+          reason: `state rule .${c}[\u2026]`,
+          scope: "style",
+          regex: new RegExp(
+            `\\.${escapeRe(c)}\\b[^{,]*(\\[(aria-(pressed|expanded|selected|checked|current)|data-state)|:(focus|focus-visible|hover|active|checked))`,
+            "i"
+          )
+        });
+        if (f.ruleId === "jourilo/focus-visible")
+          add({
+            value: `.${c}{outline}`,
+            weight: 6,
+            reason: `removes the outline in a .${c} rule`,
+            scope: "style",
+            regex: new RegExp(`\\.${escapeRe(c)}\\b[^{]*\\{[^}]*outline\\s*:\\s*(none|0)\\b`, "i")
+          });
+      }
     }
   }
   switch (f.ruleId) {

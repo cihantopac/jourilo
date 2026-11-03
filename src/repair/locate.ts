@@ -111,6 +111,15 @@ interface Token {
   primary?: boolean;
 }
 
+/** Findings whose cause is often a state-specific rule (pressed, expanded, focus) rather than the base style. */
+const VISUAL_STATE_RULES = new Set([
+  'jourilo/focus-visible',
+  'axe/color-contrast',
+  'axe/color-contrast-enhanced',
+  'axe/link-in-text-block',
+  'jourilo/target-size',
+]);
+
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const attrRe = (attr: string, value: string) =>
@@ -220,6 +229,34 @@ export function tokensFor(f: Finding): Token[] {
         regex: colorRegex(fg),
         primary: true,
       });
+    }
+  }
+  // A state rule (.tool[aria-pressed="true"], .tool:hover) can override the base style the element shows.
+  if (VISUAL_STATE_RULES.has(f.ruleId)) {
+    for (const e of f.evidence) {
+      const sel = (e.selector ?? '').replace(/(?<!\\)\[(?:\\.|[^\]\\])*\]/g, ' ');
+      for (const m of sel.matchAll(/\.((?:\\.|[\w-])+)/g)) {
+        const c = m[1]!.replace(/\\(.)/g, '$1');
+        if (c.length <= 2 || !/^[A-Za-z]/.test(c)) continue;
+        add({
+          value: `.${c}[state]`,
+          weight: 8,
+          reason: `state rule .${c}[…]`,
+          scope: 'style',
+          regex: new RegExp(
+            `\\.${escapeRe(c)}\\b[^{,]*(\\[(aria-(pressed|expanded|selected|checked|current)|data-state)|:(focus|focus-visible|hover|active|checked))`,
+            'i',
+          ),
+        });
+        if (f.ruleId === 'jourilo/focus-visible')
+          add({
+            value: `.${c}{outline}`,
+            weight: 6,
+            reason: `removes the outline in a .${c} rule`,
+            scope: 'style',
+            regex: new RegExp(`\\.${escapeRe(c)}\\b[^{]*\\{[^}]*outline\\s*:\\s*(none|0)\\b`, 'i'),
+          });
+      }
     }
   }
   // Rule-specific source patterns describe the root cause itself, so they outrank element matches.

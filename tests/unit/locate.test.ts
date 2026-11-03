@@ -81,6 +81,37 @@ describe('source location', () => {
   });
 });
 
+describe('state CSS rules', () => {
+  const stateRepo = (css: string) => {
+    const root = mkdtempSync(join(tmpdir(), 'jourilo-state-'));
+    mkdirSync(join(root, 'app'), { recursive: true });
+    const pad = Array.from({ length: 35 }, (_, i) => `  // line ${i + 2}`).join('\n');
+    writeFileSync(
+      join(root, 'app/page.tsx'),
+      `export default function P() {\n${pad}\n  return <button className="tool" aria-pressed={on}>Go</button>;\n}\n`,
+    );
+    writeFileSync(join(root, 'app/globals.css'), css);
+    return indexRepository(root);
+  };
+  const evidence = [
+    {
+      type: 'element' as const,
+      selector: 'main > .tool:nth-of-type(2)',
+      snippet: '<button class="tool" aria-pressed="true">',
+    },
+  ];
+  it('locates a focus-visible finding in the state CSS rule that removes the outline', () => {
+    const files = stateRepo('.tool[aria-pressed="true"] { outline: none; }\n');
+    const src = locate(finding('jourilo/focus-visible', '/', evidence), files);
+    expect(src[0]).toMatchObject({ file: 'app/globals.css', confidence: 'high' });
+  });
+  it('locates a contrast finding in a pressed-state rule', () => {
+    const files = stateRepo('.tool[aria-pressed="true"]{color:#999}\n');
+    const src = locate(finding('axe/color-contrast', '/', evidence), files);
+    expect(src[0]).toMatchObject({ file: 'app/globals.css', confidence: 'high' });
+  });
+});
+
 describe('design tokens and documentation', () => {
   it('maps color utilities to their token definitions and ignores docs', () => {
     const root = mkdtempSync(join(tmpdir(), 'jourilo-tw-'));
