@@ -62,8 +62,23 @@ const FOCUS_INFO = `(el) => {
     for (let a = hit; a && a.nodeType === 1 && !a.contains(el); a = a.parentElement) if (paints(a)) return true;
     return false;
   };
-  // A control that hides itself (opacity 0, 1px) is not "obscured"; that belongs to focus-visible.
-  const selfHidden = parseFloat(getComputedStyle(el).opacity) < 0.1 || r.width <= 1 || r.height <= 1;
+  // A control that hides itself (opacity 0, 1px) or sits in a hidden or collapsed ancestor (opacity 0, clipped to
+  // nothing) is not "obscured"; that belongs to focus-visible.
+  const hiddenByAncestor = () => {
+    let l = r.left, t = r.top, rt = r.right, b = r.bottom;
+    for (let a = el.parentElement; a; a = a.parentElement) {
+      const cs = getComputedStyle(a);
+      if (parseFloat(cs.opacity) < 0.1) return true;
+      if (cs.overflowX !== 'visible' || cs.overflowY !== 'visible') {
+        const ar = a.getBoundingClientRect();
+        if (cs.overflowX !== 'visible') { l = Math.max(l, ar.left); rt = Math.min(rt, ar.right); }
+        if (cs.overflowY !== 'visible') { t = Math.max(t, ar.top); b = Math.min(b, ar.bottom); }
+        if (rt - l <= 1 || b - t <= 1) return true;
+      }
+    }
+    return false;
+  };
+  const selfHidden = parseFloat(getComputedStyle(el).opacity) < 0.1 || r.width <= 1 || r.height <= 1 || hiddenByAncestor();
   const pts = [[0.5, 0.5], [0.15, 0.15], [0.85, 0.15], [0.15, 0.85], [0.85, 0.85]];
   let visiblePts = 0, inViewport = 0, cover = null;
   for (const [fx, fy] of pts) {

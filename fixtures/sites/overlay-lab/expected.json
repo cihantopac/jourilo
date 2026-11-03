@@ -11,7 +11,7 @@
     {
       "rule": "jourilo/focus-obscured",
       "path": "/controls",
-      "why": "an opacity:0 checkbox under its label, a transparent click-catcher, and a sticky header with scroll-padding"
+      "why": "an opacity:0 checkbox and a full-opacity one under its label, a transparent click-catcher, a sticky header with scroll-padding, and links in an opacity:0 menu and a height:0 overflow:hidden panel"
     }
   ],
   "maxDefects": {
