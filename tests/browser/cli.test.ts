@@ -1,5 +1,5 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
@@ -254,4 +254,56 @@ describe('cli stop early', () => {
     expect(r.run.limitations.some((l) => /before pages were discovered/.test(l))).toBe(true);
     expect(r.afterSignalMs).toBeLessThan(10_000);
   }, 120_000);
+});
+
+describe('cli --evidence minimal', () => {
+  const site = [
+    'fixtures/sites/acme-saas',
+    '--pages',
+    '6',
+    '--viewports',
+    'desktop,mobile',
+    '--no-forms',
+    '--no-keyboard',
+  ];
+  const audit = (extra: string[]) => {
+    const r = spawnSync(
+      process.execPath,
+      [cli, 'audit', ...site, ...extra, '--json', '-q', '--workspace', ws],
+      {
+        encoding: 'utf8',
+        cwd: root,
+        maxBuffer: 64 * 1024 * 1024,
+      },
+    );
+    const out = JSON.parse(r.stdout) as { runDir: string };
+    const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8')) as Run;
+    const shots = join(out.runDir, 'screenshots');
+    const bytes = readdirSync(shots).reduce((n, f) => n + statSync(join(shots, f)).size, 0);
+    return { run, bytes, runDir: out.runDir };
+  };
+
+  it('--evidence minimal at least halves the evidence on acme-saas', () => {
+    const full = audit([]);
+    const min = audit(['--evidence', 'minimal']);
+    console.log(
+      `evidence bytes: full=${full.bytes} minimal=${min.bytes} ratio=${(min.bytes / full.bytes).toFixed(3)}`,
+    );
+    expect(min.bytes).toBeLessThanOrEqual(full.bytes * 0.5);
+    const fps = (r: Run) => r.findings.map((f) => f.fingerprint).sort();
+    expect(fps(min.run)).toEqual(fps(full.run));
+    expect(min.run.settings.evidence).toBe('minimal');
+    expect(full.run.settings.evidence).toBeUndefined();
+    expect(min.run.limitations.some((l) => /first screen/.test(l))).toBe(true);
+    // Every screenshot the run names still exists.
+    for (const p of min.run.pages)
+      if (p.screenshot) expect(existsSync(join(min.runDir, p.screenshot))).toBe(true);
+    for (const f of min.run.findings)
+      for (const e of f.evidence) if (e.file) expect(existsSync(join(min.runDir, e.file))).toBe(true);
+    // Every file the manifest lists exists.
+    const manifest = JSON.parse(readFileSync(join(min.runDir, 'manifest.json'), 'utf8')) as {
+      files: { path: string }[];
+    };
+    for (const a of manifest.files) expect(existsSync(join(min.runDir, a.path))).toBe(true);
+  }, 240_000);
 });

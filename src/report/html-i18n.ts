@@ -186,6 +186,7 @@ const EN = {
   'j.step': 'Step {n}',
   'j.stoppedHere': 'Stopped here',
   'j.noShot': 'No screenshot',
+  'pages.noShot': 'No screenshot kept',
   'j.lastStep': 'Last step',
   'j.goal': 'Goal',
 
@@ -426,6 +427,7 @@ const TR: Record<MsgKey, string> = {
   'j.step': 'Adım {n}',
   'j.stoppedHere': 'Burada durdu',
   'j.noShot': 'Ekran görüntüsü yok',
+  'pages.noShot': 'Ekran görüntüsü saklanmadı',
   'j.lastStep': 'Son adım',
   'j.goal': 'Hedef',
 

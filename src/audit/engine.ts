@@ -41,6 +41,7 @@ import { probeFormValidation } from '../journeys/forms.js';
 import { runJourney } from '../journeys/runner.js';
 import { testData } from '../journeys/safety.js';
 import type { JourneySpec } from '../journeys/schema.js';
+import { type EvidenceMode, firstScreenLimitation, pruneFullPageScreenshots } from './evidence.js';
 import { mergeFindings } from './finding.js';
 import {
   axeFindings,
@@ -85,6 +86,8 @@ export interface AuditOptions {
   locale?: string;
   timezoneId?: string;
   clock?: string;
+  /** `minimal` keeps first screens and only the full-page screenshots findings point at (default `full`). */
+  evidence?: EvidenceMode;
   /**
    * A journey run first, on the first viewport and under the journeys safety policy; the state it leaves (cookies,
    * localStorage) is what every capture context starts from.
@@ -242,6 +245,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
             stepTimeoutMs: Math.min(opts.timeoutMs, 10_000),
             viewportOverride: opts.viewports[0]!.name,
             saveAuth: setupState,
+            ...(opts.evidence ? { evidence: opts.evidence } : {}),
             ...(opts.storageState ? { storageState: opts.storageState } : {}),
             ...stateOptions(opts),
             log,
@@ -327,6 +331,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
                 (!vp.hasTouch || opts.viewports.every((v) => v.hasTouch)),
               axe: !opts.inventoryOnly,
               throttle: opts.throttle,
+              ...(opts.evidence ? { evidence: opts.evidence } : {}),
             });
             observations.push(obs);
           }
@@ -481,6 +486,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         `While keys were pressed and widgets operated, ${stopped.length} request(s) that would have changed data or left the site were stopped (e.g. ${stopped[0]!.method} ${stopped[0]!.url}); audits only observe.`,
       );
 
+    // Pruned only now: findings are built and dismissals applied, and dismissed findings keep their evidence.
     const pages: PageCapture[] = observations.map((o) => ({
       url: o.url,
       finalUrl: o.finalUrl,
@@ -494,6 +500,15 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       failedRequests: o.network.length,
       inventory: o.probe?.inventory ?? emptyInventory(),
     }));
+    if (opts.evidence === 'minimal') {
+      const { pruned } = pruneFullPageScreenshots(
+        runDir,
+        pages,
+        [...findings, ...dismissed],
+        observations.map((o) => o.foldScreenshot),
+      );
+      if (pruned.length) limitations.push(firstScreenLimitation(pruned));
+    }
 
     const run: Run = {
       schemaVersion: RUN_SCHEMA_VERSION,
@@ -512,6 +527,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         keyboard: opts.keyboard,
         throttle: opts.throttle,
         runs,
+        ...(opts.evidence === 'minimal' ? { evidence: 'minimal' } : {}),
         ...(opts.setupJourney ? { setupJourney: opts.setupJourney.id } : {}),
         ...(opts.timezoneId ? { timezoneId: opts.timezoneId } : {}),
         ...(opts.clock ? { clock: opts.clock } : {}),

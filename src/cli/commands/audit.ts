@@ -20,6 +20,7 @@ import {
   list,
   num,
   type OptionSpec,
+  parseEvidence,
   parseStateOptions,
   requirePositional,
   str,
@@ -54,6 +55,7 @@ export const AUDIT_OPTIONS: OptionSpec = {
   'fail-on': { type: 'string' },
   'max-duration': { type: 'string' },
   'run-id': { type: 'string' },
+  evidence: { type: 'string' },
 };
 
 const SEVERITIES: Severity[] = ['critical', 'serious', 'moderate', 'minor'];
@@ -110,6 +112,7 @@ export async function auditCommand(
   const maxDuration = str(ctx, 'max-duration') === undefined ? undefined : num(ctx, 'max-duration', 0);
   if (maxDuration === 0) throw new JouriloError('USAGE', '--max-duration must be more than 0 seconds.');
 
+  const evidence = parseEvidence(ctx);
   const setupRef = str(ctx, 'setup-journey');
   const setupJourney = setupRef ? loadJourneys(ctx.ws, [setupRef])[0] : undefined;
 
@@ -140,6 +143,7 @@ export async function auditCommand(
       ...(str(ctx, 'locale') ? { locale: str(ctx, 'locale')! } : {}),
       ...state,
       ...(setupJourney ? { setupJourney } : {}),
+      ...(evidence ? { evidence } : {}),
       ...(categories ? { categories } : {}),
       context: loadContext(repo ?? process.cwd(), str(ctx, 'brand') ? { brand: str(ctx, 'brand')! } : {}),
       ...(str(ctx, 'run-id') !== undefined ? { runId: str(ctx, 'run-id')! } : {}),
@@ -273,6 +277,7 @@ export const audit: Command = {
                        (disposable/test environments you are authorized to use only; never to delete/payment URLs)
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
+  --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
   --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused if the run exists
   --max-duration SECS  Stop after this many seconds and write a partial run (exit 6), as SIGINT/SIGTERM do;
                        a second signal quits at once (exit 130)`,

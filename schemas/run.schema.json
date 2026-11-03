@@ -53,6 +53,10 @@
         "setupJourney": { "type": "string", "description": "Id of the journey that ran before the audit." },
         "timezoneId": { "type": "string" },
         "clock": { "type": "string" },
+        "evidence": {
+          "enum": ["full", "minimal"],
+          "description": "Absent means full. minimal: first screens plus the full-page screenshots findings need."
+        },
         "axe": { "type": ["string", "null"] },
         "hostClass": { "type": "string" },
         "scope": {

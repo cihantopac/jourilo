@@ -101,6 +101,15 @@ export function list(ctx: Context, key: string): string[] {
   return [];
 }
 
+/** `--evidence full|minimal`; undefined when not given. */
+export function parseEvidence(ctx: Context): 'full' | 'minimal' | undefined {
+  const v = str(ctx, 'evidence');
+  if (v === undefined) return undefined;
+  if (v !== 'full' && v !== 'minimal')
+    throw new JouriloError('USAGE', `--evidence must be full or minimal (got ${v}).`);
+  return v;
+}
+
 /** `--timezone` and `--clock`, validated up front so a typo fails before the browser starts. */
 export function parseStateOptions(ctx: Context): { timezoneId?: string; clock?: string } {
   const timezoneId = str(ctx, 'timezone');

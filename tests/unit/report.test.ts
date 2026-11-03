@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { emptyInventory } from '../../src/audit/engine.js';
 import { makeFinding } from '../../src/audit/finding.js';
 import type { Finding } from '../../src/core/types.js';
 import { compareRuns } from '../../src/report/compare.js';
@@ -221,5 +222,33 @@ describe('dismissed findings in the report', () => {
     const md = renderMarkdown(run([], { dismissed }));
     expect(md).toContain('## Dismissed');
     expect(md).toContain('Decorative <b>image</b>');
+  });
+
+  it('the report renders a page whose screenshot is absent', () => {
+    const shotless = f('usability/x', '/', {
+      evidence: [{ type: 'element', selector: 'a.cta', rect: { x: 10, y: 10, width: 50, height: 20 } }],
+    });
+    const html = renderHtml(
+      run([shotless], {
+        settings: { evidence: 'minimal' },
+        pages: [
+          {
+            url: 'https://example.test/',
+            finalUrl: 'https://example.test/',
+            status: 200,
+            title: 'Home',
+            viewport: 'desktop',
+            loadMs: 1,
+            metrics: [],
+            consoleErrors: 0,
+            failedRequests: 0,
+            inventory: emptyInventory(),
+          },
+        ],
+      }),
+    );
+    expect(html).not.toMatch(/<img[^>]*src="screenshots\//);
+    expect(html).toContain('No screenshot kept');
+    expect(renderMarkdown(run([shotless]))).toBeTruthy();
   });
 });

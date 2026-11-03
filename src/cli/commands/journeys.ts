@@ -22,7 +22,16 @@ import { suggestJourneys } from '../../journeys/suggest.js';
 import { wouldBeCommitted } from '../../repair/git.js';
 import { locateFindings } from '../../repair/locate.js';
 import { writeReports } from '../../report/index.js';
-import { type Command, type Context, flag, list, num, parseStateOptions, str } from '../framework.js';
+import {
+  type Command,
+  type Context,
+  flag,
+  list,
+  num,
+  parseEvidence,
+  parseStateOptions,
+  str,
+} from '../framework.js';
 
 export function journeysDir(ws: Workspace): string {
   return join(ws.root, 'journeys');
@@ -192,6 +201,7 @@ async function runCmd(ctx: Context) {
       'Create some with `jourilo journeys suggest <url>`.',
     );
   const state = parseStateOptions(ctx);
+  const evidence = parseEvidence(ctx);
   const isDir = existsSync(baseArg) && !baseArg.includes('://');
   const server = isDir ? await serveStatic(resolve(baseArg)) : undefined;
   try {
@@ -241,6 +251,10 @@ async function runCmd(ctx: Context) {
         ctx.log(warning);
       }
     }
+    if (evidence === 'minimal')
+      limitations.push(
+        '--evidence minimal: only the failed step, the step before it and the last step of each journey kept a screenshot.',
+      );
     if (flag(ctx, 'trace')) {
       mkdirSync(join(runDir, 'traces'), { recursive: true });
       limitations.push(
@@ -267,6 +281,7 @@ async function runCmd(ctx: Context) {
               ...(vp ? { viewportOverride: vp } : {}),
               ...(str(ctx, 'auth') ? { storageState: str(ctx, 'auth')! } : {}),
               ...state,
+              ...(evidence ? { evidence } : {}),
               ...(saveAuth ? { saveAuth } : {}),
               ...(allowOrigins.length ? { allowOrigins } : {}),
               log: k === 0 ? ctx.log : undefined,
@@ -306,6 +321,7 @@ async function runCmd(ctx: Context) {
         allowDestructive: policy.allowDestructive,
         hostClass,
         ...state,
+        ...(evidence === 'minimal' ? { evidence } : {}),
       },
       pages: [],
       journeys,
@@ -378,6 +394,7 @@ export const journeys: Command = {
     repeat: { type: 'string' },
     timezone: { type: 'string' },
     clock: { type: 'string' },
+    evidence: { type: 'string' },
   },
   details: `Subcommands:
   suggest [url|dir|run]  Derive journeys from a site (or an existing run) into .jourilo/journeys/*.json
@@ -396,6 +413,7 @@ Run options:
   --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
   --timezone ZONE        IANA time zone for the page (e.g. Europe/Istanbul)
   --clock ISO            Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
+  --evidence MODE        full (default) or minimal: keep only the screenshots of the failed step, the step before it and the last step
   --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
   --fail-on-failure      Exit 1 when a journey fails
 

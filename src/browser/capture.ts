@@ -3,6 +3,7 @@
 import { join } from 'node:path';
 import axe from 'axe-core';
 import type { Browser, BrowserContext, Page } from 'playwright-core';
+import { EVIDENCE_QUALITY, type EvidenceMode, FULL_PAGE_MAX_HEIGHT } from '../audit/evidence.js';
 import { toPosix } from '../core/fs-safety.js';
 import { shortHash, slug } from '../core/hash.js';
 import { lexiconSources } from '../core/lexicon.js';
@@ -150,6 +151,8 @@ export interface CaptureOptions {
   clock?: string;
   /** Simulated mobile network + CPU (Chromium only). */
   throttle?: boolean;
+  /** `minimal`: JPEG quality 55 and full-page height capped at 6000 px (default `full`). */
+  evidence?: EvidenceMode;
 }
 
 export async function newContext(
@@ -422,32 +425,48 @@ export async function capturePage(
     if (opts.screenshots !== false) {
       const base = `${slug(new URL(url).pathname.replace(/^\/$/, 'home'), 40)}-${shortHash(url).slice(0, 6)}-${vp.name}`;
       const mask = [...DEFAULT_MASK, ...(opts.mask ?? [])].map((s) => page.locator(s));
+      const mode = opts.evidence ?? 'full';
       const full = join('screenshots', `${base}.jpg`);
       const fold = join('screenshots', `${base}-fold.jpg`);
       try {
-        const height = Math.min(obs.probe?.scroll.height ?? vp.height, 12_000);
-        await page.screenshot({
-          path: join(opts.runDir, full),
-          type: 'jpeg',
-          quality: 80,
-          fullPage: true,
-          clip: { x: 0, y: 0, width: vp.width, height },
-          animations: 'disabled',
-          caret: 'hide',
-          mask,
-          maskColor: '#FF00FF',
-        });
-        obs.screenshot = toPosix(full);
-        await page.screenshot({
-          path: join(opts.runDir, fold),
-          type: 'jpeg',
-          quality: 80,
-          animations: 'disabled',
-          caret: 'hide',
-          mask,
-          maskColor: '#FF00FF',
-        });
-        obs.foldScreenshot = toPosix(fold);
+        const height = Math.min(obs.probe?.scroll.height ?? vp.height, FULL_PAGE_MAX_HEIGHT[mode]);
+        if (mode === 'minimal' && height <= vp.height) {
+          // The document fits in the first screen: one file serves as fold and full page (same pixels, same coordinates).
+          await page.screenshot({
+            path: join(opts.runDir, full),
+            type: 'jpeg',
+            quality: EVIDENCE_QUALITY[mode],
+            animations: 'disabled',
+            caret: 'hide',
+            mask,
+            maskColor: '#FF00FF',
+          });
+          obs.screenshot = toPosix(full);
+          obs.foldScreenshot = obs.screenshot;
+        } else {
+          await page.screenshot({
+            path: join(opts.runDir, full),
+            type: 'jpeg',
+            quality: EVIDENCE_QUALITY[mode],
+            fullPage: true,
+            clip: { x: 0, y: 0, width: vp.width, height },
+            animations: 'disabled',
+            caret: 'hide',
+            mask,
+            maskColor: '#FF00FF',
+          });
+          obs.screenshot = toPosix(full);
+          await page.screenshot({
+            path: join(opts.runDir, fold),
+            type: 'jpeg',
+            quality: EVIDENCE_QUALITY[mode],
+            animations: 'disabled',
+            caret: 'hide',
+            mask,
+            maskColor: '#FF00FF',
+          });
+          obs.foldScreenshot = toPosix(fold);
+        }
       } catch (e) {
         obs.errors.push(`screenshot: ${(e as Error).message.split('\n')[0]}`);
       }

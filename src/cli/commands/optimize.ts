@@ -207,6 +207,7 @@ export const verify: Command = {
         mode: base.mode,
         ...(typeof base.settings.timezoneId === 'string' ? { timezoneId: base.settings.timezoneId } : {}),
         ...(typeof base.settings.clock === 'string' ? { clock: base.settings.clock } : {}),
+        ...(base.settings.evidence === 'minimal' ? { evidence: 'minimal' as const } : {}),
         ...(setupJourney ? { setupJourney } : {}),
         ...(repo ? { context: loadContext(repo) } : {}),
         onProgress: ctx.log,

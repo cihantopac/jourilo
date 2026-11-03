@@ -1,8 +1,10 @@
 // Executes journeys in a real browser with evidence for every step: screenshot, URL, timing, console and network
 // failures, optional Playwright trace. Deterministic: fixed viewport, generated test data, no randomness in
 // selectors, one controlled retry for transient element states.
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Browser, ElementHandle, Locator, Page } from 'playwright-core';
+import { EVIDENCE_QUALITY, type EvidenceMode, journeyStepsToKeep } from '../audit/evidence.js';
 import { makeFinding } from '../audit/finding.js';
 import { CWV, nielsen } from '../audit/standards.js';
 import { DEFAULT_MASK, newContext, observe } from '../browser/capture.js';
@@ -33,6 +35,8 @@ export interface JourneyRunOptions {
   saveAuth?: string;
   /** Other origins main-frame navigations may reach (e.g. a test identity provider). */
   allowOrigins?: string[];
+  /** `minimal`: JPEG quality 55; only the failed step, the step before it and the final step keep a screenshot. */
+  evidence?: EvidenceMode;
   log?: (msg: string) => void;
 }
 
@@ -293,7 +297,7 @@ export async function runJourney(
       await page.screenshot({
         path: join(opts.runDir, file),
         type: 'jpeg',
-        quality: 70,
+        quality: opts.evidence === 'minimal' ? EVIDENCE_QUALITY.minimal : 70,
         animations: 'disabled',
         caret: 'hide',
         mask: DEFAULT_MASK.map((s) => page.locator(s)),
@@ -363,6 +367,15 @@ export async function runJourney(
           });
         break;
       }
+    }
+
+    if (opts.evidence === 'minimal') {
+      const keep = journeyStepsToKeep(steps);
+      steps.forEach((st, i) => {
+        if (!st.screenshot || keep.has(i)) return;
+        rmSync(join(opts.runDir, st.screenshot), { force: true });
+        delete st.screenshot;
+      });
     }
 
     // Success criteria are evaluated even after a failure so the report shows which goals were missed.
