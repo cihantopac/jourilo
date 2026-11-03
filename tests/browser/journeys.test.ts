@@ -296,4 +296,23 @@ describe('journeys --repeat --evidence minimal', () => {
     expect(files.length).toBeGreaterThan(0);
     for (const f of files) expect(existsSync(join(out.runDir, f)), f).toBe(true);
   }, 120_000);
+
+  it('inventories only toggles that can make a journey, before applying the cap', () => {
+    const r = jourilo(
+      'audit',
+      'fixtures/apps/journey-lab',
+      '--url',
+      '/toggles.html',
+      '--viewports',
+      'desktop',
+      '--no-keyboard',
+    );
+    expect(r.status, r.stderr).toBe(0);
+    const out = JSON.parse(r.stdout);
+    const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8'));
+    expect(run.pages[0].inventory.toggles).toEqual([
+      { selector: '#faq-btn', name: 'Shipping details', state: 'expanded', controls: 'faq-panel' },
+      { selector: '#bold', name: 'Bold', state: 'pressed', controls: null },
+    ]);
+  });
 });

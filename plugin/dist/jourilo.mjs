@@ -40694,11 +40694,14 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
     if (!expanded && !pressed) continue;
     const name = nameOf(el);
     if (!name) continue;
+    const controls = (el.getAttribute('aria-controls') || '').trim().split(/\\s+/)[0] || null;
+    // Only toggles that can yield a journey count against the cap: a disclosure needs a panel to check.
+    if (expanded && !(controls && document.getElementById(controls))) continue;
     toggles.push({
       selector: selectorOf(el),
       name: name.slice(0, 80),
       state: expanded ? 'expanded' : 'pressed',
-      controls: (el.getAttribute('aria-controls') || '').trim().split(/\\s+/)[0] || null,
+      controls,
     });
     if (toggles.length >= 10) break;
   }
@@ -48068,6 +48071,7 @@ function formJourney(page, form) {
   };
 }
 var TOGGLE_UI = lexicon("toggle-ui");
+var isUiSwitch = (c) => !c.href && TOGGLE_UI.test(c.text);
 var DESTRUCTIVE2 = lexicon("destructive");
 function toggleJourney(page, toggle) {
   if (DESTRUCTIVE2.test(toggle.name)) return null;
@@ -48106,9 +48110,7 @@ function suggestJourneys(run) {
     out.push(j);
   };
   const home = desktop.find((p) => pathOf2(p.url).split("?")[0] === "/") ?? desktop[0];
-  const cta = home?.inventory.ctas.find(
-    (c) => c.emphasis === "primary" && c.aboveFold && !TOGGLE_UI.test(c.text)
-  );
+  const cta = home?.inventory.ctas.find((c) => c.emphasis === "primary" && c.aboveFold && !isUiSwitch(c));
   if (home && cta) {
     const href = cta.href && !cta.href.startsWith("#") ? cta.href : null;
     const dest = href ? pathOf2(new URL(href, home.url).toString()).split("?")[0] : null;
@@ -48164,7 +48166,7 @@ function suggestJourneys(run) {
   for (const p of desktop) for (const f of p.inventory.forms) push(formJourney(p, f));
   const pricing = desktop.find((p) => /pric|plans/i.test(pathOf2(p.url)));
   const planCta = pricing?.inventory.ctas.find(
-    (c) => c.emphasis === "primary" && c.href && !c.href.startsWith("#") && !TOGGLE_UI.test(c.text)
+    (c) => c.emphasis === "primary" && c.href && !c.href.startsWith("#") && !isUiSwitch(c)
   );
   if (pricing && planCta) {
     push({

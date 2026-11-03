@@ -81,6 +81,8 @@ function formJourney(page: PageCapture, form: FormInfo): JourneySpec | null {
 }
 
 const TOGGLE_UI = lexicon('toggle-ui');
+/** A button without a destination that is named like a theme or language switch is not a call to action. */
+const isUiSwitch = (c: { text: string; href: string | null }) => !c.href && TOGGLE_UI.test(c.text);
 const DESTRUCTIVE = lexicon('destructive');
 
 /** Opens a collapsed disclosure or presses a toggle and checks the visible result; null when nothing can be checked. */
@@ -124,9 +126,7 @@ export function suggestJourneys(run: Run): JourneySpec[] {
 
   // 1. The landing page's primary call to action.
   const home = desktop.find((p) => pathOf(p.url).split('?')[0] === '/') ?? desktop[0];
-  const cta = home?.inventory.ctas.find(
-    (c) => c.emphasis === 'primary' && c.aboveFold && !TOGGLE_UI.test(c.text),
-  );
+  const cta = home?.inventory.ctas.find((c) => c.emphasis === 'primary' && c.aboveFold && !isUiSwitch(c));
   if (home && cta) {
     const href = cta.href && !cta.href.startsWith('#') ? cta.href : null;
     const dest = href ? pathOf(new URL(href, home.url).toString()).split('?')[0]! : null;
@@ -192,7 +192,7 @@ export function suggestJourneys(run: Run): JourneySpec[] {
   // 4. Pricing → next step.
   const pricing = desktop.find((p) => /pric|plans/i.test(pathOf(p.url)));
   const planCta = pricing?.inventory.ctas.find(
-    (c) => c.emphasis === 'primary' && c.href && !c.href.startsWith('#') && !TOGGLE_UI.test(c.text),
+    (c) => c.emphasis === 'primary' && c.href && !c.href.startsWith('#') && !isUiSwitch(c),
   );
   if (pricing && planCta) {
     push({

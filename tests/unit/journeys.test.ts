@@ -432,4 +432,24 @@ describe('journey suggestions: disclosures and toggles', () => {
     const cta = suggestJourneys(runWith(real)).find((x) => x.id === 'landing-primary-cta');
     expect(cta?.name).toContain('Start free');
   });
+
+  it('keeps a real call to action that merely mentions a theme', () => {
+    const cta = (text: string, href: string | null) => ({
+      text,
+      selector: '#go',
+      href,
+      rect,
+      aboveFold: true,
+      emphasis: 'primary' as const,
+    });
+    const j = suggestJourneys(runWith({ ctas: [cta('Try dark mode free', '/signup')] })).find(
+      (x) => x.id === 'landing-primary-cta',
+    );
+    expect(j?.name).toContain('Try dark mode free');
+    expect(
+      suggestJourneys(runWith({ ctas: [cta('Toggle dark mode', null)] })).some(
+        (x) => x.id === 'landing-primary-cta',
+      ),
+    ).toBe(false);
+  });
 });

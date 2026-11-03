@@ -298,11 +298,14 @@
     if (!expanded && !pressed) continue;
     const name = nameOf(el);
     if (!name) continue;
+    const controls = (el.getAttribute('aria-controls') || '').trim().split(/\s+/)[0] || null;
+    // Only toggles that can yield a journey count against the cap: a disclosure needs a panel to check.
+    if (expanded && !(controls && document.getElementById(controls))) continue;
     toggles.push({
       selector: selectorOf(el),
       name: name.slice(0, 80),
       state: expanded ? 'expanded' : 'pressed',
-      controls: (el.getAttribute('aria-controls') || '').trim().split(/\s+/)[0] || null,
+      controls,
     });
     if (toggles.length >= 10) break;
   }
