@@ -3,7 +3,8 @@
 // starting point, not a claim about what the product's key journeys are.
 import { pathOf } from '../audit/finding.js';
 import { slug } from '../core/hash.js';
-import type { FieldInfo, FormInfo, PageCapture, Run } from '../core/types.js';
+import { lexicon } from '../core/lexicon.js';
+import type { FieldInfo, FormInfo, PageCapture, Run, ToggleInfo } from '../core/types.js';
 import type { JourneySpec, Step, Target } from './schema.js';
 
 function fieldTarget(f: FieldInfo): Target {
@@ -79,6 +80,38 @@ function formJourney(page: PageCapture, form: FormInfo): JourneySpec | null {
   };
 }
 
+const TOGGLE_UI = lexicon('toggle-ui');
+const DESTRUCTIVE = lexicon('destructive');
+
+/** Opens a collapsed disclosure or presses a toggle and checks the visible result; null when nothing can be checked. */
+export function toggleJourney(page: PageCapture, toggle: ToggleInfo): JourneySpec | null {
+  if (DESTRUCTIVE.test(toggle.name)) return null;
+  const path = pathOf(page.url).split('?')[0]!;
+  let check: Step;
+  if (toggle.state === 'expanded') {
+    if (!toggle.controls) return null;
+    const id = toggle.controls;
+    check = {
+      action: 'expect',
+      visible: { css: /^[A-Za-z][\w-]*$/.test(id) ? `#${id}` : `[id="${id.replace(/"/g, '\\"')}"]` },
+    };
+  } else {
+    check = { action: 'expect', visible: { css: `${toggle.selector}[aria-pressed="true"]` } };
+  }
+  return {
+    version: 1,
+    id: slug(`toggle-${toggle.name}-${path === '/' ? 'home' : path}`, 60),
+    name: `${toggle.state === 'expanded' ? 'Open' : 'Press'} "${toggle.name}" (${path})`,
+    goal: toggle.state === 'expanded' ? 'reveal the hidden content' : 'switch the control on',
+    start: path,
+    steps: [{ action: 'click', target: { role: 'button', name: toggle.name, exact: true } }, check],
+    success: [{ description: 'No uncaught exceptions', noPageErrors: true }],
+    safety: { submitsForms: false },
+    source: 'suggested',
+    tags: ['toggle', toggle.state],
+  };
+}
+
 export function suggestJourneys(run: Run): JourneySpec[] {
   const out: JourneySpec[] = [];
   const desktop = run.pages.filter((p) => p.viewport === run.viewports[0]?.name && (p.status ?? 200) < 400);
@@ -91,7 +124,9 @@ export function suggestJourneys(run: Run): JourneySpec[] {
 
   // 1. The landing page's primary call to action.
   const home = desktop.find((p) => pathOf(p.url).split('?')[0] === '/') ?? desktop[0];
-  const cta = home?.inventory.ctas.find((c) => c.emphasis === 'primary' && c.aboveFold);
+  const cta = home?.inventory.ctas.find(
+    (c) => c.emphasis === 'primary' && c.aboveFold && !TOGGLE_UI.test(c.text),
+  );
   if (home && cta) {
     const href = cta.href && !cta.href.startsWith('#') ? cta.href : null;
     const dest = href ? pathOf(new URL(href, home.url).toString()).split('?')[0]! : null;
@@ -157,7 +192,7 @@ export function suggestJourneys(run: Run): JourneySpec[] {
   // 4. Pricing → next step.
   const pricing = desktop.find((p) => /pric|plans/i.test(pathOf(p.url)));
   const planCta = pricing?.inventory.ctas.find(
-    (c) => c.emphasis === 'primary' && c.href && !c.href.startsWith('#'),
+    (c) => c.emphasis === 'primary' && c.href && !c.href.startsWith('#') && !TOGGLE_UI.test(c.text),
   );
   if (pricing && planCta) {
     push({
@@ -175,6 +210,19 @@ export function suggestJourneys(run: Run): JourneySpec[] {
       source: 'suggested',
       tags: ['conversion', 'pricing'],
     });
+  }
+
+  // 5. Disclosures and toggles, after the funnel journeys (at most 3 per run).
+  let toggleCount = 0;
+  for (const p of desktop) {
+    for (const t of p.inventory.toggles ?? []) {
+      if (toggleCount >= 3) break;
+      const j = toggleJourney(p, t);
+      if (j && !seen.has(j.id)) {
+        push(j);
+        toggleCount++;
+      }
+    }
   }
   return out;
 }

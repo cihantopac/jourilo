@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { emptyInventory } from '../../src/audit/engine.js';
+import type { PageInventory } from '../../src/core/types.js';
 import { keyEffect, matchesUrl } from '../../src/journeys/runner.js';
 import {
   checkAction,
@@ -10,7 +12,8 @@ import {
   testData,
 } from '../../src/journeys/safety.js';
 import { describeStep, validateJourney } from '../../src/journeys/schema.js';
-import { valueFor } from '../../src/journeys/suggest.js';
+import { suggestJourneys, valueFor } from '../../src/journeys/suggest.js';
+import { run } from '../helpers.js';
 
 const local = { hostClass: 'local' as const, allowSubmit: false, allowDestructive: false };
 const publicHost = { hostClass: 'public' as const, allowSubmit: false, allowDestructive: false };
@@ -339,5 +342,94 @@ describe('journey stability (--repeat)', () => {
       'stable',
       0,
     ]);
+  });
+});
+
+describe('journey suggestions: disclosures and toggles', () => {
+  const runWith = (inv: Partial<PageInventory>) =>
+    run([], {
+      pages: [
+        {
+          url: 'https://example.test/',
+          finalUrl: 'https://example.test/',
+          status: 200,
+          title: 'Home',
+          viewport: 'desktop',
+          loadMs: 100,
+          metrics: [],
+          consoleErrors: 0,
+          failedRequests: 0,
+          inventory: { ...emptyInventory(), ...inv },
+        },
+      ],
+    });
+  const rect = { x: 0, y: 0, width: 120, height: 40 };
+
+  it('suggests an open-and-check journey for an aria-expanded control', () => {
+    const j = suggestJourneys(
+      runWith({
+        toggles: [
+          { selector: '#faq-btn', name: 'Shipping details', state: 'expanded', controls: 'faq-panel' },
+        ],
+      }),
+    ).find((x) => x.tags?.includes('toggle'));
+    expect(j).toBeDefined();
+    expect(() => validateJourney(j)).not.toThrow();
+    expect(j!.steps).toEqual([
+      { action: 'click', target: { role: 'button', name: 'Shipping details', exact: true } },
+      { action: 'expect', visible: { css: '#faq-panel' } },
+    ]);
+    expect(j!.success).toContainEqual({ description: 'No uncaught exceptions', noPageErrors: true });
+  });
+
+  it('suggests a pressed toggle journey', () => {
+    const j = suggestJourneys(
+      runWith({ toggles: [{ selector: '#bold', name: 'Bold', state: 'pressed', controls: null }] }),
+    ).find((x) => x.tags?.includes('toggle'));
+    expect(j).toBeDefined();
+    expect(() => validateJourney(j)).not.toThrow();
+    expect(j!.steps).toEqual([
+      { action: 'click', target: { role: 'button', name: 'Bold', exact: true } },
+      { action: 'expect', visible: { css: '#bold[aria-pressed="true"]' } },
+    ]);
+  });
+
+  it('does not take a theme switch for the main call to action', () => {
+    const inv = {
+      ctas: [
+        {
+          text: 'Toggle dark mode',
+          selector: '#theme',
+          href: null,
+          rect,
+          aboveFold: true,
+          emphasis: 'primary' as const,
+        },
+        {
+          text: 'Dili değiştir',
+          selector: '#lang',
+          href: null,
+          rect,
+          aboveFold: true,
+          emphasis: 'primary' as const,
+        },
+      ],
+    };
+    expect(suggestJourneys(runWith(inv)).some((x) => x.id === 'landing-primary-cta')).toBe(false);
+    const real = {
+      ctas: [
+        ...inv.ctas,
+        {
+          text: 'Start free',
+          selector: '#go',
+          href: '/signup',
+          rect,
+          aboveFold: true,
+          emphasis: 'primary' as const,
+        },
+      ],
+    };
+    const cta = suggestJourneys(runWith(real)).find((x) => x.id === 'landing-primary-cta');
+    expect(cta?.name).toContain('Start free');
   });
 });

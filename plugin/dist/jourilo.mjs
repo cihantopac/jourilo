@@ -39541,6 +39541,47 @@ var LEX = {
     "prueba gratuita",
     "essai gratuit",
     "essayer gratuitement"
+  ],
+  // Appearance and language switches: controls that change how the page looks, not where the funnel goes.
+  "toggle-ui": [
+    // en
+    "themes?",
+    "dark( mode)?",
+    "light( mode)?",
+    "mode",
+    "appearance",
+    "languages?",
+    "locale",
+    // tr
+    "tema",
+    "karanl\u0131k",
+    "karanlik",
+    "ayd\u0131nl\u0131k",
+    "aydinlik",
+    "koyu",
+    "mod",
+    "dil(i|ini)?",
+    "g\xF6r\xFCn\xFCm",
+    // de
+    "thema",
+    "dunkel(modus)?",
+    "hell(modus)?",
+    "modus",
+    "sprache",
+    "darstellung",
+    // es
+    "tema",
+    "oscuro",
+    "claro",
+    "modo",
+    "idioma",
+    "apariencia",
+    // fr
+    "th\xE8me",
+    "sombre",
+    "clair",
+    "langue",
+    "apparence"
   ]
 };
 var STEMS = /* @__PURE__ */ new Set([
@@ -40644,6 +40685,24 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
     if (ctas.length >= MAX) break;
   }
 
+  // Collapsed disclosures and unpressed toggle buttons: candidates for open-and-check journeys.
+  const toggles = [];
+  for (const el of interactive) {
+    if (el.tagName !== 'BUTTON' && el.getAttribute('role') !== 'button') continue;
+    const expanded = el.getAttribute('aria-expanded') === 'false';
+    const pressed = el.getAttribute('aria-pressed') === 'false';
+    if (!expanded && !pressed) continue;
+    const name = nameOf(el);
+    if (!name) continue;
+    toggles.push({
+      selector: selectorOf(el),
+      name: name.slice(0, 80),
+      state: expanded ? 'expanded' : 'pressed',
+      controls: (el.getAttribute('aria-controls') || '').trim().split(/\\s+/)[0] || null,
+    });
+    if (toggles.length >= 10) break;
+  }
+
   const labelOf = (f) => {
     const aria = f.getAttribute('aria-label');
     if (aria?.trim()) return aria.trim();
@@ -40927,6 +40986,7 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
       headings,
       landmarks: Array.from(new Set(landmarks)),
       ctas,
+      toggles,
       forms,
       links,
       images: {
@@ -48007,6 +48067,35 @@ function formJourney(page, form) {
     tags: ["form", form.purpose]
   };
 }
+var TOGGLE_UI = lexicon("toggle-ui");
+var DESTRUCTIVE2 = lexicon("destructive");
+function toggleJourney(page, toggle) {
+  if (DESTRUCTIVE2.test(toggle.name)) return null;
+  const path2 = pathOf2(page.url).split("?")[0];
+  let check;
+  if (toggle.state === "expanded") {
+    if (!toggle.controls) return null;
+    const id = toggle.controls;
+    check = {
+      action: "expect",
+      visible: { css: /^[A-Za-z][\w-]*$/.test(id) ? `#${id}` : `[id="${id.replace(/"/g, '\\"')}"]` }
+    };
+  } else {
+    check = { action: "expect", visible: { css: `${toggle.selector}[aria-pressed="true"]` } };
+  }
+  return {
+    version: 1,
+    id: slug(`toggle-${toggle.name}-${path2 === "/" ? "home" : path2}`, 60),
+    name: `${toggle.state === "expanded" ? "Open" : "Press"} "${toggle.name}" (${path2})`,
+    goal: toggle.state === "expanded" ? "reveal the hidden content" : "switch the control on",
+    start: path2,
+    steps: [{ action: "click", target: { role: "button", name: toggle.name, exact: true } }, check],
+    success: [{ description: "No uncaught exceptions", noPageErrors: true }],
+    safety: { submitsForms: false },
+    source: "suggested",
+    tags: ["toggle", toggle.state]
+  };
+}
 function suggestJourneys(run) {
   const out = [];
   const desktop = run.pages.filter((p) => p.viewport === run.viewports[0]?.name && (p.status ?? 200) < 400);
@@ -48017,7 +48106,9 @@ function suggestJourneys(run) {
     out.push(j);
   };
   const home = desktop.find((p) => pathOf2(p.url).split("?")[0] === "/") ?? desktop[0];
-  const cta = home?.inventory.ctas.find((c) => c.emphasis === "primary" && c.aboveFold);
+  const cta = home?.inventory.ctas.find(
+    (c) => c.emphasis === "primary" && c.aboveFold && !TOGGLE_UI.test(c.text)
+  );
   if (home && cta) {
     const href = cta.href && !cta.href.startsWith("#") ? cta.href : null;
     const dest = href ? pathOf2(new URL(href, home.url).toString()).split("?")[0] : null;
@@ -48073,7 +48164,7 @@ function suggestJourneys(run) {
   for (const p of desktop) for (const f of p.inventory.forms) push(formJourney(p, f));
   const pricing = desktop.find((p) => /pric|plans/i.test(pathOf2(p.url)));
   const planCta = pricing?.inventory.ctas.find(
-    (c) => c.emphasis === "primary" && c.href && !c.href.startsWith("#")
+    (c) => c.emphasis === "primary" && c.href && !c.href.startsWith("#") && !TOGGLE_UI.test(c.text)
   );
   if (pricing && planCta) {
     push({
@@ -48091,6 +48182,17 @@ function suggestJourneys(run) {
       source: "suggested",
       tags: ["conversion", "pricing"]
     });
+  }
+  let toggleCount = 0;
+  for (const p of desktop) {
+    for (const t of p.inventory.toggles ?? []) {
+      if (toggleCount >= 3) break;
+      const j = toggleJourney(p, t);
+      if (j && !seen.has(j.id)) {
+        push(j);
+        toggleCount++;
+      }
+    }
   }
   return out;
 }

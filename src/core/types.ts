@@ -157,6 +157,8 @@ export interface PageInventory {
   headings: { level: number; text: string }[];
   landmarks: string[];
   ctas: CtaInfo[];
+  /** Collapsed disclosures and unpressed toggle buttons (at most 10 per page). */
+  toggles?: ToggleInfo[];
   forms: FormInfo[];
   links: { href: string; text: string; internal: boolean }[];
   images: { total: number; withoutAlt: number; withoutDimensions: number };
@@ -165,6 +167,14 @@ export interface PageInventory {
   wordCount: number;
   metaDescription: string | null;
   hasViewportMeta: boolean;
+}
+
+export interface ToggleInfo {
+  selector: string;
+  name: string;
+  state: 'expanded' | 'pressed';
+  /** The id named by aria-controls, when present. */
+  controls: string | null;
 }
 
 export interface CtaInfo {

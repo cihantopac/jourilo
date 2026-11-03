@@ -376,6 +376,20 @@
             }
           }
         },
+        "toggles": {
+          "description": "Collapsed disclosures (aria-expanded=false) and unpressed toggle buttons (aria-pressed=false), at most 10 per page.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["selector", "name", "state", "controls"],
+            "properties": {
+              "selector": { "type": "string" },
+              "name": { "type": "string" },
+              "state": { "enum": ["expanded", "pressed"] },
+              "controls": { "type": ["string", "null"] }
+            }
+          }
+        },
         "forms": {
           "type": "array",
           "items": {
