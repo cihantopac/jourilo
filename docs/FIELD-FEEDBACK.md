@@ -15,26 +15,26 @@ One entry per problem, in this shape:
 
 ## Intake
 
-| #   | Project     | Area          | Summary                                                                                | Verdict          |
-| --- | ----------- | ------------- | -------------------------------------------------------------------------------------- | ---------------- |
-| F1  | cihanca.com | Keyboard      | Focus hidden behind a non-fixed overlay (a half-closed shutter) not reported (2.4.11)  | Bug              |
-| F2  | cihanca.com | Run setup     | No way to set the state before auditing: `--timezone`, `--clock`, `--setup-journey`    | Feature          |
-| F3  | cihanca.com | Widgets       | `aria-expanded` + `aria-controls` disclosure reported as a dialog (3 false positives)  | Bug              |
-| F4  | cihanca.com | Triage        | A false positive cannot be dismissed; it comes back on every run                       | Feature          |
-| F5  | cihanca.com | Source locate | Located `page.tsx:37` instead of the CSS rule `globals.css .tool[aria-pressed]`        | Bug              |
-| F6  | cihanca.com | Journeys      | `journeys suggest` suggested nothing on a page made of toggles and disclosures         | Feature          |
-| F7  | cihanca.com | Journeys      | Clicking a covered target times out ("Timeout 10000ms exceeded") without saying why    | Bug              |
-| F8  | cihanca.com | Contrast      | axe `color-contrast` incomplete on 47–59 nodes; pixel sampling could decide many       | Feature (large)  |
-| F9  | cihanca.com | Evidence      | About 38 MB of evidence for two runs; a light evidence mode is wanted                  | Feature          |
-| F10 | cihanca.com | Report        | Wants an overall score for "where do we stand"                                         | Declined (D3)    |
-| F11 | Frameva     | Automation    | An unresolvable host is classed as public; the run ends with exit 0 and a finding      | Bug              |
-| F12 | Frameva     | Automation    | SIGTERM leaves no `run.json`; no `--max-duration` with partial results; free-text progress | Feature      |
-| F13 | Frameva     | Automation    | No `manifest.json` with sha256 per artifact, no `--run-id` for idempotent runs          | Feature          |
-| F14 | Frameva     | Automation    | No published JSON Schema for `run.json` and no additive-change policy for schemaVersion | Feature          |
-| F15 | Frameva     | Network       | No upstream proxy chaining behind the guard; no `--allow-hosts` / `--block-hosts`       | Feature          |
-| F16 | Frameva     | Run setup     | No `--user-agent`, `--extra-header`, `--ignore-https-errors`; no `--output-dir`         | Feature          |
-| F17 | Frameva     | Run setup     | Audits cannot get past cookie walls; only journeys can                                 | Partly (see note) |
-| F18 | Frameva     | Docs          | Implemented flags missing from docs/CLI.md: `--timeout`, `--locale`, `--headed`, `report --stdout`, journeys flags | Bug |
+| #   | Project     | Area          | Summary                                                                                                            | Verdict           |
+| --- | ----------- | ------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------- |
+| F1  | cihanca.com | Keyboard      | Focus hidden behind a non-fixed overlay (a half-closed shutter) not reported (2.4.11)                              | Bug               |
+| F2  | cihanca.com | Run setup     | No way to set the state before auditing: `--timezone`, `--clock`, `--setup-journey`                                | Feature           |
+| F3  | cihanca.com | Widgets       | `aria-expanded` + `aria-controls` disclosure reported as a dialog (3 false positives)                              | Bug               |
+| F4  | cihanca.com | Triage        | A false positive cannot be dismissed; it comes back on every run                                                   | Feature           |
+| F5  | cihanca.com | Source locate | Located `page.tsx:37` instead of the CSS rule `globals.css .tool[aria-pressed]`                                    | Bug               |
+| F6  | cihanca.com | Journeys      | `journeys suggest` suggested nothing on a page made of toggles and disclosures                                     | Feature           |
+| F7  | cihanca.com | Journeys      | Clicking a covered target times out ("Timeout 10000ms exceeded") without saying why                                | Bug               |
+| F8  | cihanca.com | Contrast      | axe `color-contrast` incomplete on 47–59 nodes; pixel sampling could decide many                                   | Feature (large)   |
+| F9  | cihanca.com | Evidence      | About 38 MB of evidence for two runs; a light evidence mode is wanted                                              | Feature           |
+| F10 | cihanca.com | Report        | Wants an overall score for "where do we stand"                                                                     | Declined (D3)     |
+| F11 | Frameva     | Automation    | An unresolvable host is classed as public; the run ends with exit 0 and a finding                                  | Bug               |
+| F12 | Frameva     | Automation    | SIGTERM leaves no `run.json`; no `--max-duration` with partial results; free-text progress                         | Feature           |
+| F13 | Frameva     | Automation    | No `manifest.json` with sha256 per artifact, no `--run-id` for idempotent runs                                     | Feature           |
+| F14 | Frameva     | Automation    | No published JSON Schema for `run.json` and no additive-change policy for schemaVersion                            | Feature           |
+| F15 | Frameva     | Network       | No upstream proxy chaining behind the guard; no `--allow-hosts` / `--block-hosts`                                  | Feature           |
+| F16 | Frameva     | Run setup     | No `--user-agent`, `--extra-header`, `--ignore-https-errors`; no `--output-dir`                                    | Feature           |
+| F17 | Frameva     | Run setup     | Audits cannot get past cookie walls; only journeys can                                                             | Partly (see note) |
+| F18 | Frameva     | Docs          | Implemented flags missing from docs/CLI.md: `--timeout`, `--locale`, `--headed`, `report --stdout`, journeys flags | Bug               |
 
 ## Notes per item
 
@@ -77,23 +77,23 @@ One entry per problem, in this shape:
 
 Count each project that reports the same item again here; recurrence decides priority in the 1.2.0 plan.
 
-| Item | Projects    |
-| ---- | ----------- |
-| F1   | cihanca.com |
+| Item | Projects                            |
+| ---- | ----------------------------------- |
+| F1   | cihanca.com                         |
 | F2   | cihanca.com, Frameva (`--timezone`) |
-| F3   | cihanca.com |
-| F4   | cihanca.com |
-| F5   | cihanca.com |
-| F6   | cihanca.com |
-| F7   | cihanca.com |
-| F8   | cihanca.com |
-| F9   | cihanca.com |
-| F10  | cihanca.com |
-| F11  | Frameva     |
-| F12  | Frameva     |
-| F13  | Frameva     |
-| F14  | Frameva     |
-| F15  | Frameva     |
-| F16  | Frameva     |
-| F17  | Frameva     |
-| F18  | Frameva     |
+| F3   | cihanca.com                         |
+| F4   | cihanca.com                         |
+| F5   | cihanca.com                         |
+| F6   | cihanca.com                         |
+| F7   | cihanca.com                         |
+| F8   | cihanca.com                         |
+| F9   | cihanca.com                         |
+| F10  | cihanca.com                         |
+| F11  | Frameva                             |
+| F12  | Frameva                             |
+| F13  | Frameva                             |
+| F14  | Frameva                             |
+| F15  | Frameva                             |
+| F16  | Frameva                             |
+| F17  | Frameva                             |
+| F18  | Frameva                             |
