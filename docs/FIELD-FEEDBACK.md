@@ -1,0 +1,99 @@
+# Field feedback for 1.2.0
+
+Experience reports from using Jourilo 1.1.0 on real projects, collected before 1.2.0 is planned. Nothing here is
+scheduled yet: items are triaged against the code when they arrive, recurrences are counted, and the 1.2.0 plan is made
+from the whole list at once.
+
+## How to report
+
+One entry per problem, in this shape:
+
+- **What happened** — command, flags, target, and what Jourilo did or reported.
+- **What was expected** — and why (WCAG criterion, the real state of the page, a manual check).
+- **Evidence** — run id, finding ids, screenshot or report path, repository and branch.
+- **Impact** — missed defect, false positive, wrong location, failed run, friction, or a missing capability.
+
+## Intake
+
+| #   | Project     | Area          | Summary                                                                                | Verdict          |
+| --- | ----------- | ------------- | -------------------------------------------------------------------------------------- | ---------------- |
+| F1  | cihanca.com | Keyboard      | Focus hidden behind a non-fixed overlay (a half-closed shutter) not reported (2.4.11)  | Bug              |
+| F2  | cihanca.com | Run setup     | No way to set the state before auditing: `--timezone`, `--clock`, `--setup-journey`    | Feature          |
+| F3  | cihanca.com | Widgets       | `aria-expanded` + `aria-controls` disclosure reported as a dialog (3 false positives)  | Bug              |
+| F4  | cihanca.com | Triage        | A false positive cannot be dismissed; it comes back on every run                       | Feature          |
+| F5  | cihanca.com | Source locate | Located `page.tsx:37` instead of the CSS rule `globals.css .tool[aria-pressed]`        | Bug              |
+| F6  | cihanca.com | Journeys      | `journeys suggest` suggested nothing on a page made of toggles and disclosures         | Feature          |
+| F7  | cihanca.com | Journeys      | Clicking a covered target times out ("Timeout 10000ms exceeded") without saying why    | Bug              |
+| F8  | cihanca.com | Contrast      | axe `color-contrast` incomplete on 47–59 nodes; pixel sampling could decide many       | Feature (large)  |
+| F9  | cihanca.com | Evidence      | About 38 MB of evidence for two runs; a light evidence mode is wanted                  | Feature          |
+| F10 | cihanca.com | Report        | Wants an overall score for "where do we stand"                                         | Declined (D3)    |
+| F11 | Frameva     | Automation    | An unresolvable host is classed as public; the run ends with exit 0 and a finding      | Bug              |
+| F12 | Frameva     | Automation    | SIGTERM leaves no `run.json`; no `--max-duration` with partial results; free-text progress | Feature      |
+| F13 | Frameva     | Automation    | No `manifest.json` with sha256 per artifact, no `--run-id` for idempotent runs          | Feature          |
+| F14 | Frameva     | Automation    | No published JSON Schema for `run.json` and no additive-change policy for schemaVersion | Feature          |
+| F15 | Frameva     | Network       | No upstream proxy chaining behind the guard; no `--allow-hosts` / `--block-hosts`       | Feature          |
+| F16 | Frameva     | Run setup     | No `--user-agent`, `--extra-header`, `--ignore-https-errors`; no `--output-dir`         | Feature          |
+| F17 | Frameva     | Run setup     | Audits cannot get past cookie walls; only journeys can                                 | Partly (see note) |
+| F18 | Frameva     | Docs          | Implemented flags missing from docs/CLI.md: `--timeout`, `--locale`, `--headed`, `report --stdout`, journeys flags | Bug |
+
+## Notes per item
+
+- **F1** — `src/browser/keyboard.ts` samples five points with `elementFromPoint`, but only counts a cover whose element
+  or ancestor is `fixed`/`sticky`. Any opaque, hit-testable element that is not the focused element or its descendant
+  should count. Needs a fixture with an in-flow overlay and a control with a translucent one.
+- **F2** — Playwright offers `timezoneId` and `page.clock`. A setup journey (run before every page) covers theme, night
+  mode, consent and signed-in states in general.
+- **F3** — `src/browser/widgets.ts` tests "a dialog appeared" before the disclosure branch, so any overlay that becomes
+  visible wins. A trigger with `aria-expanded` and `aria-controls` whose controlled element toggles is a disclosure,
+  unless the opened element has `role=dialog`/`alertdialog` or `aria-modal`.
+- **F4** — A `finding dismiss <id> --reason` verdict stored by fingerprint and applied to later runs (shown as
+  dismissed, never deleted). Relivaro has the same pattern.
+- **F5** — The locator does not rank attribute-state selectors (`[aria-pressed]`, `[aria-expanded]`, `[data-state]`)
+  when the finding is about a state.
+- **F6** — Suggestions come only from calls to action and forms. Add interaction journeys for `aria-expanded` /
+  `aria-pressed` controls (open, check the state, close).
+- **F7** — On a click timeout, report the element on top at the target's center and try the visible part of the target.
+- **F8** — Sample the rendered pixels behind the text for axe "incomplete" contrast nodes. Engine change; needs a
+  benchmark rerun.
+- **F9** — `--evidence minimal`: first-screen shots plus screenshots of failing steps and findings only.
+- **F10** — Kept out on purpose (DECISIONS D3). The report lede and the short agent answer already give a one-line status;
+  consider making that line more explicit instead.
+- **F11–F18 (Frameva)** — From a planning study of the code and docs for a one-job-per-container adapter, not from a
+  run yet (backlog JOURILO-001..011 in the Frameva repository, `docs/tool-feedback/BACKLOG.md`). A measured report is
+  promised after the first real run.
+- **F11** — `src/core/url-safety.ts` returns `public` when DNS lookup fails, so the browser's navigation error becomes a
+  finding and the command exits 0. Needs a distinct outcome (`NAVIGATION_FAILED`) and a non-zero exit when no page loaded.
+- **F12** — No SIGTERM/SIGINT handler finalizes the run. A signal or a time budget should write `run.json` marked
+  partial; progress could be JSON lines on stderr with `--json`.
+- **F15** — `src/core/net-guard.ts` connects to the resolved address directly; chaining to a corporate or sandbox proxy
+  needs care so the guard still checks the final destination.
+- **F16** — `--timezone` from the same request is counted under F2. `ignoreHTTPSErrors` is hard-coded to false in
+  `src/browser/capture.ts`; an opt-in flag should be shown in the report's limits.
+- **F17** — `audit --auth <storage-state>` already exists, so a saved consent state works. A consent click before each
+  page is the setup journey of F2.
+- **F18** — The generated reference does not list these flags; check the generator against every command's options.
+
+## Recurrence
+
+Count each project that reports the same item again here; recurrence decides priority in the 1.2.0 plan.
+
+| Item | Projects    |
+| ---- | ----------- |
+| F1   | cihanca.com |
+| F2   | cihanca.com, Frameva (`--timezone`) |
+| F3   | cihanca.com |
+| F4   | cihanca.com |
+| F5   | cihanca.com |
+| F6   | cihanca.com |
+| F7   | cihanca.com |
+| F8   | cihanca.com |
+| F9   | cihanca.com |
+| F10  | cihanca.com |
+| F11  | Frameva     |
+| F12  | Frameva     |
+| F13  | Frameva     |
+| F14  | Frameva     |
+| F15  | Frameva     |
+| F16  | Frameva     |
+| F17  | Frameva     |
+| F18  | Frameva     |
