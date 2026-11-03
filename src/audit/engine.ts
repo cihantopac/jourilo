@@ -14,6 +14,7 @@ import type { BrowserName } from '../browser/runtime.js';
 import { type GuardedSession, networkLimitations, openGuardedBrowser } from '../browser/session.js';
 import { toMetrics } from '../browser/vitals.js';
 import { conversionFindings } from '../conversion/rules.js';
+import { applyDismissals, loadDismissals } from '../core/dismissals.js';
 import { JouriloError } from '../core/errors.js';
 import { newRunId } from '../core/hash.js';
 import { redactUrl } from '../core/redact.js';
@@ -349,6 +350,9 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
     findings = mergeFindings(findings);
     respectLockedBrand(findings, opts.context?.brand ?? null);
     if (opts.categories?.length) findings = findings.filter((f) => opts.categories!.includes(f.category));
+    // Findings a person already dismissed stay out of the run (and the summary), listed apart with their reason.
+    const { kept, dismissed } = applyDismissals(findings, loadDismissals(ws));
+    findings = kept;
 
     limitations.push(
       'Automated accessibility checks cover only part of WCAG 2.2; criteria such as 1.3.3, 2.5.7, 3.2.6, 3.3.7 and 3.3.8 and most content quality questions need manual review.',
@@ -428,6 +432,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       pages,
       journeys,
       findings,
+      ...(dismissed.length ? { dismissed } : {}),
       summary: summarize(findings, pages.length, journeys.length),
       limitations: [...new Set(limitations)],
       ...(opts.context && (opts.context.brand || opts.context.search) ? { context: opts.context } : {}),

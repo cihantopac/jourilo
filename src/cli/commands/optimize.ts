@@ -229,6 +229,7 @@ export const verify: Command = {
           baseline: base.id,
           run: run.id,
           fixed: cmp.fixed.map((f) => ({ fingerprint: f.fingerprint, title: f.title })),
+          dismissed: cmp.dismissed.map((f) => ({ fingerprint: f.fingerprint, title: f.title })),
           introduced: cmp.introduced,
           persisting: cmp.persisting.length,
           metrics: cmp.metrics,
@@ -239,6 +240,7 @@ export const verify: Command = {
           `Verified ${run.id} against ${base.id}`,
           `  fixed ${cmp.fixed.length} · new ${cmp.introduced.length} · still present ${cmp.persisting.length}`,
           ...cmp.fixed.map((f) => `  ✓ fixed  ${f.title} (${new URL(f.url).pathname})`),
+          ...cmp.dismissed.map((f) => `  – dismissed (not fixed)  ${f.title} (${new URL(f.url).pathname})`),
           ...cmp.introduced.map((f) => `  ✗ new    ${f.severity} ${f.title} (${new URL(f.url).pathname})`),
           ...metricSummary(cmp.metrics),
           cmp.regressionFree

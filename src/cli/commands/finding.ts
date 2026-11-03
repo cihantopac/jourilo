@@ -5,12 +5,19 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { summarize } from '../../audit/engine.js';
 import { makeFinding } from '../../audit/finding.js';
+import {
+  type DismissedFinding,
+  loadDismissals,
+  removeDismissal,
+  resolveFingerprint,
+  saveDismissal,
+} from '../../core/dismissals.js';
 import { JouriloError } from '../../core/errors.js';
 import { resolveInside } from '../../core/fs-safety.js';
 import { excerpt } from '../../core/redact.js';
-import type { Category, Confidence, FindingKind, Severity } from '../../core/types.js';
+import type { Category, Confidence, FindingKind, Run, Severity } from '../../core/types.js';
 import { writeReports } from '../../report/index.js';
-import { type Command, str } from '../framework.js';
+import { type Command, type Context, str } from '../framework.js';
 
 const CATEGORIES: Category[] = [
   'accessibility',
@@ -29,7 +36,7 @@ export const finding: Command = {
   summary:
     'Add a judgment (AI inference or user input) to a run, tied to evidence in that run; never mixed with measurements.',
   usage:
-    'jourilo finding add --run <id> --title … --category usability --description … --evidence screenshots/x.jpg [--by agent|user]',
+    'jourilo finding add --run <id> --title … --category usability --description … --evidence screenshots/x.jpg [--by agent|user] | finding dismiss <id> --run <run> --reason "<text>" [--by user|agent] | finding undismiss <id> [--run <run>]',
   options: {
     run: { type: 'string' },
     title: { type: 'string' },
@@ -44,8 +51,11 @@ export const finding: Command = {
     viewport: { type: 'string' },
     evidence: { type: 'string', multiple: true },
     by: { type: 'string' },
+    reason: { type: 'string' },
   },
   async run(ctx) {
+    if (ctx.positionals[0] === 'dismiss') return dismiss(ctx);
+    if (ctx.positionals[0] === 'undismiss') return undismiss(ctx);
     if (ctx.positionals[0] !== 'add') throw new JouriloError('USAGE', `Usage: ${finding.usage}`);
     const { run, dir } = ctx.ws.loadRun(str(ctx, 'run') ?? 'latest');
     const need = (k: string) => {
@@ -123,3 +133,75 @@ export const finding: Command = {
     };
   },
 };
+
+/** Moves a finding of a saved run into `dismissed` (or back) and rewrites that run's reports. */
+function refreshRun(ctx: Context, runRef: string, change: (run: Run) => void): string {
+  const { run, dir } = ctx.ws.loadRun(runRef);
+  change(run);
+  if (run.dismissed && !run.dismissed.length) delete run.dismissed;
+  run.summary = summarize(run.findings, run.summary.pages, run.summary.journeys);
+  ctx.ws.saveRun(run);
+  writeReports(dir, run, undefined, { history: ctx.ws.listRuns() });
+  return run.id;
+}
+
+function dismiss(ctx: Context) {
+  const reason = str(ctx, 'reason')?.trim();
+  if (!reason)
+    throw new JouriloError(
+      'USAGE',
+      '--reason is required: say why this is not a problem, so the next person can check it.',
+    );
+  const idArg = ctx.positionals[1];
+  if (!idArg) throw new JouriloError('USAGE', `Usage: ${finding.usage}`);
+  const by = str(ctx, 'by') ?? 'user';
+  if (by !== 'user' && by !== 'agent') throw new JouriloError('USAGE', '--by must be user or agent');
+  const runRef = str(ctx, 'run') ?? 'latest';
+  const { run } = ctx.ws.loadRun(runRef);
+  const fp = resolveFingerprint(
+    idArg,
+    run.findings.map((f) => f.fingerprint),
+  );
+  const f = run.findings.find((x) => x.fingerprint === fp)!;
+  const d = {
+    fingerprint: fp,
+    ruleId: f.ruleId,
+    url: f.url,
+    reason: excerpt(reason, 400),
+    by,
+    at: new Date().toISOString(),
+  } as const;
+  saveDismissal(ctx.ws, d);
+  const runId = refreshRun(ctx, runRef, (r) => {
+    r.findings = r.findings.filter((x) => x.fingerprint !== fp);
+    r.dismissed = [...(r.dismissed ?? []).filter((x) => x.fingerprint !== fp), { ...f, dismissal: d }];
+  });
+  return {
+    data: d,
+    text: `Dismissed ${fp} (${f.title}) in run ${runId}; later runs keep it out. Undo with: jourilo finding undismiss ${fp}`,
+  };
+}
+
+function undismiss(ctx: Context) {
+  const idArg = ctx.positionals[1];
+  if (!idArg) throw new JouriloError('USAGE', `Usage: ${finding.usage}`);
+  const fp = resolveFingerprint(
+    idArg,
+    loadDismissals(ctx.ws).map((d) => d.fingerprint),
+  );
+  removeDismissal(ctx.ws, fp);
+  // Bring the finding back into the run it was dismissed in, when that run is named.
+  const runRef = str(ctx, 'run');
+  if (runRef)
+    refreshRun(ctx, runRef, (r) => {
+      const back = (r.dismissed ?? []).find((x) => x.fingerprint === fp) as DismissedFinding | undefined;
+      if (!back) return;
+      const { dismissal: _dismissal, ...restored } = back;
+      r.dismissed = (r.dismissed ?? []).filter((x) => x.fingerprint !== fp);
+      r.findings.push(restored);
+    });
+  return {
+    data: { fingerprint: fp },
+    text: `Removed the dismissal of ${fp}; the next run reports it again.`,
+  };
+}

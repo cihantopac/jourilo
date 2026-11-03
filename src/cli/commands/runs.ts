@@ -63,9 +63,10 @@ export const compare: Command = {
     const failed = flag(ctx, 'fail-on-regression') && !cmp.regressionFree;
     const lines = [
       `Baseline ${base.id} → ${head.id}`,
-      `  fixed ${cmp.fixed.length} · new ${cmp.introduced.length} · still present ${cmp.persisting.length} · changed ${cmp.changed.length}`,
+      `  fixed ${cmp.fixed.length} · new ${cmp.introduced.length} · still present ${cmp.persisting.length} · changed ${cmp.changed.length}${cmp.dismissed.length ? ` · dismissed ${cmp.dismissed.length}` : ''}`,
       ...cmp.introduced.slice(0, 10).map((f) => `  NEW    ${f.severity.padEnd(9)} ${f.title} (${f.url})`),
       ...cmp.fixed.slice(0, 10).map((f) => `  FIXED  ${f.severity.padEnd(9)} ${f.title} (${f.url})`),
+      ...cmp.dismissed.slice(0, 10).map((f) => `  DISMISSED ${f.title} (${f.url})`),
       cmp.regressionFree ? '  No new serious/critical defects.' : '  ⚠ New serious/critical defects.',
       `  Report: ${written.html}`,
     ];
@@ -74,6 +75,7 @@ export const compare: Command = {
         base: base.id,
         head: head.id,
         fixed: cmp.fixed,
+        dismissed: cmp.dismissed,
         introduced: cmp.introduced,
         persisting: cmp.persisting.map((f) => f.fingerprint),
         changed: cmp.changed.map((c) => ({

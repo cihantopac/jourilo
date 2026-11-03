@@ -5,6 +5,7 @@ import { makeFinding, mergeFindings } from '../../audit/finding.js';
 import type { BrowserName } from '../../browser/runtime.js';
 import { networkLimitations, openGuardedBrowser } from '../../browser/session.js';
 import { parseViewports } from '../../browser/viewports.js';
+import { applyDismissals, loadDismissals } from '../../core/dismissals.js';
 import { JouriloError } from '../../core/errors.js';
 import { displayPath } from '../../core/fs-safety.js';
 import { newRunId } from '../../core/hash.js';
@@ -285,6 +286,8 @@ async function runCmd(ctx: Context) {
     const network = session.report();
     limitations.push(...networkLimitations(network));
     findings = mergeFindings(findings);
+    const { kept, dismissed } = applyDismissals(findings, loadDismissals(ctx.ws));
+    findings = kept;
     const run: Run = {
       schemaVersion: RUN_SCHEMA_VERSION,
       id,
@@ -305,6 +308,7 @@ async function runCmd(ctx: Context) {
       pages: [],
       journeys,
       findings,
+      ...(dismissed.length ? { dismissed } : {}),
       summary: summarize(findings, 0, journeys.length),
       limitations: [
         ...limitations,

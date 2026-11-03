@@ -3,6 +3,7 @@ import { makeFinding } from '../../src/audit/finding.js';
 import type { Finding } from '../../src/core/types.js';
 import { compareRuns } from '../../src/report/compare.js';
 import { esc, renderHtml } from '../../src/report/html.js';
+import { I18N } from '../../src/report/html-i18n.js';
 import { renderMarkdown, renderSarif } from '../../src/report/text.js';
 import { run } from '../helpers.js';
 
@@ -185,5 +186,40 @@ describe('report sections for safety and stability', () => {
     expect(md).toContain('## Network safety');
     expect(md).toContain('## Still needs a person');
     expect(md).toContain('2.5.7 Dragging movements');
+  });
+});
+
+describe('dismissed findings in the report', () => {
+  it('the report lists dismissed findings with their reason, folded, in EN and TR', () => {
+    const a = f('axe/a', '/', { title: 'Image without alt text' });
+    const dismissed = [
+      {
+        ...a,
+        dismissal: {
+          fingerprint: a.fingerprint,
+          ruleId: a.ruleId,
+          url: a.url,
+          reason: 'Decorative <b>image</b>',
+          by: 'user' as const,
+          at: '2026-11-03T10:00:00.000Z',
+        },
+      },
+    ];
+    const html = renderHtml(run([], { dismissed }));
+    expect(html).toContain('Dismissed as not a problem (1)');
+    expect(html).toContain('Decorative &lt;b&gt;image&lt;/b&gt;');
+    expect(html).toContain('2026-11-03');
+    const section = html.slice(
+      html.indexOf('id="h-dismissed"') - 200,
+      html.indexOf('id="h-dismissed"') + 1500,
+    );
+    expect(section).toContain('<details');
+    expect(section).not.toContain('type="checkbox"');
+    expect(section).not.toContain('<button');
+    expect(I18N.tr['dismissed.title']).toBe('Sorun değil olarak kapatılanlar ({n})');
+    expect(renderHtml(run([]))).not.toContain('h-dismissed');
+    const md = renderMarkdown(run([], { dismissed }));
+    expect(md).toContain('## Dismissed');
+    expect(md).toContain('Decorative <b>image</b>');
   });
 });

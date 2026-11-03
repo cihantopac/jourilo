@@ -36,6 +36,8 @@ export function renderMarkdown(run: Run, cmp?: RunComparison, limit = 25): strin
     for (const f of cmp.introduced.slice(0, 10))
       lines.push(`- 🆕 ${f.severity}: ${md(f.title)} — \`${path(f.url)}\``);
     for (const f of cmp.fixed.slice(0, 10)) lines.push(`- ✅ fixed: ${md(f.title)} — \`${path(f.url)}\``);
+    for (const f of cmp.dismissed.slice(0, 10))
+      lines.push(`- 🚫 dismissed (not fixed): ${md(f.title)} — \`${path(f.url)}\``);
     lines.push('');
     if (cmp.metrics.length) {
       lines.push(
@@ -81,6 +83,19 @@ export function renderMarkdown(run: Run, cmp?: RunComparison, limit = 25): strin
     'Needs manual review',
     sorted.filter((f) => f.kind === 'needs-review'),
   );
+  if (run.dismissed?.length) {
+    lines.push(
+      '## Dismissed as not a problem',
+      '',
+      'Kept out of the counts above and out of later runs; `jourilo finding undismiss <id>` brings one back.',
+      '',
+    );
+    for (const f of run.dismissed.slice(0, limit))
+      lines.push(
+        `- ${md(f.title)} — \`${path(f.url)}\` (\`${f.fingerprint}\`): ${md(f.dismissal.reason)} (${f.dismissal.by}, ${f.dismissal.at.slice(0, 10)})`,
+      );
+    lines.push('');
+  }
   if (run.journeys.length) {
     lines.push('## Journeys', '');
     for (const j of run.journeys)

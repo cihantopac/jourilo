@@ -357,6 +357,20 @@ ${rest.length ? `<ul lang="en">${rest.map((l) => `<li>${esc(l)}</li>`).join('')}
 ${networkHtml(run)}</details></div></section>`;
 }
 
+function dismissedHtml(run: Run): string {
+  const list = run.dismissed ?? [];
+  if (!list.length) return '';
+  return `<section class="block" aria-labelledby="h-dismissed"><details class="fold"><summary id="h-dismissed">${T('dismissed.title', { n: list.length })}</summary>
+<p class="muted">${T('dismissed.hint')}</p>
+<ul>${list
+    .map((f) => {
+      const d = f.dismissal;
+      const who = d.by === 'agent' ? 'dismissed.by.agent' : 'dismissed.by.user';
+      return `<li><span lang="en">${esc(f.title)}</span> <code>${esc(pathname(f.url))}</code> <span class="muted">${T('fd.id')} <code>${esc(f.fingerprint)}</code></span><br>${T('dismissed.reason')}: <span lang="en">${esc(d.reason)}</span><br><span class="muted">${T(who, { date: d.at.slice(0, 10) })}</span></li>`;
+    })
+    .join('')}</ul></details></section>`;
+}
+
 function contextHtml(run: Run): string {
   const c = run.context;
   if (!c || (!c.brand && !c.search)) return '';
@@ -509,6 +523,7 @@ function compareHtml(cmp: RunComparison): string {
   ).length;
   return `<h2 class="sr">${T('tab.compare')}</h2>
 <div class="kpis">${kpi('cmp.fixed', cmp.fixed.length, cmp.fixed.length ? 'ok' : '')}${kpi('cmp.new', cmp.introduced.length, reg ? 'alert' : '')}${kpi('cmp.persisting', cmp.persisting.length, '')}${kpi('cmp.changed', cmp.changed.length, '')}</div>
+${cmp.dismissed.length ? `<p class="muted" style="margin:6px 0">${T('cmp.dismissed', { n: cmp.dismissed.length })}</p>` : ''}
 <p class="${reg ? 'poor' : 'muted'}" style="margin:6px 0"><strong>${reg ? T('cmp.regressed', { n: reg }) : T('cmp.ok')}</strong> ${T('cmp.baseline', { b: base, bd: cmp.base.startedAt.slice(0, 16).replace('T', ' '), h: cmp.head.id, hd: cmp.head.startedAt.slice(0, 16).replace('T', ' ') })}</p>
 ${fixedCards.length ? `<section class="block"><div class="block-h"><h2>${T('cmp.fixed')}</h2></div><div class="cards">${fixedCards.join('')}</div></section>` : ''}
 ${
@@ -697,6 +712,7 @@ ${blockedHtml(run, groups)}
 ${top.length ? `<div class="cards">${top.map((g) => cardHtml(run, g)).join('')}</div>` : `<p class="empty">${T('fixfirst.none')}</p>`}</section>
 ${lanesHtml(groups, run)}
 ${limitsHtml(run)}
+${dismissedHtml(run)}
 ${historyHtml(run, history)}
 ${contextHtml(run)}
 </section>

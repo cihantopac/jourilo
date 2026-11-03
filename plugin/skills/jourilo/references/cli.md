@@ -275,7 +275,7 @@ jourilo runs
 Add a judgment (AI inference or user input) to a run, tied to evidence in that run; never mixed with measurements.
 
 ```
-jourilo finding add --run <id> --title … --category usability --description … --evidence screenshots/x.jpg [--by agent|user]
+jourilo finding add --run <id> --title … --category usability --description … --evidence screenshots/x.jpg [--by agent|user] | finding dismiss <id> --run <run> --reason "<text>" [--by user|agent] | finding undismiss <id> [--run <run>]
 ```
 
 ## System

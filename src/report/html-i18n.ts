@@ -141,6 +141,13 @@ const EN = {
   'limits.manual': 'Still needs a person',
   'limits.manual.hint':
     'Automated checks cannot judge these WCAG 2.2 criteria; no run, including this one, shows conformance.',
+  'dismissed.title': 'Dismissed as not a problem ({n})',
+  'dismissed.hint':
+    'Kept out of the counts above and out of later runs. Each stays here with the reason it was dismissed; jourilo finding undismiss <id> brings one back.',
+  'dismissed.reason': 'Reason',
+  'dismissed.by.user': 'Dismissed by a person on {date}',
+  'dismissed.by.agent': 'Dismissed by an agent on {date}',
+  'cmp.dismissed': 'Dismissed, not fixed: {n}',
   'net.title': 'Network safety',
   'net.escaped':
     'Security event: {n} redirect(s) reached this machine outside the network guard. Rerun untrusted sites in Chromium or Firefox.',
@@ -374,6 +381,13 @@ const TR: Record<MsgKey, string> = {
   'limits.manual': 'Hâlâ bir insan gerektirenler',
   'limits.manual.hint':
     'Otomatik kontroller bu WCAG 2.2 ölçütlerini değerlendiremez; bu dahil hiçbir çalışma uygunluk göstermez.',
+  'dismissed.title': 'Sorun değil olarak kapatılanlar ({n})',
+  'dismissed.hint':
+    'Yukarıdaki sayılara ve sonraki çalışmalara dahil edilmez. Her biri kapatılma gerekçesiyle burada kalır; jourilo finding undismiss <kimlik> komutu birini geri getirir.',
+  'dismissed.reason': 'Gerekçe',
+  'dismissed.by.user': '{date} tarihinde bir kişi tarafından kapatıldı',
+  'dismissed.by.agent': '{date} tarihinde bir ajan tarafından kapatıldı',
+  'cmp.dismissed': 'Kapatıldı, düzeltilmedi: {n}',
   'net.title': 'Ağ güvenliği',
   'net.escaped':
     'Güvenlik olayı: {n} yönlendirme ağ korumasının dışından bu makineye ulaştı. Güvenilmeyen siteleri Chromium veya Firefox ile yeniden çalıştırın.',

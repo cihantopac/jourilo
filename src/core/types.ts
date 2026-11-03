@@ -269,4 +269,6 @@ export interface Run {
   context?: import('../integrations/context.js').ExperienceContext;
   /** What the network guard refused or detected during the run. */
   network?: import('../browser/session.js').NetworkReport;
+  /** Findings kept out of `findings` because a person or agent dismissed them (not counted in the summary). */
+  dismissed?: (Finding & { dismissal: import('./dismissals.js').Dismissal })[];
 }
