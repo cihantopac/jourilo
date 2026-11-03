@@ -12,6 +12,7 @@ import { toPosix, writeFileSafe } from '../core/fs-safety.js';
 import { excerpt, redactUrl } from '../core/redact.js';
 import type { Finding, JourneyResult, JourneyStepResult } from '../core/types.js';
 import type { HostClass } from '../core/url-safety.js';
+import { coverAt } from './cover.js';
 import { installRequestGuard } from './request-guard.js';
 import { checkAction, interpolate, isSecretValue, type SafetyPolicy } from './safety.js';
 import { describeStep, describeTarget, type JourneySpec, type Step, type Target } from './schema.js';
@@ -159,7 +160,8 @@ export function matchesUrl(actual: string, expected: string): boolean {
 
 class Blocked extends Error {}
 
-async function act(page: Page, step: Step, opts: JourneyRunOptions): Promise<void> {
+/** Runs one step. A returned note is appended to the step's description (what was done differently, and why). */
+async function act(page: Page, step: Step, opts: JourneyRunOptions): Promise<string | void> {
   const t = opts.stepTimeoutMs;
   const value = (v: string) => interpolate(v, opts.data);
   switch (step.action) {
@@ -189,11 +191,23 @@ async function act(page: Page, step: Step, opts: JourneyRunOptions): Promise<voi
         const verdict = verdictFor(f, effect, step.action, opts.policy);
         if (!verdict.allowed) throw new Blocked(verdict.reason);
       }
-      if (step.action === 'click') await handle!.click({ timeout: t });
-      else if (loc && handle) await handle.press(step.key, { timeout: t });
+      let note: string | undefined;
+      if (step.action === 'click') {
+        // A covered center would make Playwright wait for the cover to go away until the step times out: say what
+        // is on top, and click a clear part of the target when there is one.
+        const c = await coverAt(handle!);
+        if (c.covered && c.visiblePoint) {
+          note = `center covered by ${c.cover ?? 'another element'}; clicked the visible part`;
+          await handle!.click({ timeout: t, position: c.visiblePoint });
+        } else if (c.covered) {
+          throw new Error(
+            `${describeTarget(step.target)} is covered by ${c.cover ?? 'another element'}; nothing of it is visible to click.`,
+          );
+        } else await handle!.click({ timeout: t });
+      } else if (loc && handle) await handle.press(step.key, { timeout: t });
       else await page.keyboard.press(step.key);
       await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => undefined);
-      return;
+      return note;
     }
     case 'fill':
       await locatorFor(page, step.target).first().fill(value(step.value), { timeout: t });
@@ -303,14 +317,16 @@ export async function runJourney(
         url: '',
       };
       opts.log?.(`    ${i + 1}. ${res.description}`);
+      let note: string | void;
       try {
         try {
-          await act(page, step, opts);
+          note = await act(page, step, opts);
         } catch (err) {
           if (err instanceof Blocked || !TRANSIENT.test((err as Error).message)) throw err;
           await page.waitForTimeout(500);
-          await act(page, step, opts);
+          note = await act(page, step, opts);
         }
+        if (note) res.description = `${res.description} (${note})`;
       } catch (err) {
         res.status = err instanceof Blocked ? 'blocked' : 'failed';
         res.error = excerpt((err as Error).message.split('\n')[0], 300);

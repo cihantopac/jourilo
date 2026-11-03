@@ -48749,6 +48749,39 @@ init_types();
 import { join as join16 } from "node:path";
 init_fs_safety();
 
+// src/journeys/cover.ts
+var COVER_AT = `(el) => {
+  const short = (e) => {
+    if (e.id) return '#' + CSS.escape(e.id);
+    const c = (e.getAttribute('class') || '').trim().split(/\\s+/)[0];
+    return e.tagName.toLowerCase() + (c ? '.' + CSS.escape(c) : '');
+  };
+  const r = el.getBoundingClientRect();
+  const pts = [[0.5, 0.5], [0.15, 0.15], [0.85, 0.15], [0.15, 0.85], [0.85, 0.85]];
+  let cover = null, visible = null, inViewport = 0, center = true;
+  for (const [fx, fy] of pts) {
+    const x = r.left + r.width * fx, y = r.top + r.height * fy;
+    if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+    inViewport++;
+    const hit = document.elementFromPoint(x, y);
+    if (hit && (hit === el || el.contains(hit))) {
+      if (!visible) visible = { x: r.width * fx, y: r.height * fy };
+    } else if (fx === 0.5) {
+      center = false;
+      cover = hit ? short(hit) : null;
+    }
+  }
+  return { inViewport, center, cover, visible };
+}`;
+async function coverAt(handle) {
+  await handle.scrollIntoViewIfNeeded().catch(() => void 0);
+  const r = await handle.evaluate(
+    new Function(`return (${COVER_AT})(arguments[0])`)
+  );
+  if (!r || !r.inViewport || r.center) return { covered: false, cover: null, visiblePoint: null };
+  return { covered: true, cover: r.cover, visiblePoint: r.visible };
+}
+
 // src/journeys/schema.ts
 init_errors();
 var ACTIONS = /* @__PURE__ */ new Set([
@@ -48965,11 +48998,21 @@ async function act(page, step, opts) {
         const verdict = verdictFor(f, effect, step.action, opts.policy);
         if (!verdict.allowed) throw new Blocked(verdict.reason);
       }
-      if (step.action === "click") await handle.click({ timeout: t });
-      else if (loc && handle) await handle.press(step.key, { timeout: t });
+      let note;
+      if (step.action === "click") {
+        const c = await coverAt(handle);
+        if (c.covered && c.visiblePoint) {
+          note = `center covered by ${c.cover ?? "another element"}; clicked the visible part`;
+          await handle.click({ timeout: t, position: c.visiblePoint });
+        } else if (c.covered) {
+          throw new Error(
+            `${describeTarget(step.target)} is covered by ${c.cover ?? "another element"}; nothing of it is visible to click.`
+          );
+        } else await handle.click({ timeout: t });
+      } else if (loc && handle) await handle.press(step.key, { timeout: t });
       else await page.keyboard.press(step.key);
       await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
-      return;
+      return note;
     }
     case "fill":
       await locatorFor(page, step.target).first().fill(value(step.value), { timeout: t });
@@ -49067,14 +49110,16 @@ async function runJourney(browser, spec, opts) {
         url: ""
       };
       opts.log?.(`    ${i + 1}. ${res.description}`);
+      let note;
       try {
         try {
-          await act(page, step, opts);
+          note = await act(page, step, opts);
         } catch (err) {
           if (err instanceof Blocked || !TRANSIENT.test(err.message)) throw err;
           await page.waitForTimeout(500);
-          await act(page, step, opts);
+          note = await act(page, step, opts);
         }
+        if (note) res.description = `${res.description} (${note})`;
       } catch (err) {
         res.status = err instanceof Blocked ? "blocked" : "failed";
         res.error = excerpt(err.message.split("\n")[0], 300);

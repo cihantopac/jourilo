@@ -106,6 +106,42 @@ describe('journeys', () => {
     expect(out.journeys[0].status).toBe('blocked');
   });
 
+  const clickJourney = (id: string, page: string) => {
+    const dir = join(ws, 'journeys');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, `${id}.json`),
+      JSON.stringify({
+        version: 1,
+        id,
+        name: 'Click a covered button',
+        start: `/${page}`,
+        steps: [{ action: 'click', target: { role: 'button', name: 'Continue' } }],
+        success: [{ description: 'No script errors', noPageErrors: true }],
+      }),
+    );
+    const out = JSON.parse(
+      jourilo('journeys', 'run', id, '--base', 'fixtures/apps/journey-lab', '--timeout', '3').stdout,
+    );
+    return out.journeys[0];
+  };
+
+  it('clicks the visible part of a partly covered target and says so', () => {
+    const j = clickJourney('covered-partly', 'covered.html');
+    const step = j.steps[1];
+    expect(step.status, step.error).toBe('passed');
+    expect(step.description).toContain('center covered by #panel');
+    expect(step.description).toContain('clicked the visible part');
+  });
+
+  it('fails with the covering element when no part is visible', () => {
+    const j = clickJourney('covered-fully', 'covered-full.html');
+    const step = j.steps[1];
+    expect(step.status).toBe('failed');
+    expect(step.error).toMatch(/covered by #panel/);
+    expect(step.error).not.toMatch(/^Timeout \d+ms exceeded/);
+  });
+
   it('rejects invalid journey files with clear messages', () => {
     const invalid = join(ws, 'invalid.json');
     writeFileSync(
