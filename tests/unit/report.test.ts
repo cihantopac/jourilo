@@ -94,6 +94,25 @@ describe('compare', () => {
     expect(cmp.regressionFree).toBe(false);
     expect(cmp.metrics[0]).toMatchObject({ name: 'LCP', delta: -1800 });
   });
+
+  it('never counts findings on a page that did not load as fixed', () => {
+    const a = f('r/a', '/');
+    const page = {
+      url: 'https://example.test/',
+      finalUrl: '',
+      status: 200,
+      title: '',
+      viewport: 'desktop',
+      loadMs: 0,
+      metrics: [],
+      consoleErrors: 0,
+      failedRequests: 0,
+      inventory: run([]).pages[0]?.inventory as never,
+    };
+    const base = run([a], { id: 'base', pages: [page] });
+    const head = run([], { id: 'head', pages: [{ ...page, status: null }] });
+    expect(compareRuns(base, head).fixed).toEqual([]);
+  });
 });
 
 describe('text formats', () => {

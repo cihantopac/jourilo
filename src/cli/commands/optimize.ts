@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { runAudit } from '../../audit/engine.js';
+import { exitCodeForOutcome, runOutcome } from '../../audit/outcome.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { JouriloError } from '../../core/errors.js';
 import { displayPath } from '../../core/fs-safety.js';
@@ -172,12 +173,16 @@ export const verify: Command = {
         'INVALID_INPUT',
         `Run ${base.id} has no recorded scope (created by an older version or by journeys).`,
       );
-    const servedDir =
-      (str(ctx, 'target') && existsSync(str(ctx, 'target')!) ? resolve(str(ctx, 'target')!) : undefined) ??
-      (base.settings.servedDir as string | undefined);
+    // An explicit --target replaces the baseline's served directory, so a URL target is not ignored.
+    const target = str(ctx, 'target');
+    const servedDir = target
+      ? existsSync(target)
+        ? resolve(target)
+        : undefined
+      : (base.settings.servedDir as string | undefined);
     const server = servedDir ? await serveStatic(servedDir) : undefined;
     try {
-      const origin = server?.url ?? new URL(str(ctx, 'target') ?? scope.urls[0]!).origin;
+      const origin = server?.url ?? new URL(target ?? scope.urls[0]!).origin;
       const urls = scope.urls.map((u) => {
         const x = new URL(u);
         return `${x.pathname}${x.search}`;
@@ -230,14 +235,23 @@ export const verify: Command = {
         locateFindings(run, repo);
       }
       run.settings.baseline = base.id;
+      run.outcome = runOutcome(run);
       ctx.ws.saveRun(run);
       const cmp = compareRuns(base, run);
       const reports = writeReports(runDir, run, cmp, { history: ctx.ws.listRuns() });
       const failed = flag(ctx, 'fail-on-regression') && !cmp.regressionFree;
+      // Without loaded pages nothing was re-checked; a stopped run re-checked only part of the scope.
+      const caveat =
+        run.outcome === 'no-page-loaded'
+          ? `  No page could be loaded from ${origin}, so no comparison was possible: no finding is counted as fixed.`
+          : run.outcome === 'partial'
+            ? '  The run was stopped early: the comparison is partial, and findings on pages not re-checked are not counted as fixed.'
+            : undefined;
       return {
         data: {
           baseline: base.id,
           run: run.id,
+          outcome: run.outcome,
           fixed: cmp.fixed.map((f) => ({ fingerprint: f.fingerprint, title: f.title })),
           dismissed: cmp.dismissed.map((f) => ({ fingerprint: f.fingerprint, title: f.title })),
           introduced: cmp.introduced,
@@ -248,7 +262,12 @@ export const verify: Command = {
         },
         text: [
           `Verified ${run.id} against ${base.id}`,
-          `  fixed ${cmp.fixed.length} · new ${cmp.introduced.length} · still present ${cmp.persisting.length}`,
+          ...(caveat ? [caveat] : []),
+          ...(run.outcome === 'no-page-loaded'
+            ? []
+            : [
+                `  fixed ${cmp.fixed.length} · new ${cmp.introduced.length} · still present ${cmp.persisting.length}`,
+              ]),
           ...cmp.fixed.map((f) => `  ✓ fixed  ${f.title} (${new URL(f.url).pathname})`),
           ...cmp.dismissed.map((f) => `  – dismissed (not fixed)  ${f.title} (${new URL(f.url).pathname})`),
           ...cmp.introduced.map((f) => `  ✗ new    ${f.severity} ${f.title} (${new URL(f.url).pathname})`),
@@ -258,7 +277,7 @@ export const verify: Command = {
             : '  ⚠ Regression: new serious/critical defects.',
           `  Report: ${reports.html}`,
         ].join('\n'),
-        exitCode: failed ? 1 : 0,
+        exitCode: exitCodeForOutcome(run.outcome, failed),
       };
     } finally {
       await server?.close();

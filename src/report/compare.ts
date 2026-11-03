@@ -58,8 +58,8 @@ function pathKey(u: string): string {
 export function compareRuns(base: Run, head: Run): RunComparison {
   const before = new Map(base.findings.map((f) => [f.fingerprint, f]));
   const after = new Map(head.findings.map((f) => [f.fingerprint, f]));
-  // Findings on pages the head run did not visit are not "fixed": they were simply not checked.
-  const headPages = new Set(head.pages.map((p) => pathKey(p.url)));
+  // Findings on pages the head run did not visit, or that did not load, are not "fixed": they were not checked.
+  const headPages = new Set(head.pages.filter((p) => p.status !== null).map((p) => pathKey(p.url)));
   const dismissedFps = new Set((head.dismissed ?? []).map((f) => f.fingerprint));
   const dismissed = base.findings.filter((f) => dismissedFps.has(f.fingerprint));
   const fixed = base.findings.filter(

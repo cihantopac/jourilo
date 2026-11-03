@@ -90,6 +90,32 @@ describe('cli no page loaded', () => {
   });
 });
 
+describe('cli verify against an unreachable target', () => {
+  it('claims no fixes and exits 5', () => {
+    const a = jourilo(
+      'audit',
+      'fixtures/sites/acme-saas',
+      '--pages',
+      '1',
+      '--viewports',
+      'desktop',
+      '--json',
+      '-q',
+    );
+    expect(JSON.parse(a.stdout).findings.length).toBeGreaterThan(0);
+    const runId = JSON.parse(a.stdout).runId;
+    const v = jourilo('verify', runId, '--target', 'http://does-not-exist.invalid/', '--json', '-q');
+    expect(v.status, v.stderr).toBe(5);
+    const out = JSON.parse(v.stdout);
+    expect(out.outcome).toBe('no-page-loaded');
+    expect(out.fixed).toEqual([]);
+    const text = jourilo('verify', runId, '--target', 'http://does-not-exist.invalid/', '-q');
+    expect(text.status).toBe(5);
+    expect(text.stdout).toMatch(/no comparison was possible/i);
+    expect(text.stdout).not.toMatch(/fixed \d/);
+  });
+});
+
 describe('cli forged guard signal', () => {
   it('still audits a page that sends the guard header itself', async () => {
     const srv = http.createServer((_req, res) => {
