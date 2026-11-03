@@ -1,6 +1,7 @@
 // The audit pipeline: validate target → discover pages → capture each page per viewport → apply rules →
 // merge → store a Run. Pure orchestration; measurement lives in browser/, judgment rules in audit/rules and
 // conversion/.
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Browser } from 'playwright-core';
 import {
@@ -92,6 +93,8 @@ export interface AuditOptions {
   /** Restrict findings to these categories. */
   categories?: Category[];
   mode: Run['mode'];
+  /** Use this id instead of a generated one (idempotent runs); an id that already holds a run is refused. */
+  runId?: string;
   /** Submit forms empty to test validation feedback (local hosts by default; public hosts need allowSubmit). */
   forms?: boolean;
   allowSubmit?: boolean;
@@ -155,13 +158,29 @@ function stateOptions(opts: AuditOptions): { timezoneId?: string; clock?: string
   };
 }
 
+const RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+
+/** Checked before any browser work; a run that exists is never overwritten. */
+function resolveRunId(ws: Workspace, requested: string | undefined): string {
+  if (requested === undefined) return newRunId();
+  if (!RUN_ID_PATTERN.test(requested))
+    throw new JouriloError(
+      'INVALID_INPUT',
+      `Invalid run id "${requested}".`,
+      'Use 1-64 letters, digits, "_" or "-", starting with a letter or digit.',
+    );
+  if (existsSync(join(ws.runDir(requested), 'run.json')))
+    throw new JouriloError('INVALID_INPUT', `Run ${requested} already exists.`, 'Pick another --run-id.');
+  return requested;
+}
+
 export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<AuditOutput> {
+  const id = resolveRunId(ws, opts.runId);
   // Read before any browser work, so a corrupt dismissed.json fails fast instead of losing a finished audit.
   const dismissals = loadDismissals(ws);
   const target = parseTargetUrl(opts.target);
   const hostClass: HostClass = await checkTarget(target, { allowPrivate: opts.allowPrivate });
   const log = opts.onProgress ?? (() => undefined);
-  const id = newRunId();
   const runDir = ws.createRunDir(id);
   const startedAt = new Date().toISOString();
   const limitations: string[] = [];

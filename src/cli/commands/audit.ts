@@ -53,6 +53,7 @@ export const AUDIT_OPTIONS: OptionSpec = {
   runs: { type: 'string' },
   'fail-on': { type: 'string' },
   'max-duration': { type: 'string' },
+  'run-id': { type: 'string' },
 };
 
 const SEVERITIES: Severity[] = ['critical', 'serious', 'moderate', 'minor'];
@@ -141,6 +142,7 @@ export async function auditCommand(
       ...(setupJourney ? { setupJourney } : {}),
       ...(categories ? { categories } : {}),
       context: loadContext(repo ?? process.cwd(), str(ctx, 'brand') ? { brand: str(ctx, 'brand')! } : {}),
+      ...(str(ctx, 'run-id') !== undefined ? { runId: str(ctx, 'run-id')! } : {}),
       mode: repo ? 'repository' : 'website',
       forms: !flag(ctx, 'no-forms'),
       allowSubmit: flag(ctx, 'allow-submit'),
@@ -271,6 +273,7 @@ export const audit: Command = {
                        (disposable/test environments you are authorized to use only; never to delete/payment URLs)
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
+  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused if the run exists
   --max-duration SECS  Stop after this many seconds and write a partial run (exit 6), as SIGINT/SIGTERM do;
                        a second signal quits at once (exit 130)`,
   run: (ctx) => auditCommand(ctx, audit.usage),
