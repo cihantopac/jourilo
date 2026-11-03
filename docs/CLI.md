@@ -4,9 +4,11 @@
 
 Every command prints human-readable text, or JSON with `--json`. Errors go to stderr; with `--json` they are
 `{"error":{"code","message","hint"}}` with a stable `code`. Exit codes: 0 ok, 1 failed gate or error, 2 usage,
-3 blocked by a safety rule (unsafe URL/path, robots.txt, policy), 4 browser unavailable.
+3 blocked by a safety rule (unsafe URL/path, robots.txt, policy), 4 browser unavailable, 5 no page could be loaded,
+6 stopped early by SIGINT/SIGTERM or `--max-duration` (a partial run is still written; a second signal exits 130).
 
-Global options: `--json`, `--workspace DIR` (default `.jourilo`, or `JOURILO_WORKSPACE`), `--quiet`.
+Global options: `--json`, `--workspace DIR` (default `.jourilo`, or `JOURILO_WORKSPACE`), `--quiet`. With `--json`,
+progress lines on stderr are JSON too: `{"type":"progress","message":"…","at":"<ISO time>"}`.
 
 ## Understand
 
@@ -15,7 +17,14 @@ Global options: `--json`, `--workspace DIR` (default `.jourilo`, or `JOURILO_WOR
 Product intelligence: map a repository (frameworks, routes, design system, i18n, auth, analytics) or a website (pages, conversion points, services).
 
 ```
-jourilo discover <path|url> [--pages 10]
+jourilo discover <path|url> [--pages 10] [--ignore-robots] [--allow-private]
+```
+
+```
+Options:
+  --pages N         Pages to read when mapping a website (default 10)
+  --ignore-robots   Ignore robots.txt (only for sites you own or are authorized to test)
+  --allow-private   Allow private-network hosts (10.x, 192.168.x, ...)
 ```
 
 ## Audit
@@ -36,10 +45,17 @@ Options:
   --include PATH       Add pages to discovery (repeatable)
   --viewports LIST     desktop, laptop, tablet, mobile, reflow (320px) or WIDTHxHEIGHT (default desktop,mobile)
   --browser NAME       chromium (default), firefox, webkit, chrome, msedge
+  --headed             Show the browser window instead of running headless
+  --locale TAG         Browser locale for every page (e.g. tr-TR); sets Accept-Language and navigator.language
+  --timeout SECS       Per-page navigation timeout in seconds (default 30)
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
+  --timezone ZONE      IANA time zone for every page (e.g. Europe/Istanbul)
+  --clock ISO          Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
+  --setup-journey REF  Run this journey first (an id or a .json file) and audit the state it leaves, e.g. a chosen theme or
+                       a dismissed banner; it follows the journeys safety policy and starts from --auth
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
   --repo PATH          Map findings to likely source files in this repository (and read its brand/search context)
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
@@ -49,9 +65,14 @@ Options:
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
   --allow-submit       Really send empty submissions to test server-side validation, on local or other hosts
-                       (disposable/test environments you are authorized to use only; never to delete/payment URLs)
+                       (disposable/test environments you are authorized to use only; never to delete/payment URLs);
+                       also lets a --setup-journey submit forms
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
+  --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
+  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused if the run exists
+  --max-duration SECS  Stop after this many seconds and write a partial run (exit 6), as SIGINT/SIGTERM do;
+                       a second signal quits at once (exit 130)
 ```
 
 ### `jourilo accessibility`
@@ -70,10 +91,17 @@ Options:
   --include PATH       Add pages to discovery (repeatable)
   --viewports LIST     desktop, laptop, tablet, mobile, reflow (320px) or WIDTHxHEIGHT (default desktop,mobile)
   --browser NAME       chromium (default), firefox, webkit, chrome, msedge
+  --headed             Show the browser window instead of running headless
+  --locale TAG         Browser locale for every page (e.g. tr-TR); sets Accept-Language and navigator.language
+  --timeout SECS       Per-page navigation timeout in seconds (default 30)
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
+  --timezone ZONE      IANA time zone for every page (e.g. Europe/Istanbul)
+  --clock ISO          Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
+  --setup-journey REF  Run this journey first (an id or a .json file) and audit the state it leaves, e.g. a chosen theme or
+                       a dismissed banner; it follows the journeys safety policy and starts from --auth
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
   --repo PATH          Map findings to likely source files in this repository (and read its brand/search context)
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
@@ -83,9 +111,14 @@ Options:
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
   --allow-submit       Really send empty submissions to test server-side validation, on local or other hosts
-                       (disposable/test environments you are authorized to use only; never to delete/payment URLs)
+                       (disposable/test environments you are authorized to use only; never to delete/payment URLs);
+                       also lets a --setup-journey submit forms
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
+  --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
+  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused if the run exists
+  --max-duration SECS  Stop after this many seconds and write a partial run (exit 6), as SIGINT/SIGTERM do;
+                       a second signal quits at once (exit 130)
 ```
 
 ### `jourilo conversion`
@@ -104,10 +137,17 @@ Options:
   --include PATH       Add pages to discovery (repeatable)
   --viewports LIST     desktop, laptop, tablet, mobile, reflow (320px) or WIDTHxHEIGHT (default desktop,mobile)
   --browser NAME       chromium (default), firefox, webkit, chrome, msedge
+  --headed             Show the browser window instead of running headless
+  --locale TAG         Browser locale for every page (e.g. tr-TR); sets Accept-Language and navigator.language
+  --timeout SECS       Per-page navigation timeout in seconds (default 30)
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
+  --timezone ZONE      IANA time zone for every page (e.g. Europe/Istanbul)
+  --clock ISO          Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
+  --setup-journey REF  Run this journey first (an id or a .json file) and audit the state it leaves, e.g. a chosen theme or
+                       a dismissed banner; it follows the journeys safety policy and starts from --auth
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
   --repo PATH          Map findings to likely source files in this repository (and read its brand/search context)
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
@@ -117,9 +157,14 @@ Options:
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
   --allow-submit       Really send empty submissions to test server-side validation, on local or other hosts
-                       (disposable/test environments you are authorized to use only; never to delete/payment URLs)
+                       (disposable/test environments you are authorized to use only; never to delete/payment URLs);
+                       also lets a --setup-journey submit forms
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
+  --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
+  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused if the run exists
+  --max-duration SECS  Stop after this many seconds and write a partial run (exit 6), as SIGINT/SIGTERM do;
+                       a second signal quits at once (exit 130)
 ```
 
 ## Journeys
@@ -139,7 +184,17 @@ Subcommands:
   validate [files]       Check journey files against the schema
   run [ids|files]        Run journeys against --base <url|dir>
 
+Suggest options:
+  --pages N              Pages to read when deriving journeys from a site (default 8)
+  --force                Overwrite journey files that already exist (by default existing files are kept)
+  --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
+
 Run options:
+  --base URL|DIR         The site or static build to run against (required)
+  --browser NAME         chromium (default), firefox, webkit, chrome, msedge
+  --headed               Show the browser window instead of running headless
+  --timeout SECS         Per-step timeout in seconds (default 10)
+  --repo PATH            Map failed steps to likely source files in this repository (a directory --base implies it)
   --viewport LIST        desktop, mobile, … (default: the journey's own viewport or desktop)
   --var key=value        Test data for {{key}} placeholders (also JOURILO_VAR_KEY env vars)
   --allow-submit         Allow form submission on non-local hosts (authorized test environments only)
@@ -148,7 +203,11 @@ Run options:
   --trace                Record a Playwright trace per journey (contains typed values; keep private)
   --auth FILE            Playwright storage state for signed-in journeys
   --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
+  --timezone ZONE        IANA time zone for the page (e.g. Europe/Istanbul)
+  --clock ISO            Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
+  --evidence MODE        full (default) or minimal: keep only the screenshots of the failed step, the step before it and the last step
   --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
+  --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission
@@ -191,6 +250,11 @@ jourilo optimize [run=latest] --repo <path> [--rule id ...] [--apply]
 Deterministic fixers (others are reported with source candidates for a person or agent to fix):
   axe/html-has-lang, jourilo/missing-viewport-meta, jourilo/input-purpose, jourilo/focus-visible, jourilo/paste-blocked,
   jourilo/unsized-images, jourilo/placeholder-label
+Options:
+  --repo PATH      Repository to fix (default: the run's repo, else the current directory)
+  --rule ID        Only fix findings of this rule (repeatable)
+  --finding ID     Only fix this finding, by fingerprint (repeatable)
+  --apply          Write the changes
 Without --apply nothing is written. With --apply, all files are written as one change: each file must be unchanged
 since the plan, writes are atomic, an interrupted apply is undone, and `jourilo rollback <id>` restores the files
 (git is not required).
@@ -203,6 +267,13 @@ Repeat a run with the same scope (pages, viewports) after a change and compare: 
 
 ```
 jourilo verify <baseline-run> [--target url|dir] [--fail-on-regression]
+```
+
+```
+Options:
+  --target URL|DIR       Where to repeat the audit (default: the baseline run's target)
+  --repo PATH            Repository for source mapping (default: the baseline run's repo)
+  --fail-on-regression   Exit 1 when new serious or critical defects appear
 ```
 
 ### `jourilo checkpoint`
@@ -240,6 +311,13 @@ Re-render the report for a run (html, markdown, sarif or json) — default: late
 jourilo report [run-id|latest|path] [--format html|md|sarif|json] [--baseline run-id]
 ```
 
+```
+Options:
+  --format FMT     html (default), md, sarif or json; sarif and json print to stdout
+  --baseline RUN   Include a comparison with this earlier run
+  --stdout         With --format md, print the Markdown instead of only writing the file
+```
+
 ### `jourilo compare`
 
 Compare two runs (before/after): fixed, new and persisting findings plus lab metric deltas.
@@ -261,7 +339,37 @@ jourilo runs
 Add a judgment (AI inference or user input) to a run, tied to evidence in that run; never mixed with measurements.
 
 ```
-jourilo finding add --run <id> --title … --category usability --description … --evidence screenshots/x.jpg [--by agent|user]
+jourilo finding add --run <id> --title … --category usability --description … --evidence screenshots/x.jpg [--by agent|user] | finding dismiss <id> --run <run> --reason "<text>" [--by user|agent] | finding undismiss <id> [--run <run>]
+```
+
+```
+Subcommands:
+  add                  Record a judgment tied to evidence in a run
+  dismiss <id>         Mark a finding as not a problem; it is kept out of later runs and listed as dismissed
+  undismiss <id>       Remove a dismissal; the next run reports the finding again
+
+add options:
+  --run ID             Run to add to (default latest)
+  --title TEXT         Short title (required)
+  --category NAME      accessibility, usability, responsive, performance, conversion, reliability, content or design-system (required)
+  --description TEXT   What is wrong and why it matters (required)
+  --evidence FILE      Screenshot or file inside the run, e.g. screenshots/home-desktop.jpg (required, repeatable)
+  --kind KIND          defect, hypothesis or needs-review (default: hypothesis for conversion, else needs-review)
+  --severity LEVEL     critical, serious, moderate, minor or info (default minor)
+  --confidence LEVEL   low, medium or high (AI judgments are capped at medium)
+  --impact TEXT        Who is affected and how
+  --recommendation TEXT  What to change
+  --url URL            Page the finding is about (default: the run's first page)
+  --viewport NAME      Viewport the finding was seen in (e.g. desktop, mobile)
+  --by WHO             agent (default) or user
+
+dismiss options:
+  --run ID             Run to apply it to now (default latest)
+  --reason TEXT        Why this is not a problem (required)
+  --by WHO             user (default) or agent
+
+undismiss options:
+  --run ID             Also bring the finding back into this run
 ```
 
 ## System

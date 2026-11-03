@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Flaky by test data</title>
+  </head>
+  <body>
+    <!-- `journeys run --repeat` gives each attempt other test data: only an address whose tag ends in 1 enables the button. -->
+    <label>Email <input id="email" type="email" oninput="document.getElementById('go').disabled = !/1@example\.test$/.test(this.value)" /></label>
+    <button id="go" type="button" disabled>Continue</button>
+  </body>
+</html>

@@ -289,6 +289,27 @@
     if (ctas.length >= MAX) break;
   }
 
+  // Collapsed disclosures and unpressed toggle buttons: candidates for open-and-check journeys.
+  const toggles = [];
+  for (const el of interactive) {
+    if (el.tagName !== 'BUTTON' && el.getAttribute('role') !== 'button') continue;
+    const expanded = el.getAttribute('aria-expanded') === 'false';
+    const pressed = el.getAttribute('aria-pressed') === 'false';
+    if (!expanded && !pressed) continue;
+    const name = nameOf(el);
+    if (!name) continue;
+    const controls = (el.getAttribute('aria-controls') || '').trim().split(/\s+/)[0] || null;
+    // Only toggles that can yield a journey count against the cap: a disclosure needs a panel to check.
+    if (expanded && !(controls && document.getElementById(controls))) continue;
+    toggles.push({
+      selector: selectorOf(el),
+      name: name.slice(0, 80),
+      state: expanded ? 'expanded' : 'pressed',
+      controls,
+    });
+    if (toggles.length >= 10) break;
+  }
+
   const labelOf = (f) => {
     const aria = f.getAttribute('aria-label');
     if (aria?.trim()) return aria.trim();
@@ -572,6 +593,7 @@
       headings,
       landmarks: Array.from(new Set(landmarks)),
       ctas,
+      toggles,
       forms,
       links,
       images: {

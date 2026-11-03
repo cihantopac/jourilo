@@ -3,6 +3,7 @@
 // selectors, one controlled retry for transient element states.
 import { join } from 'node:path';
 import type { Browser, ElementHandle, Locator, Page } from 'playwright-core';
+import { EVIDENCE_QUALITY, type EvidenceMode } from '../audit/evidence.js';
 import { makeFinding } from '../audit/finding.js';
 import { CWV, nielsen } from '../audit/standards.js';
 import { DEFAULT_MASK, newContext, observe } from '../browser/capture.js';
@@ -12,6 +13,7 @@ import { toPosix, writeFileSafe } from '../core/fs-safety.js';
 import { excerpt, redactUrl } from '../core/redact.js';
 import type { Finding, JourneyResult, JourneyStepResult } from '../core/types.js';
 import type { HostClass } from '../core/url-safety.js';
+import { coverAt } from './cover.js';
 import { installRequestGuard } from './request-guard.js';
 import { checkAction, interpolate, isSecretValue, type SafetyPolicy } from './safety.js';
 import { describeStep, describeTarget, type JourneySpec, type Step, type Target } from './schema.js';
@@ -24,12 +26,16 @@ export interface JourneyRunOptions {
   data: Record<string, string>;
   trace: boolean;
   storageState?: string;
+  timezoneId?: string;
+  clock?: string;
   stepTimeoutMs: number;
   viewportOverride?: string;
   /** Save the browser's storage state (cookies, localStorage) after the journey, for signed-in audits. */
   saveAuth?: string;
   /** Other origins main-frame navigations may reach (e.g. a test identity provider). */
   allowOrigins?: string[];
+  /** `minimal`: JPEG quality 55. The caller prunes step screenshots (`pruneJourneyScreenshots`) once it has picked the attempt it reports. */
+  evidence?: EvidenceMode;
   log?: (msg: string) => void;
 }
 
@@ -159,7 +165,8 @@ export function matchesUrl(actual: string, expected: string): boolean {
 
 class Blocked extends Error {}
 
-async function act(page: Page, step: Step, opts: JourneyRunOptions): Promise<void> {
+/** Runs one step. A returned note is appended to the step's description (what was done differently, and why). */
+async function act(page: Page, step: Step, opts: JourneyRunOptions): Promise<string | void> {
   const t = opts.stepTimeoutMs;
   const value = (v: string) => interpolate(v, opts.data);
   switch (step.action) {
@@ -189,11 +196,23 @@ async function act(page: Page, step: Step, opts: JourneyRunOptions): Promise<voi
         const verdict = verdictFor(f, effect, step.action, opts.policy);
         if (!verdict.allowed) throw new Blocked(verdict.reason);
       }
-      if (step.action === 'click') await handle!.click({ timeout: t });
-      else if (loc && handle) await handle.press(step.key, { timeout: t });
+      let note: string | undefined;
+      if (step.action === 'click') {
+        // A covered center would make Playwright wait for the cover to go away until the step times out: say what
+        // is on top, and click a clear part of the target when there is one.
+        const c = await coverAt(handle!);
+        if (c.covered && c.visiblePoint) {
+          note = `center covered by ${c.cover ?? 'another element'}; clicked the visible part`;
+          await handle!.click({ timeout: t, position: c.visiblePoint });
+        } else if (c.covered) {
+          throw new Error(
+            `${describeTarget(step.target)} is covered by ${c.cover ?? 'another element'}; nothing of it is visible to click.`,
+          );
+        } else await handle!.click({ timeout: t });
+      } else if (loc && handle) await handle.press(step.key, { timeout: t });
       else await page.keyboard.press(step.key);
       await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => undefined);
-      return;
+      return note;
     }
     case 'fill':
       await locatorFor(page, step.target).first().fill(value(step.value), { timeout: t });
@@ -250,6 +269,8 @@ export async function runJourney(
   const ctx = await newContext(browser, vp, {
     runDir: opts.runDir,
     ...(opts.storageState ? { storageState: opts.storageState } : {}),
+    ...(opts.timezoneId ? { timezoneId: opts.timezoneId } : {}),
+    ...(opts.clock ? { clock: opts.clock } : {}),
   });
   const tracePath = opts.trace ? join('traces', `${spec.id}-${vp.name}.zip`) : undefined;
   if (tracePath) await ctx.tracing.start({ screenshots: true, snapshots: true, title: spec.name });
@@ -275,7 +296,7 @@ export async function runJourney(
       await page.screenshot({
         path: join(opts.runDir, file),
         type: 'jpeg',
-        quality: 70,
+        quality: opts.evidence === 'minimal' ? EVIDENCE_QUALITY.minimal : 70,
         animations: 'disabled',
         caret: 'hide',
         mask: DEFAULT_MASK.map((s) => page.locator(s)),
@@ -303,14 +324,16 @@ export async function runJourney(
         url: '',
       };
       opts.log?.(`    ${i + 1}. ${res.description}`);
+      let note: string | void;
       try {
         try {
-          await act(page, step, opts);
+          note = await act(page, step, opts);
         } catch (err) {
           if (err instanceof Blocked || !TRANSIENT.test((err as Error).message)) throw err;
           await page.waitForTimeout(500);
-          await act(page, step, opts);
+          note = await act(page, step, opts);
         }
+        if (note) res.description = `${res.description} (${note})`;
       } catch (err) {
         res.status = err instanceof Blocked ? 'blocked' : 'failed';
         res.error = excerpt((err as Error).message.split('\n')[0], 300);

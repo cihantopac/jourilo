@@ -133,6 +133,22 @@ describe('accessibility rules', () => {
     );
     expect(f.map((x) => x.ruleId).sort()).toEqual(['jourilo/focus-obscured', 'jourilo/focus-visible']);
     expect(f.find((x) => x.ruleId === 'jourilo/focus-visible')!.occurrences).toBe(1);
+    // The element's markup identifies it (class and state) next to its visible name.
+    const marked = keyboardFindings(
+      obs({
+        keyboard: {
+          stops: [
+            { ...stop(0, []), markup: '<button class="tool" aria-pressed="true">', name: 'bedava Jourilo' },
+          ],
+          focusableCount: 1,
+          completedCycle: true,
+          trap: null,
+          pressed: 2,
+        },
+      }),
+    );
+    expect(marked[0]!.evidence[0]!.snippet).toBe('<button class="tool" aria-pressed="true">bedava Jourilo');
+    expect(f.find((x) => x.ruleId === 'jourilo/focus-visible')!.evidence[0]!.snippet).toBe('B0');
     const trap = keyboardFindings(
       obs({
         keyboard: {

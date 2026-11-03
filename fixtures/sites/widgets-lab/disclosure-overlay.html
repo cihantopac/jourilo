@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Disclosure overlay – Widgets lab</title><link rel="stylesheet" href="/style.css">
+<style>
+  .menu-wrap { position: relative; min-height: 360px; }
+  .menu { position: absolute; top: 48px; left: 0; width: 100%; min-height: 280px; background: #fff; border: 1px solid #1f2937; border-radius: 8px; padding: 16px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); z-index: 10; }
+</style></head>
+<body>
+<main>
+  <h1>Site menu</h1>
+  <p><a href="/">Back to the lab</a></p>
+  <!-- A disclosure: aria-expanded is kept correct, focus stays on the button and Escape does nothing. The panel is a large
+       absolute layer but has no dialog role, so it must not be judged as a dialog. -->
+  <div class="menu-wrap">
+    <button type="button" id="menu-btn" aria-expanded="false" aria-controls="panel">Browse topics</button>
+    <div id="panel" class="menu" hidden>
+      <h2>Topics</h2>
+      <ul><li>Shipping</li><li>Returns</li><li>Payments</li><li>Warranty</li></ul>
+    </div>
+  </div>
+</main>
+<script>
+  var btn = document.getElementById('menu-btn');
+  btn.addEventListener('click', function () {
+    var p = document.getElementById('panel');
+    p.hidden = !p.hidden;
+    btn.setAttribute('aria-expanded', String(!p.hidden));
+  });
+</script>
+</body>
+</html>

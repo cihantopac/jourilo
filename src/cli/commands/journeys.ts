@@ -1,10 +1,12 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { runAudit, summarize } from '../../audit/engine.js';
+import { pruneJourneyScreenshots } from '../../audit/evidence.js';
 import { makeFinding, mergeFindings } from '../../audit/finding.js';
 import type { BrowserName } from '../../browser/runtime.js';
 import { networkLimitations, openGuardedBrowser } from '../../browser/session.js';
 import { parseViewports } from '../../browser/viewports.js';
+import { applyDismissals, loadDismissals } from '../../core/dismissals.js';
 import { JouriloError } from '../../core/errors.js';
 import { displayPath } from '../../core/fs-safety.js';
 import { newRunId } from '../../core/hash.js';
@@ -21,7 +23,16 @@ import { suggestJourneys } from '../../journeys/suggest.js';
 import { wouldBeCommitted } from '../../repair/git.js';
 import { locateFindings } from '../../repair/locate.js';
 import { writeReports } from '../../report/index.js';
-import { type Command, type Context, flag, list, num, str } from '../framework.js';
+import {
+  type Command,
+  type Context,
+  flag,
+  list,
+  num,
+  parseEvidence,
+  parseStateOptions,
+  str,
+} from '../framework.js';
 
 export function journeysDir(ws: Workspace): string {
   return join(ws.root, 'journeys');
@@ -178,6 +189,8 @@ export function summarizeAttempts(
 }
 
 async function runCmd(ctx: Context) {
+  // Read before any browser work, so a corrupt dismissed.json fails fast instead of losing a finished run.
+  const dismissals = loadDismissals(ctx.ws);
   const baseArg = str(ctx, 'base');
   if (!baseArg)
     throw new JouriloError('USAGE', '--base <url|dir> is required (the site to run journeys against).');
@@ -188,6 +201,8 @@ async function runCmd(ctx: Context) {
       'No journeys to run.',
       'Create some with `jourilo journeys suggest <url>`.',
     );
+  const state = parseStateOptions(ctx);
+  const evidence = parseEvidence(ctx);
   const isDir = existsSync(baseArg) && !baseArg.includes('://');
   const server = isDir ? await serveStatic(resolve(baseArg)) : undefined;
   try {
@@ -237,6 +252,10 @@ async function runCmd(ctx: Context) {
         ctx.log(warning);
       }
     }
+    if (evidence === 'minimal')
+      limitations.push(
+        '--evidence minimal: only the failed step, the step before it and the last step of each journey kept a screenshot.',
+      );
     if (flag(ctx, 'trace')) {
       mkdirSync(join(runDir, 'traces'), { recursive: true });
       limitations.push(
@@ -262,6 +281,8 @@ async function runCmd(ctx: Context) {
               stepTimeoutMs: num(ctx, 'timeout', 10) * 1000,
               ...(vp ? { viewportOverride: vp } : {}),
               ...(str(ctx, 'auth') ? { storageState: str(ctx, 'auth')! } : {}),
+              ...state,
+              ...(evidence ? { evidence } : {}),
               ...(saveAuth ? { saveAuth } : {}),
               ...(allowOrigins.length ? { allowOrigins } : {}),
               log: k === 0 ? ctx.log : undefined,
@@ -270,6 +291,12 @@ async function runCmd(ctx: Context) {
             attempts.push(r);
           }
           const { result, findings: jf } = summarizeAttempts(spec, attempts);
+          if (evidence === 'minimal')
+            pruneJourneyScreenshots(
+              runDir,
+              result,
+              attempts.map((a) => a.result),
+            );
           ctx.log(
             `  → ${result.status}${result.stability ? ` (${result.stability})` : ''} (${(result.durationMs / 1000).toFixed(1)} s)`,
           );
@@ -283,6 +310,8 @@ async function runCmd(ctx: Context) {
     const network = session.report();
     limitations.push(...networkLimitations(network));
     findings = mergeFindings(findings);
+    const { kept, dismissed } = applyDismissals(findings, dismissals);
+    findings = kept;
     const run: Run = {
       schemaVersion: RUN_SCHEMA_VERSION,
       id,
@@ -298,10 +327,13 @@ async function runCmd(ctx: Context) {
         allowSubmit: policy.allowSubmit,
         allowDestructive: policy.allowDestructive,
         hostClass,
+        ...state,
+        ...(evidence === 'minimal' ? { evidence } : {}),
       },
       pages: [],
       journeys,
       findings,
+      ...(dismissed.length ? { dismissed } : {}),
       summary: summarize(findings, 0, journeys.length),
       limitations: [
         ...limitations,
@@ -367,6 +399,9 @@ export const journeys: Command = {
     force: { type: 'boolean' },
     'save-auth': { type: 'string' },
     repeat: { type: 'string' },
+    timezone: { type: 'string' },
+    clock: { type: 'string' },
+    evidence: { type: 'string' },
   },
   details: `Subcommands:
   suggest [url|dir|run]  Derive journeys from a site (or an existing run) into .jourilo/journeys/*.json
@@ -374,7 +409,17 @@ export const journeys: Command = {
   validate [files]       Check journey files against the schema
   run [ids|files]        Run journeys against --base <url|dir>
 
+Suggest options:
+  --pages N              Pages to read when deriving journeys from a site (default 8)
+  --force                Overwrite journey files that already exist (by default existing files are kept)
+  --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
+
 Run options:
+  --base URL|DIR         The site or static build to run against (required)
+  --browser NAME         chromium (default), firefox, webkit, chrome, msedge
+  --headed               Show the browser window instead of running headless
+  --timeout SECS         Per-step timeout in seconds (default 10)
+  --repo PATH            Map failed steps to likely source files in this repository (a directory --base implies it)
   --viewport LIST        desktop, mobile, … (default: the journey's own viewport or desktop)
   --var key=value        Test data for {{key}} placeholders (also JOURILO_VAR_KEY env vars)
   --allow-submit         Allow form submission on non-local hosts (authorized test environments only)
@@ -383,7 +428,11 @@ Run options:
   --trace                Record a Playwright trace per journey (contains typed values; keep private)
   --auth FILE            Playwright storage state for signed-in journeys
   --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
+  --timezone ZONE        IANA time zone for the page (e.g. Europe/Istanbul)
+  --clock ISO            Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
+  --evidence MODE        full (default) or minimal: keep only the screenshots of the failed step, the step before it and the last step
   --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
+  --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission

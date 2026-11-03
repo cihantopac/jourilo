@@ -1,5 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { writeManifest } from '../core/manifest.js';
 import type { Run } from '../core/types.js';
 import type { RunListing } from '../core/workspace.js';
 import type { RunComparison } from './compare.js';
@@ -27,5 +28,7 @@ export function writeReports(
     out.sarif = join(dir, 'report.sarif');
     writeFileSync(out.sarif, `${JSON.stringify(renderSarif(run), null, 2)}\n`);
   }
+  // Last, so it covers the reports just written; a rewrite of the reports regenerates it.
+  writeManifest(dir, run.id);
   return out;
 }

@@ -29,16 +29,22 @@ export async function loadPlaywright(): Promise<PlaywrightModule> {
 
 /**
  * Launches a browser. With a network guard, every request (loopback included) goes through the guard's proxy, and
- * WebRTC, which could otherwise send UDP to local addresses outside the proxy, is disabled.
+ * WebRTC, which could otherwise send UDP to local addresses outside the proxy, is disabled. With `ownSignals`, the
+ * caller handles SIGINT/SIGTERM itself (to finish a partial run), so Playwright must not close the browser on them;
+ * Playwright still kills it when the process exits.
  */
 export async function launchBrowser(
   name: BrowserName = 'chromium',
   headed = false,
   guard?: NetGuard,
+  ownSignals = false,
 ): Promise<Browser> {
   const pw = await loadPlaywright();
   const type: BrowserType = name === 'firefox' ? pw.firefox : name === 'webkit' ? pw.webkit : pw.chromium;
-  const opts: LaunchOptions = { headless: !headed };
+  const opts: LaunchOptions = {
+    headless: !headed,
+    ...(ownSignals ? { handleSIGINT: false, handleSIGTERM: false } : {}),
+  };
   if (name === 'chrome' || name === 'msedge') opts.channel = name;
   if (guard) {
     if (name === 'firefox') {

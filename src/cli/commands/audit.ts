@@ -2,6 +2,7 @@ import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { type AuditOptions, runAudit } from '../../audit/engine.js';
 import { severityRank } from '../../audit/finding.js';
+import { exitCodeForOutcome, runOutcome } from '../../audit/outcome.js';
 import type { BrowserName } from '../../browser/runtime.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { JouriloError } from '../../core/errors.js';
@@ -19,9 +20,12 @@ import {
   list,
   num,
   type OptionSpec,
+  parseEvidence,
+  parseStateOptions,
   requirePositional,
   str,
 } from '../framework.js';
+import { loadJourneys } from './journeys.js';
 
 export const AUDIT_OPTIONS: OptionSpec = {
   pages: { type: 'string' },
@@ -38,6 +42,9 @@ export const AUDIT_OPTIONS: OptionSpec = {
   mask: { type: 'string', multiple: true },
   auth: { type: 'string' },
   locale: { type: 'string' },
+  timezone: { type: 'string' },
+  clock: { type: 'string' },
+  'setup-journey': { type: 'string' },
   timeout: { type: 'string' },
   repo: { type: 'string' },
   sarif: { type: 'boolean' },
@@ -46,10 +53,45 @@ export const AUDIT_OPTIONS: OptionSpec = {
   brand: { type: 'string' },
   runs: { type: 'string' },
   'fail-on': { type: 'string' },
+  'max-duration': { type: 'string' },
+  'run-id': { type: 'string' },
+  evidence: { type: 'string' },
 };
 
 const SEVERITIES: Severity[] = ['critical', 'serious', 'moderate', 'minor'];
 const BROWSERS: BrowserName[] = ['chromium', 'firefox', 'webkit', 'chrome', 'msedge'];
+
+/**
+ * The first SIGINT/SIGTERM, or the end of the --max-duration budget, stops the audit with a partial run; a second
+ * signal exits at once. `dispose` removes the handlers and the timer, so they never outlive the command.
+ */
+function stopController(ctx: Context, maxDurationS: number | undefined) {
+  const controller = new AbortController();
+  let signals = 0;
+  const onSignal = () => {
+    if (++signals > 1) process.exit(130);
+    ctx.log(
+      'Stopping: the current page finishes, then a partial run is written (signal again to quit now) …',
+    );
+    controller.abort('signal');
+  };
+  process.on('SIGINT', onSignal);
+  process.on('SIGTERM', onSignal);
+  const timer = maxDurationS
+    ? setTimeout(() => {
+        ctx.log(`--max-duration ${maxDurationS}s reached: stopping after the current page …`);
+        controller.abort('max-duration');
+      }, maxDurationS * 1000)
+    : undefined;
+  return {
+    signal: controller.signal,
+    dispose: () => {
+      process.off('SIGINT', onSignal);
+      process.off('SIGTERM', onSignal);
+      clearTimeout(timer);
+    },
+  };
+}
 
 export async function auditCommand(
   ctx: Context,
@@ -63,14 +105,24 @@ export async function auditCommand(
   const failOn = str(ctx, 'fail-on') as Severity | undefined;
   if (failOn && !SEVERITIES.includes(failOn))
     throw new JouriloError('USAGE', `--fail-on must be one of ${SEVERITIES.join(', ')}.`);
+  const state = parseStateOptions(ctx);
   const auth = str(ctx, 'auth');
   if (auth && !existsSync(auth)) throw new JouriloError('NOT_FOUND', `Auth state file not found: ${auth}`);
 
-  const isDir =
-    !/^[a-z]+:\/\//i.test(targetArg) && existsSync(targetArg) && statSync(targetArg).isDirectory();
-  const server = isDir ? await serveStatic(resolve(targetArg)) : undefined;
-  const repo = str(ctx, 'repo') ?? (isDir ? resolve(targetArg) : undefined);
+  const maxDuration = str(ctx, 'max-duration') === undefined ? undefined : num(ctx, 'max-duration', 0);
+  if (maxDuration === 0) throw new JouriloError('USAGE', '--max-duration must be more than 0 seconds.');
+
+  const evidence = parseEvidence(ctx);
+  const setupRef = str(ctx, 'setup-journey');
+  const setupJourney = setupRef ? loadJourneys(ctx.ws, [setupRef])[0] : undefined;
+
+  const stop = stopController(ctx, maxDuration);
+  let server: Awaited<ReturnType<typeof serveStatic>> | undefined;
   try {
+    const isDir =
+      !/^[a-z]+:\/\//i.test(targetArg) && existsSync(targetArg) && statSync(targetArg).isDirectory();
+    server = isDir ? await serveStatic(resolve(targetArg)) : undefined;
+    const repo = str(ctx, 'repo') ?? (isDir ? resolve(targetArg) : undefined);
     const opts: AuditOptions = {
       target: server ? server.url : targetArg,
       viewports: parseViewports(str(ctx, 'viewports')),
@@ -89,12 +141,17 @@ export async function auditCommand(
       include: list(ctx, 'include'),
       ...(auth ? { storageState: auth } : {}),
       ...(str(ctx, 'locale') ? { locale: str(ctx, 'locale')! } : {}),
+      ...state,
+      ...(setupJourney ? { setupJourney } : {}),
+      ...(evidence ? { evidence } : {}),
       ...(categories ? { categories } : {}),
       context: loadContext(repo ?? process.cwd(), str(ctx, 'brand') ? { brand: str(ctx, 'brand')! } : {}),
+      ...(str(ctx, 'run-id') !== undefined ? { runId: str(ctx, 'run-id')! } : {}),
       mode: repo ? 'repository' : 'website',
       forms: !flag(ctx, 'no-forms'),
       allowSubmit: flag(ctx, 'allow-submit'),
       onProgress: ctx.log,
+      signal: stop.signal,
     };
     if (
       flag(ctx, 'ignore-robots') &&
@@ -115,6 +172,7 @@ export async function auditCommand(
       const located = locateFindings(run, repo);
       ctx.log(`Mapped ${located} finding(s) to likely source locations in ${repo}`);
     }
+    run.outcome = runOutcome(run);
     ctx.ws.saveRun(run);
     const reports = writeReports(runDir, run, undefined, {
       sarif: flag(ctx, 'sarif'),
@@ -126,6 +184,8 @@ export async function auditCommand(
     return {
       data: {
         runId: run.id,
+        outcome: run.outcome,
+        ...(run.stoppedBy ? { stoppedBy: run.stoppedBy } : {}),
         runDir,
         reports,
         summary: run.summary,
@@ -134,9 +194,10 @@ export async function auditCommand(
         gateFailed: gate,
       },
       text: summaryText(run, reports.html),
-      exitCode: gate ? 1 : 0,
+      exitCode: exitCodeForOutcome(run.outcome, gate),
     };
   } finally {
+    stop.dispose();
     await server?.close();
   }
 }
@@ -145,6 +206,8 @@ export function summaryText(run: Run, reportPath: string): string {
   const s = run.summary;
   const lines = [
     '',
+    ...partialLines(run),
+    ...noPageLines(run),
     `Jourilo · ${run.target}`,
     `  ${s.byKind.defect} defects   critical ${s.findings.critical} · serious ${s.findings.serious} · moderate ${s.findings.moderate} · minor ${s.findings.minor}`,
     `  ${s.byKind.hypothesis} conversion hypotheses (untested) · ${s.byKind['needs-review']} need manual review`,
@@ -168,6 +231,18 @@ export function summaryText(run: Run, reportPath: string): string {
   return lines.join('\n');
 }
 
+function partialLines(run: Run): string[] {
+  if (run.outcome !== 'partial') return [];
+  const stop = run.limitations.find((l) => l.startsWith('The run was stopped early'));
+  return [`Partial run: ${stop ?? 'the run was stopped early.'}`, ''];
+}
+
+function noPageLines(run: Run): string[] {
+  if (run.outcome !== 'no-page-loaded') return [];
+  const first = run.findings.find((f) => f.ruleId === 'jourilo/page-unreachable');
+  return [`No page could be loaded from ${run.target}.`, ...(first ? [`  ${first.description}`] : []), ''];
+}
+
 export const audit: Command = {
   name: 'audit',
   summary:
@@ -182,10 +257,17 @@ export const audit: Command = {
   --include PATH       Add pages to discovery (repeatable)
   --viewports LIST     desktop, laptop, tablet, mobile, reflow (320px) or WIDTHxHEIGHT (default desktop,mobile)
   --browser NAME       chromium (default), firefox, webkit, chrome, msedge
+  --headed             Show the browser window instead of running headless
+  --locale TAG         Browser locale for every page (e.g. tr-TR); sets Accept-Language and navigator.language
+  --timeout SECS       Per-page navigation timeout in seconds (default 30)
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
   --auth FILE          Playwright storage state for authenticated pages (see docs/PRIVACY.md)
+  --timezone ZONE      IANA time zone for every page (e.g. Europe/Istanbul)
+  --clock ISO          Freeze the page's Date at this date-time (e.g. 2026-11-03T22:30:00+03:00); timers keep running
+  --setup-journey REF  Run this journey first (an id or a .json file) and audit the state it leaves, e.g. a chosen theme or
+                       a dismissed banner; it follows the journeys safety policy and starts from --auth
   --mask SELECTOR      Extra elements to black out in screenshots (repeatable)
   --repo PATH          Map findings to likely source files in this repository (and read its brand/search context)
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
@@ -195,9 +277,14 @@ export const audit: Command = {
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
   --allow-submit       Really send empty submissions to test server-side validation, on local or other hosts
-                       (disposable/test environments you are authorized to use only; never to delete/payment URLs)
+                       (disposable/test environments you are authorized to use only; never to delete/payment URLs);
+                       also lets a --setup-journey submit forms
   --sarif              Also write report.sarif for code scanning
-  --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)`,
+  --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
+  --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
+  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused if the run exists
+  --max-duration SECS  Stop after this many seconds and write a partial run (exit 6), as SIGINT/SIGTERM do;
+                       a second signal quits at once (exit 130)`,
   run: (ctx) => auditCommand(ctx, audit.usage),
 };
 

@@ -28,6 +28,49 @@ Priorities follow the rule: correctness and evidence before breadth. Items under
 - Root-cause grouping, fix paths, repair prompts for coding agents, experiment briefs for hypotheses.
 - Journey timelines, before/after crops, short agent answers, README as a visual product page.
 
+## Done in 1.2.0
+
+Driven by field reports ([FIELD-FEEDBACK.md](FIELD-FEEDBACK.md), [RELEASE-1.2.md](RELEASE-1.2.md)):
+
+- Focus hidden behind any opaque content; disclosures are not dialogs; state CSS rules as the source of a finding.
+- `--timezone`, `--clock` and `--setup-journey`; `finding dismiss`; `--evidence minimal`; interaction journeys for
+  disclosures and toggles; covered click targets explained.
+- Automation: exit 5 (no page loaded) and 6 (partial run), `--max-duration`, JSON progress, `manifest.json`,
+  `--run-id`, the published run schema and its compatibility policy.
+- Every implemented flag in the CLI reference.
+
+## Deferred from 1.2.0
+
+Each item has its number in [FIELD-FEEDBACK.md](FIELD-FEEDBACK.md). F10 (an overall score) stays declined
+([DECISIONS.md](DECISIONS.md) D3), and F17 is covered by `--auth` plus `--setup-journey`.
+
+- **F8 pixel contrast.** Sample the rendered pixels behind the text for axe "incomplete" contrast nodes. An engine
+  change: it needs a fixture, a control and a rerun of the ACT benchmark.
+- **F15 proxy chaining and allow/block hosts.** `--allow-hosts` / `--block-hosts`, and chaining to an upstream proxy
+  behind the network guard so the guard still checks the final destination.
+- **F16 user agent, extra headers, ignore-HTTPS-errors.** `--user-agent`, `--extra-header`, `--ignore-https-errors`
+  (shown in the report's limits when used) and `--output-dir`.
+- **F19 loopback deny, opt-in.** A flag or an environment variable that refuses `localhost`, `127.0.0.1` and `[::1]`
+  for integrators that audit on behalf of others. Loopback stays allowed by default; this needs Cihan's decision.
+- **F20 start URL.** Check the explicit start URL against robots.txt, and stop rewriting `/staff/` to `/staff`.
+- **F21 Chromium sandbox and process group.** An option to run Chromium with its sandbox, and to put the browser in
+  Jourilo's process group so it is cleaned up with it. Security-sensitive: test in containers first.
+- **F22 pages vs captures.** Report pages and captures separately, say how many pages a sample left out (a
+  truncation signal), and make `--pages 0` a usage error.
+- **F23 redirect chain and keyboard trap.** A finding for long or looping redirect chains, and trap detection that
+  does not depend on where the focus starts.
+
+## 1.2.x follow-ups
+
+Real defects found while building 1.2.0, small enough for a patch release:
+
+- `verify --target` with a typo ends in an internal `TypeError`; it should be `INVALID_INPUT`.
+- If `guard.close()` throws while browsing ends, the setup journey's session state is not removed.
+- `journeys run --repeat`: put the attempt index in the step file names, so a kept screenshot belongs to the
+  representative attempt.
+- Turkish uppercase folding in the toggle lexicon (`KARANLIK`, `DİL`): `İ` and `ı` do not fold like ASCII.
+- A `--run-id` directory left by a crashed run (no `run.json`) is accepted and its leftovers enter the manifest.
+
 ## Next (1.x)
 
 1. Full arrow-key patterns for menus and dialogs inside menus (Escape closes, focus returns, Home/End).
@@ -38,5 +81,4 @@ Priorities follow the rule: correctness and evidence before breadth. Items under
 5. Read-only analytics/flag adapters for experiment plans (PostHog, GrowthBook, Amplitude); sequential testing.
 6. Multi-tab journeys and OAuth popups against test identity providers.
 7. More languages for the shared lexicon (`src/core/lexicon.ts`), each with a fixture site.
-8. `journeys suggest`: never treat toggles (`aria-pressed`, theme or language switches) as the main call to action.
-9. Translated rule texts in the report (titles, impact, recommendations) for Turkish.
+8. Translated rule texts in the report (titles, impact, recommendations) for Turkish.

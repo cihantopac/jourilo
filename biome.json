@@ -11,6 +11,7 @@
       "!fixtures",
       "!docs/evaluation",
       "!branding",
+      "!.superpowers",
       "!benchmarks/act/.cache"
     ]
   },

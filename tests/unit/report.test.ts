@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { emptyInventory } from '../../src/audit/engine.js';
 import { makeFinding } from '../../src/audit/finding.js';
 import type { Finding } from '../../src/core/types.js';
 import { compareRuns } from '../../src/report/compare.js';
 import { esc, renderHtml } from '../../src/report/html.js';
+import { I18N } from '../../src/report/html-i18n.js';
 import { renderMarkdown, renderSarif } from '../../src/report/text.js';
 import { run } from '../helpers.js';
 
@@ -91,6 +93,25 @@ describe('compare', () => {
     expect(cmp.persisting.map((x) => x.ruleId)).toEqual(['r/b']);
     expect(cmp.regressionFree).toBe(false);
     expect(cmp.metrics[0]).toMatchObject({ name: 'LCP', delta: -1800 });
+  });
+
+  it('never counts findings on a page that did not load as fixed', () => {
+    const a = f('r/a', '/');
+    const page = {
+      url: 'https://example.test/',
+      finalUrl: '',
+      status: 200,
+      title: '',
+      viewport: 'desktop',
+      loadMs: 0,
+      metrics: [],
+      consoleErrors: 0,
+      failedRequests: 0,
+      inventory: run([]).pages[0]?.inventory as never,
+    };
+    const base = run([a], { id: 'base', pages: [page] });
+    const head = run([], { id: 'head', pages: [{ ...page, status: null }] });
+    expect(compareRuns(base, head).fixed).toEqual([]);
   });
 });
 
@@ -185,5 +206,68 @@ describe('report sections for safety and stability', () => {
     expect(md).toContain('## Network safety');
     expect(md).toContain('## Still needs a person');
     expect(md).toContain('2.5.7 Dragging movements');
+  });
+});
+
+describe('dismissed findings in the report', () => {
+  it('the report lists dismissed findings with their reason, folded, in EN and TR', () => {
+    const a = f('axe/a', '/', { title: 'Image without alt text' });
+    const dismissed = [
+      {
+        ...a,
+        dismissal: {
+          fingerprint: a.fingerprint,
+          ruleId: a.ruleId,
+          url: a.url,
+          reason: 'Decorative <b>image</b>',
+          by: 'user' as const,
+          at: '2026-11-03T10:00:00.000Z',
+        },
+      },
+    ];
+    const html = renderHtml(run([], { dismissed }));
+    expect(html).toContain('Dismissed as not a problem (1)');
+    expect(html).toContain('Decorative &lt;b&gt;image&lt;/b&gt;');
+    expect(html).toContain('2026-11-03');
+    const section = html.slice(
+      html.indexOf('id="h-dismissed"') - 200,
+      html.indexOf('id="h-dismissed"') + 1500,
+    );
+    expect(section).toContain('<details');
+    expect(section).not.toContain('type="checkbox"');
+    expect(section).not.toContain('<button');
+    expect(I18N.tr['dismissed.title']).toBe('Sorun değil olarak kapatılanlar ({n})');
+    expect(renderHtml(run([]))).not.toContain('h-dismissed');
+    const md = renderMarkdown(run([], { dismissed }));
+    expect(md).toContain('## Dismissed');
+    expect(md).toContain('Decorative <b>image</b>');
+  });
+
+  it('the report renders a page whose screenshot is absent', () => {
+    const shotless = f('usability/x', '/', {
+      evidence: [{ type: 'element', selector: 'a.cta', rect: { x: 10, y: 10, width: 50, height: 20 } }],
+    });
+    const html = renderHtml(
+      run([shotless], {
+        settings: { evidence: 'minimal' },
+        pages: [
+          {
+            url: 'https://example.test/',
+            finalUrl: 'https://example.test/',
+            status: 200,
+            title: 'Home',
+            viewport: 'desktop',
+            loadMs: 1,
+            metrics: [],
+            consoleErrors: 0,
+            failedRequests: 0,
+            inventory: emptyInventory(),
+          },
+        ],
+      }),
+    );
+    expect(html).not.toMatch(/<img[^>]*src="screenshots\//);
+    expect(html).toContain('No screenshot kept');
+    expect(renderMarkdown(run([shotless]))).toBeTruthy();
   });
 });

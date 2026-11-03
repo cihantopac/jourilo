@@ -157,6 +157,8 @@ export interface PageInventory {
   headings: { level: number; text: string }[];
   landmarks: string[];
   ctas: CtaInfo[];
+  /** Collapsed disclosures and unpressed toggle buttons (at most 10 per page). */
+  toggles?: ToggleInfo[];
   forms: FormInfo[];
   links: { href: string; text: string; internal: boolean }[];
   images: { total: number; withoutAlt: number; withoutDimensions: number };
@@ -165,6 +167,14 @@ export interface PageInventory {
   wordCount: number;
   metaDescription: string | null;
   hasViewportMeta: boolean;
+}
+
+export interface ToggleInfo {
+  selector: string;
+  name: string;
+  state: 'expanded' | 'pressed';
+  /** The id named by aria-controls, when present. */
+  controls: string | null;
 }
 
 export interface CtaInfo {
@@ -231,6 +241,8 @@ export interface JourneyResult {
   /** With --repeat: every attempt, and whether the outcome was the same each time. */
   attempts?: { status: JourneyResult['status']; durationMs: number }[];
   stability?: 'stable' | 'flaky';
+  /** `setup`: the journey ran before the audit to put the site into the state that was audited. */
+  role?: 'setup';
 }
 
 export type RunMode = 'website' | 'repository';
@@ -267,4 +279,13 @@ export interface Run {
   context?: import('../integrations/context.js').ExperienceContext;
   /** What the network guard refused or detected during the run. */
   network?: import('../browser/session.js').NetworkReport;
+  /**
+   * `no-page-loaded`: no page of the run got a response (DNS, refused connection, ...). `partial`: the run was
+   * stopped early (see `stoppedBy`). Absent in older runs.
+   */
+  outcome?: 'complete' | 'no-page-loaded' | 'partial';
+  /** Why a `partial` run stopped: a SIGINT/SIGTERM, or the `--max-duration` budget ran out. */
+  stoppedBy?: 'signal' | 'max-duration';
+  /** Findings kept out of `findings` because a person or agent dismissed them (not counted in the summary). */
+  dismissed?: (Finding & { dismissal: import('./dismissals.js').Dismissal })[];
 }

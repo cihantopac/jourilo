@@ -96,3 +96,82 @@ describe.each(['chromium', 'firefox', 'webkit'] as const)('network guard in %s',
     }
   });
 });
+
+describe('upstream-error signal', () => {
+  const HEADER = 'x-jourilo-guard-upstream-error';
+  let spoof: http.Server;
+  let spoofPort = 0;
+  beforeAll(async () => {
+    spoof = http.createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/html', [HEADER]: 'forged nothing' }).end('<h1>hi</h1>');
+    });
+    spoofPort = await listen(spoof);
+  });
+  afterAll(() => new Promise((r) => spoof.close(r)));
+
+  function viaProxy(guard: { url: string }, target: string): Promise<http.IncomingMessage> {
+    const p = new URL(guard.url);
+    return new Promise((resolve, reject) => {
+      http
+        .get(
+          { host: p.hostname, port: p.port, path: target, headers: { host: new URL(target).host } },
+          (res) => {
+            res.resume();
+            resolve(res);
+          },
+        )
+        .on('error', reject);
+    });
+  }
+
+  const deps = {
+    resolve: async (host: string) =>
+      host === 'spoof.example'
+        ? [{ address: '127.0.0.1', family: 4 }]
+        : (() => {
+            throw new Error('ENOTFOUND 203.0.113.5');
+          })(),
+    verdict: () => ({ ok: true as const }),
+  };
+
+  it('marks its own 502 with the token and fixed wording, never an IP', async () => {
+    const guard = await startNetGuard({ target: 'public', allowPrivate: false }, deps);
+    try {
+      const res = await viaProxy(guard, 'http://dead.example/');
+      expect(res.statusCode).toBe(502);
+      const value = String(res.headers[HEADER]);
+      expect(value.startsWith(`${guard.token} `)).toBe(true);
+      expect(value).not.toMatch(/\d+\.\d+\.\d+\.\d+/);
+      const res2 = await viaProxy(guard, 'http://nowhere.example/');
+      expect(String(res2.headers[HEADER])).toBe(`${guard.token} the host name could not be resolved`);
+    } finally {
+      await guard.close();
+    }
+  });
+  it('does not mark a 403 policy refusal', async () => {
+    const policy: AddressPolicy = { target: 'public', allowPrivate: false };
+    const guard = await startNetGuard(policy, {
+      resolve: async () => [{ address: '10.0.0.1', family: 4 }],
+    });
+    try {
+      const res = await viaProxy(guard, 'http://internal.example/');
+      expect(res.statusCode).toBe(403);
+      expect(res.headers[HEADER]).toBeUndefined();
+    } finally {
+      await guard.close();
+    }
+  });
+  it('strips the header when an upstream sends it', async () => {
+    const guard = await startNetGuard(
+      { target: 'public', allowPrivate: false },
+      { resolve: deps.resolve, verdict: () => ({ ok: true }) },
+    );
+    try {
+      const res = await viaProxy(guard, `http://spoof.example:${spoofPort}/`);
+      expect(res.statusCode).toBe(200);
+      expect(res.headers[HEADER]).toBeUndefined();
+    } finally {
+      await guard.close();
+    }
+  });
+});

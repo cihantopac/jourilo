@@ -1,11 +1,13 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { runAudit } from '../../audit/engine.js';
+import { exitCodeForOutcome, runOutcome } from '../../audit/outcome.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { JouriloError } from '../../core/errors.js';
 import { displayPath } from '../../core/fs-safety.js';
 import { serveStatic } from '../../core/static-server.js';
 import { loadContext } from '../../integrations/context.js';
+import type { JourneySpec } from '../../journeys/schema.js';
 import { unifiedDiff } from '../../repair/diff.js';
 import { composeEdits, planFixes } from '../../repair/fixes.js';
 import {
@@ -26,6 +28,7 @@ import {
 import { compareRuns, type MetricDelta } from '../../report/compare.js';
 import { writeReports } from '../../report/index.js';
 import { type Command, flag, list, str } from '../framework.js';
+import { loadJourneys } from './journeys.js';
 
 export const optimize: Command = {
   name: 'optimize',
@@ -41,6 +44,11 @@ export const optimize: Command = {
   details: `Deterministic fixers (others are reported with source candidates for a person or agent to fix):
   axe/html-has-lang, jourilo/missing-viewport-meta, jourilo/input-purpose, jourilo/focus-visible, jourilo/paste-blocked,
   jourilo/unsized-images, jourilo/placeholder-label
+Options:
+  --repo PATH      Repository to fix (default: the run's repo, else the current directory)
+  --rule ID        Only fix findings of this rule (repeatable)
+  --finding ID     Only fix this finding, by fingerprint (repeatable)
+  --apply          Write the changes
 Without --apply nothing is written. With --apply, all files are written as one change: each file must be unchanged
 since the plan, writes are atomic, an interrupted apply is undone, and \`jourilo rollback <id>\` restores the files
 (git is not required).
@@ -153,6 +161,10 @@ export const verify: Command = {
     'fail-on-regression': { type: 'boolean' },
     repo: { type: 'string' },
   },
+  details: `Options:
+  --target URL|DIR       Where to repeat the audit (default: the baseline run's target)
+  --repo PATH            Repository for source mapping (default: the baseline run's repo)
+  --fail-on-regression   Exit 1 when new serious or critical defects appear`,
   async run(ctx) {
     const base = ctx.ws.loadRun(ctx.positionals[0] ?? 'latest').run;
     const scope = base.settings.scope as { urls: string[]; viewports: string[] } | undefined;
@@ -161,17 +173,35 @@ export const verify: Command = {
         'INVALID_INPUT',
         `Run ${base.id} has no recorded scope (created by an older version or by journeys).`,
       );
-    const servedDir =
-      (str(ctx, 'target') && existsSync(str(ctx, 'target')!) ? resolve(str(ctx, 'target')!) : undefined) ??
-      (base.settings.servedDir as string | undefined);
+    // An explicit --target replaces the baseline's served directory, so a URL target is not ignored.
+    const target = str(ctx, 'target');
+    const servedDir = target
+      ? existsSync(target)
+        ? resolve(target)
+        : undefined
+      : (base.settings.servedDir as string | undefined);
     const server = servedDir ? await serveStatic(servedDir) : undefined;
     try {
-      const origin = server?.url ?? new URL(str(ctx, 'target') ?? scope.urls[0]!).origin;
+      const origin = server?.url ?? new URL(target ?? scope.urls[0]!).origin;
       const urls = scope.urls.map((u) => {
         const x = new URL(u);
         return `${x.pathname}${x.search}`;
       });
       const repo = str(ctx, 'repo') ?? (base.settings.repo as string | undefined);
+      // Replay the state the baseline was audited in, or the comparison would be against the default state.
+      const setupId = base.settings.setupJourney as string | undefined;
+      let setupJourney: JourneySpec | undefined;
+      if (setupId) {
+        try {
+          setupJourney = loadJourneys(ctx.ws, [setupId])[0];
+        } catch (err) {
+          throw new JouriloError(
+            'INVALID_INPUT',
+            `Run ${base.id} was audited after setup journey "${setupId}", which cannot be loaded now: ${(err as Error).message}`,
+            'Restore the journey file, or audit again without it.',
+          );
+        }
+      }
       const { run, runDir } = await runAudit(ctx.ws, {
         target: origin,
         urls,
@@ -189,6 +219,10 @@ export const verify: Command = {
         timeoutMs: 30_000,
         mask: [],
         mode: base.mode,
+        ...(typeof base.settings.timezoneId === 'string' ? { timezoneId: base.settings.timezoneId } : {}),
+        ...(typeof base.settings.clock === 'string' ? { clock: base.settings.clock } : {}),
+        ...(base.settings.evidence === 'minimal' ? { evidence: 'minimal' as const } : {}),
+        ...(setupJourney ? { setupJourney } : {}),
         ...(repo ? { context: loadContext(repo) } : {}),
         onProgress: ctx.log,
       });
@@ -201,15 +235,25 @@ export const verify: Command = {
         locateFindings(run, repo);
       }
       run.settings.baseline = base.id;
+      run.outcome = runOutcome(run);
       ctx.ws.saveRun(run);
       const cmp = compareRuns(base, run);
       const reports = writeReports(runDir, run, cmp, { history: ctx.ws.listRuns() });
       const failed = flag(ctx, 'fail-on-regression') && !cmp.regressionFree;
+      // Without loaded pages nothing was re-checked; a stopped run re-checked only part of the scope.
+      const caveat =
+        run.outcome === 'no-page-loaded'
+          ? `  No page could be loaded from ${origin}, so no comparison was possible: no finding is counted as fixed.`
+          : run.outcome === 'partial'
+            ? '  The run was stopped early: the comparison is partial, and findings on pages not re-checked are not counted as fixed.'
+            : undefined;
       return {
         data: {
           baseline: base.id,
           run: run.id,
+          outcome: run.outcome,
           fixed: cmp.fixed.map((f) => ({ fingerprint: f.fingerprint, title: f.title })),
+          dismissed: cmp.dismissed.map((f) => ({ fingerprint: f.fingerprint, title: f.title })),
           introduced: cmp.introduced,
           persisting: cmp.persisting.length,
           metrics: cmp.metrics,
@@ -218,8 +262,14 @@ export const verify: Command = {
         },
         text: [
           `Verified ${run.id} against ${base.id}`,
-          `  fixed ${cmp.fixed.length} · new ${cmp.introduced.length} · still present ${cmp.persisting.length}`,
+          ...(caveat ? [caveat] : []),
+          ...(run.outcome === 'no-page-loaded'
+            ? []
+            : [
+                `  fixed ${cmp.fixed.length} · new ${cmp.introduced.length} · still present ${cmp.persisting.length}`,
+              ]),
           ...cmp.fixed.map((f) => `  ✓ fixed  ${f.title} (${new URL(f.url).pathname})`),
+          ...cmp.dismissed.map((f) => `  – dismissed (not fixed)  ${f.title} (${new URL(f.url).pathname})`),
           ...cmp.introduced.map((f) => `  ✗ new    ${f.severity} ${f.title} (${new URL(f.url).pathname})`),
           ...metricSummary(cmp.metrics),
           cmp.regressionFree
@@ -227,7 +277,7 @@ export const verify: Command = {
             : '  ⚠ Regression: new serious/critical defects.',
           `  Report: ${reports.html}`,
         ].join('\n'),
-        exitCode: failed ? 1 : 0,
+        exitCode: exitCodeForOutcome(run.outcome, failed),
       };
     } finally {
       await server?.close();

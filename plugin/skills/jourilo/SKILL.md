@@ -23,7 +23,7 @@ node "${CLAUDE_PLUGIN_ROOT}/dist/jourilo.mjs" <command> [options] --json
 ```
 
 (Written below as `jourilo`.) Do not wrap it in shell variables, `cd`, `&&` chains or pipes: the plugin
-pre-approves exactly that form. Output is JSON with `--json`; errors are JSON on stderr with a stable `code`.
+pre-approves exactly that form. Output is JSON with `--json`; with `--json`, stderr is a stream of JSON lines (progress, then any error with a stable `code`).
 Command reference: `${CLAUDE_PLUGIN_ROOT}/skills/jourilo/references/cli.md` — read it once per session.
 Run data lives in `.jourilo/` in the current project (git-ignored automatically).
 
@@ -69,7 +69,9 @@ Tell the user which stage you are in. If they asked for one thing (e.g. "just ac
    match the real goals (explicit success criteria), then `jourilo journeys run --base <url>`.
 5. **Judge** — Look at the fold and full-page screenshots of key pages. Record design/usability judgments that
    the rules cannot measure (hierarchy, clarity of the value proposition, confusing copy) with `finding add`,
-   each tied to a screenshot, labelled as yours.
+   each tied to a screenshot, labelled as yours. When a finding is a confirmed false positive, record it with
+   `jourilo finding dismiss <id> --run <run> --reason "<why>" --by agent`: the reason is required, a dismissed
+   finding is never counted as "fixed", and you dismiss only when the user agrees or the evidence is clear.
 6. **Prioritize** — Group by root cause, not by symptom. Order: blocked journeys and critical/serious defects on key
    journeys → serious accessibility defects → performance on key pages → conversion hypotheses.
 7. **Fix (repository mode, with permission)** — `jourilo optimize <run> --repo <path>` previews deterministic fixes

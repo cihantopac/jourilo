@@ -9,7 +9,10 @@ export interface Context {
   positionals: string[];
   json: boolean;
   ws: Workspace;
-  /** Progress lines go to stderr so stdout stays machine-readable. */
+  /**
+   * Progress lines go to stderr so stdout stays machine-readable; with --json each one is a JSON line
+   * `{"type":"progress","message":...,"at":ISO}`.
+   */
   log: (msg: string) => void;
 }
 
@@ -52,13 +55,19 @@ export function parse(cmd: Command, argv: string[]): Context {
   }
   const values = parsed.values as Context['values'];
   const quiet = Boolean(values.quiet);
+  const json = Boolean(values.json);
   return {
     values,
     positionals: parsed.positionals,
-    json: Boolean(values.json),
+    json,
     ws: new Workspace(values.workspace as string | undefined),
     log: (msg) => {
-      if (!quiet) process.stderr.write(`${msg}\n`);
+      if (quiet) return;
+      process.stderr.write(
+        json
+          ? `${JSON.stringify({ type: 'progress', message: msg.trim(), at: new Date().toISOString() })}\n`
+          : `${msg}\n`,
+      );
     },
   };
 }
@@ -90,6 +99,39 @@ export function list(ctx: Context, key: string): string[] {
       .map((s) => s.trim())
       .filter(Boolean);
   return [];
+}
+
+/** `--evidence full|minimal`; undefined when not given. */
+export function parseEvidence(ctx: Context): 'full' | 'minimal' | undefined {
+  const v = str(ctx, 'evidence');
+  if (v === undefined) return undefined;
+  if (v !== 'full' && v !== 'minimal')
+    throw new JouriloError('USAGE', `--evidence must be full or minimal (got ${v}).`);
+  return v;
+}
+
+/** `--timezone` and `--clock`, validated up front so a typo fails before the browser starts. */
+export function parseStateOptions(ctx: Context): { timezoneId?: string; clock?: string } {
+  const timezoneId = str(ctx, 'timezone');
+  const clock = str(ctx, 'clock');
+  if (timezoneId) {
+    try {
+      new Intl.DateTimeFormat(undefined, { timeZone: timezoneId });
+    } catch {
+      throw new JouriloError(
+        'USAGE',
+        `--timezone ${timezoneId} is not a known IANA time zone.`,
+        'Example: --timezone Europe/Istanbul',
+      );
+    }
+  }
+  if (clock && Number.isNaN(new Date(clock).getTime()))
+    throw new JouriloError(
+      'USAGE',
+      `--clock ${clock} is not a valid date-time.`,
+      'Example: --clock 2026-11-03T22:30:00+03:00',
+    );
+  return { ...(timezoneId ? { timezoneId } : {}), ...(clock ? { clock } : {}) };
 }
 
 export function flag(ctx: Context, key: string): boolean {

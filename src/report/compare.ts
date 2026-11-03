@@ -36,6 +36,8 @@ export interface RunComparison {
   base: Run;
   head: Run;
   fixed: Finding[];
+  /** Base findings the head run kept out because they were dismissed: not fixed, not present. */
+  dismissed: Finding[];
   introduced: Finding[];
   persisting: Finding[];
   changed: { before: Finding; after: Finding }[];
@@ -56,9 +58,13 @@ function pathKey(u: string): string {
 export function compareRuns(base: Run, head: Run): RunComparison {
   const before = new Map(base.findings.map((f) => [f.fingerprint, f]));
   const after = new Map(head.findings.map((f) => [f.fingerprint, f]));
-  // Findings on pages the head run did not visit are not "fixed": they were simply not checked.
-  const headPages = new Set(head.pages.map((p) => pathKey(p.url)));
-  const fixed = base.findings.filter((f) => !after.has(f.fingerprint) && headPages.has(pathKey(f.url)));
+  // Findings on pages the head run did not visit, or that did not load, are not "fixed": they were not checked.
+  const headPages = new Set(head.pages.filter((p) => p.status !== null).map((p) => pathKey(p.url)));
+  const dismissedFps = new Set((head.dismissed ?? []).map((f) => f.fingerprint));
+  const dismissed = base.findings.filter((f) => dismissedFps.has(f.fingerprint));
+  const fixed = base.findings.filter(
+    (f) => !after.has(f.fingerprint) && !dismissedFps.has(f.fingerprint) && headPages.has(pathKey(f.url)),
+  );
   const introduced = head.findings.filter((f) => !before.has(f.fingerprint));
   const persisting = head.findings.filter((f) => before.has(f.fingerprint));
   const changed = persisting
@@ -88,5 +94,5 @@ export function compareRuns(base: Run, head: Run): RunComparison {
   const regressionFree = !introduced.some(
     (f) => f.kind === 'defect' && (f.severity === 'critical' || f.severity === 'serious'),
   );
-  return { base, head, fixed, introduced, persisting, changed, metrics, regressionFree };
+  return { base, head, fixed, dismissed, introduced, persisting, changed, metrics, regressionFree };
 }

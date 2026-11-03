@@ -5,3 +5,4 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; }
 .panel { background: #fff; padding: 24px; border-radius: 8px; max-width: 420px; }
 [hidden] { display: none !important; }
+.tool[aria-pressed="true"] { outline: 3px solid #b45309; outline-offset: 3px; }

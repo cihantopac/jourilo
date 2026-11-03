@@ -110,3 +110,15 @@ URL). A project can provide `jourilo.context.json` directly. Nothing is required
 
 Absolute home paths leaked the user name into shareable reports and screenshots; targets are now shown relative or
 with `~`.
+
+## D18 · Dismissals are verdicts, not deletions (2026-11-03)
+
+A person or an agent can mark a finding as not a problem with `finding dismiss <id> --reason "<text>"`. The verdict is
+stored by fingerprint in `<workspace>/dismissed.json` with the reason, who dismissed it (`user` or `agent`) and when.
+Later runs of the same workspace list the finding as dismissed and leave it out of the counts, the gate and the
+repair prompts; `finding undismiss` brings it back. Dismissing never deletes evidence: the screenshots and the
+finding stay in the run that produced it, so the verdict can be audited and reversed. A dismissed finding is
+"dismissed", never "fixed": `verify` does not count it as a repair. If the fingerprint changes (the element, the rule
+or the page changed), the finding comes back as new, because the verdict was about the thing that was seen. The
+alternative, an allow-list inside the audit options, would hide findings without a reason or an author. A dismissal
+is a judgment, and like other judgments it is never mixed with measurements (D4).

@@ -20,8 +20,14 @@
       "rule": "jourilo/composite-keyboard",
       "path": "/composite-broken",
       "why": "roving tab list and radio group without arrow keys"
+    },
+    {
+      "rule": "jourilo/focus-visible",
+      "path": "/pressed-tools",
+      "why": "the pressed toggle's state rule sets its own outline over :focus-visible (real-site case, 2026-11-03)"
     }
   ],
+  "sources": [{ "rule": "jourilo/focus-visible", "path": "/pressed-tools", "file": "style.css" }],
   "mustNotFind": [
     {
       "rule": "jourilo/expanded-state",
@@ -92,6 +98,26 @@
       "rule": "jourilo/focus-visible",
       "path": "/focus-sibling",
       "why": "the indicator is drawn by a sibling element (ACT oj04fd passed examples)"
+    },
+    {
+      "rule": "jourilo/dialog-role",
+      "path": "/disclosure-overlay",
+      "why": "an aria-expanded + aria-controls disclosure with a large absolute panel is not a dialog (real-site false positive, 2026-11-02)"
+    },
+    {
+      "rule": "jourilo/dialog-focus",
+      "path": "/disclosure-overlay",
+      "why": "an aria-expanded + aria-controls disclosure with a large absolute panel is not a dialog (real-site false positive, 2026-11-02)"
+    },
+    {
+      "rule": "jourilo/dialog-escape",
+      "path": "/disclosure-overlay",
+      "why": "an aria-expanded + aria-controls disclosure with a large absolute panel is not a dialog (real-site false positive, 2026-11-02)"
+    },
+    {
+      "rule": "jourilo/expanded-state",
+      "path": "/disclosure-overlay",
+      "why": "an aria-expanded + aria-controls disclosure with a large absolute panel is not a dialog (real-site false positive, 2026-11-02)"
     }
   ],
   "maxDefects": {
@@ -102,7 +128,11 @@
       "/anchors",
       "/launcher",
       "/composite-ok",
-      "/focus-sibling"
+      "/focus-sibling",
+      "/disclosure-overlay"
     ]
+  },
+  "audit": {
+    "maxPages": 10
   }
 }

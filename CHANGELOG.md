@@ -4,6 +4,69 @@ All notable changes are documented here. The project follows [Semantic Versionin
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-03
+
+Field feedback from two real projects (a portfolio site and a container adapter, F1-F23 in
+[docs/FIELD-FEEDBACK.md](docs/FIELD-FEEDBACK.md)) drove this release: fewer false positives, one missed defect found,
+state you can set before an audit, and runs that automation can trust. `RUN_SCHEMA_VERSION` stays 1; every new field is
+optional and old runs still load. No run shows WCAG conformance.
+
+### Fixed
+
+- **Focus hidden behind any opaque content** (WCAG 2.4.11) is reported, not only behind `fixed` or `sticky` elements,
+  and focus stops hidden by an ancestor are skipped. A pointer-events overlay can still hide focus unreported (see
+  limitations).
+- **A disclosure is not a dialog.** A trigger with `aria-expanded` and `aria-controls` whose target toggles is no
+  longer reported as a dialog without a name or focus trap, unless the opened element is a dialog.
+- **State CSS rules are the source.** Findings about `:hover`, `:focus` and attribute states (`[aria-pressed]`,
+  `[aria-expanded]`, `[data-state]`) point at the CSS rule, not the component that renders the element.
+  Keyboard-walk findings now record the element's opening tag (class, id, role, state attributes) before its
+  name, so a rule like `.tool[aria-pressed="true"] { outline: … }` is found even when the focus selector has no
+  class.
+- **Covered click targets in journeys** are explained (which element is on top) and worked around by clicking the
+  visible part, instead of a bare timeout. Targets inside shadow roots are hit-tested correctly.
+- **No page loaded is no longer a quiet success.** An unresolvable host or a refused connection ends the run with
+  outcome `no-page-loaded` and exit 5; the reason is redacted and never contains an address.
+- **`verify` against a page that did not load never reports "fixed"**, and `verify --target` is honored for static
+  baselines.
+- `journeys suggest` keeps real calls to action that mention a theme and lists only toggles that can make a journey.
+- The setup journey's session state is removed after the audit, so saved cookies do not stay in the run directory.
+- Dismissals are loaded before the browser starts, so a corrupt file fails fast.
+- Journeys with `--evidence minimal` prune against the representative attempt.
+
+### Added (options)
+
+- `--timezone ZONE` and `--clock ISO` for `audit`, `journeys run` and `verify`: set the page's time zone and freeze
+  `Date`, for example to audit night mode. Timers keep running.
+- `--setup-journey REF` on `audit` and `verify`: run a journey first (a theme, a dismissed banner, a signed-in state)
+  and audit the cookies and `localStorage` it leaves. It follows the journeys safety policy.
+- `--evidence minimal`: first screens plus the screenshots findings and failed steps need, JPEG quality 55. On the
+  fixture site this keeps 46 % of the full evidence size.
+- `finding dismiss <id> --reason "<text>" [--by user|agent]` and `finding undismiss <id>`: mark a false positive once;
+  later runs list it as dismissed and keep it out of the counts (DECISIONS D18).
+- `journeys suggest` also suggests interaction journeys for disclosures (`aria-expanded`) and toggles
+  (`aria-pressed`).
+
+### Automation
+
+- **Exit codes 5 and 6.** 5: no page could be loaded. 6: stopped early (SIGINT, SIGTERM or `--max-duration`); a
+  second signal exits 130.
+- **Partial runs.** A stop writes `run.json` with outcome `partial` and the pages finished so far, then exits 6.
+- `--max-duration SECS` stops an audit after a time budget.
+- **JSON progress.** With `--json`, progress lines on stderr are JSON: `{"type":"progress","message":"...","at":"..."}`.
+- **`manifest.json`** with the size and sha256 of every artifact in the run directory.
+- **`--run-id ID`** names the run (1-64 of `A-Z a-z 0-9 _ -`) so a job can be retried idempotently; an existing id is
+  refused.
+- **Run schema.** `schemas/run.schema.json` (JSON Schema draft 2020-12, shipped in the npm package) and the
+  compatibility policy in [docs/RUN-FORMAT.md](docs/RUN-FORMAT.md): fields are only added, and optional.
+
+### Docs
+
+- `docs/CLI.md` documents every implemented flag (`--timeout`, `--locale`, `--headed`, `report --stdout`, the journeys
+  flags) and both new exit codes; a test keeps the reference and the options in step.
+- `docs/RELEASE-1.2.md` (evidence), `docs/FIELD-FEEDBACK.md` (status of F1-F23), new limitations, the roadmap with
+  the deferred items, D18, and the new flags in `docs/WORKFLOW.md`.
+
 ## [1.1.0] - 2026-11-01
 
 The detection engine is unchanged from 1.0.0 (fixture benchmark 45/45, 0 false positives); this release is about

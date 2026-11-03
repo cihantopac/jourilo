@@ -26,11 +26,12 @@ export async function openGuardedBrowser(
   name: BrowserName,
   headed: boolean,
   policy: AddressPolicy,
+  ownSignals = false,
 ): Promise<GuardedSession> {
   const guard = await startNetGuard(policy);
   let browser: Browser;
   try {
-    browser = await launchBrowser(name, headed, guard);
+    browser = await launchBrowser(name, headed, guard, ownSignals);
   } catch (err) {
     await guard.close();
     throw err;

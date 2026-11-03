@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Tools – Widgets lab</title><link rel="stylesheet" href="/style.css">
+<style>.peg { display: flex; flex-wrap: wrap; gap: 64px; padding: 16px 0; }</style></head>
+<body>
+<!-- Toggle buttons without ids: the keyboard walk's selector is a class-less path. The pressed button's state rule
+     in style.css sets its own outline, which outranks button:focus-visible, so focusing it changes nothing
+     (real-site case, 2026-11-03). -->
+<main><h1>Tools</h1><p><a href="/">Back to the lab</a></p>
+<div><div class="peg" role="group" aria-label="Tools">
+  <button type="button" class="tool" aria-pressed="false">Hammer</button>
+  <button type="button" class="tool" aria-pressed="true">Saw</button>
+  <button type="button" class="tool" aria-pressed="false">Drill</button>
+</div></div>
+</main>
+<script>
+  document.querySelectorAll('.tool').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.tool').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+    });
+  });
+</script>
+</body>
+</html>

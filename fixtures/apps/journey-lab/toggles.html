@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Toggles</title></head>
+<body>
+<main>
+<h1>Toggle inventory</h1>
+<!-- Twelve collapsed buttons without aria-controls cannot make a journey and must not use up the cap. -->
+<button aria-expanded="false" id="nav0">Menu 0</button>
+<button aria-expanded="false" id="nav1">Menu 1</button>
+<button aria-expanded="false" id="nav2">Menu 2</button>
+<button aria-expanded="false" id="nav3">Menu 3</button>
+<button aria-expanded="false" id="nav4">Menu 4</button>
+<button aria-expanded="false" id="nav5">Menu 5</button>
+<button aria-expanded="false" id="nav6">Menu 6</button>
+<button aria-expanded="false" id="nav7">Menu 7</button>
+<button aria-expanded="false" id="nav8">Menu 8</button>
+<button aria-expanded="false" id="nav9">Menu 9</button>
+<button aria-expanded="false" id="nav10">Menu 10</button>
+<button aria-expanded="false" id="nav11">Menu 11</button>
+<button aria-expanded="true" aria-controls="open-panel">Already open</button>
+<a href="#x" role="link" aria-expanded="false">Link disclosure</a>
+<button aria-expanded="false" aria-controls="faq-panel" id="faq-btn">Shipping details</button>
+<div id="faq-panel" hidden>Ships in two days.</div>
+<div id="open-panel">Open panel.</div>
+<button aria-pressed="false" id="bold">Bold</button>
+<script>
+document.getElementById('faq-btn').addEventListener('click', function () {
+  this.setAttribute('aria-expanded', 'true');
+  document.getElementById('faq-panel').hidden = false;
+});
+document.getElementById('bold').addEventListener('click', function () {
+  this.setAttribute('aria-pressed', 'true');
+});
+</script>
+</main>
+</body>
+</html>

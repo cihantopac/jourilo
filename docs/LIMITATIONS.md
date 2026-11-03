@@ -4,13 +4,14 @@ Stated so nobody mistakes silence for a pass.
 
 ## Platforms
 
-| Platform                       | Status                                                                                                                          |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| macOS, Node 20 and 22          | GitHub Actions: all tests pass (unit, Chromium/Firefox/WebKit browser tests, repair loop); also tested locally on Apple Silicon |
-| Linux (Ubuntu), Node 20 and 22 | GitHub Actions: all tests pass; detection benchmark passes                                                                      |
-| Windows, Node 20 and 22        | GitHub Actions: all tests pass (after making rollback byte-exact under `core.autocrlf=true`)                                    |
-| Chromium, Firefox, WebKit      | fixture audits, journeys, signed-in audits and form checks give identical results in all three (tested on every CI platform)    |
-| WebKit on Windows              | neither Tab nor Alt+Tab focuses links, so link focus checks are not run; the report states this as a limitation                 |
+| Platform                       | Status                                                                                                                                                      |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS, Node 20 and 22          | GitHub Actions: all tests pass (unit, Chromium/Firefox/WebKit browser tests, repair loop); also tested locally on Apple Silicon                             |
+| Linux (Ubuntu), Node 20 and 22 | GitHub Actions: all tests pass; detection benchmark passes                                                                                                  |
+| Windows, Node 20 and 22        | GitHub Actions: all tests pass (after making rollback byte-exact under `core.autocrlf=true`)                                                                |
+| Chromium, Firefox, WebKit      | fixture audits, journeys, signed-in audits and form checks give identical results in all three (tested on every CI platform)                                |
+| WebKit on Windows              | neither Tab nor Alt+Tab focuses links, so link focus checks are not run; the report states this as a limitation                                             |
+| Stopping early on Windows      | Windows has no POSIX signals: a SIGTERM from another process ends Jourilo at once, with no partial run. Use `--max-duration`, which works on every platform |
 
 ## Accessibility
 
@@ -24,6 +25,10 @@ Stated so nobody mistakes silence for a pass.
   items?); the full arrow-key patterns (Home/End, typeahead, menus opening submenus, grids) are not.
 - Focus-visible detection compares the styles of the element and its parent, then the pixels around the element with
   and without focus, so indicators drawn by a sibling are seen; an indicator drawn far away from the element is not.
+- Focus hidden by other content is found when an opaque, hit-testable element covers the focused element at the
+  sample points. Not found: an overlay with `pointer-events: none` (it is invisible to hit-testing), a cover that is
+  only translucent, an iframe or embedded object painting over the element, `oklch()`/`lab()` backgrounds with
+  alpha, and a cover that reaches the element only outside the five sampled points.
 - A keyboard trap whose page explains a way out ("Press Ctrl+M to exit") is tested with that key; if it works the
   trap is listed for review (WCAG 2.1.2 allows it), not as a defect. Whether the explanation is announced before
   focus is held needs a person.
@@ -46,6 +51,14 @@ Stated so nobody mistakes silence for a pass.
   cannot tell a product race from a fragile journey definition; the report says which attempts failed. No multi-tab, file upload, OAuth popup,
   CAPTCHA or e-mail verification support. Signed-in flows need a test account: run a sign-in journey with
   `--save-auth`, or provide a Playwright storage state.
+- A setup journey (`--setup-journey`) carries over cookies and `localStorage` only. State kept in memory (a
+  single-page app's store, `sessionStorage`, an open dialog, a service worker's cache) is gone when each page loads
+  in its own context, so the audited page can differ from the page the journey left. Check the first screenshot.
+- `--clock` freezes only `Date`; `performance.now()`, timers, animations and CSS keep real time. A page that reads
+  the time from a timer or a server still shows the real one. `--timezone` changes the zone only.
+- With `journeys run --repeat N`, the step screenshots and other step files are named by step, so the attempts share
+  them: a kept file can show a later attempt than the representative one. The attempt index is not in the file name yet
+  (see the roadmap).
 - The keyboard walk steps past the first trap it finds; a second trap on the same page ends the walk.
 - Form validation is probed on local hosts by simulating an empty submission: requests that would send data are
   intercepted, so validation that only the server performs is reported as not tested. `--allow-submit` sends the
@@ -55,6 +68,13 @@ Stated so nobody mistakes silence for a pass.
   journeys that submit should use disposable data.
 - Without `--allow-submit`, journeys on non-local hosts cannot send first-party POST requests (including some
   telemetry); the journey result lists what was stopped.
+
+## Evidence size
+
+- `--evidence minimal` keeps the first screen of a page that has no finding on the full page; the rest of that page
+  is not kept, so a reviewer cannot look below the first screen afterwards. Pages with a finding keep the full-page
+  screenshot, and a page shorter than the viewport is stored once. Use full evidence when a person will review the
+  whole page. Under `audit --evidence minimal`, the screenshots of a setup journey's steps are all kept.
 
 ## Conversion and experiments
 

@@ -5,6 +5,7 @@
 //
 // HTTPS and WebSockets are tunnelled with CONNECT (the proxy never sees or alters their content); plain HTTP is
 // forwarded. Node-side fetches (robots.txt, sitemaps) use `guardedFetchText` with the same policy per redirect hop.
+import { randomBytes } from 'node:crypto';
 import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import https from 'node:https';
@@ -148,12 +149,28 @@ export interface NetGuard {
   /** Proxy URL for the browser (http://127.0.0.1:port). */
   url: string;
   policy: AddressPolicy;
+  /** Secret of this guard instance: only a response header that starts with it is the guard's own signal. */
+  token: string;
   /** Connections refused by the policy (deduplicated by host:port, capped). */
   blocked: BlockedConnection[];
   close(): Promise<void>;
 }
 
+/** Set on the guard's own 502 so a page that never reached the server is not mistaken for an HTTP error page. */
+export const GUARD_UPSTREAM_ERROR_HEADER = 'x-jourilo-guard-upstream-error';
+
+/** Fixed wording for a connection failure; the raw error can carry resolved IP addresses and must not be reported. */
+export function upstreamFailureWording(message: string): string {
+  if (/DNS lookup failed|ENOTFOUND|EAI_AGAIN/i.test(message)) return 'the host name could not be resolved';
+  if (/ECONNREFUSED/i.test(message)) return 'the connection was refused';
+  if (/ETIMEDOUT|timed out/i.test(message)) return 'the connection timed out';
+  if (/ECONNRESET/i.test(message)) return 'the connection was reset';
+  if (/cert|SSL|TLS/i.test(message)) return 'the TLS certificate was rejected';
+  return 'the connection failed';
+}
+
 export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {}): Promise<NetGuard> {
+  const token = randomBytes(16).toString('hex');
   const blocked: BlockedConnection[] = [];
   const seen = new Set<string>();
   const record = (host: string, port: number, reason: string) => {
@@ -218,7 +235,12 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
     const fail = (status: number, reason: string) => {
       if (res.headersSent) return void res.destroy();
       res
-        .writeHead(status, { 'content-type': 'text/plain' })
+        .writeHead(status, {
+          'content-type': 'text/plain',
+          ...(status === 403
+            ? {}
+            : { [GUARD_UPSTREAM_ERROR_HEADER]: `${token} ${upstreamFailureWording(reason)}` }),
+        })
         .end(status === 403 ? `Blocked by Jourilo network guard: ${reason}` : 'Bad gateway');
     };
     resolveAllowed(host, port, policy, deps).then(
@@ -249,7 +271,12 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
           }
           const out: Record<string, string | string[]> = {};
           for (const [k, v] of Object.entries(up.headers))
-            if (v !== undefined && !HOP_BY_HOP.has(k.toLowerCase())) out[k] = v;
+            if (
+              v !== undefined &&
+              !HOP_BY_HOP.has(k.toLowerCase()) &&
+              k.toLowerCase() !== GUARD_UPSTREAM_ERROR_HEADER
+            )
+              out[k] = v;
           res.writeHead(up.statusCode ?? 502, up.statusMessage, out);
           up.pipe(res);
         });
@@ -321,6 +348,7 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
   return {
     url: `http://127.0.0.1:${port}`,
     policy,
+    token,
     blocked,
     close: () =>
       new Promise<void>((resolve) => {

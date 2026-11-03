@@ -4,6 +4,7 @@
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { benchFixture } from '../../src/cli/commands/bench.js';
+import { Workspace } from '../../src/core/workspace.js';
 
 const ws = join(import.meta.dirname, '..', '.tmp', 'browser-ws');
 
@@ -24,6 +25,13 @@ describe('fixture benchmark', () => {
     expect(r.missed).toEqual([]);
     expect(r.falsePositives).toEqual([]);
     expect(r.excessDefects).toEqual([]);
+    expect(r.sourceMisses).toEqual([]);
+    // The keyboard walk records the element's markup, so its class and state reach source location.
+    const { run } = new Workspace(ws).loadRun('latest');
+    const focus = run.findings.find(
+      (f) => f.ruleId === 'jourilo/focus-visible' && f.url.endsWith('/pressed-tools'),
+    );
+    expect(focus?.evidence[0]?.snippet).toBe('<button class="tool" aria-pressed="true">Saw');
   });
   it('applies conversion, form and field-purpose heuristics to a Turkish site', async () => {
     const r = await benchFixture(join(import.meta.dirname, '../../fixtures/sites/tr-dukkan'), ws);

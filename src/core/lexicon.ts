@@ -19,7 +19,8 @@ export type Concept =
   | 'trustSecurity'
   | 'trustLogos'
   | 'pricingPeriod'
-  | 'freeTrial';
+  | 'freeTrial'
+  | 'toggle-ui';
 
 const LEX: Record<Concept, string[]> = {
   destructive: [
@@ -408,6 +409,47 @@ const LEX: Record<Concept, string[]> = {
     'prueba gratuita',
     'essai gratuit',
     'essayer gratuitement',
+  ],
+  // Appearance and language switches: controls that change how the page looks, not where the funnel goes.
+  'toggle-ui': [
+    // en
+    'themes?',
+    'dark( mode)?',
+    'light( mode)?',
+    'mode',
+    'appearance',
+    'languages?',
+    'locale',
+    // tr
+    'tema',
+    'karanlık',
+    'karanlik',
+    'aydınlık',
+    'aydinlik',
+    'koyu',
+    'mod',
+    'dil(i|ini)?',
+    'görünüm',
+    // de
+    'thema',
+    'dunkel(modus)?',
+    'hell(modus)?',
+    'modus',
+    'sprache',
+    'darstellung',
+    // es
+    'tema',
+    'oscuro',
+    'claro',
+    'modo',
+    'idioma',
+    'apariencia',
+    // fr
+    'thème',
+    'sombre',
+    'clair',
+    'langue',
+    'apparence',
   ],
 };
 
