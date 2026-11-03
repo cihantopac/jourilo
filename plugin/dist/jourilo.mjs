@@ -39498,6 +39498,7 @@ function lexiconSources() {
 }
 
 // src/core/net-guard.ts
+import { randomBytes as randomBytes2 } from "node:crypto";
 import { lookup as dnsLookup } from "node:dns";
 import http from "node:http";
 import https from "node:https";
@@ -39760,8 +39761,16 @@ function redirectEscape(url, redirectedFrom, policy) {
   }
 }
 var GUARD_UPSTREAM_ERROR_HEADER = "x-jourilo-guard-upstream-error";
-var headerSafe = (s) => s.replace(/[^\x20-\x7e]/g, " ").slice(0, 200);
+function upstreamFailureWording(message) {
+  if (/DNS lookup failed|ENOTFOUND|EAI_AGAIN/i.test(message)) return "the host name could not be resolved";
+  if (/ECONNREFUSED/i.test(message)) return "the connection was refused";
+  if (/ETIMEDOUT|timed out/i.test(message)) return "the connection timed out";
+  if (/ECONNRESET/i.test(message)) return "the connection was reset";
+  if (/cert|SSL|TLS/i.test(message)) return "the TLS certificate was rejected";
+  return "the connection failed";
+}
 async function startNetGuard(policy, deps = {}) {
+  const token = randomBytes2(16).toString("hex");
   const blocked = [];
   const seen = /* @__PURE__ */ new Set();
   const record = (host, port2, reason) => {
@@ -39817,7 +39826,7 @@ async function startNetGuard(policy, deps = {}) {
       if (res.headersSent) return void res.destroy();
       res.writeHead(status, {
         "content-type": "text/plain",
-        ...status === 403 ? {} : { [GUARD_UPSTREAM_ERROR_HEADER]: headerSafe(reason) }
+        ...status === 403 ? {} : { [GUARD_UPSTREAM_ERROR_HEADER]: `${token} ${upstreamFailureWording(reason)}` }
       }).end(status === 403 ? `Blocked by Jourilo network guard: ${reason}` : "Bad gateway");
     };
     resolveAllowed(host, port2, policy, deps).then(
@@ -39845,7 +39854,8 @@ async function startNetGuard(policy, deps = {}) {
           }
           const out = {};
           for (const [k, v] of Object.entries(up.headers))
-            if (v !== void 0 && !HOP_BY_HOP.has(k.toLowerCase())) out[k] = v;
+            if (v !== void 0 && !HOP_BY_HOP.has(k.toLowerCase()) && k.toLowerCase() !== GUARD_UPSTREAM_ERROR_HEADER)
+              out[k] = v;
           res.writeHead(up.statusCode ?? 502, up.statusMessage, out);
           up.pipe(res);
         });
@@ -39918,6 +39928,7 @@ ${status === 403 ? `Blocked by Jourilo network guard: ${reason}` : ""}`
   return {
     url: `http://127.0.0.1:${port}`,
     policy,
+    token,
     blocked,
     close: () => new Promise((resolve10) => {
       for (const s of sockets) s.destroy();
@@ -41869,9 +41880,9 @@ async function capturePage(ctx, url, vp, opts) {
       obs.errors.push(`navigation: ${err.message.split("\n")[0]}`);
       return obs;
     }
-    const upstreamError = response?.headers()[GUARD_UPSTREAM_ERROR_HEADER];
-    if (upstreamError) {
-      obs.errors.push(`navigation: could not connect: ${upstreamError}`);
+    const signal = response?.headers()[GUARD_UPSTREAM_ERROR_HEADER];
+    if (opts.guardToken && signal?.startsWith(`${opts.guardToken} `) && new URL(url).protocol === "http:") {
+      obs.errors.push(`navigation: could not connect: ${signal.slice(opts.guardToken.length + 1)}`);
       return obs;
     }
     obs.loadMs = Date.now() - t0;
@@ -44818,6 +44829,7 @@ async function runAudit(ws, opts) {
           log(`  ${vp.name.padEnd(8)} ${redactUrl(url)}`);
           const obs = await capturePage(ctx, url, vp, {
             runDir,
+            guardToken: session.guard.token,
             timeoutMs: opts.timeoutMs,
             mask: opts.mask,
             // Keyboard walks are for keyboard devices; skip them on touch viewports unless only touch was requested.
@@ -45036,6 +45048,10 @@ function emptyInventory() {
 // src/audit/outcome.ts
 function runOutcome(run) {
   return run.pages.some((p) => p.status !== null) ? "complete" : "no-page-loaded";
+}
+function exitCodeForOutcome(outcome, gateFailed) {
+  if (outcome === "no-page-loaded") return 5;
+  return gateFailed ? 1 : 0;
 }
 
 // src/cli/commands/audit.ts
@@ -47899,7 +47915,7 @@ import { dirname as dirname6, join as join14 } from "node:path";
 // src/repair/transaction.ts
 init_errors();
 init_fs_safety();
-import { createHash as createHash2, randomBytes as randomBytes2 } from "node:crypto";
+import { createHash as createHash2, randomBytes as randomBytes3 } from "node:crypto";
 import {
   closeSync,
   existsSync as existsSync8,
@@ -47921,7 +47937,7 @@ var recordsDir = (wsRoot) => join13(wsRoot, "checkpoints");
 var txDir = (wsRoot, id) => join13(recordsDir(wsRoot), id);
 function atomicWrite(path2, data, mode) {
   mkdirSync4(dirname5(path2), { recursive: true });
-  const tmp = join13(dirname5(path2), `.${basename2(path2)}.jourilo-${randomBytes2(4).toString("hex")}.tmp`);
+  const tmp = join13(dirname5(path2), `.${basename2(path2)}.jourilo-${randomBytes3(4).toString("hex")}.tmp`);
   const fd = openSync(tmp, "wx", mode ?? 420);
   try {
     let off = 0;
@@ -48694,7 +48710,6 @@ async function auditCommand(ctx, usage2, categories) {
       history: ctx.ws.listRuns()
     });
     const gate = failOn ? run.findings.some((f) => f.kind === "defect" && severityRank(f.severity) <= severityRank(failOn)) : false;
-    const noPage = run.outcome === "no-page-loaded";
     return {
       data: {
         runId: run.id,
@@ -48707,7 +48722,7 @@ async function auditCommand(ctx, usage2, categories) {
         gateFailed: gate
       },
       text: summaryText(run, reports.html),
-      exitCode: noPage ? 5 : gate ? 1 : 0
+      exitCode: exitCodeForOutcome(run.outcome, gate)
     };
   } finally {
     await server?.close();

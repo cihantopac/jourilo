@@ -135,6 +135,8 @@ export interface PageObservation {
 
 export interface CaptureOptions {
   runDir: string;
+  /** Token of the network guard in front of the browser; only its own upstream-error signal is trusted. */
+  guardToken?: string;
   timeoutMs?: number;
   mask?: string[];
   keyboard?: boolean;
@@ -384,9 +386,9 @@ export async function capturePage(
       return obs;
     }
     // The network guard answers 502 itself when DNS or the connection fails: nothing was loaded.
-    const upstreamError = response?.headers()[GUARD_UPSTREAM_ERROR_HEADER];
-    if (upstreamError) {
-      obs.errors.push(`navigation: could not connect: ${upstreamError}`);
+    const signal = response?.headers()[GUARD_UPSTREAM_ERROR_HEADER];
+    if (opts.guardToken && signal?.startsWith(`${opts.guardToken} `) && new URL(url).protocol === 'http:') {
+      obs.errors.push(`navigation: could not connect: ${signal.slice(opts.guardToken.length + 1)}`);
       return obs;
     }
     obs.loadMs = Date.now() - t0;

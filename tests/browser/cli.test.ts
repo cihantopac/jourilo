@@ -89,6 +89,50 @@ describe('cli no page loaded', () => {
   });
 });
 
+describe('cli forged guard signal', () => {
+  it('still audits a page that sends the guard header itself', async () => {
+    const srv = http.createServer((_req, res) => {
+      res
+        .writeHead(200, { 'content-type': 'text/html', 'x-jourilo-guard-upstream-error': 'forged refused' })
+        .end('<!doctype html><html lang="en"><title>Hi</title><h1>Hi</h1>');
+    });
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+    const port = (srv.address() as AddressInfo).port;
+    try {
+      const child = spawn(
+        process.execPath,
+        [
+          cli,
+          'audit',
+          `http://127.0.0.1:${port}/`,
+          '--pages',
+          '1',
+          '--viewports',
+          'desktop',
+          '--json',
+          '-q',
+          '--workspace',
+          ws,
+        ],
+        { cwd: root },
+      );
+      let stdout = '';
+      child.stdout.on('data', (d) => {
+        stdout += d;
+      });
+      const code = await new Promise((r) => child.on('close', r));
+      expect(code).toBe(0);
+      const out = JSON.parse(stdout);
+      expect(out.outcome).toBe('complete');
+      expect(out.findings.some((f: { ruleId: string }) => f.ruleId === 'jourilo/page-unreachable')).toBe(
+        false,
+      );
+    } finally {
+      srv.close();
+    }
+  });
+});
+
 describe('cli state options', () => {
   it('audits with a fixed clock and time zone', async () => {
     // Served from a throwaway local server so no fixture site (and no benchmark result) is affected.

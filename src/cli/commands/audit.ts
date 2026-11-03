@@ -2,7 +2,7 @@ import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { type AuditOptions, runAudit } from '../../audit/engine.js';
 import { severityRank } from '../../audit/finding.js';
-import { runOutcome } from '../../audit/outcome.js';
+import { exitCodeForOutcome, runOutcome } from '../../audit/outcome.js';
 import type { BrowserName } from '../../browser/runtime.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { JouriloError } from '../../core/errors.js';
@@ -136,7 +136,6 @@ export async function auditCommand(
     const gate = failOn
       ? run.findings.some((f) => f.kind === 'defect' && severityRank(f.severity) <= severityRank(failOn))
       : false;
-    const noPage = run.outcome === 'no-page-loaded';
     return {
       data: {
         runId: run.id,
@@ -149,7 +148,7 @@ export async function auditCommand(
         gateFailed: gate,
       },
       text: summaryText(run, reports.html),
-      exitCode: noPage ? 5 : gate ? 1 : 0,
+      exitCode: exitCodeForOutcome(run.outcome, gate),
     };
   } finally {
     await server?.close();

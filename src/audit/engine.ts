@@ -237,6 +237,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
           log(`  ${vp.name.padEnd(8)} ${redactUrl(url)}`);
           const obs = await capturePage(ctx, url, vp, {
             runDir,
+            guardToken: session.guard.token,
             timeoutMs: opts.timeoutMs,
             mask: opts.mask,
             // Keyboard walks are for keyboard devices; skip them on touch viewports unless only touch was requested.
