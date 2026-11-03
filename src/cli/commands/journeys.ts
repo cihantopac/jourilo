@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { runAudit, summarize } from '../../audit/engine.js';
+import { pruneJourneyScreenshots } from '../../audit/evidence.js';
 import { makeFinding, mergeFindings } from '../../audit/finding.js';
 import type { BrowserName } from '../../browser/runtime.js';
 import { networkLimitations, openGuardedBrowser } from '../../browser/session.js';
@@ -290,6 +291,12 @@ async function runCmd(ctx: Context) {
             attempts.push(r);
           }
           const { result, findings: jf } = summarizeAttempts(spec, attempts);
+          if (evidence === 'minimal')
+            pruneJourneyScreenshots(
+              runDir,
+              result,
+              attempts.map((a) => a.result),
+            );
           ctx.log(
             `  → ${result.status}${result.stability ? ` (${result.stability})` : ''} (${(result.durationMs / 1000).toFixed(1)} s)`,
           );

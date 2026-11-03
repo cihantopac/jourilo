@@ -62,3 +62,21 @@ export function journeyStepsToKeep(steps: Pick<JourneyStepResult, 'status'>[]): 
   if (last >= 0) keep.add(last);
   return keep;
 }
+
+/**
+ * Minimal journey evidence, applied to the attempt that is reported: its failed step, the step before it and its
+ * final step keep a screenshot. Attempts share file names, so the files of every attempt are deleted except the kept
+ * ones, and only the reported attempt's steps stay linked.
+ */
+export function pruneJourneyScreenshots(
+  runDir: string,
+  reported: { steps: JourneyStepResult[] },
+  attempts: { steps: JourneyStepResult[] }[] = [reported],
+): void {
+  const keep = journeyStepsToKeep(reported.steps);
+  const kept = new Set(reported.steps.flatMap((s, i) => (keep.has(i) && s.screenshot ? [s.screenshot] : [])));
+  for (const a of attempts)
+    for (const s of a.steps)
+      if (s.screenshot && !kept.has(s.screenshot)) rmSync(join(runDir, s.screenshot), { force: true });
+  for (const s of reported.steps) if (s.screenshot && !kept.has(s.screenshot)) delete s.screenshot;
+}

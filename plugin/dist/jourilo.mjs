@@ -39126,6 +39126,14 @@ function journeyStepsToKeep(steps) {
   if (last >= 0) keep.add(last);
   return keep;
 }
+function pruneJourneyScreenshots(runDir, reported, attempts = [reported]) {
+  const keep = journeyStepsToKeep(reported.steps);
+  const kept = new Set(reported.steps.flatMap((s, i) => keep.has(i) && s.screenshot ? [s.screenshot] : []));
+  for (const a of attempts)
+    for (const s of a.steps)
+      if (s.screenshot && !kept.has(s.screenshot)) rmSync(join4(runDir, s.screenshot), { force: true });
+  for (const s of reported.steps) if (s.screenshot && !kept.has(s.screenshot)) delete s.screenshot;
+}
 
 // src/browser/capture.ts
 init_fs_safety();
@@ -43217,7 +43225,6 @@ async function probeFormValidation(ctx, url, form, vp, policy, runDir) {
 }
 
 // src/journeys/runner.ts
-import { rmSync as rmSync2 } from "node:fs";
 import { join as join9 } from "node:path";
 
 // src/browser/viewports.ts
@@ -43675,14 +43682,6 @@ async function runJourney(browser, spec, opts) {
           });
         break;
       }
-    }
-    if (opts.evidence === "minimal") {
-      const keep = journeyStepsToKeep(steps);
-      steps.forEach((st, i) => {
-        if (!st.screenshot || keep.has(i)) return;
-        rmSync2(join9(opts.runDir, st.screenshot), { force: true });
-        delete st.screenshot;
-      });
     }
     const pageErrors = live.console.filter((c) => c.type === "pageerror");
     const failedFirstParty = live.network.filter((n) => n.firstParty);
@@ -48117,7 +48116,7 @@ import {
   readdirSync as readdirSync6,
   readFileSync as readFileSync9,
   renameSync,
-  rmSync as rmSync3,
+  rmSync as rmSync2,
   statSync as statSync4,
   unlinkSync,
   writeSync
@@ -48143,7 +48142,7 @@ function atomicWrite(path2, data, mode) {
       return;
     } catch (err) {
       if (attempt >= 5 || !["EPERM", "EBUSY", "EACCES"].includes(err.code ?? "")) {
-        rmSync3(tmp, { force: true });
+        rmSync2(tmp, { force: true });
         throw err;
       }
       const until = Date.now() + 50 * (attempt + 1);
@@ -48679,6 +48678,12 @@ async function runCmd(ctx) {
             attempts.push(r);
           }
           const { result, findings: jf } = summarizeAttempts(spec, attempts);
+          if (evidence === "minimal")
+            pruneJourneyScreenshots(
+              runDir,
+              result,
+              attempts.map((a) => a.result)
+            );
           ctx.log(
             `  \u2192 ${result.status}${result.stability ? ` (${result.stability})` : ""} (${(result.durationMs / 1e3).toFixed(1)} s)`
           );

@@ -1,7 +1,7 @@
 // Journeys end-to-end on the acme-saas fixture: suggestion derives the expected journeys from real pages, the
 // runner reports real outcomes, and the safety policy blocks risky steps.
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -249,4 +249,51 @@ describe('journeys', () => {
     expect(msg).toMatch(/id must be/);
     expect(msg).toMatch(/success must/);
   });
+});
+
+describe('journeys --repeat --evidence minimal', () => {
+  it('keeps every screenshot the representative attempt refers to', () => {
+    mkdirSync(join(ws, 'journeys'), { recursive: true });
+    writeFileSync(
+      join(ws, 'journeys', 'flaky-lab.json'),
+      JSON.stringify({
+        version: 1,
+        id: 'flaky-lab',
+        name: 'Flaky by test data',
+        start: '/flaky.html',
+        steps: [
+          { action: 'fill', target: { label: 'Email' }, value: '{{email}}' },
+          { action: 'click', target: { role: 'button', name: 'Continue' } },
+          { action: 'screenshot' },
+          { action: 'screenshot' },
+        ],
+        success: [{ description: 'No script errors', noPageErrors: true }],
+      }),
+    );
+    const r = jourilo(
+      'journeys',
+      'run',
+      'flaky-lab',
+      '--base',
+      'fixtures/apps/journey-lab',
+      '--repeat',
+      '2',
+      '--evidence',
+      'minimal',
+      '--timeout',
+      '2',
+    );
+    const out = JSON.parse(r.stdout) as {
+      runDir: string;
+      journeys: { stability?: string; steps: { screenshot?: string }[] }[];
+      findings: { evidence: { file?: string }[] }[];
+    };
+    expect(out.journeys[0]!.stability).toBe('flaky');
+    const files = [
+      ...out.journeys.flatMap((j) => j.steps.map((s) => s.screenshot)),
+      ...out.findings.flatMap((f) => f.evidence.map((e) => e.file)),
+    ].filter((f): f is string => !!f);
+    expect(files.length).toBeGreaterThan(0);
+    for (const f of files) expect(existsSync(join(out.runDir, f)), f).toBe(true);
+  }, 120_000);
 });
