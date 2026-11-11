@@ -42084,6 +42084,20 @@ async function capturePage(ctx, url, vp, opts) {
     keyboard: null,
     errors: []
   };
+  const redirects = [];
+  page.on("response", (res) => {
+    const status = res.status();
+    if (status < 300 || status >= 400 || redirects.length >= 10) return;
+    if (!res.request().isNavigationRequest() || res.request().frame() !== page.mainFrame()) return;
+    const location = res.headers().location;
+    if (!location) return;
+    let to = location;
+    try {
+      to = new URL(location, res.url()).href;
+    } catch {
+    }
+    redirects.push({ status, from: redactUrl(res.url()), to: redactUrl(to) });
+  });
   try {
     if (opts.throttle && !await applyThrottle(page))
       obs.errors.push("Throttling is only available in Chromium.");
@@ -42093,6 +42107,7 @@ async function capturePage(ctx, url, vp, opts) {
       response = await page.goto(url, { waitUntil: "load", timeout: timeoutMs });
     } catch (err) {
       obs.errors.push(`navigation: ${err.message.split("\n")[0]}`);
+      if (redirects.length) obs.redirects = redirects;
       return obs;
     }
     const signal = response?.headers()[GUARD_UPSTREAM_ERROR_HEADER];
@@ -44750,10 +44765,23 @@ function reliabilityFindings(obs) {
   const vp = obs.viewport.name;
   const navError = obs.errors.find((e) => e.startsWith("navigation:"));
   if (navError) {
+    const hops = obs.redirects ?? [];
+    const froms = hops.map((h) => h.from);
+    const loop = /ERR_TOO_MANY_REDIRECTS/i.test(navError) || new Set(froms).size < froms.length;
+    const short = (u) => {
+      try {
+        const a = new URL(u);
+        return a.origin === new URL(obs.url).origin ? `${a.pathname}${a.search}` : u;
+      } catch {
+        return u;
+      }
+    };
+    const chain = hops.slice(0, 5).map((h) => `${h.status} ${short(h.from)} \u2192 ${short(h.to)}`);
+    const chainText = chain.join(", ") + (hops.length > chain.length ? `, and ${hops.length - chain.length} more` : "");
     out.push(
       makeFinding({
         ruleId: "jourilo/page-unreachable",
-        title: "Page failed to load",
+        title: loop ? "Page redirects to itself in a loop" : "Page failed to load",
         category: "reliability",
         kind: "defect",
         severity: "critical",
@@ -44761,11 +44789,14 @@ function reliabilityFindings(obs) {
         provenance: "observed",
         url: obs.url,
         viewport: vp,
-        description: navError,
+        description: loop ? `The browser followed a redirect loop and gave up (${navError})${chainText ? `. Redirects seen: ${chainText}` : ""}.` : navError,
         impact: "Visitors cannot use this page at all.",
-        recommendation: "Check the server, DNS and redirects for this URL.",
+        recommendation: loop ? "Fix the server's redirect rules or host configuration (HTTP/HTTPS, www and trailing-slash redirects, or a proxy or CDN redirect) so the URL stops redirecting back to itself." : "Check the server, DNS and redirects for this URL.",
         standards: [],
-        evidence: [{ type: "network", snippet: navError }]
+        evidence: [
+          { type: "network", snippet: navError },
+          ...chain.length ? [{ type: "network", snippet: chain.join("\n") }] : []
+        ]
       })
     );
     return out;

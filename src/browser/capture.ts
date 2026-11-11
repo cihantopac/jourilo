@@ -130,6 +130,8 @@ export interface PageObservation {
   widgets?: WidgetCheck | null;
   /** Requests the read-only guard aborted while keys were pressed and widgets operated. */
   blockedActions?: BlockedRequest[];
+  /** Main-frame redirect hops seen before a navigation error (at most 10; internal). */
+  redirects?: { status: number; from: string; to: string }[];
   /** Steps that could not run, with the reason; becomes run limitations. */
   errors: string[];
 }
@@ -425,6 +427,21 @@ export async function capturePage(
     keyboard: null,
     errors: [],
   };
+  const redirects: NonNullable<PageObservation['redirects']> = [];
+  page.on('response', (res) => {
+    const status = res.status();
+    if (status < 300 || status >= 400 || redirects.length >= 10) return;
+    if (!res.request().isNavigationRequest() || res.request().frame() !== page.mainFrame()) return;
+    const location = res.headers().location;
+    if (!location) return;
+    let to = location;
+    try {
+      to = new URL(location, res.url()).href;
+    } catch {
+      // keep the raw header value
+    }
+    redirects.push({ status, from: redactUrl(res.url()), to: redactUrl(to) });
+  });
   try {
     if (opts.throttle && !(await applyThrottle(page)))
       obs.errors.push('Throttling is only available in Chromium.');
@@ -434,6 +451,7 @@ export async function capturePage(
       response = await page.goto(url, { waitUntil: 'load', timeout: timeoutMs });
     } catch (err) {
       obs.errors.push(`navigation: ${(err as Error).message.split('\n')[0]}`);
+      if (redirects.length) obs.redirects = redirects;
       return obs;
     }
     // The network guard answers 502 itself when DNS or the connection fails: nothing was loaded.

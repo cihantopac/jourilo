@@ -160,6 +160,50 @@ describe('cli forged guard signal', () => {
   });
 });
 
+describe('cli redirect loop', () => {
+  it('a redirect loop is named with its chain', async () => {
+    const srv = http.createServer((req, res) => {
+      const next = req.url === '/a' ? '/b' : req.url === '/b' ? '/a' : '/';
+      res.writeHead(req.url === '/' ? 307 : 302, { location: next }).end();
+    });
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+    const port = (srv.address() as AddressInfo).port;
+    try {
+      const child = spawn(
+        process.execPath,
+        [
+          cli,
+          'audit',
+          `http://127.0.0.1:${port}/`,
+          '--pages',
+          '1',
+          '--viewports',
+          'desktop',
+          '--json',
+          '-q',
+          '--workspace',
+          ws,
+        ],
+        { cwd: root },
+      );
+      let stdout = '';
+      child.stdout.on('data', (d) => {
+        stdout += d;
+      });
+      const code = await new Promise((r) => child.on('close', r));
+      expect(code).toBe(5);
+      const out = JSON.parse(stdout);
+      const f = out.findings.find((x: { ruleId: string }) => x.ruleId === 'jourilo/page-unreachable');
+      expect(f.title).toBe('Page redirects to itself in a loop');
+      expect(f.description).toContain('redirect loop');
+      expect(f.description).toMatch(/307 \/ → \//);
+      expect(f.recommendation).toMatch(/redirect|host/i);
+    } finally {
+      srv.close();
+    }
+  }, 120_000);
+});
+
 describe('cli state options', () => {
   it('audits with a fixed clock and time zone', async () => {
     // Served from a throwaway local server so no fixture site (and no benchmark result) is affected.
