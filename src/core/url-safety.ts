@@ -1,6 +1,7 @@
 // Target validation and the network address policy. Jourilo only opens http(s) pages, keeps crawling on the target
 // origin, and refuses private-network addresses unless the user explicitly targets a local development host or opts
 // in. The same policy is enforced for every browser request by the network guard (core/net-guard.ts).
+import { execFile } from 'node:child_process';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { JouriloError } from './errors.js';
@@ -169,12 +170,53 @@ export type Resolver = (host: string) => Promise<{ address: string; family: numb
 
 export const systemResolver: Resolver = (host) => lookup(host, { all: true, verbatim: true });
 
+/** How long a name may take to resolve before it counts as unresolvable. */
+export const RESOLVE_TIMEOUT_MS = 5000;
+
+/** Rejects when `work` takes longer than `ms`; the timer never keeps the process alive. */
+export function withTimeout<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const limit = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+    timer.unref();
+  });
+  return Promise.race([work, limit]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Resolves a name in a short-lived child process. The system resolver cannot be cancelled: a lookup abandoned in this
+ * process keeps the process alive (and even `process.exit` waits for it) until the resolver's own timeout, often
+ * 30 s. A child that outlives the limit is simply killed.
+ */
+export function resolveInChild(host: string, ms: number): Promise<{ address: string; family: number }[]> {
+  const script =
+    "require('node:dns').lookup(process.argv[1],{all:true,verbatim:true},(e,a)=>{if(e)process.exit(1);process.stdout.write(JSON.stringify(a),()=>process.exit(0))})";
+  return new Promise((resolve, reject) => {
+    execFile(process.execPath, ['-e', script, host], { timeout: ms, encoding: 'utf8' }, (err, stdout) => {
+      if (err) return reject(new Error(`DNS lookup failed for ${host}`));
+      try {
+        resolve(JSON.parse(stdout) as { address: string; family: number }[]);
+      } catch {
+        reject(new Error(`DNS lookup failed for ${host}`));
+      }
+    });
+  });
+}
+
 export interface UrlCheckOptions {
   allowPrivate?: boolean;
   /** Skip DNS resolution (tests, offline). */
   resolveDns?: boolean;
   /** DNS resolver (tests inject answers). */
   resolver?: Resolver;
+  /** Time limit for resolving a local name (default 5 s; tests shorten it). */
+  resolveTimeoutMs?: number;
+}
+
+export interface TargetCheck {
+  hostClass: HostClass;
+  /** A local name (not `.localhost`) that did not resolve: nothing can be loaded from it. */
+  unresolved?: true;
 }
 
 const PRIVATE_HINT = 'Pass --allow-private if you are authorized to test this host.';
@@ -185,26 +227,48 @@ const PRIVATE_HINT = 'Pass --allow-private if you are authorized to test this ho
  * Metadata and reserved addresses are refused even with --allow-private.
  */
 export async function checkTarget(url: URL, opts: UrlCheckOptions = {}): Promise<HostClass> {
+  return (await checkTargetDetailed(url, opts)).hostClass;
+}
+
+/** `checkTarget` plus whether a local name failed to resolve (the audit then skips the browser). */
+export async function checkTargetDetailed(url: URL, opts: UrlCheckOptions = {}): Promise<TargetCheck> {
   const host = url.hostname.replace(/^\[|\]$/g, '');
   const literal = isIP(host) !== 0;
   if (literal) {
     const cls = classifyIp(host);
     if (cls === 'metadata' || (cls === 'reserved' && host !== '0.0.0.0'))
       throw new JouriloError('UNSAFE_URL', `${host} is a ${cls} address; Jourilo does not audit it.`);
-    if (cls === 'loopback') return 'local';
-    if (cls === 'public') return 'public';
+    if (cls === 'loopback') return { hostClass: 'local' };
+    if (cls === 'public') return { hostClass: 'public' };
     if (!opts.allowPrivate)
       throw new JouriloError('UNSAFE_URL', `${host} is a private network address.`, PRIVATE_HINT);
-    return 'private';
+    return { hostClass: 'private' };
   }
-  if (isLocalHostname(host)) return 'local';
-  if (opts.resolveDns === false) return 'public';
+  if (isLocalHostname(host)) {
+    // `.localhost` resolves to loopback by specification. Any other local name (such as `.test`) needs a hosts entry
+    // or a local resolver; without one the browser would wait out its whole navigation timeout.
+    const h = host.toLowerCase();
+    const needsLookup = LOCAL_SUFFIXES.some((x) => x !== '.localhost' && h.endsWith(x));
+    if (opts.resolveDns === false || !needsLookup) return { hostClass: 'local' };
+    try {
+      const limit = opts.resolveTimeoutMs ?? RESOLVE_TIMEOUT_MS;
+      await withTimeout(
+        opts.resolver ? opts.resolver(host) : resolveInChild(host, limit),
+        limit,
+        `DNS lookup failed for ${host} (timed out)`,
+      );
+    } catch {
+      return { hostClass: 'local', unresolved: true };
+    }
+    return { hostClass: 'local' };
+  }
+  if (opts.resolveDns === false) return { hostClass: 'public' };
   let addrs: { address: string }[];
   try {
     addrs = await (opts.resolver ?? systemResolver)(host);
   } catch {
     // DNS failure is reported later by the browser as a navigation error, with evidence.
-    return 'public';
+    return { hostClass: 'public' };
   }
   const classes = addrs.map((a) => ({ address: a.address, cls: classifyIp(a.address) }));
   const forbidden = classes.find((c) => c.cls === 'metadata' || c.cls === 'reserved');
@@ -214,7 +278,7 @@ export async function checkTarget(url: URL, opts: UrlCheckOptions = {}): Promise
       `${host} resolves to ${forbidden.address}, a ${forbidden.cls} address; Jourilo does not audit it.`,
     );
   const nonPublic = classes.filter((c) => c.cls !== 'public');
-  if (!nonPublic.length) return 'public';
+  if (!nonPublic.length) return { hostClass: 'public' };
   if (!opts.allowPrivate) {
     const mixed = nonPublic.length < classes.length;
     throw new JouriloError(
@@ -225,7 +289,7 @@ export async function checkTarget(url: URL, opts: UrlCheckOptions = {}): Promise
       PRIVATE_HINT,
     );
   }
-  return 'private';
+  return { hostClass: 'private' };
 }
 
 /** Same origin, http(s) only, no obvious logout / destructive GET endpoints. */

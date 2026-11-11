@@ -39613,6 +39613,7 @@ import net, { isIP as isIP2 } from "node:net";
 
 // src/core/url-safety.ts
 init_errors();
+import { execFile } from "node:child_process";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 var LOCAL_SUFFIXES = [".localhost", ".test"];
@@ -39720,27 +39721,67 @@ function parseTargetUrl(raw) {
   return url;
 }
 var systemResolver = (host) => lookup(host, { all: true, verbatim: true });
+var RESOLVE_TIMEOUT_MS = 5e3;
+function withTimeout(work, ms, message) {
+  let timer;
+  const limit = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+    timer.unref();
+  });
+  return Promise.race([work, limit]).finally(() => clearTimeout(timer));
+}
+function resolveInChild(host, ms) {
+  const script = "require('node:dns').lookup(process.argv[1],{all:true,verbatim:true},(e,a)=>{if(e)process.exit(1);process.stdout.write(JSON.stringify(a),()=>process.exit(0))})";
+  return new Promise((resolve10, reject) => {
+    execFile(process.execPath, ["-e", script, host], { timeout: ms, encoding: "utf8" }, (err, stdout) => {
+      if (err) return reject(new Error(`DNS lookup failed for ${host}`));
+      try {
+        resolve10(JSON.parse(stdout));
+      } catch {
+        reject(new Error(`DNS lookup failed for ${host}`));
+      }
+    });
+  });
+}
 var PRIVATE_HINT = "Pass --allow-private if you are authorized to test this host.";
 async function checkTarget(url, opts = {}) {
+  return (await checkTargetDetailed(url, opts)).hostClass;
+}
+async function checkTargetDetailed(url, opts = {}) {
   const host = url.hostname.replace(/^\[|\]$/g, "");
   const literal = isIP(host) !== 0;
   if (literal) {
     const cls = classifyIp(host);
     if (cls === "metadata" || cls === "reserved" && host !== "0.0.0.0")
       throw new JouriloError("UNSAFE_URL", `${host} is a ${cls} address; Jourilo does not audit it.`);
-    if (cls === "loopback") return "local";
-    if (cls === "public") return "public";
+    if (cls === "loopback") return { hostClass: "local" };
+    if (cls === "public") return { hostClass: "public" };
     if (!opts.allowPrivate)
       throw new JouriloError("UNSAFE_URL", `${host} is a private network address.`, PRIVATE_HINT);
-    return "private";
+    return { hostClass: "private" };
   }
-  if (isLocalHostname(host)) return "local";
-  if (opts.resolveDns === false) return "public";
+  if (isLocalHostname(host)) {
+    const h = host.toLowerCase();
+    const needsLookup = LOCAL_SUFFIXES.some((x) => x !== ".localhost" && h.endsWith(x));
+    if (opts.resolveDns === false || !needsLookup) return { hostClass: "local" };
+    try {
+      const limit = opts.resolveTimeoutMs ?? RESOLVE_TIMEOUT_MS;
+      await withTimeout(
+        opts.resolver ? opts.resolver(host) : resolveInChild(host, limit),
+        limit,
+        `DNS lookup failed for ${host} (timed out)`
+      );
+    } catch {
+      return { hostClass: "local", unresolved: true };
+    }
+    return { hostClass: "local" };
+  }
+  if (opts.resolveDns === false) return { hostClass: "public" };
   let addrs;
   try {
     addrs = await (opts.resolver ?? systemResolver)(host);
   } catch {
-    return "public";
+    return { hostClass: "public" };
   }
   const classes = addrs.map((a) => ({ address: a.address, cls: classifyIp(a.address) }));
   const forbidden = classes.find((c) => c.cls === "metadata" || c.cls === "reserved");
@@ -39750,7 +39791,7 @@ async function checkTarget(url, opts = {}) {
       `${host} resolves to ${forbidden.address}, a ${forbidden.cls} address; Jourilo does not audit it.`
     );
   const nonPublic = classes.filter((c) => c.cls !== "public");
-  if (!nonPublic.length) return "public";
+  if (!nonPublic.length) return { hostClass: "public" };
   if (!opts.allowPrivate) {
     const mixed = nonPublic.length < classes.length;
     throw new JouriloError(
@@ -39759,7 +39800,7 @@ async function checkTarget(url, opts = {}) {
       PRIVATE_HINT
     );
   }
-  return "private";
+  return { hostClass: "private" };
 }
 function isCrawlable(candidate, origin) {
   let u;
@@ -39800,7 +39841,11 @@ async function resolveAllowed(host, port, policy, deps = {}) {
   if (isIP2(h)) addrs = [{ address: h, family: isIP2(h) }];
   else {
     try {
-      addrs = await (deps.resolve ?? systemResolve)(h);
+      addrs = await withTimeout(
+        (deps.resolve ?? systemResolve)(h),
+        deps.resolveTimeoutMs ?? RESOLVE_TIMEOUT_MS,
+        `DNS lookup failed for ${h} (timed out)`
+      );
     } catch (err) {
       throw Object.assign(new Error(`DNS lookup failed for ${h}`), { cause: err });
     }
@@ -45008,6 +45053,8 @@ var PAGE_RULES = {
 };
 var AuditStopped = class extends Error {
 };
+var NameUnresolved = class extends Error {
+};
 function untilStopped(p, signal) {
   if (!signal) return p;
   p.catch(() => void 0);
@@ -45047,7 +45094,8 @@ async function runAudit(ws, opts) {
   const id = resolveRunId(ws, opts.runId);
   const dismissals = loadDismissals(ws);
   const target = parseTargetUrl(opts.target);
-  const hostClass = await checkTarget(target, { allowPrivate: opts.allowPrivate });
+  const check = await checkTargetDetailed(target, { allowPrivate: opts.allowPrivate });
+  const hostClass = check.hostClass;
   const log = opts.onProgress ?? (() => void 0);
   const runDir = ws.createRunDir(id);
   const startedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -45085,6 +45133,7 @@ async function runAudit(ws, opts) {
   };
   try {
     try {
+      if (check.unresolved) throw new NameUnresolved();
       log(`Starting ${opts.browser} \u2026`);
       halt();
       session = await openGuardedBrowser(
@@ -45262,9 +45311,14 @@ async function runAudit(ws, opts) {
         );
       }
     } catch (err) {
-      if (!(err instanceof AuditStopped)) throw err;
-      stoppedBy = signal?.reason === "max-duration" ? "max-duration" : "signal";
-      log(`Stopped early (${stoppedBy}); writing a partial run \u2026`);
+      if (err instanceof NameUnresolved) {
+        const msg = `No page was loaded: the host name ${target.hostname} could not be resolved (no hosts entry or local DNS answer).`;
+        log(msg);
+        limitations.push(msg);
+      } else if (err instanceof AuditStopped) {
+        stoppedBy = signal?.reason === "max-duration" ? "max-duration" : "signal";
+        log(`Stopped early (${stoppedBy}); writing a partial run \u2026`);
+      } else throw err;
     }
     await endBrowsing();
     if (stoppedBy)
@@ -49303,7 +49357,8 @@ function partialLines(run) {
 function noPageLines(run) {
   if (run.outcome !== "no-page-loaded") return [];
   const first = run.findings.find((f) => f.ruleId === "jourilo/page-unreachable");
-  return [`No page could be loaded from ${run.target}.`, ...first ? [`  ${first.description}`] : [], ""];
+  const why = first?.description ?? run.limitations.find((l) => l.includes("could not be resolved"));
+  return [`No page could be loaded from ${run.target}.`, ...why ? [`  ${why}`] : [], ""];
 }
 var audit = {
   name: "audit",

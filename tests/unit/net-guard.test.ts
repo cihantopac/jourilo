@@ -7,8 +7,9 @@ import {
   loopbackRedirectVerdict,
   redirectEscape,
   resolveAllowed,
+  upstreamFailureWording,
 } from '../../src/core/net-guard.js';
-import { type AddressPolicy, addressVerdict } from '../../src/core/url-safety.js';
+import { type AddressPolicy, addressVerdict, checkTargetDetailed } from '../../src/core/url-safety.js';
 
 const pub: AddressPolicy = { target: 'public', allowPrivate: false };
 
@@ -116,5 +117,30 @@ describe('guardedFetchText', () => {
       }),
     ).toBeNull();
     expect(internalHits).toEqual([]);
+  });
+});
+
+describe('resolver timeout', () => {
+  it('rejects with the unresolved wording when the resolver never answers', async () => {
+    const never = () => new Promise<never>(() => undefined);
+    const err = await resolveAllowed('slow.example', 80, pub, {
+      resolve: never,
+      resolveTimeoutMs: 50,
+    }).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(upstreamFailureWording((err as Error).message)).toBe('the host name could not be resolved');
+  });
+});
+
+describe('checkTargetDetailed', () => {
+  it('marks an unresolvable .test name and leaves .localhost alone', async () => {
+    const never = () => new Promise<never>(() => undefined);
+    const bad = await checkTargetDetailed(new URL('http://nope.test/'), {
+      resolver: never,
+      resolveTimeoutMs: 50,
+    });
+    expect(bad).toEqual({ hostClass: 'local', unresolved: true });
+    const ok = await checkTargetDetailed(new URL('http://app.localhost/'), { resolver: never });
+    expect(ok).toEqual({ hostClass: 'local' });
   });
 });

@@ -36,7 +36,7 @@ import type {
   Viewport,
 } from '../core/types.js';
 import { RUN_SCHEMA_VERSION } from '../core/types.js';
-import { checkTarget, type HostClass, parseTargetUrl } from '../core/url-safety.js';
+import { checkTargetDetailed, type HostClass, parseTargetUrl } from '../core/url-safety.js';
 import { VERSION } from '../core/version.js';
 import type { Workspace } from '../core/workspace.js';
 import { crawl } from '../discovery/crawl.js';
@@ -130,6 +130,8 @@ export interface AuditOutput {
 
 /** Thrown at a stop point once `AuditOptions.signal` is aborted; ends the browsing phase, not the run. */
 class AuditStopped extends Error {}
+/** A local name that does not resolve: no capture can succeed, so none is started. */
+class NameUnresolved extends Error {}
 
 /**
  * Settles with `p`, or rejects with AuditStopped as soon as `signal` aborts. Used for steps worth abandoning
@@ -187,7 +189,8 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
   // Read before any browser work, so a corrupt dismissed.json fails fast instead of losing a finished audit.
   const dismissals = loadDismissals(ws);
   const target = parseTargetUrl(opts.target);
-  const hostClass: HostClass = await checkTarget(target, { allowPrivate: opts.allowPrivate });
+  const check = await checkTargetDetailed(target, { allowPrivate: opts.allowPrivate });
+  const hostClass: HostClass = check.hostClass;
   const log = opts.onProgress ?? (() => undefined);
   const runDir = ws.createRunDir(id);
   const startedAt = new Date().toISOString();
@@ -230,6 +233,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
   };
   try {
     try {
+      if (check.unresolved) throw new NameUnresolved();
       log(`Starting ${opts.browser} …`);
       halt();
       // Not abandoned midway: a browser still launching would be left running.
@@ -426,9 +430,14 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         );
       }
     } catch (err) {
-      if (!(err instanceof AuditStopped)) throw err;
-      stoppedBy = signal?.reason === 'max-duration' ? 'max-duration' : 'signal';
-      log(`Stopped early (${stoppedBy}); writing a partial run …`);
+      if (err instanceof NameUnresolved) {
+        const msg = `No page was loaded: the host name ${target.hostname} could not be resolved (no hosts entry or local DNS answer).`;
+        log(msg);
+        limitations.push(msg);
+      } else if (err instanceof AuditStopped) {
+        stoppedBy = signal?.reason === 'max-duration' ? 'max-duration' : 'signal';
+        log(`Stopped early (${stoppedBy}); writing a partial run …`);
+      } else throw err;
     }
     await endBrowsing();
     if (stoppedBy)

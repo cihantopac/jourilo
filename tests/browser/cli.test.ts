@@ -90,6 +90,28 @@ describe('cli no page loaded', () => {
   });
 });
 
+describe('cli unresolvable local name', () => {
+  it('an unresolvable .test name exits 5 quickly', () => {
+    const t0 = Date.now();
+    const r = jourilo(
+      'audit',
+      'http://does-not-exist.test/',
+      '--pages',
+      '1',
+      '--viewports',
+      'desktop',
+      '--json',
+      '-q',
+    );
+    expect(Date.now() - t0).toBeLessThan(10_000);
+    expect(r.status).toBe(5);
+    expect(r.stdout).toContain('"outcome":"no-page-loaded"');
+    const out = JSON.parse(r.stdout);
+    const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8'));
+    expect(run.limitations.some((l: string) => l.includes('could not be resolved'))).toBe(true);
+  });
+});
+
 describe('cli verify against an unreachable target', () => {
   it('claims no fixes and exits 5', () => {
     const a = jourilo(

@@ -240,7 +240,8 @@ function partialLines(run: Run): string[] {
 function noPageLines(run: Run): string[] {
   if (run.outcome !== 'no-page-loaded') return [];
   const first = run.findings.find((f) => f.ruleId === 'jourilo/page-unreachable');
-  return [`No page could be loaded from ${run.target}.`, ...(first ? [`  ${first.description}`] : []), ''];
+  const why = first?.description ?? run.limitations.find((l) => l.includes('could not be resolved'));
+  return [`No page could be loaded from ${run.target}.`, ...(why ? [`  ${why}`] : []), ''];
 }
 
 export const audit: Command = {

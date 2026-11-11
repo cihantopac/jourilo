@@ -11,7 +11,13 @@ import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import https from 'node:https';
 import net, { isIP, type Socket } from 'node:net';
 import type { Duplex } from 'node:stream';
-import { type AddressPolicy, addressVerdict, classifyIp } from './url-safety.js';
+import {
+  type AddressPolicy,
+  addressVerdict,
+  classifyIp,
+  RESOLVE_TIMEOUT_MS,
+  withTimeout,
+} from './url-safety.js';
 
 export interface BlockedConnection {
   host: string;
@@ -35,6 +41,8 @@ export type Verdict = { ok: true } | { ok: false; reason: string };
 export interface GuardDeps {
   resolve?: (host: string) => Promise<LookupAddress[]>;
   verdict?: (address: string, port: number) => Verdict;
+  /** Limit for one name lookup (default 5 s). */
+  resolveTimeoutMs?: number;
 }
 
 const systemResolve = (host: string) =>
@@ -59,7 +67,11 @@ export async function resolveAllowed(
   if (isIP(h)) addrs = [{ address: h, family: isIP(h) }];
   else {
     try {
-      addrs = await (deps.resolve ?? systemResolve)(h);
+      addrs = await withTimeout(
+        (deps.resolve ?? systemResolve)(h),
+        deps.resolveTimeoutMs ?? RESOLVE_TIMEOUT_MS,
+        `DNS lookup failed for ${h} (timed out)`,
+      );
     } catch (err) {
       throw Object.assign(new Error(`DNS lookup failed for ${h}`), { cause: err });
     }
