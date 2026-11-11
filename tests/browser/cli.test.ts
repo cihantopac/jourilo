@@ -1,5 +1,5 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
@@ -29,6 +29,41 @@ describe('cli', () => {
     expect(JSON.parse(r.stderr).error.code).toBe('UNSAFE_URL');
     expect(jourilo('nope').status).toBe(2);
   });
+  it('--deny-local refuses local targets, as does JOURILO_DENY_LOCAL=1', () => {
+    for (const t of ['localhost:3000', 'http://127.0.0.1/', 'http://[::1]/', 'http://app.test/']) {
+      const r = jourilo('audit', t, '--deny-local', '--json');
+      expect(r.status, t).toBe(3);
+      expect(JSON.parse(r.stderr).error.code).toBe('UNSAFE_URL');
+      expect(JSON.parse(r.stderr).error.message).toContain('--deny-local');
+    }
+    for (const value of ['1', 'true', 'yes']) {
+      const r = spawnSync(
+        process.execPath,
+        [cli, 'discover', 'http://app.test/', '--workspace', ws, '--json'],
+        { encoding: 'utf8', cwd: root, env: { ...process.env, JOURILO_DENY_LOCAL: value } },
+      );
+      expect(r.status, value).toBe(3);
+    }
+    const dir = join(ws, 'journeys');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, 'home.json'),
+      JSON.stringify({
+        version: 1,
+        id: 'home',
+        name: 'Home',
+        start: '/',
+        steps: [{ action: 'click', target: { role: 'link', name: 'Home' } }],
+        success: [{ description: 'Stays home', url: '/' }],
+      }),
+    );
+    const j = jourilo('journeys', 'run', 'home', '--base', 'http://localhost:1/', '--deny-local', '--json');
+    expect(j.status).toBe(3);
+  });
+  it('without the option a local target is still allowed', () => {
+    const r = jourilo('audit', 'http://localhost:1/', '--pages', '1', '--viewports', 'mobile', '--json');
+    expect(r.status).not.toBe(3);
+  }, 120_000);
   it('audits a static directory, writes reports and gates on severity', () => {
     const r = jourilo(
       'audit',

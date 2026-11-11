@@ -17,7 +17,7 @@ progress lines on stderr are JSON too: `{"type":"progress","message":"…","at":
 Product intelligence: map a repository (frameworks, routes, design system, i18n, auth, analytics) or a website (pages, conversion points, services).
 
 ```
-jourilo discover <path|url> [--pages 10] [--ignore-robots] [--allow-private]
+jourilo discover <path|url> [--pages 10] [--ignore-robots] [--allow-private] [--deny-local]
 ```
 
 ```
@@ -25,6 +25,8 @@ Options:
   --pages N         Pages to read when mapping a website (default 10)
   --ignore-robots   Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private   Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local      Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
+                    JOURILO_DENY_LOCAL=1 does the same
 ```
 
 ## Audit
@@ -61,6 +63,8 @@ Options:
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
+                       JOURILO_DENY_LOCAL=1 does the same. For hosted integrations; a directory target is still served
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -107,6 +111,8 @@ Options:
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
+                       JOURILO_DENY_LOCAL=1 does the same. For hosted integrations; a directory target is still served
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -153,6 +159,8 @@ Options:
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
+                       JOURILO_DENY_LOCAL=1 does the same. For hosted integrations; a directory target is still served
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -188,6 +196,8 @@ Suggest options:
   --pages N              Pages to read when deriving journeys from a site (default 8)
   --force                Overwrite journey files that already exist (by default existing files are kept)
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
+                         JOURILO_DENY_LOCAL=1 does the same
 
 Run options:
   --base URL|DIR         The site or static build to run against (required)
@@ -208,6 +218,8 @@ Run options:
   --evidence MODE        full (default) or minimal: keep only the screenshots of the failed step, the step before it and the last step
   --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
+                         JOURILO_DENY_LOCAL=1 does the same
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission
@@ -273,6 +285,8 @@ jourilo verify <baseline-run> [--target url|dir] [--fail-on-regression]
 Options:
   --target URL|DIR       Where to repeat the audit (default: the baseline run's target)
   --repo PATH            Repository for source mapping (default: the baseline run's repo)
+  --deny-local           Refuse a local target (localhost, 127.0.0.1, [::1], *.localhost, *.test) with exit 3;
+                         JOURILO_DENY_LOCAL=1 does the same
   --fail-on-regression   Exit 1 when new serious or critical defects appear
 ```
 

@@ -120,6 +120,8 @@ export interface AddressPolicy {
   target: HostClass;
   /** The user passed --allow-private (authorized to test private-network hosts). */
   allowPrivate: boolean;
+  /** The user passed --deny-local: loopback and local names are refused, also as a redirect or subresource. */
+  denyLocal?: boolean;
 }
 
 /** Whether the browser (or Jourilo itself) may connect to this address while auditing a target. */
@@ -139,6 +141,8 @@ export function addressVerdict(
     case 'reserved':
       return { ok: false, reason: `${ip} is a reserved or special-purpose address.` };
     case 'loopback':
+      if (policy.denyLocal)
+        return { ok: false, reason: `${ip} is this machine (loopback) and --deny-local is set.` };
       return policy.target === 'local' || policy.allowPrivate
         ? { ok: true }
         : { ok: false, reason: `${ip} is this machine (loopback); a public target may not reach it.` };
@@ -239,6 +243,8 @@ export interface UrlCheckOptions {
   resolveTimeoutMs?: number;
   /** Look a local name up (only the audit engine needs the answer). Default true; `checkTarget` turns it off. */
   resolveLocalNames?: boolean;
+  /** Refuse local targets (loopback, `localhost`, `*.localhost`, `*.test`) before any lookup. */
+  denyLocal?: boolean;
 }
 
 export interface TargetCheck {
@@ -246,6 +252,9 @@ export interface TargetCheck {
   /** A local name (not `.localhost`) that did not resolve: nothing can be loaded from it. */
   unresolved?: true;
 }
+
+const DENY_LOCAL_HINT =
+  'Unset --deny-local / JOURILO_DENY_LOCAL to audit a local development server, or pass a public URL.';
 
 const PRIVATE_HINT = 'Pass --allow-private if you are authorized to test this host.';
 
@@ -262,6 +271,12 @@ export async function checkTarget(url: URL, opts: UrlCheckOptions = {}): Promise
 export async function checkTargetDetailed(url: URL, opts: UrlCheckOptions = {}): Promise<TargetCheck> {
   const host = url.hostname.replace(/^\[|\]$/g, '');
   const literal = isIP(host) !== 0;
+  if (opts.denyLocal && (isLocalHostname(host) || (literal && classifyIp(host) === 'loopback')))
+    throw new JouriloError(
+      'UNSAFE_URL',
+      `${host} is a local address and --deny-local is set.`,
+      DENY_LOCAL_HINT,
+    );
   if (literal) {
     const cls = classifyIp(host);
     if (cls === 'metadata' || (cls === 'reserved' && host !== '0.0.0.0'))

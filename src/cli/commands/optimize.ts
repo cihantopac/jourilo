@@ -27,7 +27,7 @@ import {
 } from '../../repair/transaction.js';
 import { compareRuns, type MetricDelta } from '../../report/compare.js';
 import { writeReports } from '../../report/index.js';
-import { type Command, flag, list, str } from '../framework.js';
+import { type Command, denyLocalFrom, flag, list, str } from '../framework.js';
 import { loadJourneys } from './journeys.js';
 
 export const optimize: Command = {
@@ -159,11 +159,14 @@ export const verify: Command = {
   options: {
     target: { type: 'string' },
     'fail-on-regression': { type: 'boolean' },
+    'deny-local': { type: 'boolean' },
     repo: { type: 'string' },
   },
   details: `Options:
   --target URL|DIR       Where to repeat the audit (default: the baseline run's target)
   --repo PATH            Repository for source mapping (default: the baseline run's repo)
+  --deny-local           Refuse a local target (localhost, 127.0.0.1, [::1], *.localhost, *.test) with exit 3;
+                         JOURILO_DENY_LOCAL=1 does the same
   --fail-on-regression   Exit 1 when new serious or critical defects appear`,
   async run(ctx) {
     const base = ctx.ws.loadRun(ctx.positionals[0] ?? 'latest').run;
@@ -212,6 +215,7 @@ export const verify: Command = {
         headed: false,
         respectRobots: base.settings.respectRobots !== false,
         allowPrivate: base.settings.hostClass === 'private',
+        ...(!server && denyLocalFrom(ctx) ? { denyLocal: true } : {}),
         keyboard: base.settings.keyboard !== false,
         throttle: base.settings.throttle === true,
         // Same number of visits as the baseline, so medians are compared with medians.

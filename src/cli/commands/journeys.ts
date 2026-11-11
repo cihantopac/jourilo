@@ -26,6 +26,7 @@ import { writeReports } from '../../report/index.js';
 import {
   type Command,
   type Context,
+  denyLocalFrom,
   flag,
   list,
   num,
@@ -99,6 +100,7 @@ async function suggest(ctx: Context) {
           headed: false,
           respectRobots: true,
           allowPrivate: flag(ctx, 'allow-private'),
+          ...(!server && denyLocalFrom(ctx) ? { denyLocal: true } : {}),
           keyboard: false,
           throttle: false,
           timeoutMs: 30_000,
@@ -207,13 +209,15 @@ async function runCmd(ctx: Context) {
   const server = isDir ? await serveStatic(resolve(baseArg)) : undefined;
   try {
     const base = parseTargetUrl(server?.url ?? baseArg);
-    const hostClass = await checkTarget(base, { allowPrivate: flag(ctx, 'allow-private') });
+    const denyLocal = !server && denyLocalFrom(ctx);
+    const hostClass = await checkTarget(base, { allowPrivate: flag(ctx, 'allow-private'), denyLocal });
     const id = newRunId();
     const runDir = ctx.ws.createRunDir(id);
     const browserName = (str(ctx, 'browser') ?? 'chromium') as BrowserName;
     const session = await openGuardedBrowser(browserName, flag(ctx, 'headed'), {
       target: hostClass,
       allowPrivate: flag(ctx, 'allow-private'),
+      ...(denyLocal ? { denyLocal: true } : {}),
     });
     const browser = session.browser;
     const browserVersion = browser.version();
@@ -388,6 +392,7 @@ export const journeys: Command = {
     'allow-submit': { type: 'boolean' },
     'allow-destructive': { type: 'boolean' },
     'allow-private': { type: 'boolean' },
+    'deny-local': { type: 'boolean' },
     'allow-origin': { type: 'string', multiple: true },
     'fail-on-failure': { type: 'boolean' },
     browser: { type: 'string' },
@@ -413,6 +418,8 @@ Suggest options:
   --pages N              Pages to read when deriving journeys from a site (default 8)
   --force                Overwrite journey files that already exist (by default existing files are kept)
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
+                         JOURILO_DENY_LOCAL=1 does the same
 
 Run options:
   --base URL|DIR         The site or static build to run against (required)
@@ -433,6 +440,8 @@ Run options:
   --evidence MODE        full (default) or minimal: keep only the screenshots of the failed step, the step before it and the last step
   --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
+                         JOURILO_DENY_LOCAL=1 does the same
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission

@@ -16,6 +16,7 @@ import {
   type Command,
   type CommandResult,
   type Context,
+  denyLocalFrom,
   flag,
   list,
   num,
@@ -39,6 +40,7 @@ export const AUDIT_OPTIONS: OptionSpec = {
   throttle: { type: 'boolean' },
   'ignore-robots': { type: 'boolean' },
   'allow-private': { type: 'boolean' },
+  'deny-local': { type: 'boolean' },
   mask: { type: 'string', multiple: true },
   auth: { type: 'string' },
   locale: { type: 'string' },
@@ -132,6 +134,7 @@ export async function auditCommand(
       headed: flag(ctx, 'headed'),
       respectRobots: !flag(ctx, 'ignore-robots'),
       allowPrivate: flag(ctx, 'allow-private'),
+      ...(!server && denyLocalFrom(ctx) ? { denyLocal: true } : {}),
       keyboard: !flag(ctx, 'no-keyboard'),
       throttle: flag(ctx, 'throttle'),
       runs: num(ctx, 'runs', 1),
@@ -274,6 +277,8 @@ export const audit: Command = {
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
+                       JOURILO_DENY_LOCAL=1 does the same. For hosted integrations; a directory target is still served
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)

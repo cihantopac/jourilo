@@ -138,6 +138,12 @@ export function flag(ctx: Context, key: string): boolean {
   return ctx.values[key] === true;
 }
 
+/** `--deny-local`, or `JOURILO_DENY_LOCAL` set to 1, true or yes: refuse loopback / `*.test` / `*.localhost` targets. */
+export function denyLocalFrom(ctx: Context): boolean {
+  if (flag(ctx, 'deny-local')) return true;
+  return ['1', 'true', 'yes'].includes((process.env.JOURILO_DENY_LOCAL ?? '').trim().toLowerCase());
+}
+
 export function requirePositional(ctx: Context, index: number, name: string, usage: string): string {
   const v = ctx.positionals[index];
   if (!v) throw new JouriloError('USAGE', `Missing <${name}>.`, `Usage: ${usage}`);

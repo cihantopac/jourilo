@@ -15,6 +15,7 @@ import {
   type AddressPolicy,
   addressVerdict,
   classifyIp,
+  isLocalHostname,
   RESOLVE_TIMEOUT_MS,
   withTimeout,
 } from './url-safety.js';
@@ -134,6 +135,8 @@ export function loopbackRedirectVerdict(location: string, from: URL, policy: Add
   } catch {
     return null;
   }
+  if (policy.denyLocal && isLocalHostname(to.hostname))
+    return `redirect from ${from.host} to ${to.host} (a local address) refused: --deny-local is set.`;
   if (!isLoopbackName(to.hostname)) return null;
   if (policy.target === 'local' || policy.allowPrivate) return null;
   return `redirect from ${from.host} to ${to.host} (this machine) refused.`;

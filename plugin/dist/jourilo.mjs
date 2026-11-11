@@ -38917,6 +38917,10 @@ function parseStateOptions(ctx) {
 function flag(ctx, key) {
   return ctx.values[key] === true;
 }
+function denyLocalFrom(ctx) {
+  if (flag(ctx, "deny-local")) return true;
+  return ["1", "true", "yes"].includes((process.env.JOURILO_DENY_LOCAL ?? "").trim().toLowerCase());
+}
 function requirePositional(ctx, index, name, usage2) {
   const v = ctx.positionals[index];
   if (!v) throw new JouriloError("USAGE", `Missing <${name}>.`, `Usage: ${usage2}`);
@@ -39699,6 +39703,8 @@ function addressVerdict(ip, policy) {
     case "reserved":
       return { ok: false, reason: `${ip} is a reserved or special-purpose address.` };
     case "loopback":
+      if (policy.denyLocal)
+        return { ok: false, reason: `${ip} is this machine (loopback) and --deny-local is set.` };
       return policy.target === "local" || policy.allowPrivate ? { ok: true } : { ok: false, reason: `${ip} is this machine (loopback); a public target may not reach it.` };
     default:
       return policy.allowPrivate ? { ok: true } : {
@@ -39753,6 +39759,7 @@ function resolveInChild(host, ms, exec = execFile) {
     }
   });
 }
+var DENY_LOCAL_HINT = "Unset --deny-local / JOURILO_DENY_LOCAL to audit a local development server, or pass a public URL.";
 var PRIVATE_HINT = "Pass --allow-private if you are authorized to test this host.";
 async function checkTarget(url, opts = {}) {
   return (await checkTargetDetailed(url, { ...opts, resolveLocalNames: false })).hostClass;
@@ -39760,6 +39767,12 @@ async function checkTarget(url, opts = {}) {
 async function checkTargetDetailed(url, opts = {}) {
   const host = url.hostname.replace(/^\[|\]$/g, "");
   const literal = isIP(host) !== 0;
+  if (opts.denyLocal && (isLocalHostname(host) || literal && classifyIp(host) === "loopback"))
+    throw new JouriloError(
+      "UNSAFE_URL",
+      `${host} is a local address and --deny-local is set.`,
+      DENY_LOCAL_HINT
+    );
   if (literal) {
     const cls = classifyIp(host);
     if (cls === "metadata" || cls === "reserved" && host !== "0.0.0.0")
@@ -39915,6 +39928,8 @@ function loopbackRedirectVerdict(location, from, policy) {
   } catch {
     return null;
   }
+  if (policy.denyLocal && isLocalHostname(to.hostname))
+    return `redirect from ${from.host} to ${to.host} (a local address) refused: --deny-local is set.`;
   if (!isLoopbackName(to.hostname)) return null;
   if (policy.target === "local" || policy.allowPrivate) return null;
   return `redirect from ${from.host} to ${to.host} (this machine) refused.`;
@@ -45141,7 +45156,10 @@ async function runAudit(ws, opts) {
   const id = resolveRunId(ws, opts.runId);
   const dismissals = loadDismissals(ws);
   const target = parseTargetUrl(opts.target);
-  const check = await checkTargetDetailed(target, { allowPrivate: opts.allowPrivate });
+  const check = await checkTargetDetailed(target, {
+    allowPrivate: opts.allowPrivate,
+    ...opts.denyLocal ? { denyLocal: true } : {}
+  });
   const hostClass = check.hostClass;
   const log = opts.onProgress ?? (() => void 0);
   const runDir = ws.createRunDir(id);
@@ -45186,7 +45204,11 @@ async function runAudit(ws, opts) {
       session = await openGuardedBrowser(
         opts.browser,
         opts.headed,
-        { target: hostClass, allowPrivate: opts.allowPrivate },
+        {
+          target: hostClass,
+          allowPrivate: opts.allowPrivate,
+          ...opts.denyLocal ? { denyLocal: true } : {}
+        },
         signal !== void 0
       );
       const browser = session.browser;
@@ -48901,6 +48923,7 @@ async function suggest(ctx) {
         headed: false,
         respectRobots: true,
         allowPrivate: flag(ctx, "allow-private"),
+        ...!server && denyLocalFrom(ctx) ? { denyLocal: true } : {},
         keyboard: false,
         throttle: false,
         timeoutMs: 3e4,
@@ -48994,13 +49017,15 @@ async function runCmd(ctx) {
   const server = isDir ? await serveStatic(resolve5(baseArg)) : void 0;
   try {
     const base2 = parseTargetUrl(server?.url ?? baseArg);
-    const hostClass = await checkTarget(base2, { allowPrivate: flag(ctx, "allow-private") });
+    const denyLocal = !server && denyLocalFrom(ctx);
+    const hostClass = await checkTarget(base2, { allowPrivate: flag(ctx, "allow-private"), denyLocal });
     const id = newRunId();
     const runDir = ctx.ws.createRunDir(id);
     const browserName = str(ctx, "browser") ?? "chromium";
     const session = await openGuardedBrowser(browserName, flag(ctx, "headed"), {
       target: hostClass,
-      allowPrivate: flag(ctx, "allow-private")
+      allowPrivate: flag(ctx, "allow-private"),
+      ...denyLocal ? { denyLocal: true } : {}
     });
     const browser = session.browser;
     const browserVersion = browser.version();
@@ -49160,6 +49185,7 @@ var journeys = {
     "allow-submit": { type: "boolean" },
     "allow-destructive": { type: "boolean" },
     "allow-private": { type: "boolean" },
+    "deny-local": { type: "boolean" },
     "allow-origin": { type: "string", multiple: true },
     "fail-on-failure": { type: "boolean" },
     browser: { type: "string" },
@@ -49185,6 +49211,8 @@ Suggest options:
   --pages N              Pages to read when deriving journeys from a site (default 8)
   --force                Overwrite journey files that already exist (by default existing files are kept)
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
+                         JOURILO_DENY_LOCAL=1 does the same
 
 Run options:
   --base URL|DIR         The site or static build to run against (required)
@@ -49205,6 +49233,8 @@ Run options:
   --evidence MODE        full (default) or minimal: keep only the screenshots of the failed step, the step before it and the last step
   --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
+                         JOURILO_DENY_LOCAL=1 does the same
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission
@@ -49241,6 +49271,7 @@ var AUDIT_OPTIONS = {
   throttle: { type: "boolean" },
   "ignore-robots": { type: "boolean" },
   "allow-private": { type: "boolean" },
+  "deny-local": { type: "boolean" },
   mask: { type: "string", multiple: true },
   auth: { type: "string" },
   locale: { type: "string" },
@@ -49317,6 +49348,7 @@ async function auditCommand(ctx, usage2, categories) {
       headed: flag(ctx, "headed"),
       respectRobots: !flag(ctx, "ignore-robots"),
       allowPrivate: flag(ctx, "allow-private"),
+      ...!server && denyLocalFrom(ctx) ? { denyLocal: true } : {},
       keyboard: !flag(ctx, "no-keyboard"),
       throttle: flag(ctx, "throttle"),
       runs: num(ctx, "runs", 1),
@@ -49447,6 +49479,8 @@ var audit = {
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
+                       JOURILO_DENY_LOCAL=1 does the same. For hosted integrations; a directory target is still served
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -50503,16 +50537,19 @@ function siteText(p) {
 var discover = {
   name: "discover",
   summary: "Product intelligence: map a repository (frameworks, routes, design system, i18n, auth, analytics) or a website (pages, conversion points, services).",
-  usage: "jourilo discover <path|url> [--pages 10] [--ignore-robots] [--allow-private]",
+  usage: "jourilo discover <path|url> [--pages 10] [--ignore-robots] [--allow-private] [--deny-local]",
   options: {
     pages: { type: "string" },
     "allow-private": { type: "boolean" },
+    "deny-local": { type: "boolean" },
     "ignore-robots": { type: "boolean" }
   },
   details: `Options:
   --pages N         Pages to read when mapping a website (default 10)
   --ignore-robots   Ignore robots.txt (only for sites you own or are authorized to test)
-  --allow-private   Allow private-network hosts (10.x, 192.168.x, ...)`,
+  --allow-private   Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local      Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
+                    JOURILO_DENY_LOCAL=1 does the same`,
   async run(ctx) {
     const target = requirePositional(ctx, 0, "path|url", discover.usage);
     ctx.ws.ensure();
@@ -50534,6 +50571,7 @@ var discover = {
       headed: false,
       respectRobots: !flag(ctx, "ignore-robots"),
       allowPrivate: flag(ctx, "allow-private"),
+      ...denyLocalFrom(ctx) ? { denyLocal: true } : {},
       keyboard: false,
       throttle: false,
       timeoutMs: 3e4,
@@ -51462,11 +51500,14 @@ var verify = {
   options: {
     target: { type: "string" },
     "fail-on-regression": { type: "boolean" },
+    "deny-local": { type: "boolean" },
     repo: { type: "string" }
   },
   details: `Options:
   --target URL|DIR       Where to repeat the audit (default: the baseline run's target)
   --repo PATH            Repository for source mapping (default: the baseline run's repo)
+  --deny-local           Refuse a local target (localhost, 127.0.0.1, [::1], *.localhost, *.test) with exit 3;
+                         JOURILO_DENY_LOCAL=1 does the same
   --fail-on-regression   Exit 1 when new serious or critical defects appear`,
   async run(ctx) {
     const base2 = ctx.ws.loadRun(ctx.positionals[0] ?? "latest").run;
@@ -51509,6 +51550,7 @@ var verify = {
         headed: false,
         respectRobots: base2.settings.respectRobots !== false,
         allowPrivate: base2.settings.hostClass === "private",
+        ...!server && denyLocalFrom(ctx) ? { denyLocal: true } : {},
         keyboard: base2.settings.keyboard !== false,
         throttle: base2.settings.throttle === true,
         // Same number of visits as the baseline, so medians are compared with medians.

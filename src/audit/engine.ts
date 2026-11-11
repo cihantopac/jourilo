@@ -80,6 +80,8 @@ export interface AuditOptions {
   headed: boolean;
   respectRobots: boolean;
   allowPrivate: boolean;
+  /** Refuse local targets (see `--deny-local`), also when reached by redirect. */
+  denyLocal?: boolean;
   keyboard: boolean;
   throttle: boolean;
   timeoutMs: number;
@@ -189,7 +191,10 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
   // Read before any browser work, so a corrupt dismissed.json fails fast instead of losing a finished audit.
   const dismissals = loadDismissals(ws);
   const target = parseTargetUrl(opts.target);
-  const check = await checkTargetDetailed(target, { allowPrivate: opts.allowPrivate });
+  const check = await checkTargetDetailed(target, {
+    allowPrivate: opts.allowPrivate,
+    ...(opts.denyLocal ? { denyLocal: true } : {}),
+  });
   const hostClass: HostClass = check.hostClass;
   const log = opts.onProgress ?? (() => undefined);
   const runDir = ws.createRunDir(id);
@@ -240,7 +245,11 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       session = await openGuardedBrowser(
         opts.browser,
         opts.headed,
-        { target: hostClass, allowPrivate: opts.allowPrivate },
+        {
+          target: hostClass,
+          allowPrivate: opts.allowPrivate,
+          ...(opts.denyLocal ? { denyLocal: true } : {}),
+        },
         signal !== undefined,
       );
       const browser: Browser = session.browser;

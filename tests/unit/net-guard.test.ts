@@ -221,3 +221,57 @@ describe('resolveInChild', () => {
     await expect(resolveInChild('app.test', 5000, killed as never)).rejects.toBeInstanceOf(LookupFailed);
   });
 });
+
+describe('--deny-local', () => {
+  const deny = { allowPrivate: false, denyLocal: true } as const;
+  const refused = (u: string) => checkTarget(new URL(u), { denyLocal: true });
+
+  it('refuses localhost, 127.0.0.1, [::1] and *.test / *.localhost with UNSAFE_URL, before any lookup', async () => {
+    let looked = false;
+    const resolver = async () => {
+      looked = true;
+      return [];
+    };
+    for (const u of [
+      'http://localhost:3000/',
+      'http://127.0.0.1/',
+      'http://[::1]/',
+      'http://app.test/',
+      'http://app.localhost/',
+    ]) {
+      await expect(refused(u)).rejects.toMatchObject({ code: 'UNSAFE_URL' });
+      await expect(checkTargetDetailed(new URL(u), { denyLocal: true, resolver })).rejects.toThrow(
+        /--deny-local is set/,
+      );
+    }
+    expect(looked).toBe(false);
+  });
+  it('still allows local targets without the option, and public hosts with it', async () => {
+    expect(await checkTarget(new URL('http://localhost:3000/'))).toBe('local');
+    expect(await checkTarget(new URL('http://app.test/'))).toBe('local');
+    expect(await checkTarget(new URL('https://example.com/'), { denyLocal: true, resolveDns: false })).toBe(
+      'public',
+    );
+  });
+  it('blocks loopback destinations even for a local target or with --allow-private', async () => {
+    expect(addressVerdict('127.0.0.1', { target: 'local', allowPrivate: true, denyLocal: true }).ok).toBe(
+      false,
+    );
+    expect(addressVerdict('127.0.0.1', { target: 'local', allowPrivate: false }).ok).toBe(true);
+    expect(await resolveAllowed('127.0.0.1', 80, { target: 'local', ...deny })).toHaveProperty('blocked');
+  });
+  it('blocks a redirect from a public page to localhost or a *.test name, and says so', async () => {
+    const from = new URL('https://example.test.public/a');
+    const policy: AddressPolicy = { target: 'public', allowPrivate: true, denyLocal: true };
+    expect(loopbackRedirectVerdict('http://127.0.0.1/', from, policy)).toMatch(/--deny-local/);
+    expect(loopbackRedirectVerdict('http://app.test/', from, policy)).toMatch(/--deny-local/);
+    expect(redirectEscape('http://localhost/', 'https://shop.example/', policy)).toMatch(/--deny-local/);
+    // The guard resolves a public name for the first hop and refuses the loopback hop.
+    const resolve = async (h: string) =>
+      h === 'example.test.public' ? [{ address: '93.184.216.34', family: 4 }] : [];
+    expect(await resolveAllowed('example.test.public', 443, policy, { resolve })).toMatchObject({
+      address: '93.184.216.34',
+    });
+    expect(await resolveAllowed('127.0.0.1', 80, policy, { resolve })).toHaveProperty('blocked');
+  });
+});
