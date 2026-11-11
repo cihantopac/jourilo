@@ -41948,11 +41948,54 @@ async function settle(page, timeoutMs) {
   await page.waitForTimeout(300);
 }
 var AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"];
+var HIDDEN_SKIP_RULES = /* @__PURE__ */ new Set(["color-contrast", "color-contrast-enhanced"]);
 async function runAxe(page) {
   await page.addScriptTag({ content: import_axe_core.default.source });
   const raw = await page.evaluate(
     `axe.run(document, { runOnly: { type: 'tag', values: ${JSON.stringify(AXE_TAGS)} }, resultTypes: ['violations', 'incomplete'], elementRef: false, rules: { 'target-size': { enabled: true } } })`
   );
+  const hiddenFlags = await page.evaluate(
+    `(${String(
+      (groups) => groups.map((target) => {
+        try {
+          let root = document;
+          let el = null;
+          const chain = [];
+          for (let i = 0; i < target.length; i++) {
+            const part = target[i];
+            const hops = Array.isArray(part) ? part : [part];
+            for (let h = 0; h < hops.length; h++) {
+              el = root.querySelector(hops[h]);
+              if (!el) return false;
+              chain.push(el);
+              if (h < hops.length - 1) {
+                if (!el.shadowRoot) return false;
+                root = el.shadowRoot;
+              }
+            }
+            if (i < target.length - 1) {
+              const doc = el?.contentDocument;
+              if (!doc) return false;
+              root = doc;
+            }
+          }
+          return chain.some((c) => c.closest('[aria-hidden="true"]') !== null);
+        } catch {
+          return false;
+        }
+      })
+    )})(${JSON.stringify(
+      raw.incomplete.flatMap((r) => HIDDEN_SKIP_RULES.has(r.id) ? r.nodes.map((n) => n.target) : [])
+    )})`
+  ).catch(() => []);
+  {
+    let q = 0;
+    for (const r of raw.incomplete) {
+      if (!HIDDEN_SKIP_RULES.has(r.id)) continue;
+      r.nodes = r.nodes.filter(() => !hiddenFlags[q++]);
+    }
+    raw.incomplete = raw.incomplete.filter((r) => !HIDDEN_SKIP_RULES.has(r.id) || r.nodes.length > 0);
+  }
   const map = (r) => ({
     id: r.id,
     impact: r.impact ?? null,

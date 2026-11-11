@@ -41,6 +41,14 @@
       "path": "/trap-documented",
       "kind": "needs-review",
       "why": "held focus with a documented, working Ctrl+M exit"
+    },
+    {
+      "rule": "axe-review/color-contrast",
+      "path": "/banner",
+      "evidenceExactly": [
+        "ctl-banner"
+      ],
+      "why": "visible text over a background image stays in manual review"
     }
   ],
   "mustNotFind": [
@@ -66,6 +74,11 @@
       "path": "/trap-documented",
       "kind": "defect",
       "why": "WCAG 2.1.2 allows a documented way out that works"
+    },
+    {
+      "rule": "axe-review/color-contrast",
+      "path": "/glyphs",
+      "why": "aria-hidden decorative glyphs in a fallback font are not read as text (F25)"
     }
   ],
   "maxDefects": {

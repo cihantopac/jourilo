@@ -254,6 +254,8 @@ async function settle(page: Page, timeoutMs: number): Promise<void> {
 
 const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
 
+const HIDDEN_SKIP_RULES = new Set(['color-contrast', 'color-contrast-enhanced']);
+
 async function runAxe(page: Page): Promise<PageObservation['axe']> {
   await page.addScriptTag({ content: axe.source });
   const raw = (await page.evaluate(
@@ -263,6 +265,52 @@ async function runAxe(page: Page): Promise<PageObservation['axe']> {
     incomplete: RawAxe[];
     testEngine: { version: string };
   };
+  // Manual-review contrast listings skip content assistive technology never presents (F25). Decide in the page,
+  // where the elements still exist; a target that cannot be resolved (closed shadow root, cross-origin frame) stays.
+  const hiddenFlags = (await page
+    .evaluate(
+      `(${String((groups: (string | string[])[][]) =>
+        groups.map((target) => {
+          try {
+            let root: Document | ShadowRoot = document;
+            let el: Element | null = null;
+            const chain: Element[] = [];
+            for (let i = 0; i < target.length; i++) {
+              const part = target[i] as string | string[];
+              const hops = Array.isArray(part) ? part : [part];
+              for (let h = 0; h < hops.length; h++) {
+                el = root.querySelector(hops[h] as string);
+                if (!el) return false;
+                chain.push(el);
+                if (h < hops.length - 1) {
+                  if (!el.shadowRoot) return false;
+                  root = el.shadowRoot;
+                }
+              }
+              if (i < target.length - 1) {
+                const doc: Document | null | undefined = (el as HTMLIFrameElement | null)?.contentDocument;
+                if (!doc) return false;
+                root = doc;
+              }
+            }
+            return chain.some((c) => c.closest('[aria-hidden="true"]') !== null);
+          } catch {
+            return false;
+          }
+        }),
+      )})(${JSON.stringify(
+        raw.incomplete.flatMap((r) => (HIDDEN_SKIP_RULES.has(r.id) ? r.nodes.map((n) => n.target) : [])),
+      )})`,
+    )
+    .catch(() => [])) as boolean[];
+  {
+    let q = 0;
+    for (const r of raw.incomplete) {
+      if (!HIDDEN_SKIP_RULES.has(r.id)) continue;
+      r.nodes = r.nodes.filter(() => !hiddenFlags[q++]);
+    }
+    raw.incomplete = raw.incomplete.filter((r) => !HIDDEN_SKIP_RULES.has(r.id) || r.nodes.length > 0);
+  }
   const map = (r: RawAxe): AxeIssue => ({
     id: r.id,
     impact: r.impact ?? null,
