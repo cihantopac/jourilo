@@ -41,7 +41,8 @@ Driven by field reports ([FIELD-FEEDBACK.md](FIELD-FEEDBACK.md), [RELEASE-1.2.md
 
 ## Deferred from 1.2.0
 
-Each item has its number in [FIELD-FEEDBACK.md](FIELD-FEEDBACK.md). F10 (an overall score) stays declined
+All planned: F19, F20 and part of F22/F23 in [1.2.1](superpowers/plans/2026-11-11-jourilo-1.2.1.md), the rest in
+[1.3.0](superpowers/plans/2026-11-11-jourilo-1.3.0.md). Each item has its number in [FIELD-FEEDBACK.md](FIELD-FEEDBACK.md). F10 (an overall score) stays declined
 ([DECISIONS.md](DECISIONS.md) D3), and F17 is covered by `--auth` plus `--setup-journey`.
 
 - **F8 pixel contrast.** Sample the rendered pixels behind the text for axe "incomplete" contrast nodes. An engine
@@ -51,7 +52,8 @@ Each item has its number in [FIELD-FEEDBACK.md](FIELD-FEEDBACK.md). F10 (an over
 - **F16 user agent, extra headers, ignore-HTTPS-errors.** `--user-agent`, `--extra-header`, `--ignore-https-errors`
   (shown in the report's limits when used) and `--output-dir`.
 - **F19 loopback deny, opt-in.** A flag or an environment variable that refuses `localhost`, `127.0.0.1` and `[::1]`
-  for integrators that audit on behalf of others. Loopback stays allowed by default; this needs Cihan's decision.
+  for integrators that audit on behalf of others. Decided (2026-11-11): loopback stays allowed by default;
+  `--deny-local` and `JOURILO_DENY_LOCAL` refuse it.
 - **F20 start URL.** Check the explicit start URL against robots.txt, and stop rewriting `/staff/` to `/staff`.
 - **F21 Chromium sandbox and process group.** An option to run Chromium with its sandbox, and to put the browser in
   Jourilo's process group so it is cleaned up with it. Security-sensitive: test in containers first.
@@ -62,7 +64,8 @@ Each item has its number in [FIELD-FEEDBACK.md](FIELD-FEEDBACK.md). F10 (an over
 
 ## 1.2.x follow-ups
 
-Real defects found while building 1.2.0, small enough for a patch release:
+Real defects found while building 1.2.0, all planned for [1.2.1](superpowers/plans/2026-11-11-jourilo-1.2.1.md) together
+with the field items F24–F40 (false positives on modern front ends and automation edges):
 
 - `verify --target` with a typo ends in an internal `TypeError`; it should be `INVALID_INPUT`.
 - If `guard.close()` throws while browsing ends, the setup journey's session state is not removed.
@@ -72,6 +75,10 @@ Real defects found while building 1.2.0, small enough for a patch release:
 - A `--run-id` directory left by a crashed run (no `run.json`) is accepted and its leftovers enter the manifest.
 
 ## Next (1.x)
+
+All eight are planned for [1.4.0](superpowers/plans/2026-11-11-jourilo-1.4.0.md). Decisions (2026-11-11): the
+TypeScript parser is bundled in a lazy chunk, the adapters are PostHog, GrowthBook and Amplitude (read-only), and the
+new languages are Italian, Portuguese and Dutch.
 
 1. Full arrow-key patterns for menus and dialogs inside menus (Escape closes, focus returns, Home/End).
 2. AST-based route and component discovery for TS/TSX, Vue SFC and Svelte, and component-level root causes.
