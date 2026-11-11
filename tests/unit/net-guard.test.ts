@@ -1,6 +1,9 @@
 // Node-side fetches (robots.txt, sitemaps) and the guard's resolver must apply the address policy on every hop.
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   guardedFetchText,
@@ -9,7 +12,14 @@ import {
   resolveAllowed,
   upstreamFailureWording,
 } from '../../src/core/net-guard.js';
-import { type AddressPolicy, addressVerdict, checkTargetDetailed } from '../../src/core/url-safety.js';
+import {
+  type AddressPolicy,
+  addressVerdict,
+  checkTarget,
+  checkTargetDetailed,
+  LookupFailed,
+  resolveInChild,
+} from '../../src/core/url-safety.js';
 
 const pub: AddressPolicy = { target: 'public', allowPrivate: false };
 
@@ -142,5 +152,72 @@ describe('checkTargetDetailed', () => {
     expect(bad).toEqual({ hostClass: 'local', unresolved: true });
     const ok = await checkTargetDetailed(new URL('http://app.localhost/'), { resolver: never });
     expect(ok).toEqual({ hostClass: 'local' });
+  });
+});
+
+describe('checkTarget', () => {
+  it('does not pre-resolve a local name (only the audit engine needs the answer)', async () => {
+    let called = false;
+    const resolver = async () => {
+      called = true;
+      throw new Error('nope');
+    };
+    expect(await checkTarget(new URL('http://nope.test/'), { resolver })).toBe('local');
+    expect(called).toBe(false);
+  });
+});
+
+describe('resolveInChild', () => {
+  it('resolves a real name through the child', async () => {
+    const answers = await resolveInChild('localhost', 5000);
+    expect(answers.length).toBeGreaterThan(0);
+    expect(answers[0]).toHaveProperty('address');
+  });
+
+  it('passes an option-like host as data and executes nothing', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'jourilo-inject-'));
+    try {
+      const marker = join(dir, 'marker');
+      const hosts = [
+        `--eval=require("fs").writeFileSync(${JSON.stringify(marker)},"x");x.test`,
+        '--eval=process.exit(7);x.test',
+        '--require=x.test',
+        '-p',
+      ];
+      for (const host of hosts) {
+        const out = await resolveInChild(host, 5000).catch((e: unknown) => e);
+        // A normal outcome: a lookup failure (or, never executed, an empty/real answer) - not an exit-7 crash.
+        expect(Array.isArray(out) || out instanceof LookupFailed).toBe(true);
+      }
+      expect(existsSync(marker)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports a lookup error as LookupFailed', async () => {
+    await expect(resolveInChild('does-not-exist.invalid', 5000)).rejects.toBeInstanceOf(LookupFailed);
+  });
+
+  it('fails open when the child cannot be started or crashes', async () => {
+    const spawnError = (_f: string, _a: string[], _o: unknown, cb: (e: Error, out: string) => void) => {
+      cb(Object.assign(new Error('spawn EPERM'), { code: 'EPERM' }), '');
+    };
+    expect(await resolveInChild('app.test', 5000, spawnError as never)).toEqual([]);
+    const crash = (_f: string, _a: string[], _o: unknown, cb: (e: Error, out: string) => void) => {
+      cb(Object.assign(new Error('boom'), { code: 1 }), '');
+    };
+    expect(await resolveInChild('app.test', 5000, crash as never)).toEqual([]);
+    const throws = () => {
+      throw new Error('sync spawn failure');
+    };
+    expect(await resolveInChild('app.test', 5000, throws as never)).toEqual([]);
+  });
+
+  it('counts the timeout kill as unresolved', async () => {
+    const killed = (_f: string, _a: string[], _o: unknown, cb: (e: Error, out: string) => void) => {
+      cb(Object.assign(new Error('killed'), { killed: true }), '');
+    };
+    await expect(resolveInChild('app.test', 5000, killed as never)).rejects.toBeInstanceOf(LookupFailed);
   });
 });

@@ -39730,22 +39730,32 @@ function withTimeout(work, ms, message) {
   });
   return Promise.race([work, limit]).finally(() => clearTimeout(timer));
 }
-function resolveInChild(host, ms) {
-  const script = "require('node:dns').lookup(process.argv[1],{all:true,verbatim:true},(e,a)=>{if(e)process.exit(1);process.stdout.write(JSON.stringify(a),()=>process.exit(0))})";
+var LookupFailed = class extends Error {
+};
+function resolveInChild(host, ms, exec = execFile) {
+  const script = "require('node:dns').lookup(process.env.JOURILO_RESOLVE_HOST,{all:true,verbatim:true},(e,a)=>{if(e)process.exit(2);process.stdout.write(JSON.stringify(a),()=>process.exit(0))})";
+  const env = { ...process.env, NODE_OPTIONS: "", JOURILO_RESOLVE_HOST: host };
   return new Promise((resolve10, reject) => {
-    execFile(process.execPath, ["-e", script, host], { timeout: ms, encoding: "utf8" }, (err, stdout) => {
-      if (err) return reject(new Error(`DNS lookup failed for ${host}`));
-      try {
-        resolve10(JSON.parse(stdout));
-      } catch {
-        reject(new Error(`DNS lookup failed for ${host}`));
-      }
-    });
+    try {
+      exec(process.execPath, ["-e", script], { timeout: ms, encoding: "utf8", env }, (err, stdout) => {
+        if (err) {
+          if (err.killed || err.code === 2) return reject(new LookupFailed(`DNS lookup failed for ${host}`));
+          return resolve10([]);
+        }
+        try {
+          resolve10(JSON.parse(stdout));
+        } catch {
+          resolve10([]);
+        }
+      });
+    } catch {
+      resolve10([]);
+    }
   });
 }
 var PRIVATE_HINT = "Pass --allow-private if you are authorized to test this host.";
 async function checkTarget(url, opts = {}) {
-  return (await checkTargetDetailed(url, opts)).hostClass;
+  return (await checkTargetDetailed(url, { ...opts, resolveLocalNames: false })).hostClass;
 }
 async function checkTargetDetailed(url, opts = {}) {
   const host = url.hostname.replace(/^\[|\]$/g, "");
@@ -39763,7 +39773,8 @@ async function checkTargetDetailed(url, opts = {}) {
   if (isLocalHostname(host)) {
     const h = host.toLowerCase();
     const needsLookup = LOCAL_SUFFIXES.some((x) => x !== ".localhost" && h.endsWith(x));
-    if (opts.resolveDns === false || !needsLookup) return { hostClass: "local" };
+    if (opts.resolveDns === false || opts.resolveLocalNames === false || !needsLookup)
+      return { hostClass: "local" };
     try {
       const limit = opts.resolveTimeoutMs ?? RESOLVE_TIMEOUT_MS;
       await withTimeout(

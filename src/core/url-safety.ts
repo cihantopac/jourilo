@@ -183,23 +183,49 @@ export function withTimeout<T>(work: Promise<T>, ms: number, message: string): P
   return Promise.race([work, limit]).finally(() => clearTimeout(timer));
 }
 
+/** The resolver answered that the name does not exist (or the lookup ran out of time). */
+export class LookupFailed extends Error {}
+
+type ExecFileFn = (
+  file: string,
+  args: string[],
+  options: { timeout: number; encoding: 'utf8'; env: NodeJS.ProcessEnv },
+  callback: (err: (Error & { code?: unknown; killed?: boolean }) | null, stdout: string) => void,
+) => unknown;
+
 /**
  * Resolves a name in a short-lived child process. The system resolver cannot be cancelled: a lookup abandoned in this
- * process keeps the process alive (and even `process.exit` waits for it) until the resolver's own timeout, often
- * 30 s. A child that outlives the limit is simply killed.
+ * process keeps the process alive (and even `process.exit`) until the resolver's own timeout, often 30 s. A child
+ * that outlives the limit is simply killed.
+ *
+ * The host reaches the child only as data, through an environment variable, so it can never be parsed as a Node
+ * option. Only a lookup error reported by the child, or the timeout kill, rejects with `LookupFailed`; any other
+ * failure (spawn error, crash) resolves to no answers so the caller fails open and lets the browser decide.
  */
-export function resolveInChild(host: string, ms: number): Promise<{ address: string; family: number }[]> {
+export function resolveInChild(
+  host: string,
+  ms: number,
+  exec: ExecFileFn = execFile as unknown as ExecFileFn,
+): Promise<{ address: string; family: number }[]> {
   const script =
-    "require('node:dns').lookup(process.argv[1],{all:true,verbatim:true},(e,a)=>{if(e)process.exit(1);process.stdout.write(JSON.stringify(a),()=>process.exit(0))})";
+    "require('node:dns').lookup(process.env.JOURILO_RESOLVE_HOST,{all:true,verbatim:true},(e,a)=>{if(e)process.exit(2);process.stdout.write(JSON.stringify(a),()=>process.exit(0))})";
+  const env = { ...process.env, NODE_OPTIONS: '', JOURILO_RESOLVE_HOST: host };
   return new Promise((resolve, reject) => {
-    execFile(process.execPath, ['-e', script, host], { timeout: ms, encoding: 'utf8' }, (err, stdout) => {
-      if (err) return reject(new Error(`DNS lookup failed for ${host}`));
-      try {
-        resolve(JSON.parse(stdout) as { address: string; family: number }[]);
-      } catch {
-        reject(new Error(`DNS lookup failed for ${host}`));
-      }
-    });
+    try {
+      exec(process.execPath, ['-e', script], { timeout: ms, encoding: 'utf8', env }, (err, stdout) => {
+        if (err) {
+          if (err.killed || err.code === 2) return reject(new LookupFailed(`DNS lookup failed for ${host}`));
+          return resolve([]);
+        }
+        try {
+          resolve(JSON.parse(stdout) as { address: string; family: number }[]);
+        } catch {
+          resolve([]);
+        }
+      });
+    } catch {
+      resolve([]);
+    }
   });
 }
 
@@ -211,6 +237,8 @@ export interface UrlCheckOptions {
   resolver?: Resolver;
   /** Time limit for resolving a local name (default 5 s; tests shorten it). */
   resolveTimeoutMs?: number;
+  /** Look a local name up (only the audit engine needs the answer). Default true; `checkTarget` turns it off. */
+  resolveLocalNames?: boolean;
 }
 
 export interface TargetCheck {
@@ -227,7 +255,7 @@ const PRIVATE_HINT = 'Pass --allow-private if you are authorized to test this ho
  * Metadata and reserved addresses are refused even with --allow-private.
  */
 export async function checkTarget(url: URL, opts: UrlCheckOptions = {}): Promise<HostClass> {
-  return (await checkTargetDetailed(url, opts)).hostClass;
+  return (await checkTargetDetailed(url, { ...opts, resolveLocalNames: false })).hostClass;
 }
 
 /** `checkTarget` plus whether a local name failed to resolve (the audit then skips the browser). */
@@ -249,7 +277,8 @@ export async function checkTargetDetailed(url: URL, opts: UrlCheckOptions = {}):
     // or a local resolver; without one the browser would wait out its whole navigation timeout.
     const h = host.toLowerCase();
     const needsLookup = LOCAL_SUFFIXES.some((x) => x !== '.localhost' && h.endsWith(x));
-    if (opts.resolveDns === false || !needsLookup) return { hostClass: 'local' };
+    if (opts.resolveDns === false || opts.resolveLocalNames === false || !needsLookup)
+      return { hostClass: 'local' };
     try {
       const limit = opts.resolveTimeoutMs ?? RESOLVE_TIMEOUT_MS;
       await withTimeout(
