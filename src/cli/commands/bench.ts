@@ -21,8 +21,11 @@ interface Expectation {
   /** Only a finding of this kind matches (e.g. a defect must not be reported where review is right). */
   kind?: Finding['kind'];
   why?: string;
-  /** Every evidence item of the matching finding must contain this text (snippet or selector). */
-  evidenceOnly?: string;
+  /**
+   * The evidence of the matching finding is exactly these elements: every item contains one of the texts (snippet or
+   * selector) and every text is contained in some item.
+   */
+  evidenceExactly?: string[];
 }
 
 interface DefectLimit {
@@ -92,10 +95,15 @@ export async function benchFixture(dir: string, wsRoot: string): Promise<Fixture
       context: loadContext(dir),
     });
     locateFindings(run, dir);
-    const evidenceOk = (f: Finding, e: Expectation) =>
-      !e.evidenceOnly ||
-      (f.evidence.length > 0 &&
-        f.evidence.every((ev) => `${ev.snippet ?? ''} ${ev.selector ?? ''}`.includes(e.evidenceOnly!)));
+    const evidenceOk = (f: Finding, e: Expectation) => {
+      if (!e.evidenceExactly) return true;
+      const texts = f.evidence.map((ev) => `${ev.snippet ?? ''} ${ev.selector ?? ''}`);
+      return (
+        texts.length > 0 &&
+        texts.every((t) => e.evidenceExactly!.some((n) => t.includes(n))) &&
+        e.evidenceExactly.every((n) => texts.some((t) => t.includes(n)))
+      );
+    };
     const missed = expected.mustFind.filter(
       (e) => !run.findings.some((f) => matches(f, e) && evidenceOk(f, e)),
     );

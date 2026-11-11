@@ -20,7 +20,7 @@ export interface FocusStop {
   inModal: boolean;
   /**
    * The stop has no box to draw an indicator on (its rect, measured while focused, is at most 1 px wide or tall and
-   * no descendant is larger) or is a dev-server overlay. It is not page content and is not judged for focus-visible.
+   * no descendant is larger, and it has no text or accessible name) or is a dev-server overlay. It is not page content and is not judged for focus-visible.
    */
   boxless?: boolean;
 }
@@ -103,8 +103,14 @@ const FOCUS_INFO = `(el) => {
   }
   const noBox = (e) => { const b = e.getBoundingClientRect(); return b.width <= 1 || b.height <= 1; };
   const rootHost = el.getRootNode && el.getRootNode().host;
+  // A stop with text or an accessible name is content a person can reach, so a hidden one is a real focus-visible
+  // failure (a clipped skip link that stays 1 x 1 while focused), not a stop without a box.
+  const labelledBy = (el.getAttribute('aria-labelledby') || '').split(/s+/).filter(Boolean)
+    .map((id) => { const n = document.getElementById(id); return n ? (n.textContent || '') : ''; }).join('').trim();
+  const hasName = !!((el.textContent || '').trim() || (el.getAttribute('aria-label') || '').trim() || labelledBy ||
+    (el.getAttribute('title') || '').trim() || (el.getAttribute('alt') || '').trim());
   const boxless = !!(el.matches(${JSON.stringify(DEV_OVERLAY)}) || (rootHost && rootHost.matches(${JSON.stringify(DEV_OVERLAY)})) ||
-    (noBox(el) && !Array.from(el.querySelectorAll('*')).some((d) => !noBox(d)) &&
+    (noBox(el) && !hasName && !Array.from(el.querySelectorAll('*')).some((d) => !noBox(d)) &&
       !(el.shadowRoot && Array.from(el.shadowRoot.querySelectorAll('*')).some((d) => !noBox(d)))));
   const name = (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('title') || '').replace(/\\s+/g, ' ').trim().slice(0, 80);
   // The element's identity as markup (like an axe node's html), so a state rule (.tool[aria-pressed]) can be found.

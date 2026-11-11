@@ -9,8 +9,12 @@
     {
       "rule": "jourilo/focus-visible",
       "path": "/dev-overlay",
-      "why": "a button with outline:none and no other indicator must still be reported (evidence is that button only)",
-      "evidenceOnly": "Control without indicator"
+      "why": "exactly three stops fail: a nameless link that only has a box while focused, a clipped skip link with text that stays 1x1 focused, and a button with outline:none; the nextjs-portal overlay, the 0x0 span and the off-screen skip link with an outline are not reported",
+      "evidenceExactly": [
+        "class=\"grow\"",
+        "class=\"srclip\"",
+        "Control without indicator"
+      ]
     }
   ],
   "mustNotFind": [

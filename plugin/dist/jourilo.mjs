@@ -41081,8 +41081,14 @@ var FOCUS_INFO = `(el) => {
   }
   const noBox = (e) => { const b = e.getBoundingClientRect(); return b.width <= 1 || b.height <= 1; };
   const rootHost = el.getRootNode && el.getRootNode().host;
+  // A stop with text or an accessible name is content a person can reach, so a hidden one is a real focus-visible
+  // failure (a clipped skip link that stays 1 x 1 while focused), not a stop without a box.
+  const labelledBy = (el.getAttribute('aria-labelledby') || '').split(/s+/).filter(Boolean)
+    .map((id) => { const n = document.getElementById(id); return n ? (n.textContent || '') : ''; }).join('').trim();
+  const hasName = !!((el.textContent || '').trim() || (el.getAttribute('aria-label') || '').trim() || labelledBy ||
+    (el.getAttribute('title') || '').trim() || (el.getAttribute('alt') || '').trim());
   const boxless = !!(el.matches(${JSON.stringify(DEV_OVERLAY)}) || (rootHost && rootHost.matches(${JSON.stringify(DEV_OVERLAY)})) ||
-    (noBox(el) && !Array.from(el.querySelectorAll('*')).some((d) => !noBox(d)) &&
+    (noBox(el) && !hasName && !Array.from(el.querySelectorAll('*')).some((d) => !noBox(d)) &&
       !(el.shadowRoot && Array.from(el.shadowRoot.querySelectorAll('*')).some((d) => !noBox(d)))));
   const name = (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('title') || '').replace(/\\s+/g, ' ').trim().slice(0, 80);
   // The element's identity as markup (like an axe node's html), so a state rule (.tool[aria-pressed]) can be found.
@@ -49271,7 +49277,11 @@ async function benchFixture(dir, wsRoot) {
       context: loadContext(dir)
     });
     locateFindings(run, dir);
-    const evidenceOk = (f, e) => !e.evidenceOnly || f.evidence.length > 0 && f.evidence.every((ev) => `${ev.snippet ?? ""} ${ev.selector ?? ""}`.includes(e.evidenceOnly));
+    const evidenceOk = (f, e) => {
+      if (!e.evidenceExactly) return true;
+      const texts = f.evidence.map((ev) => `${ev.snippet ?? ""} ${ev.selector ?? ""}`);
+      return texts.length > 0 && texts.every((t) => e.evidenceExactly.some((n) => t.includes(n))) && e.evidenceExactly.every((n) => texts.some((t) => t.includes(n)));
+    };
     const missed = expected.mustFind.filter(
       (e) => !run.findings.some((f) => matches(f, e) && evidenceOk(f, e))
     );

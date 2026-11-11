@@ -9,6 +9,13 @@
   /* Off-screen until focused, then drawn with an outline. */
   .skip { position: absolute; left: -9999px; top: 8px; padding: 8px 12px; background: #fff; color: #1d4ed8; }
   .skip:focus { left: 8px; outline: 3px solid #1d4ed8; }
+  /* Nameless and textless, zero size, no indicator: not content, no box to draw on. */
+  .ghost { position: absolute; width: 0; height: 0; overflow: hidden; outline: none; }
+  /* Nameless link with no box until it has focus, then 40 x 20 and no indicator: judged on its focused box. */
+  .grow { display: inline-block; width: 0; height: 0; outline: none; }
+  .grow:focus { width: 40px; height: 20px; }
+  /* Clipped skip link with text whose :focus rule is missing: stays 1 x 1 while focused. */
+  .srclip { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; outline: none; }
   /* A control that removes its indicator and draws none of its own. */
   .bare { outline: none; }
   .bare:focus, .bare:focus-visible { outline: none; }
@@ -21,7 +28,9 @@
   <button type="button">Two</button>
   <button type="button">Three</button>
 </p>
-<span tabindex="0" style="position:absolute;width:0;height:0;overflow:hidden"></span>
+<span tabindex="0" class="ghost"></span>
+<a href="#main" class="grow"></a>
+<a href="#main" class="srclip">Skip to footer</a>
 <p><button type="button" class="bare">Control without indicator</button></p>
 </main>
 <!-- Like `next dev`: a script appends a zero-size custom element with an open shadow root to itself. -->
