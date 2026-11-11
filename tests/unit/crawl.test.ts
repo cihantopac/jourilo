@@ -2,10 +2,18 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { BrowserContext } from 'playwright-core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { crawl } from '../../src/discovery/crawl.js';
+import { crawl, explicitRobotsOverrides, robotsOverrideLimitation } from '../../src/discovery/crawl.js';
 
 let server: Server | undefined;
-afterEach(() => new Promise<void>((r) => (server ? server.close(() => r()) : r())));
+afterEach(
+  () =>
+    new Promise<void>((r) => {
+      const s = server;
+      server = undefined;
+      if (s) s.close(() => r());
+      else r();
+    }),
+);
 
 async function origin(robots: string | null): Promise<string> {
   server = createServer((req, res) => {
@@ -86,21 +94,30 @@ describe('crawl: trailing slashes and robots.txt', () => {
     expect(r.skipped).toEqual([{ url: `${o}/staff/`, reason: 'robots.txt' }]);
     expect(r.robotsOverridden).toEqual([]);
   });
+
+  it('reports the override only for pages that were audited', async () => {
+    const o = await origin('User-agent: *\nDisallow: /staff/\n');
+    const r = await crawl(fakeContext({}), `${o}/`, opts({ include: ['/staff/'], maxPages: 1 }));
+    expect(r.pages.map((p) => p.url)).toEqual([`${o}/`]);
+    expect(r.robotsOverridden).toEqual([]);
+  });
 });
 
-describe('fingerprint page identity', () => {
-  it('does not change when a page URL carries a trailing slash', async () => {
-    const { makeFinding } = await import('../../src/audit/finding.js');
-    const base = {
-      ruleId: 'axe/html-has-lang',
-      severity: 'serious',
-      title: 't',
-      evidence: [],
-    } as unknown as Parameters<typeof makeFinding>[0];
-    const fp = (url: string) => makeFinding({ ...base, url }).fingerprint;
-    expect(fp('https://x.test/de/')).toBe(fp('https://x.test/de'));
-    expect(fp('https://x.test/de/?a=1')).toBe(fp('https://x.test/de?a=1'));
-    expect(fp('https://x.test/')).not.toBe(fp('https://x.test/de'));
-    expect(fp('https://x.test/')).toBe(fp('https://x.test'));
+describe('explicit pages and robots.txt', () => {
+  const policy = { target: 'local' as const, allowPrivate: false };
+  it('finds explicitly requested pages that robots.txt disallows', async () => {
+    const o = await origin('User-agent: *\nDisallow: /staff/\n');
+    await expect(explicitRobotsOverrides([`${o}/staff/`, `${o}/team`], policy)).resolves.toEqual([
+      `${o}/staff/`,
+    ]);
+  });
+  it('finds nothing when there is no robots.txt', async () => {
+    const o = await origin(null);
+    await expect(explicitRobotsOverrides([`${o}/staff/`], policy)).resolves.toEqual([]);
+  });
+  it('words the limitation as documented', () => {
+    expect(robotsOverrideLimitation('http://x.test/staff/')).toBe(
+      'robots.txt disallows http://x.test/staff/; it was audited because it was requested explicitly.',
+    );
   });
 });

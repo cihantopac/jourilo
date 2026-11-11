@@ -115,6 +115,29 @@ describe('compare', () => {
   });
 });
 
+describe('compareRuns page identity', () => {
+  it('treats /de and /de/ as one page', () => {
+    const a = f('r/a', '/de');
+    const page = (path: string, lcp: number) => ({
+      url: `https://example.test${path}`,
+      finalUrl: '',
+      status: 200,
+      title: '',
+      viewport: 'desktop',
+      loadMs: 0,
+      metrics: [{ name: 'LCP', value: lcp, unit: 'ms' as const, source: 'lab' as const }],
+      consoleErrors: 0,
+      failedRequests: 0,
+      inventory: run([]).pages[0]?.inventory as never,
+    });
+    const base = run([a], { id: 'base', pages: [page('/de', 3000)] });
+    const head = run([], { id: 'head', pages: [page('/de/', 1200)] });
+    const cmp = compareRuns(base, head);
+    expect(cmp.fixed.map((x) => x.ruleId)).toEqual(['r/a']);
+    expect(cmp.metrics[0]).toMatchObject({ name: 'LCP', delta: -1800 });
+  });
+});
+
 describe('text formats', () => {
   it('renders markdown and valid SARIF shape', () => {
     const r = run([

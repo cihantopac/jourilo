@@ -39,7 +39,7 @@ import { RUN_SCHEMA_VERSION } from '../core/types.js';
 import { checkTargetDetailed, type HostClass, parseTargetUrl } from '../core/url-safety.js';
 import { VERSION } from '../core/version.js';
 import type { Workspace } from '../core/workspace.js';
-import { crawl } from '../discovery/crawl.js';
+import { crawl, explicitRobotsOverrides, robotsOverrideLimitation } from '../discovery/crawl.js';
 import type { ExperienceContext } from '../integrations/context.js';
 import { designFindings, respectLockedBrand } from '../integrations/design-rules.js';
 import { probeFormValidation } from '../journeys/forms.js';
@@ -312,8 +312,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         const robotsSkips = found.skipped.filter((s) => s.reason === 'robots.txt').length;
         if (robotsSkips)
           limitations.push(`${robotsSkips} URL(s) were skipped because robots.txt disallows them.`);
-        for (const u of found.robotsOverridden)
-          limitations.push(`robots.txt disallows ${u}; it was audited because it was requested explicitly.`);
+        for (const u of found.robotsOverridden) limitations.push(robotsOverrideLimitation(u));
         if (found.sitemapRebasedFrom)
           limitations.push(
             `The sitemap lists ${found.sitemapRebasedFrom} URLs; their paths were audited on the local server instead.`,
@@ -321,6 +320,19 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         if (!found.robots && opts.respectRobots && hostClass === 'public')
           limitations.push('No robots.txt was found; crawling stayed on the target origin.');
         urls = discovered.length ? discovered : [{ url: target.toString() }];
+      } else if (opts.respectRobots) {
+        // Pages known up front skip discovery, but robots.txt is still read: a disallowed page is audited because
+        // it was requested, and the run says so.
+        halt();
+        for (const u of await untilStopped(
+          explicitRobotsOverrides(
+            urls.map((x) => x.url),
+            session.guard.policy,
+            opts.timeoutMs,
+          ),
+          signal,
+        ))
+          limitations.push(robotsOverrideLimitation(u));
       }
       log(
         `Auditing ${urls.length} page(s) × ${opts.viewports.length} viewport(s) in ${opts.browser} ${browserVersion}`,

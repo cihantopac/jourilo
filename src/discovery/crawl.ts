@@ -76,6 +76,28 @@ export async function loadRobots(
   return text === null ? null : parseRobots(text, USER_AGENT_TOKEN);
 }
 
+/** The limitation recorded when robots.txt disallows a page that was audited because it was requested explicitly. */
+export function robotsOverrideLimitation(url: string): string {
+  return `robots.txt disallows ${url}; it was audited because it was requested explicitly.`;
+}
+
+/** Explicitly requested pages (--url, or the lone target) that robots.txt disallows. They are audited anyway. */
+export async function explicitRobotsOverrides(
+  urls: string[],
+  policy: AddressPolicy,
+  timeoutMs = 8000,
+): Promise<string[]> {
+  const out: string[] = [];
+  const rules = new Map<string, RobotsRules | null>();
+  for (const raw of urls) {
+    const u = new URL(raw);
+    if (!rules.has(u.origin)) rules.set(u.origin, await loadRobots(u.origin, policy, timeoutMs));
+    const r = rules.get(u.origin);
+    if (r && !isAllowed(r, `${u.pathname}${u.search}`)) out.push(redactUrl(u.toString()));
+  }
+  return out;
+}
+
 async function sitemapUrls(
   origin: string,
   robots: RobotsRules | null,
@@ -202,10 +224,12 @@ export async function crawl(ctx: BrowserContext, start: string, opts: CrawlOptio
     if (picked.length >= opts.maxPages) break;
     if (!picked.includes(p)) picked.push(p);
   }
+  // Only pages that were actually audited carry the note.
+  const auditedOverrides = robotsOverridden.filter((u) => picked.some((p) => redactUrl(p.url) === u));
   return {
     pages: picked,
     skipped,
-    robotsOverridden,
+    robotsOverridden: auditedOverrides,
     robots,
     sitemapUrls: fromSitemap.urls.length,
     sitemapRebasedFrom: fromSitemap.rebasedFrom,

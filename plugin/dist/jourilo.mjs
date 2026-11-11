@@ -42337,7 +42337,7 @@ function pathOf2(url) {
 function fingerprintPath(url) {
   try {
     const u = new URL(url);
-    const path2 = u.pathname !== "/" && u.pathname.endsWith("/") ? u.pathname.slice(0, -1) : u.pathname;
+    const path2 = u.pathname === "/" ? "/" : u.pathname.replace(/\/+$/, "") || "/";
     return `${path2}${u.search}`;
   } catch {
     return url;
@@ -42922,6 +42922,20 @@ async function loadRobots(origin, policy, timeoutMs = 8e3) {
   const text = await fetchText(`${origin}/robots.txt`, timeoutMs, policy);
   return text === null ? null : parseRobots(text, USER_AGENT_TOKEN);
 }
+function robotsOverrideLimitation(url) {
+  return `robots.txt disallows ${url}; it was audited because it was requested explicitly.`;
+}
+async function explicitRobotsOverrides(urls, policy, timeoutMs = 8e3) {
+  const out = [];
+  const rules = /* @__PURE__ */ new Map();
+  for (const raw of urls) {
+    const u = new URL(raw);
+    if (!rules.has(u.origin)) rules.set(u.origin, await loadRobots(u.origin, policy, timeoutMs));
+    const r = rules.get(u.origin);
+    if (r && !isAllowed(r, `${u.pathname}${u.search}`)) out.push(redactUrl(u.toString()));
+  }
+  return out;
+}
 async function sitemapUrls(origin, robots, timeoutMs, policy) {
   const local = policy.target === "local";
   const rebase = (raw) => {
@@ -43027,10 +43041,11 @@ async function crawl(ctx, start, opts) {
     if (picked.length >= opts.maxPages) break;
     if (!picked.includes(p)) picked.push(p);
   }
+  const auditedOverrides = robotsOverridden.filter((u) => picked.some((p) => redactUrl(p.url) === u));
   return {
     pages: picked,
     skipped,
-    robotsOverridden,
+    robotsOverridden: auditedOverrides,
     robots,
     sitemapUrls: fromSitemap.urls.length,
     sitemapRebasedFrom: fromSitemap.rebasedFrom
@@ -45236,8 +45251,7 @@ async function runAudit(ws, opts) {
         const robotsSkips = found.skipped.filter((s) => s.reason === "robots.txt").length;
         if (robotsSkips)
           limitations.push(`${robotsSkips} URL(s) were skipped because robots.txt disallows them.`);
-        for (const u of found.robotsOverridden)
-          limitations.push(`robots.txt disallows ${u}; it was audited because it was requested explicitly.`);
+        for (const u of found.robotsOverridden) limitations.push(robotsOverrideLimitation(u));
         if (found.sitemapRebasedFrom)
           limitations.push(
             `The sitemap lists ${found.sitemapRebasedFrom} URLs; their paths were audited on the local server instead.`
@@ -45245,6 +45259,17 @@ async function runAudit(ws, opts) {
         if (!found.robots && opts.respectRobots && hostClass === "public")
           limitations.push("No robots.txt was found; crawling stayed on the target origin.");
         urls = discovered.length ? discovered : [{ url: target.toString() }];
+      } else if (opts.respectRobots) {
+        halt();
+        for (const u of await untilStopped(
+          explicitRobotsOverrides(
+            urls.map((x) => x.url),
+            session.guard.policy,
+            opts.timeoutMs
+          ),
+          signal
+        ))
+          limitations.push(robotsOverrideLimitation(u));
       }
       log(
         `Auditing ${urls.length} page(s) \xD7 ${opts.viewports.length} viewport(s) in ${opts.browser} ${browserVersion}`
@@ -51272,14 +51297,7 @@ function metricVerdict(name, a, b) {
   }
   return Math.abs(delta) < (RESOLUTION[name] ?? 0) ? "noise" : "unconfirmed";
 }
-function pathKey(u) {
-  try {
-    const x = new URL(u);
-    return `${x.pathname}${x.search}`;
-  } catch {
-    return u;
-  }
-}
+var pathKey = fingerprintPath;
 function compareRuns(base2, head) {
   const before = new Map(base2.findings.map((f) => [f.fingerprint, f]));
   const after = new Map(head.findings.map((f) => [f.fingerprint, f]));

@@ -17,11 +17,11 @@ export function pathOf(url: string): string {
   }
 }
 
-/** The page identity inside a fingerprint: one trailing slash is dropped from a non-root path, as in 1.2.0. */
+/** The page identity used in fingerprints and run comparison: trailing slashes are dropped from a non-root path, so `/de` and `/de/` are one page. */
 export function fingerprintPath(url: string): string {
   try {
     const u = new URL(url);
-    const path = u.pathname !== '/' && u.pathname.endsWith('/') ? u.pathname.slice(0, -1) : u.pathname;
+    const path = u.pathname === '/' ? '/' : u.pathname.replace(/\/+$/, '') || '/';
     return `${path}${u.search}`;
   } catch {
     return url;

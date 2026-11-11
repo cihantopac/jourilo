@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergeFindings } from '../../src/audit/finding.js';
+import { makeFinding, mergeFindings } from '../../src/audit/finding.js';
 import {
   axeFindings,
   keyboardFindings,
@@ -480,5 +480,22 @@ describe('keyboard trap advice', () => {
     expect(adviceKey('press Esc to leave the editor')).toBe('Escape');
     expect(adviceKey('Use Ctrl+Shift+F6 to move on')).toBe('Control+Shift+F6');
     expect(adviceKey('How to go the next element')).toBeNull();
+  });
+});
+
+describe('fingerprint page identity', () => {
+  it('does not change when a page URL carries trailing slashes', () => {
+    const base = {
+      ruleId: 'axe/html-has-lang',
+      severity: 'serious',
+      title: 't',
+      evidence: [],
+    } as unknown as Parameters<typeof makeFinding>[0];
+    const fp = (url: string) => makeFinding({ ...base, url }).fingerprint;
+    expect(fp('https://x.test/de/')).toBe(fp('https://x.test/de'));
+    expect(fp('https://x.test/de//')).toBe(fp('https://x.test/de'));
+    expect(fp('https://x.test/de/?a=1')).toBe(fp('https://x.test/de?a=1'));
+    expect(fp('https://x.test/')).not.toBe(fp('https://x.test/de'));
+    expect(fp('https://x.test/')).toBe(fp('https://x.test'));
   });
 });
