@@ -39834,6 +39834,10 @@ function normalizeForCrawl(raw) {
   u.hash = "";
   for (const k of [...u.searchParams.keys()])
     if (/^utm_|^(fbclid|gclid|ref)$/i.test(k)) u.searchParams.delete(k);
+  return u.toString();
+}
+function crawlKey(url) {
+  const u = new URL(normalizeForCrawl(url));
   if (u.pathname !== "/" && u.pathname.endsWith("/")) u.pathname = u.pathname.replace(/\/+$/, "");
   return u.toString();
 }
@@ -42330,12 +42334,21 @@ function pathOf2(url) {
     return url;
   }
 }
+function fingerprintPath(url) {
+  try {
+    const u = new URL(url);
+    const path2 = u.pathname !== "/" && u.pathname.endsWith("/") ? u.pathname.slice(0, -1) : u.pathname;
+    return `${path2}${u.search}`;
+  } catch {
+    return url;
+  }
+}
 function makeFinding(input) {
   const { key, occurrences, reproduction, ...rest } = input;
   const finding2 = {
     ...rest,
     // Viewport is deliberately not part of the fingerprint: the same defect seen at two widths is one finding.
-    fingerprint: shortHash(input.ruleId, pathOf2(input.url), key ?? "", input.journey ?? ""),
+    fingerprint: shortHash(input.ruleId, fingerprintPath(input.url), key ?? "", input.journey ?? ""),
     occurrences: occurrences ?? 1,
     reproduction: reproduction ?? defaultReproduction(input)
   };
@@ -42944,27 +42957,34 @@ async function crawl(ctx, start, opts) {
   const origin = new URL(start).origin;
   const robots = opts.respectRobots ? await loadRobots(origin, opts.policy) : null;
   const skipped = [];
+  const robotsOverridden = [];
   const seen = /* @__PURE__ */ new Map();
   const queue = [];
-  const push = (raw, depth) => {
+  const push = (raw, depth, explicit = false) => {
     let n;
+    let key;
     try {
       n = normalizeForCrawl(raw);
+      key = crawlKey(raw);
     } catch {
       return;
     }
-    if (seen.has(n) || !isCrawlable(n, origin)) return;
+    if (seen.has(key) || !isCrawlable(n, origin)) return;
     const u = new URL(n);
     if (robots && !isAllowed(robots, `${u.pathname}${u.search}`)) {
-      skipped.push({ url: redactUrl(n), reason: "robots.txt" });
-      seen.set(n, depth);
-      return;
+      if (explicit) {
+        robotsOverridden.push(redactUrl(n));
+      } else {
+        skipped.push({ url: redactUrl(n), reason: "robots.txt" });
+        seen.set(key, { url: n, depth, blocked: true });
+        return;
+      }
     }
-    seen.set(n, depth);
+    seen.set(key, { url: n, depth, blocked: false });
     queue.push({ url: n, depth });
   };
-  push(start, 0);
-  for (const extra of opts.include ?? []) push(new URL(extra, start).toString(), 0);
+  push(start, 0, true);
+  for (const extra of opts.include ?? []) push(new URL(extra, start).toString(), 0, true);
   const fromSitemap = await sitemapUrls(origin, robots, opts.timeoutMs, opts.policy);
   for (const u of fromSitemap.urls) push(u, 1);
   const visited = /* @__PURE__ */ new Set();
@@ -42993,7 +43013,7 @@ async function crawl(ctx, start, opts) {
   } finally {
     await page.close().catch(() => void 0);
   }
-  const ranked = [...seen.entries()].filter(([u]) => !skipped.some((s) => s.url === redactUrl(u) && s.reason === "robots.txt")).map(([url, depth]) => ({ url, depth, role: pageRole(url), score: rankUrl(url, depth) })).sort((a, b) => b.score - a.score);
+  const ranked = [...seen.values()].filter((e) => !e.blocked).map(({ url, depth }) => ({ url, depth, role: pageRole(url), score: rankUrl(url, depth) })).sort((a, b) => b.score - a.score);
   const picked = [];
   const roles = /* @__PURE__ */ new Set();
   for (const p of ranked) {
@@ -43010,6 +43030,7 @@ async function crawl(ctx, start, opts) {
   return {
     pages: picked,
     skipped,
+    robotsOverridden,
     robots,
     sitemapUrls: fromSitemap.urls.length,
     sitemapRebasedFrom: fromSitemap.rebasedFrom
@@ -45215,6 +45236,8 @@ async function runAudit(ws, opts) {
         const robotsSkips = found.skipped.filter((s) => s.reason === "robots.txt").length;
         if (robotsSkips)
           limitations.push(`${robotsSkips} URL(s) were skipped because robots.txt disallows them.`);
+        for (const u of found.robotsOverridden)
+          limitations.push(`robots.txt disallows ${u}; it was audited because it was requested explicitly.`);
         if (found.sitemapRebasedFrom)
           limitations.push(
             `The sitemap lists ${found.sitemapRebasedFrom} URLs; their paths were audited on the local server instead.`

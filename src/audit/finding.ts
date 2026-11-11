@@ -17,12 +17,23 @@ export function pathOf(url: string): string {
   }
 }
 
+/** The page identity inside a fingerprint: one trailing slash is dropped from a non-root path, as in 1.2.0. */
+export function fingerprintPath(url: string): string {
+  try {
+    const u = new URL(url);
+    const path = u.pathname !== '/' && u.pathname.endsWith('/') ? u.pathname.slice(0, -1) : u.pathname;
+    return `${path}${u.search}`;
+  } catch {
+    return url;
+  }
+}
+
 export function makeFinding(input: FindingInput): Finding {
   const { key, occurrences, reproduction, ...rest } = input;
   const finding: Finding = {
     ...rest,
     // Viewport is deliberately not part of the fingerprint: the same defect seen at two widths is one finding.
-    fingerprint: shortHash(input.ruleId, pathOf(input.url), key ?? '', input.journey ?? ''),
+    fingerprint: shortHash(input.ruleId, fingerprintPath(input.url), key ?? '', input.journey ?? ''),
     occurrences: occurrences ?? 1,
     reproduction: reproduction ?? defaultReproduction(input),
   };

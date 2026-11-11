@@ -312,6 +312,8 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         const robotsSkips = found.skipped.filter((s) => s.reason === 'robots.txt').length;
         if (robotsSkips)
           limitations.push(`${robotsSkips} URL(s) were skipped because robots.txt disallows them.`);
+        for (const u of found.robotsOverridden)
+          limitations.push(`robots.txt disallows ${u}; it was audited because it was requested explicitly.`);
         if (found.sitemapRebasedFrom)
           limitations.push(
             `The sitemap lists ${found.sitemapRebasedFrom} URLs; their paths were audited on the local server instead.`,

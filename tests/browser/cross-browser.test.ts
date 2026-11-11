@@ -39,12 +39,16 @@ describe.each(['firefox', 'webkit'])('%s', (browser) => {
       findings: { ruleId: string; url: string }[];
       limitations: string[];
     };
-    const found = new Set(out.findings.map((f) => `${f.ruleId} ${new URL(f.url).pathname}`));
+    const found = new Set(
+      out.findings.map((f) => `${f.ruleId} ${new URL(f.url).pathname.replace(/(.)\/$/, '$1')}`),
+    );
     // CLS and TBT need Chromium-only performance APIs; the run must say so instead of reporting zeros.
     const chromiumOnly = (rule: string) =>
       rule === 'jourilo/unsized-images' || rule === 'perf/cls' || rule === 'perf/tbt';
     expect(
-      expected.mustFind.filter((e) => !chromiumOnly(e.rule) && !found.has(`${e.rule} ${e.path}`)),
+      expected.mustFind.filter(
+        (e) => !chromiumOnly(e.rule) && !found.has(`${e.rule} ${e.path.replace(/(.)\/$/, '$1')}`),
+      ),
     ).toEqual([]);
     expect(out.limitations.some((l) => /does not expose CLS/.test(l))).toBe(true);
   });
@@ -92,7 +96,9 @@ describe.each(['firefox', 'webkit'])('%s', (browser) => {
     expect(linksSkipped).toBe(browser === 'webkit' && process.platform === 'win32');
     // Lab timings depend on the runner's speed, so performance findings are left out of the comparison.
     const behaviour = audit.findings.filter((f) => !f.ruleId.startsWith('perf/'));
-    expect(behaviour.map((f) => `${f.ruleId} ${new URL(f.url).pathname}`).sort()).toEqual(
+    expect(
+      behaviour.map((f) => `${f.ruleId} ${new URL(f.url).pathname.replace(/(.)\/$/, '$1')}`).sort(),
+    ).toEqual(
       linksSkipped
         ? ['jourilo/keyboard-trap /analytics']
         : ['jourilo/focus-obscured /analytics', 'jourilo/keyboard-trap /analytics'],
@@ -113,7 +119,7 @@ describe.each(['firefox', 'webkit'])('%s', (browser) => {
     ) as { findings: { ruleId: string; url: string }[] };
     const formRules = forms.findings
       .filter((f) => /validation|errors-not/.test(f.ruleId))
-      .map((f) => `${f.ruleId} ${new URL(f.url).pathname}`)
+      .map((f) => `${f.ruleId} ${new URL(f.url).pathname.replace(/(.)\/$/, '$1')}`)
       .sort();
     expect(formRules).toEqual(['a11y/errors-not-associated /login', 'ux/no-validation-feedback /signup']);
   });

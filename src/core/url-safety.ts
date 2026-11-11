@@ -346,6 +346,12 @@ export function normalizeForCrawl(raw: string): string {
   u.hash = '';
   for (const k of [...u.searchParams.keys()])
     if (/^utm_|^(fbclid|gclid|ref)$/i.test(k)) u.searchParams.delete(k);
+  return u.toString();
+}
+
+/** The identity of a crawl URL: `/a` and `/a/` are one page. Used only to deduplicate; never to rewrite a URL. */
+export function crawlKey(url: string): string {
+  const u = new URL(normalizeForCrawl(url));
   if (u.pathname !== '/' && u.pathname.endsWith('/')) u.pathname = u.pathname.replace(/\/+$/, '');
   return u.toString();
 }
