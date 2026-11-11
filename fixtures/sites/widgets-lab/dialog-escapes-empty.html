@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Dialog that leaks focus to empty stops – Widgets lab</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<main>
+  <h1>Prompt library</h1>
+  <p><a href="/">Back to the lab</a></p>
+  <!-- Control for dialog-guards-slow: same shape, but the two empty focusable elements behind the dialog are page
+       content, not guards (no aria-hidden, no guard attribute), and nothing wraps. This is a real escape. -->
+  <p><button type="button" id="open-dialog" aria-haspopup="dialog">Open details</button></p>
+  <div id="portal" hidden>
+    <div class="overlay"><div class="panel" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+      <h2 id="dlg-title">Prompt details</h2>
+      <p><button type="button" id="first">Close</button></p>
+    </div></div>
+    <span tabindex="0" class="stop" style="position:fixed;bottom:0;left:0;width:1px;height:1px;overflow:hidden"></span>
+    <span tabindex="0" class="stop" style="position:fixed;bottom:0;left:2px;width:1px;height:1px;overflow:hidden"></span>
+  </div>
+</main>
+<script>
+  var portal = document.getElementById('portal'), opener = document.getElementById('open-dialog');
+  var first = document.getElementById('first');
+  function close() { portal.hidden = true; opener.focus(); }
+  opener.addEventListener('click', function () { portal.hidden = false; first.focus(); });
+  first.addEventListener('click', close);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !portal.hidden) close(); });
+</script>
+</body>
+</html>
