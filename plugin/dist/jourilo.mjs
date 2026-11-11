@@ -41648,7 +41648,11 @@ var STATE = `(controls, mode) => {
   if (mode === 'same') {
     const d = window.__jouriloDialog;
     const ae = document.activeElement;
-    return { dialogOpen: visible(d) && (d.tagName !== 'DIALOG' || d.open), unlabelled: false, focusInDialog: !!d && !!ae && d.contains(ae), focusables: 0, controlledVisible: null, activeSelector: ae && ae !== document.body ? (ae.id ? '#' + ae.id : ae.tagName.toLowerCase()) : null };
+    let deep = ae;
+    while (deep && deep.shadowRoot && deep.shadowRoot.activeElement) deep = deep.shadowRoot.activeElement;
+    // A focus guard (Base UI, Radix, React Aria, Headless UI) is an empty sentinel; focus parked there is not an escape.
+    const onSentinel = !!deep && deep !== document.body && !(deep.textContent || '').trim() && (deep.getAttribute('aria-hidden') === 'true' || deep.getAttributeNames().some((n) => /focus-?guard|focus-?trap|data-.*sentinel/i.test(n)));
+    return { dialogOpen: visible(d) && (d.tagName !== 'DIALOG' || d.open), unlabelled: false, focusInDialog: !!d && !!ae && d.contains(ae), onSentinel, focusables: 0, controlledVisible: null, activeSelector: ae && ae !== document.body ? (ae.id ? '#' + ae.id : ae.tagName.toLowerCase()) : null };
   }
   const dialogs = Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"], dialog[open], [aria-modal="true"]')).filter(visible);
   let d = dialogs[dialogs.length - 1] || null;
@@ -41678,6 +41682,20 @@ var STATE = `(controls, mode) => {
     activeSelector: ae && ae !== document.body ? (ae.id ? '#' + ae.id : ae.tagName.toLowerCase()) : null,
   };
 }`;
+var WAIT_FOCUS_STABLE = `new Promise((resolve) => {
+  const deepActive = () => { let a = document.activeElement; while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement; return a; };
+  const start = performance.now();
+  let last = deepActive();
+  let same = 0;
+  const tick = () => {
+    const now = deepActive();
+    same = now === last ? same + 1 : 0;
+    last = now;
+    if (same >= 4 || performance.now() - start >= 250) resolve(true);
+    else requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+})`;
 var COMPOSITES = `(() => {
   const ITEM = { tablist: 'tab', radiogroup: 'radio', listbox: 'option', menubar: 'menuitem, [role="menuitemcheckbox"], [role="menuitemradio"]', tree: 'treeitem' };
   const visible = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
@@ -41792,8 +41810,9 @@ async function checkWidgets(page) {
         );
       } else {
         for (let k = 0; k <= after.focusables; k++) await page.keyboard.press("Tab");
+        await page.evaluate(WAIT_FOCUS_STABLE).catch(() => void 0);
         const tabbed = await state(t.controls, "same");
-        if (tabbed.dialogOpen && !tabbed.focusInDialog)
+        if (tabbed.dialogOpen && !tabbed.focusInDialog && !tabbed.onSentinel)
           issue(
             "dialog-focus-escapes",
             `Pressing Tab ${after.focusables + 1} time(s) moved focus out of the open dialog to ${tabbed.activeSelector ?? "the page"}.`

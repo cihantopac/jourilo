@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Dialog with focus guards – Widgets lab</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<main>
+  <h1>Prompt library</h1>
+  <p><a href="/">Back to the lab</a></p>
+  <!-- Field case (F30): Base UI, Radix and React Aria park focus on an empty sentinel next to the popup for a tick before
+       wrapping it back into the dialog. A person cannot Tab faster than the wrap; the audit must not call it an escape. -->
+  <p><button type="button" id="open-dialog" aria-haspopup="dialog">Open details</button></p>
+  <a href="/">Footer link</a>
+  <div id="portal" hidden>
+    <span tabindex="0" aria-hidden="true" data-base-ui-focus-guard style="position:fixed;top:0;left:0;width:1px;height:1px;overflow:hidden;white-space:nowrap"></span>
+    <div class="overlay"><div class="panel" id="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+      <h2 id="dlg-title">Prompt details</h2>
+      <p><button type="button" id="first">Copy</button> <button type="button" id="last">Close</button></p>
+    </div></div>
+    <span tabindex="0" aria-hidden="true" data-base-ui-focus-guard style="position:fixed;bottom:0;left:0;width:1px;height:1px;overflow:hidden;white-space:nowrap"></span>
+  </div>
+</main>
+<script>
+  var portal = document.getElementById('portal'), opener = document.getElementById('open-dialog');
+  var first = document.getElementById('first'), last = document.getElementById('last');
+  var guards = portal.querySelectorAll('[data-base-ui-focus-guard]');
+  function close() { portal.hidden = true; opener.focus(); }
+  opener.addEventListener('click', function () { portal.hidden = false; first.focus(); });
+  last.addEventListener('click', close);
+  // Focus parks on a guard, then wraps a tick later.
+  guards[0].addEventListener('focus', function () { setTimeout(function () { last.focus(); }, 30); });
+  guards[1].addEventListener('focus', function () { setTimeout(function () { first.focus(); }, 30); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !portal.hidden) close(); });
+</script>
+</body>
+</html>

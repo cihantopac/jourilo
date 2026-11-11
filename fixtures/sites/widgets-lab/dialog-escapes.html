@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Dialog that leaks focus – Widgets lab</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<main>
+  <h1>Prompt library</h1>
+  <p><a href="/">Back to the lab</a></p>
+  <!-- Seeded defect: the dialog is modal in name only, so Tab walks out of it into the page behind the overlay. -->
+  <p><button type="button" id="open-dialog" aria-haspopup="dialog">Open details</button></p>
+  <a href="/" id="behind">Footer link</a>
+  <div class="overlay" id="portal" hidden>
+    <div class="panel" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+      <h2 id="dlg-title">Prompt details</h2>
+      <p><button type="button" id="first">Copy</button> <button type="button" id="last">Close</button></p>
+    </div>
+  </div>
+</main>
+<script>
+  var portal = document.getElementById('portal'), opener = document.getElementById('open-dialog');
+  function close() { portal.hidden = true; opener.focus(); }
+  opener.addEventListener('click', function () { portal.hidden = false; document.getElementById('first').focus(); });
+  document.getElementById('last').addEventListener('click', close);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !portal.hidden) close(); });
+</script>
+</body>
+</html>
