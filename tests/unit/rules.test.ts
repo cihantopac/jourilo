@@ -373,6 +373,39 @@ describe('conversion rules', () => {
 });
 
 describe('merge', () => {
+  const mk = (
+    offenders: { selector: string; rect: typeof rect; right: number; width: number; tag: string }[],
+    vp: 'desktop' | 'mobile',
+  ) =>
+    responsiveFindings(
+      obs({
+        viewport: VIEWPORTS[vp]!,
+        probe: probe({ overflow: { docWidth: 420, viewportWidth: 375, offenders } }),
+      }),
+    );
+  const located = [{ selector: '.strip', rect, right: 420, width: 400, tag: 'div' }];
+  it('lets a located defect win over a review item in either viewport order', () => {
+    const review = mk([], 'desktop');
+    const defect = mk(located, 'mobile');
+    for (const order of [
+      [...review, ...defect],
+      [...defect, ...review],
+    ]) {
+      const merged = mergeFindings(order);
+      expect(merged).toHaveLength(1);
+      expect(merged[0]!.kind).toBe('defect');
+      expect(merged[0]!.confidence).toBe('high');
+      expect(merged[0]!.description).toContain('Widest culprit');
+      expect(merged[0]!.description).not.toContain('no element could be located');
+    }
+  });
+  it('leaves merges of equal kind unchanged', () => {
+    const merged = mergeFindings([...mk([], 'desktop'), ...mk([], 'mobile')]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]!.kind).toBe('needs-review');
+    expect(merged[0]!.confidence).toBe('low');
+    expect(merged[0]!.description).toContain('no element could be located');
+  });
   it('folds the same defect seen in two viewports into one finding', () => {
     const a = responsiveFindings(
       obs({ probe: probe({ overflow: { docWidth: 500, viewportWidth: 390, offenders: [] } }) }),

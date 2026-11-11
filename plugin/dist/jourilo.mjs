@@ -42280,6 +42280,11 @@ var SEVERITY_ORDER = ["critical", "serious", "moderate", "minor", "info"];
 function severityRank(s) {
   return SEVERITY_ORDER.indexOf(s);
 }
+var KIND_STRENGTH = { "needs-review": 0, hypothesis: 1, defect: 2 };
+var CONFIDENCE_STRENGTH = { low: 0, medium: 1, high: 2 };
+function strength(f) {
+  return KIND_STRENGTH[f.kind] * 10 + CONFIDENCE_STRENGTH[f.confidence];
+}
 function mergeFindings(findings) {
   const byFp = /* @__PURE__ */ new Map();
   for (const f of findings) {
@@ -42292,6 +42297,13 @@ function mergeFindings(findings) {
     viewports.delete("");
     prev.viewport = [...viewports].join(", ");
     if (severityRank(f.severity) < severityRank(prev.severity)) prev.severity = f.severity;
+    if (strength(f) > strength(prev)) {
+      prev.kind = f.kind;
+      prev.confidence = f.confidence;
+      prev.title = f.title;
+      prev.description = f.description;
+      prev.recommendation = f.recommendation;
+    }
     prev.occurrences = Math.max(prev.occurrences, f.occurrences);
     for (const e of f.evidence) {
       if (prev.evidence.length >= 12) break;
