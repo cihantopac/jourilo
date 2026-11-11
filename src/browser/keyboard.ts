@@ -105,7 +105,7 @@ const FOCUS_INFO = `(el) => {
   const rootHost = el.getRootNode && el.getRootNode().host;
   // A stop with text or an accessible name is content a person can reach, so a hidden one is a real focus-visible
   // failure (a clipped skip link that stays 1 x 1 while focused), not a stop without a box.
-  const labelledBy = (el.getAttribute('aria-labelledby') || '').split(/s+/).filter(Boolean)
+  const labelledBy = (el.getAttribute('aria-labelledby') || '').split(/\\s+/).filter(Boolean)
     .map((id) => { const n = document.getElementById(id); return n ? (n.textContent || '') : ''; }).join('').trim();
   const hasName = !!((el.textContent || '').trim() || (el.getAttribute('aria-label') || '').trim() || labelledBy ||
     (el.getAttribute('title') || '').trim() || (el.getAttribute('alt') || '').trim());
