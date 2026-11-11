@@ -15,34 +15,44 @@ export function responsiveFindings(obs: PageObservation): Finding[] {
   if (p.overflow.docWidth > p.overflow.viewportWidth + 1) {
     const narrow = vp.width <= 400;
     const extra = p.overflow.docWidth - p.overflow.viewportWidth;
+    // Without a located element nothing can be fixed from this finding alone: a person has to look.
+    const located = p.overflow.offenders.length > 0;
     out.push(
       makeFinding({
         ruleId: 'jourilo/horizontal-overflow',
         title: `Page scrolls sideways at ${vp.width} px`,
         category: 'responsive',
-        kind: 'defect',
+        kind: located ? 'defect' : 'needs-review',
         severity: narrow ? 'serious' : 'moderate',
-        confidence: 'high',
+        confidence: located ? 'high' : 'low',
         provenance: 'measured',
         url: obs.url,
         viewport: vp.name,
         description: `The document is ${p.overflow.docWidth} px wide in a ${p.overflow.viewportWidth} px viewport (${extra} px of horizontal scrolling).${
-          p.overflow.offenders.length
+          located
             ? ` Widest culprit: <${p.overflow.offenders[0]!.tag}> ending at ${p.overflow.offenders[0]!.right} px.`
-            : ''
+            : ' The measurement is real, but no element could be located that sticks out; check the page by hand (for example scripted or transformed content).'
         }`,
         impact:
           'Content is cut off or requires two-dimensional scrolling; on phones the page wobbles sideways while scrolling.',
         recommendation:
           'Constrain the offending element (max-width: 100%, flex-wrap, min-width: 0 on flex children, overflow-wrap: anywhere for long strings, responsive tables in a scroll container).',
         standards: vp.width <= 320 ? [wcag('1.4.10')] : [wcag('1.4.10'), nielsen(8)],
-        evidence: p.overflow.offenders.map((o) => ({
-          type: 'element' as const,
-          selector: o.selector,
-          rect: o.rect,
-          data: { right: o.right, width: o.width, viewport: p.overflow.viewportWidth },
-          ...shot,
-        })),
+        evidence: located
+          ? p.overflow.offenders.map((o) => ({
+              type: 'element' as const,
+              selector: o.selector,
+              rect: o.rect,
+              data: { right: o.right, width: o.width, viewport: p.overflow.viewportWidth },
+              ...shot,
+            }))
+          : [
+              {
+                type: obs.screenshot ? ('screenshot' as const) : ('metric' as const),
+                data: { docWidth: p.overflow.docWidth, viewport: p.overflow.viewportWidth },
+                ...shot,
+              },
+            ],
         occurrences: Math.max(1, p.overflow.offenders.length),
       }),
     );

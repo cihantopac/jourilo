@@ -260,6 +260,49 @@ describe('experience rules', () => {
     expect(f[0]!.severity).toBe('serious');
     expect(f[0]!.description).toContain('290 px');
   });
+  it('overflow with offenders stays a defect', () => {
+    const f = responsiveFindings(
+      obs({
+        screenshot: 'screenshots/a.jpg',
+        probe: probe({
+          overflow: {
+            docWidth: 420,
+            viewportWidth: 375,
+            offenders: [{ selector: '.strip', rect, right: 420, width: 400, tag: 'div' }],
+          },
+        }),
+      }),
+    );
+    expect(f[0]!.kind).toBe('defect');
+    expect(f[0]!.confidence).toBe('high');
+  });
+  it('overflow without offenders is a needs-review item', () => {
+    const input = {
+      screenshot: 'screenshots/a.jpg',
+      probe: probe({ overflow: { docWidth: 420, viewportWidth: 375, offenders: [] } }),
+    };
+    const f = responsiveFindings(obs(input));
+    expect(f).toHaveLength(1);
+    expect(f[0]!.kind).toBe('needs-review');
+    expect(f[0]!.confidence).toBe('low');
+    expect(f[0]!.severity).toBe('serious');
+    expect(f[0]!.description).toContain('no element could be located');
+    expect(f[0]!.evidence.length).toBeGreaterThan(0);
+    expect(f[0]!.evidence.some((e) => e.file === 'screenshots/a.jpg')).toBe(true);
+    const withOffender = responsiveFindings(
+      obs({
+        ...input,
+        probe: probe({
+          overflow: {
+            docWidth: 420,
+            viewportWidth: 375,
+            offenders: [{ selector: '.strip', rect, right: 420, width: 400, tag: 'div' }],
+          },
+        }),
+      }),
+    );
+    expect(f[0]!.fingerprint).toBe(withOffender[0]!.fingerprint);
+  });
   it('does not flag pages that fit', () => {
     expect(responsiveFindings(obs())).toEqual([]);
   });
