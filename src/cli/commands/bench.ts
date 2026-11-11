@@ -21,6 +21,16 @@ interface Expectation {
   /** Only a finding of this kind matches (e.g. a defect must not be reported where review is right). */
   kind?: Finding['kind'];
   why?: string;
+  /** Every evidence item of the matching finding must contain this text (snippet or selector). */
+  evidenceOnly?: string;
+}
+
+interface DefectLimit {
+  minSeverity: Severity;
+  count: number;
+  paths?: string[];
+  /** Limit only the defects of this rule. */
+  rule?: string;
 }
 
 interface Expected {
@@ -28,7 +38,7 @@ interface Expected {
   mustFind: Expectation[];
   mustNotFind: Expectation[];
   /** Control pages (all pages when `paths` is omitted) may have at most `count` defects at or above minSeverity. */
-  maxDefects?: { minSeverity: Severity; count: number; paths?: string[] };
+  maxDefects?: DefectLimit | DefectLimit[];
   /** Text the recommendation of a finding must contain (e.g. locked-brand guidance). */
   recommendations?: { rule: string; path: string; includes: string }[];
   /** Expected source file for a rule (root-cause location accuracy). */
@@ -82,7 +92,13 @@ export async function benchFixture(dir: string, wsRoot: string): Promise<Fixture
       context: loadContext(dir),
     });
     locateFindings(run, dir);
-    const missed = expected.mustFind.filter((e) => !run.findings.some((f) => matches(f, e)));
+    const evidenceOk = (f: Finding, e: Expectation) =>
+      !e.evidenceOnly ||
+      (f.evidence.length > 0 &&
+        f.evidence.every((ev) => `${ev.snippet ?? ''} ${ev.selector ?? ''}`.includes(e.evidenceOnly!)));
+    const missed = expected.mustFind.filter(
+      (e) => !run.findings.some((f) => matches(f, e) && evidenceOk(f, e)),
+    );
     for (const r of expected.recommendations ?? []) {
       const f = run.findings.find((x) => matches(x, r));
       if (!f?.recommendation.includes(r.includes))
@@ -91,20 +107,19 @@ export async function benchFixture(dir: string, wsRoot: string): Promise<Fixture
     const falsePositives = expected.mustNotFind
       .filter((e) => run.findings.some((f) => matches(f, e)))
       .map((e) => ({ rule: e.rule, path: e.path, ...(e.why ? { why: e.why } : {}) }));
-    const excessDefects = expected.maxDefects
-      ? run.findings
-          .filter(
-            (f) =>
-              f.kind === 'defect' &&
-              severityRank(f.severity) <= severityRank(expected.maxDefects!.minSeverity),
-          )
-          .filter(
-            (f) =>
-              !expected.maxDefects!.paths ||
-              expected.maxDefects!.paths.includes(pathOf(f.url).split('?')[0]!.replace(/\/$/, '') || '/'),
-          )
-          .map((f) => ({ rule: f.ruleId, path: pathOf(f.url), severity: f.severity }))
-      : [];
+    const limits = expected.maxDefects ? [expected.maxDefects].flat() : [];
+    const excessDefects: FixtureResult['excessDefects'] = [];
+    for (const lim of limits) {
+      const over: FixtureResult['excessDefects'] = [];
+      for (const f of run.findings) {
+        if (f.kind !== 'defect' || severityRank(f.severity) > severityRank(lim.minSeverity)) continue;
+        if (lim.rule && f.ruleId !== lim.rule) continue;
+        if (lim.paths && !lim.paths.includes(pathOf(f.url).split('?')[0]!.replace(/\/$/, '') || '/'))
+          continue;
+        over.push({ rule: f.ruleId, path: pathOf(f.url), severity: f.severity });
+      }
+      excessDefects.push(...over.slice(0, Math.max(0, over.length - lim.count)));
+    }
     const sourceMisses: FixtureResult['sourceMisses'] = [];
     for (const s of expected.sources ?? []) {
       const f = run.findings.find((x) => matches(x, { rule: s.rule, path: s.path }));
@@ -117,10 +132,7 @@ export async function benchFixture(dir: string, wsRoot: string): Promise<Fixture
       expected: expected.mustFind.length,
       missed,
       falsePositives,
-      excessDefects: excessDefects.slice(
-        0,
-        Math.max(0, excessDefects.length - (expected.maxDefects?.count ?? 0)),
-      ),
+      excessDefects,
       sourceHits: (expected.sources?.length ?? 0) - sourceMisses.length,
       sourceExpected: expected.sources?.length ?? 0,
       sourceMisses,

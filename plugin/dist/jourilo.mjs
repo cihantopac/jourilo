@@ -41019,6 +41019,7 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
 `;
 
 // src/browser/keyboard.ts
+var DEV_OVERLAY = "nextjs-portal, vite-error-overlay, astro-dev-toolbar, #webpack-dev-server-client-overlay";
 var FOCUS_INFO = `(el) => {
   if (!el || el === document.body || el === document.documentElement) return null;
   const sx = window.scrollX, sy = window.scrollY;
@@ -41078,6 +41079,11 @@ var FOCUS_INFO = `(el) => {
     if (!hit || hit === el || el.contains(hit) || hit.contains(el)) { visiblePts++; continue; }
     if (isCover(hit)) cover = cover || hit;
   }
+  const noBox = (e) => { const b = e.getBoundingClientRect(); return b.width <= 1 || b.height <= 1; };
+  const rootHost = el.getRootNode && el.getRootNode().host;
+  const boxless = !!(el.matches(${JSON.stringify(DEV_OVERLAY)}) || (rootHost && rootHost.matches(${JSON.stringify(DEV_OVERLAY)})) ||
+    (noBox(el) && !Array.from(el.querySelectorAll('*')).some((d) => !noBox(d)) &&
+      !(el.shadowRoot && Array.from(el.shadowRoot.querySelectorAll('*')).some((d) => !noBox(d)))));
   const name = (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('title') || '').replace(/\\s+/g, ' ').trim().slice(0, 80);
   // The element's identity as markup (like an axe node's html), so a state rule (.tool[aria-pressed]) can be found.
   const attrs = ['id', 'class', 'role', 'aria-pressed', 'aria-expanded', 'aria-selected', 'aria-checked', 'aria-current', 'data-state']
@@ -41090,6 +41096,7 @@ var FOCUS_INFO = `(el) => {
     obscured: !selfHidden && inViewport > 0 && visiblePts === 0 && !!cover,
     coverSelector: cover ? sel(cover) : undefined,
     inModal: !!el.closest('[aria-modal="true"], dialog[open]'),
+    boxless,
   };
 }`;
 var FOCUS_STYLES = `(el) => {
@@ -44080,7 +44087,8 @@ function keyboardFindings(obs) {
   const out = [];
   const vp = obs.viewport.name;
   const shot = obs.screenshot ? { file: obs.screenshot } : {};
-  const invisible = kb.stops.filter((s) => s.indicatorChecked && s.indicatorChanges.length === 0);
+  const boxed = kb.stops.filter((s) => !s.boxless);
+  const invisible = boxed.filter((s) => s.indicatorChecked && s.indicatorChanges.length === 0);
   if (invisible.length) {
     out.push(
       makeFinding({
@@ -44093,7 +44101,7 @@ function keyboardFindings(obs) {
         provenance: "measured",
         url: obs.url,
         viewport: vp,
-        description: `${invisible.length} of ${kb.stops.length} elements reached with Tab look exactly the same focused and unfocused (outline, box-shadow, border, background, color, underline and the parent's styles were compared).`,
+        description: `${invisible.length} of ${boxed.length} elements reached with Tab look exactly the same focused and unfocused (outline, box-shadow, border, background, color, underline and the parent's styles were compared).`,
         impact: "Keyboard users cannot see where they are on the page, so they cannot operate it reliably.",
         recommendation: "Do not remove the focus outline without a replacement. Add a clearly visible :focus-visible style (e.g. a 2 px outline with 3:1 contrast) to the shared button/link/input components.",
         standards: [wcag("2.4.7")],
@@ -49263,18 +49271,29 @@ async function benchFixture(dir, wsRoot) {
       context: loadContext(dir)
     });
     locateFindings(run, dir);
-    const missed = expected.mustFind.filter((e) => !run.findings.some((f) => matches(f, e)));
+    const evidenceOk = (f, e) => !e.evidenceOnly || f.evidence.length > 0 && f.evidence.every((ev) => `${ev.snippet ?? ""} ${ev.selector ?? ""}`.includes(e.evidenceOnly));
+    const missed = expected.mustFind.filter(
+      (e) => !run.findings.some((f) => matches(f, e) && evidenceOk(f, e))
+    );
     for (const r of expected.recommendations ?? []) {
       const f = run.findings.find((x) => matches(x, r));
       if (!f?.recommendation.includes(r.includes))
         missed.push({ rule: r.rule, path: r.path, why: `recommendation should include "${r.includes}"` });
     }
     const falsePositives = expected.mustNotFind.filter((e) => run.findings.some((f) => matches(f, e))).map((e) => ({ rule: e.rule, path: e.path, ...e.why ? { why: e.why } : {} }));
-    const excessDefects = expected.maxDefects ? run.findings.filter(
-      (f) => f.kind === "defect" && severityRank(f.severity) <= severityRank(expected.maxDefects.minSeverity)
-    ).filter(
-      (f) => !expected.maxDefects.paths || expected.maxDefects.paths.includes(pathOf2(f.url).split("?")[0].replace(/\/$/, "") || "/")
-    ).map((f) => ({ rule: f.ruleId, path: pathOf2(f.url), severity: f.severity })) : [];
+    const limits = expected.maxDefects ? [expected.maxDefects].flat() : [];
+    const excessDefects = [];
+    for (const lim of limits) {
+      const over = [];
+      for (const f of run.findings) {
+        if (f.kind !== "defect" || severityRank(f.severity) > severityRank(lim.minSeverity)) continue;
+        if (lim.rule && f.ruleId !== lim.rule) continue;
+        if (lim.paths && !lim.paths.includes(pathOf2(f.url).split("?")[0].replace(/\/$/, "") || "/"))
+          continue;
+        over.push({ rule: f.ruleId, path: pathOf2(f.url), severity: f.severity });
+      }
+      excessDefects.push(...over.slice(0, Math.max(0, over.length - lim.count)));
+    }
     const sourceMisses = [];
     for (const s of expected.sources ?? []) {
       const f = run.findings.find((x) => matches(x, { rule: s.rule, path: s.path }));
@@ -49287,10 +49306,7 @@ async function benchFixture(dir, wsRoot) {
       expected: expected.mustFind.length,
       missed,
       falsePositives,
-      excessDefects: excessDefects.slice(
-        0,
-        Math.max(0, excessDefects.length - (expected.maxDefects?.count ?? 0))
-      ),
+      excessDefects,
       sourceHits: (expected.sources?.length ?? 0) - sourceMisses.length,
       sourceExpected: expected.sources?.length ?? 0,
       sourceMisses,

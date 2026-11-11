@@ -5,6 +5,12 @@
       "rule": "jourilo/focus-obscured",
       "path": "/shutter",
       "why": "an in-flow opaque panel covers three tabbable links (cihanca.com, field item F1)"
+    },
+    {
+      "rule": "jourilo/focus-visible",
+      "path": "/dev-overlay",
+      "why": "a button with outline:none and no other indicator must still be reported (evidence is that button only)",
+      "evidenceOnly": "Control without indicator"
     }
   ],
   "mustNotFind": [
@@ -12,11 +18,29 @@
       "rule": "jourilo/focus-obscured",
       "path": "/controls",
       "why": "an opacity:0 checkbox and a full-opacity one under its label, a transparent click-catcher, a sticky header with scroll-padding, and links in an opacity:0 menu and a height:0 overflow:hidden panel"
+    },
+    {
+      "rule": "jourilo/focus-obscured",
+      "path": "/dev-overlay",
+      "why": "zero-size overlay, 0x0 span and an off-screen skip link are not covered content"
     }
   ],
-  "maxDefects": {
-    "minSeverity": "moderate",
-    "count": 0,
-    "paths": ["/controls", "/"]
-  }
+  "maxDefects": [
+    {
+      "minSeverity": "moderate",
+      "count": 0,
+      "paths": [
+        "/controls",
+        "/"
+      ]
+    },
+    {
+      "rule": "jourilo/focus-visible",
+      "minSeverity": "minor",
+      "count": 1,
+      "paths": [
+        "/dev-overlay"
+      ]
+    }
+  ]
 }
