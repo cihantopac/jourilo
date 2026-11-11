@@ -40830,12 +40830,15 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
   for (const fs of document.querySelectorAll('fieldset')) {
     if (!isVisible(fs)) continue;
     const legend = fs.querySelector(':scope > legend');
-    if (!legend || !text(legend))
-      structure.fieldsets.push({
-        selector: selectorOf(fs),
-        rect: rectOf(fs),
-        issue: legend ? 'empty legend' : 'no legend',
-      });
+    if (legend && text(legend)) continue;
+    if ((fs.getAttribute('aria-label') || '').trim()) continue;
+    const labelledBy = (fs.getAttribute('aria-labelledby') || '').split(/\\s+/).filter(Boolean);
+    if (labelledBy.some((id) => text(document.getElementById(id)))) continue;
+    structure.fieldsets.push({
+      selector: selectorOf(fs),
+      rect: rectOf(fs),
+      issue: legend ? 'empty legend' : 'no name',
+    });
   }
   const radiosByName = new Map();
   for (const r of document.querySelectorAll('input[type="radio"][name]')) {
@@ -44520,9 +44523,9 @@ function structureFindings(obs) {
         provenance: "measured",
         url: obs.url,
         viewport: vp,
-        description: `${st.fieldsets.length} fieldset(s) have no legend or an empty one, so the group of fields has no name.`,
+        description: `${st.fieldsets.length} fieldset(s) have no legend, aria-label or aria-labelledby (or an empty one), so the group of fields has no name.`,
         impact: 'Screen-reader users hear the fields without the question they answer (e.g. "Yes / No" without "Do you have a passport?").',
-        recommendation: "Give every fieldset a first-child <legend> with the group question; remove fieldsets used only for styling.",
+        recommendation: "Give every fieldset a first-child <legend> with the group question (or an aria-label / aria-labelledby that names it); remove fieldsets used only for styling.",
         standards: [wcag("1.3.1"), wcag("3.3.2")],
         evidence: ev(st.fieldsets, (i) => st.fieldsets[i].issue),
         occurrences: st.fieldsets.length

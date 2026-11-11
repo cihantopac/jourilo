@@ -646,11 +646,11 @@ export function structureFindings(obs: PageObservation): Finding[] {
         provenance: 'measured',
         url: obs.url,
         viewport: vp,
-        description: `${st.fieldsets.length} fieldset(s) have no legend or an empty one, so the group of fields has no name.`,
+        description: `${st.fieldsets.length} fieldset(s) have no legend, aria-label or aria-labelledby (or an empty one), so the group of fields has no name.`,
         impact:
           'Screen-reader users hear the fields without the question they answer (e.g. "Yes / No" without "Do you have a passport?").',
         recommendation:
-          'Give every fieldset a first-child <legend> with the group question; remove fieldsets used only for styling.',
+          'Give every fieldset a first-child <legend> with the group question (or an aria-label / aria-labelledby that names it); remove fieldsets used only for styling.',
         standards: [wcag('1.3.1'), wcag('3.3.2')],
         evidence: ev(st.fieldsets, (i) => st.fieldsets[i]!.issue),
         occurrences: st.fieldsets.length,

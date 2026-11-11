@@ -1,0 +1,8 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font:16px/1.5 system-ui,sans-serif;color:#111827;margin:0}main{max-width:720px;margin:0 auto;padding:24px 16px}button:focus-visible{outline:3px solid #1d4ed8}button{font:inherit;padding:10px 16px}fieldset{margin:0 0 16px}</style><title>Named groups – Structure lab</title></head><body><main>
+<h1>Viewer controls</h1>
+<!-- Fieldsets named without a legend (F27): the first two must pass, the last two must still fire. -->
+<fieldset aria-label="Move the view"><button type="button">Up</button> <button type="button">Down</button> <button type="button">Left</button> <button type="button">Right</button></fieldset>
+<fieldset aria-labelledby="size-heading"><h3 id="size-heading">Size</h3><button type="button">Smaller</button> <button type="button">Larger</button></fieldset>
+<fieldset id="ctl-unresolved" aria-labelledby="missing"><button type="button">Zoom in</button> <button type="button">Zoom out</button></fieldset>
+<fieldset id="ctl-blank" aria-label="   "><button type="button">Previous</button> <button type="button">Next</button></fieldset>
+</main></body></html>

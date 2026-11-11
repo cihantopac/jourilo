@@ -7,6 +7,15 @@
       "why": "fieldset without legend and with an empty legend"
     },
     {
+      "rule": "jourilo/fieldset-legend",
+      "path": "/named",
+      "evidenceExactly": [
+        "#ctl-unresolved",
+        "#ctl-blank"
+      ],
+      "why": "aria-labelledby that resolves to nothing and a blank aria-label are not names; the aria-label and resolving aria-labelledby fieldsets are"
+    },
+    {
       "rule": "jourilo/radio-group",
       "path": "/broken",
       "why": "radio pair not grouped"
