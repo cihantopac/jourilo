@@ -44,8 +44,8 @@ Driven by field reports ([FIELD-FEEDBACK.md](FIELD-FEEDBACK.md), [RELEASE-1.2.md
 Field items F19, F20, F24, F25, F27, F28, F30, F32-F34, F37, F39, F40 and part of F22/F23
 ([FIELD-FEEDBACK.md](FIELD-FEEDBACK.md), [RELEASE-1.2.md](RELEASE-1.2.md)):
 
-- `--deny-local` / `JOURILO_DENY_LOCAL` (fail-closed, refused with WebKit); the start URL keeps its trailing slash and
-  is checked against robots.txt.
+- `--deny-local` / `JOURILO_DENY_LOCAL` (fail-closed, refused with WebKit); trailing slashes are kept, and an explicitly
+  requested URL that robots.txt disallows is audited with a limitation that says so.
 - Fewer false positives: dev-server overlays and boxless focus stops, `aria-hidden` contrast glyphs, fieldsets named by
   ARIA, dialog focus guards; overflow without a located element is a review item; the stronger sighting decides a
   merged finding.

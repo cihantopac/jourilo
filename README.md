@@ -113,11 +113,11 @@ the report. All commands: [docs/PLUGIN.md](docs/PLUGIN.md).
 ## Benchmarks
 
 On the 955 [W3C ACT Rules](https://www.w3.org/WAI/standards-guidelines/act/rules/) test cases that map to WCAG criteria,
-written by the ACT Rules Community Group and not for Jourilo (measured again on 2026-11-03 for 1.2.0, with the same result):
+written by the ACT Rules Community Group and not for Jourilo (measured again on 2026-11-12 for 1.2.1, with the same result):
 
 |                       | Precision | Recall | False positives |
 | --------------------- | --------- | ------ | --------------- |
-| Jourilo 1.2.0         | 93.9 %    | 55.4 % | 11              |
+| Jourilo 1.2.1         | 93.9 %    | 55.4 % | 11              |
 | axe-core 4.14.0 alone | 93.6 %    | 53.5 % | 11              |
 
 Jourilo runs axe-core and adds its own keyboard-trap and focus-indicator checks. Many misses are criteria only a person
