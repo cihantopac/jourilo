@@ -39614,6 +39614,180 @@ Re-run with --write to install.`
 import { existsSync as existsSync12, writeSync as writeSync2 } from "node:fs";
 import { resolve as resolve6 } from "node:path";
 
+// src/browser/vitals.ts
+var VITALS_INIT_SCRIPT = `(() => {
+  if (window.__jourilo) return;
+  const s = window.__jourilo = { lcp: null, lcpElement: null, cls: 0, clsEntries: [], longTasks: [], inp: null, interactions: [], fcp: null };
+  const po = (type, cb, extra) => {
+    try { new PerformanceObserver((l) => l.getEntries().forEach(cb)).observe(Object.assign({ type, buffered: true }, extra || {})); } catch (e) {}
+  };
+  po('largest-contentful-paint', (e) => {
+    s.lcp = e.startTime;
+    const el = e.element;
+    s.lcpElement = el ? (el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (typeof el.className === 'string' && el.className ? '.' + el.className.trim().split(/\\s+/).slice(0, 2).join('.') : '')) : (e.url || null);
+  });
+  // CLS: largest session window (gap < 1s, window < 5s), shifts without recent input only.
+  let win = 0, winStart = 0, winLast = 0;
+  po('layout-shift', (e) => {
+    if (e.hadRecentInput) return;
+    if (win && e.startTime - winLast < 1000 && e.startTime - winStart < 5000) { win += e.value; } else { win = e.value; winStart = e.startTime; }
+    winLast = e.startTime;
+    if (win > s.cls) s.cls = win;
+    if (s.clsEntries.length < 20) {
+      const src = (e.sources || []).map((x) => x.node && x.node.nodeType === 1 ? x.node.tagName.toLowerCase() + (x.node.id ? '#' + x.node.id : '') : null).filter(Boolean);
+      s.clsEntries.push({ value: e.value, t: e.startTime, sources: src });
+    }
+  });
+  po('paint', (e) => { if (e.name === 'first-contentful-paint') s.fcp = e.startTime; });
+  po('longtask', (e) => { s.longTasks.push({ start: e.startTime, duration: e.duration }); });
+  // INP approximation for scripted interactions: worst event duration per interactionId.
+  po('event', (e) => {
+    if (!e.interactionId) return;
+    const prev = s.interactions.find((i) => i.id === e.interactionId);
+    if (prev) { prev.duration = Math.max(prev.duration, e.duration); } else { s.interactions.push({ id: e.interactionId, name: e.name, duration: e.duration }); }
+    s.inp = Math.max(s.inp || 0, e.duration);
+  }, { durationThreshold: 16 });
+})();`;
+var READ_VITALS_SCRIPT = `(() => {
+  const s = window.__jourilo || {};
+  const nav = performance.getEntriesByType('navigation')[0];
+  const res = performance.getEntriesByType('resource');
+  const fcp = s.fcp;
+  // Only report what this browser can measure: Firefox and WebKit lack layout-shift, longtask and some event
+  // timing entries, and a default of 0 would look like a perfect score.
+  const types = (typeof PerformanceObserver !== 'undefined' && PerformanceObserver.supportedEntryTypes) || [];
+  const has = (t) => types.includes(t);
+  let tbt = null;
+  if (fcp != null && has('longtask')) {
+    tbt = 0;
+    for (const t of s.longTasks || []) {
+      if (t.start + t.duration <= fcp) continue;
+      tbt += Math.max(0, t.duration - 50);
+    }
+  }
+  let bytes = nav ? (nav.transferSize || 0) : 0;
+  for (const r of res) bytes += r.transferSize || 0;
+  return {
+    lcp: has('largest-contentful-paint') ? (s.lcp ?? null) : null, lcpElement: s.lcpElement ?? null,
+    cls: has('layout-shift') ? (s.cls || 0) : null, clsEntries: s.clsEntries || [],
+    fcp: fcp ?? null, ttfb: nav ? nav.responseStart : null, tbt,
+    inp: has('event') ? (s.inp ?? null) : null, interactions: (s.interactions || []).length,
+    unsupported: ['largest-contentful-paint', 'layout-shift', 'longtask', 'event'].filter((t) => !has(t)),
+    domContentLoaded: nav ? nav.domContentLoadedEventEnd : null, load: nav ? nav.loadEventEnd : null,
+    transferBytes: bytes, requests: res.length + 1, domNodes: document.getElementsByTagName('*').length,
+  };
+})()`;
+var THRESHOLDS = {
+  LCP: [2500, 4e3],
+  CLS: [0.1, 0.25],
+  INP: [200, 500],
+  FCP: [1800, 3e3],
+  TTFB: [800, 1800],
+  TBT: [200, 600]
+};
+function rate(name, value) {
+  const t = THRESHOLDS[name];
+  if (!t) return void 0;
+  return value <= t[0] ? "good" : value <= t[1] ? "needs-improvement" : "poor";
+}
+function toMetrics(v, spread, runs2 = 1) {
+  const out = [];
+  const KEY = {
+    LCP: "lcp",
+    CLS: "cls",
+    FCP: "fcp",
+    TTFB: "ttfb",
+    TBT: "tbt",
+    Load: "load",
+    Transfer: "transferBytes"
+  };
+  const add = (name, value, unit, note) => {
+    if (value == null || Number.isNaN(value)) return;
+    const range = spread?.[KEY[name] ?? ""];
+    if (runs2 > 1 && range) {
+      const fmt = (x) => unit === "score" ? x.toFixed(3) : String(Math.round(x));
+      note = `${note ? `${note} ` : ""}Median of ${runs2} runs (range ${fmt(range[0])}\u2013${fmt(range[1])}).`;
+    }
+    const rounded = unit === "score" ? Math.round(value * 1e3) / 1e3 : Math.round(value);
+    const m = { name, value: rounded, unit, source: "lab" };
+    if (runs2 > 1 && range) {
+      const r2 = (x) => unit === "score" ? Math.round(x * 1e3) / 1e3 : Math.round(x);
+      m.runs = runs2;
+      m.range = [r2(range[0]), r2(range[1])];
+    }
+    const r = rate(name, rounded);
+    if (r) m.rating = r;
+    if (note) m.note = note;
+    out.push(m);
+  };
+  add("LCP", v.lcp, "ms", v.lcpElement ? `LCP element: ${v.lcpElement}` : void 0);
+  add("CLS", v.cls, "score");
+  add("FCP", v.fcp, "ms");
+  add("TTFB", v.ttfb, "ms");
+  add("TBT", v.tbt, "ms", "Lab proxy for interactivity; INP needs real interactions.");
+  if (v.interactions > 0)
+    add("INP", v.inp, "ms", `From ${v.interactions} scripted interaction(s); not field data.`);
+  add("Load", v.load, "ms");
+  add("Transfer", v.transferBytes, "bytes");
+  add("Requests", v.requests, "count");
+  add("DOM nodes", v.domNodes, "count");
+  return out;
+}
+
+// src/audit/budget.ts
+init_errors();
+function parseBudgets(value) {
+  if (value === void 0) return [];
+  const known = Object.keys(THRESHOLDS).join(", ");
+  const usage2 = (why) => new JouriloError("USAGE", `--budget ${why}`, `Example: --budget LCP=2000,CLS=0.05 (metrics: ${known}).`);
+  const specs = [];
+  for (const part of value.split(",").map((s) => s.trim())) {
+    const [name = "", raw, ...rest] = part.split("=").map((s) => s.trim());
+    const metric = name.toUpperCase();
+    if (!(metric in THRESHOLDS)) throw usage2(`has an unknown metric "${name}" (known: ${known}).`);
+    const limit = Number(raw);
+    if (raw === void 0 || rest.length || raw === "" || !Number.isFinite(limit) || limit < 0)
+      throw usage2(`needs a number of 0 or more for ${metric} (got "${raw ?? ""}").`);
+    if (specs.some((s) => s.metric === metric)) throw usage2(`names ${metric} twice.`);
+    specs.push({ metric, limit });
+  }
+  return specs;
+}
+function evaluateBudgets(pages, specs) {
+  return specs.map(({ metric, limit }) => {
+    let worst;
+    for (const page of pages) {
+      const m = page.metrics.find((x) => x.name === metric);
+      if (m && (!worst || m.value > worst.value)) worst = { value: m.value, page };
+    }
+    if (!worst) return { metric, limit, worst: null, url: null, viewport: null, ok: null };
+    return {
+      metric,
+      limit,
+      worst: worst.value,
+      url: worst.page.url,
+      viewport: worst.page.viewport,
+      ok: worst.value <= limit
+    };
+  });
+}
+function budgetFailed(budgets) {
+  return !!budgets?.some((b) => b.ok === false);
+}
+function budgetLimitation(b) {
+  return `Budget ${b.metric}=${b.limit} was not checked: ${b.metric} was not measured on any page of this run${b.metric === "INP" ? " (it needs a real interaction, which a scripted visit does not produce)" : ""}.`;
+}
+function budgetLine(b) {
+  const unit = b.metric === "CLS" ? "" : " ms";
+  if (b.ok === null) return `Budget not measured: ${b.metric} (limit ${b.limit}${unit})`;
+  let path2 = b.url ?? "";
+  try {
+    path2 = new URL(path2).pathname;
+  } catch {
+  }
+  return b.ok ? `Budget met: ${b.metric} ${b.worst}${unit} within ${b.limit}${unit} (worst: ${path2} [${b.viewport}])` : `Budget exceeded: ${b.metric} ${b.worst}${unit} over ${b.limit}${unit} (worst: ${path2} [${b.viewport}])`;
+}
+
 // src/audit/engine.ts
 import { existsSync as existsSync6, rmSync as rmSync3 } from "node:fs";
 import { join as join11 } from "node:path";
@@ -42261,126 +42435,6 @@ function requestLimitations(opts) {
         `${hops.length} redirect(s) within ${h.origin} were followed without the extra headers (${hops.slice(0, 3).join("; ")}${hops.length > 3 ? "; \u2026" : ""}); a page that needs them is best audited at its final URL.`
       );
   }
-  return out;
-}
-
-// src/browser/vitals.ts
-var VITALS_INIT_SCRIPT = `(() => {
-  if (window.__jourilo) return;
-  const s = window.__jourilo = { lcp: null, lcpElement: null, cls: 0, clsEntries: [], longTasks: [], inp: null, interactions: [], fcp: null };
-  const po = (type, cb, extra) => {
-    try { new PerformanceObserver((l) => l.getEntries().forEach(cb)).observe(Object.assign({ type, buffered: true }, extra || {})); } catch (e) {}
-  };
-  po('largest-contentful-paint', (e) => {
-    s.lcp = e.startTime;
-    const el = e.element;
-    s.lcpElement = el ? (el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (typeof el.className === 'string' && el.className ? '.' + el.className.trim().split(/\\s+/).slice(0, 2).join('.') : '')) : (e.url || null);
-  });
-  // CLS: largest session window (gap < 1s, window < 5s), shifts without recent input only.
-  let win = 0, winStart = 0, winLast = 0;
-  po('layout-shift', (e) => {
-    if (e.hadRecentInput) return;
-    if (win && e.startTime - winLast < 1000 && e.startTime - winStart < 5000) { win += e.value; } else { win = e.value; winStart = e.startTime; }
-    winLast = e.startTime;
-    if (win > s.cls) s.cls = win;
-    if (s.clsEntries.length < 20) {
-      const src = (e.sources || []).map((x) => x.node && x.node.nodeType === 1 ? x.node.tagName.toLowerCase() + (x.node.id ? '#' + x.node.id : '') : null).filter(Boolean);
-      s.clsEntries.push({ value: e.value, t: e.startTime, sources: src });
-    }
-  });
-  po('paint', (e) => { if (e.name === 'first-contentful-paint') s.fcp = e.startTime; });
-  po('longtask', (e) => { s.longTasks.push({ start: e.startTime, duration: e.duration }); });
-  // INP approximation for scripted interactions: worst event duration per interactionId.
-  po('event', (e) => {
-    if (!e.interactionId) return;
-    const prev = s.interactions.find((i) => i.id === e.interactionId);
-    if (prev) { prev.duration = Math.max(prev.duration, e.duration); } else { s.interactions.push({ id: e.interactionId, name: e.name, duration: e.duration }); }
-    s.inp = Math.max(s.inp || 0, e.duration);
-  }, { durationThreshold: 16 });
-})();`;
-var READ_VITALS_SCRIPT = `(() => {
-  const s = window.__jourilo || {};
-  const nav = performance.getEntriesByType('navigation')[0];
-  const res = performance.getEntriesByType('resource');
-  const fcp = s.fcp;
-  // Only report what this browser can measure: Firefox and WebKit lack layout-shift, longtask and some event
-  // timing entries, and a default of 0 would look like a perfect score.
-  const types = (typeof PerformanceObserver !== 'undefined' && PerformanceObserver.supportedEntryTypes) || [];
-  const has = (t) => types.includes(t);
-  let tbt = null;
-  if (fcp != null && has('longtask')) {
-    tbt = 0;
-    for (const t of s.longTasks || []) {
-      if (t.start + t.duration <= fcp) continue;
-      tbt += Math.max(0, t.duration - 50);
-    }
-  }
-  let bytes = nav ? (nav.transferSize || 0) : 0;
-  for (const r of res) bytes += r.transferSize || 0;
-  return {
-    lcp: has('largest-contentful-paint') ? (s.lcp ?? null) : null, lcpElement: s.lcpElement ?? null,
-    cls: has('layout-shift') ? (s.cls || 0) : null, clsEntries: s.clsEntries || [],
-    fcp: fcp ?? null, ttfb: nav ? nav.responseStart : null, tbt,
-    inp: has('event') ? (s.inp ?? null) : null, interactions: (s.interactions || []).length,
-    unsupported: ['largest-contentful-paint', 'layout-shift', 'longtask', 'event'].filter((t) => !has(t)),
-    domContentLoaded: nav ? nav.domContentLoadedEventEnd : null, load: nav ? nav.loadEventEnd : null,
-    transferBytes: bytes, requests: res.length + 1, domNodes: document.getElementsByTagName('*').length,
-  };
-})()`;
-var THRESHOLDS = {
-  LCP: [2500, 4e3],
-  CLS: [0.1, 0.25],
-  INP: [200, 500],
-  FCP: [1800, 3e3],
-  TTFB: [800, 1800],
-  TBT: [200, 600]
-};
-function rate(name, value) {
-  const t = THRESHOLDS[name];
-  if (!t) return void 0;
-  return value <= t[0] ? "good" : value <= t[1] ? "needs-improvement" : "poor";
-}
-function toMetrics(v, spread, runs2 = 1) {
-  const out = [];
-  const KEY = {
-    LCP: "lcp",
-    CLS: "cls",
-    FCP: "fcp",
-    TTFB: "ttfb",
-    TBT: "tbt",
-    Load: "load",
-    Transfer: "transferBytes"
-  };
-  const add = (name, value, unit, note) => {
-    if (value == null || Number.isNaN(value)) return;
-    const range = spread?.[KEY[name] ?? ""];
-    if (runs2 > 1 && range) {
-      const fmt = (x) => unit === "score" ? x.toFixed(3) : String(Math.round(x));
-      note = `${note ? `${note} ` : ""}Median of ${runs2} runs (range ${fmt(range[0])}\u2013${fmt(range[1])}).`;
-    }
-    const rounded = unit === "score" ? Math.round(value * 1e3) / 1e3 : Math.round(value);
-    const m = { name, value: rounded, unit, source: "lab" };
-    if (runs2 > 1 && range) {
-      const r2 = (x) => unit === "score" ? Math.round(x * 1e3) / 1e3 : Math.round(x);
-      m.runs = runs2;
-      m.range = [r2(range[0]), r2(range[1])];
-    }
-    const r = rate(name, rounded);
-    if (r) m.rating = r;
-    if (note) m.note = note;
-    out.push(m);
-  };
-  add("LCP", v.lcp, "ms", v.lcpElement ? `LCP element: ${v.lcpElement}` : void 0);
-  add("CLS", v.cls, "score");
-  add("FCP", v.fcp, "ms");
-  add("TTFB", v.ttfb, "ms");
-  add("TBT", v.tbt, "ms", "Lab proxy for interactivity; INP needs real interactions.");
-  if (v.interactions > 0)
-    add("INP", v.inp, "ms", `From ${v.interactions} scripted interaction(s); not field data.`);
-  add("Load", v.load, "ms");
-  add("Transfer", v.transferBytes, "bytes");
-  add("Requests", v.requests, "count");
-  add("DOM nodes", v.domNodes, "count");
   return out;
 }
 
@@ -48881,7 +48935,7 @@ function pagesHtml(run) {
 ${metricCell(p, "LCP")}${metricCell(p, "CLS")}${metricCell(p, "TBT")}${metricCell(p, "Transfer")}<td>${p.consoleErrors}</td><td>${p.failedRequests}</td></tr>`
   ).join("");
   return `<div class="tablewrap" tabindex="0" role="region"${attrs({ "aria-label": "pages.table" })}><table class="pages"><thead><tr><th><span class="sr">Screenshot</span></th><th>${T("th.page")}</th><th>${T("th.viewport")}</th><th>${T("th.http")}</th><th>LCP</th><th>CLS</th><th>TBT</th><th>Transfer</th><th>${T("th.jserr")}</th><th>${T("th.failedReq")}</th></tr></thead><tbody>${rows}</tbody></table></div>
-<p class="muted">${T("pages.note", { t: run.settings.throttle ? I18N.en["pages.throttled"] : I18N.en["pages.unthrottled"] })}</p>`;
+<p class="muted">${T("pages.note", { t: run.settings.throttle ? I18N.en["pages.throttled"] : I18N.en["pages.unthrottled"] })}</p>${run.budgets?.length ? `<ul class="muted" lang="en">${run.budgets.map((b) => `<li>${esc(budgetLine(b))}</li>`).join("")}</ul>` : ""}`;
 }
 function compareHtml(cmp) {
   const kpi = (label, n, cls) => `<div class="kpi ${cls}"><span class="lbl">${T(label)}</span><span class="num">${n}</span></div>`;
@@ -50304,6 +50358,7 @@ var AUDIT_OPTIONS = {
   brand: { type: "string" },
   runs: { type: "string" },
   "fail-on": { type: "string" },
+  budget: { type: "string" },
   "max-duration": { type: "string" },
   "run-id": { type: "string" },
   evidence: { type: "string" },
@@ -50360,6 +50415,7 @@ async function auditCommand(ctx, usage2, categories) {
   const failOn = str(ctx, "fail-on");
   if (failOn && !SEVERITIES.includes(failOn))
     throw new JouriloError("USAGE", `--fail-on must be one of ${SEVERITIES.join(", ")}.`);
+  const budgetSpecs = parseBudgets(str(ctx, "budget"));
   const state = parseStateOptions(ctx);
   const auth = str(ctx, "auth");
   if (auth && !existsSync12(auth)) throw new JouriloError("NOT_FOUND", `Auth state file not found: ${auth}`);
@@ -50424,12 +50480,17 @@ async function auditCommand(ctx, usage2, categories) {
       ctx.log(`Mapped ${located} finding(s) to likely source locations in ${repo}`);
     }
     run.outcome = runOutcome(run);
+    if (budgetSpecs.length) {
+      run.budgets = evaluateBudgets(run.pages, budgetSpecs);
+      for (const b of run.budgets) if (b.ok === null) run.limitations.push(budgetLimitation(b));
+    }
     ctx.ws.saveRun(run);
     const reports = writeReports(runDir, run, void 0, {
       sarif: flag(ctx, "sarif"),
       history: ctx.ws.listRuns()
     });
-    const gate = failOn ? run.findings.some((f) => f.kind === "defect" && severityRank(f.severity) <= severityRank(failOn)) : false;
+    const severityGate = failOn ? run.findings.some((f) => f.kind === "defect" && severityRank(f.severity) <= severityRank(failOn)) : false;
+    const gate = severityGate || budgetFailed(run.budgets);
     return {
       data: {
         runId: run.id,
@@ -50475,6 +50536,7 @@ function summaryText(run, reportPath) {
     );
   }
   if (run.findings.filter((f) => f.kind === "defect").length > top.length) lines.push("  \u2026");
+  if (run.budgets?.length) lines.push("", ...run.budgets.map((b) => `  ${budgetLine(b)}`));
   lines.push("", `  Report: ${reportPath}`, `  Run id: ${run.id}`, "");
   return lines.join("\n");
 }
@@ -50492,7 +50554,7 @@ function noPageLines(run) {
 var audit = {
   name: "audit",
   summary: "Audit a website URL or a static build directory in a real browser (accessibility, UX, responsive, performance, reliability, conversion).",
-  usage: "jourilo audit <url|dir> [--pages 6] [--viewports desktop,mobile] [--url /path ...] [--repo .] [--fail-on serious]",
+  usage: "jourilo audit <url|dir> [--pages 6] [--viewports desktop,mobile] [--url /path ...] [--repo .] [--fail-on serious] [--budget LCP=2000]",
   options: AUDIT_OPTIONS,
   details: `Options:
   --pages N            Pages to audit after discovery (default 6; 1 = only the target; 0 is a usage error)
@@ -50528,6 +50590,9 @@ ${networkOptionsHelp(23)}
                        also lets a --setup-journey submit forms
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
+  --budget LIST        Exit 1 when a lab metric exceeds its limit, e.g. LCP=2000,CLS=0.05,TBT=300 (LCP, CLS, INP, FCP,
+                       TTFB, TBT; ms, CLS unitless). Each capture's median is compared and the worst capture decides;
+                       a metric no page measured (INP) is reported as not measured, not as a pass. Combines with --fail-on
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
   --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused (exit 2) if its
                        directory exists, even without a run.json (left by a crashed run)

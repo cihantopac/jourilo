@@ -24,6 +24,14 @@ manifest is described there as `#/$defs/manifest`. The TypeScript source of trut
   `leftOut` lists at most 20 of the discovered URLs that were not audited (redacted like other URLs). The same fact is
   stated in `limitations`. It is absent for `--url` lists and when every discovered page was audited.
 
+## Budgets
+
+`--budget LCP=2000,CLS=0.05` records `budgets`: one entry per metric with the `limit`, the `worst` value and the
+`url` and `viewport` of the capture that had it, and `ok`. The comparison uses each capture's value (the median with
+`--runs N`); the worst capture decides, and a value equal to the limit is met. `ok` is `null` when no capture
+measured the metric (for example INP, which a scripted visit does not produce): that is neither a pass nor a fail,
+and `limitations` says so. A failed budget exits 1, like `--fail-on`; exit 5 and 6 keep their codes.
+
 ## Validating
 
 Use any draft 2020-12 validator against `schemas/run.schema.json`. Only the required keys are guaranteed; treat

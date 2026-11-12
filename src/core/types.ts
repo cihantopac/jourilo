@@ -293,6 +293,18 @@ export interface Run {
   outcome?: 'complete' | 'no-page-loaded' | 'partial';
   /** Why a `partial` run stopped: a SIGINT/SIGTERM, or the `--max-duration` budget ran out. */
   stoppedBy?: 'signal' | 'max-duration';
+  /**
+   * `--budget` results: per metric, the worst capture's value (the median with `--runs N`). `ok` is null when no
+   * capture measured the metric (neither a pass nor a fail).
+   */
+  budgets?: {
+    metric: string;
+    limit: number;
+    worst: number | null;
+    url: string | null;
+    viewport: string | null;
+    ok: boolean | null;
+  }[];
   /** Set when discovery found more pages than were audited: how many, and (at most 20) which were left out. */
   sample?: { discovered: number; audited: number; leftOut: string[] };
   /** Findings kept out of `findings` because a person or agent dismissed them (not counted in the summary). */

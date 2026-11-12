@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { evaluateBudgets, parseBudgets } from '../../src/audit/budget.js';
 import {
   type Command,
   type Context,
@@ -180,5 +181,53 @@ describe('progress lines', () => {
   it('stay plain text without --json and silent with --quiet', () => {
     expect(captured([])).toBe('  desktop  http://127.0.0.1/\n');
     expect(captured(['--json', '-q'])).toBe('');
+  });
+});
+
+describe('--budget', () => {
+  it('parses known metrics and rejects unknown names or non-numbers with USAGE', () => {
+    expect(parseBudgets(undefined)).toEqual([]);
+    expect(parseBudgets('LCP=2000,CLS=0.05, tbt=300')).toEqual([
+      { metric: 'LCP', limit: 2000 },
+      { metric: 'CLS', limit: 0.05 },
+      { metric: 'TBT', limit: 300 },
+    ]);
+    for (const bad of [
+      '',
+      'LCP',
+      'LCP=',
+      'LCP=fast',
+      'LCP=-1',
+      'LCP=Infinity',
+      'FOO=1',
+      'LCP=1,LCP=2',
+      'LCP=1,',
+    ]) {
+      const err = thrown(() => parseBudgets(bad));
+      expect(err.code, bad).toBe('USAGE');
+      expect(err.message, bad).toContain('--budget');
+    }
+  });
+});
+
+describe('evaluateBudgets', () => {
+  const page = (url: string, viewport: string, lcp?: number) =>
+    ({
+      url,
+      viewport,
+      metrics: lcp === undefined ? [] : [{ name: 'LCP', value: lcp, unit: 'ms', source: 'lab' }],
+    }) as never;
+  it('the worst capture decides; a limit equal to the worst value is met', () => {
+    const pages = [page('http://a/', 'desktop', 900), page('http://a/x', 'mobile', 2600)];
+    expect(evaluateBudgets(pages, [{ metric: 'LCP', limit: 2000 }])).toEqual([
+      { metric: 'LCP', limit: 2000, worst: 2600, url: 'http://a/x', viewport: 'mobile', ok: false },
+    ]);
+    expect(evaluateBudgets(pages, [{ metric: 'LCP', limit: 2600 }])[0]?.ok).toBe(true);
+  });
+  it('a metric nobody measured is ok: null, never a pass or a fail', () => {
+    const pages = [page('http://a/', 'desktop')];
+    expect(evaluateBudgets(pages, [{ metric: 'INP', limit: 200 }])).toEqual([
+      { metric: 'INP', limit: 200, worst: null, url: null, viewport: null, ok: null },
+    ]);
   });
 });

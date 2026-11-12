@@ -2,6 +2,7 @@
 // Every string that came from a page is escaped: page content is untrusted and must never execute in the report.
 // The report is complete without JavaScript; the inline client only adds language, theme, filters and the repair
 // prompt, and a strict CSP keeps it offline.
+import { budgetLine } from '../audit/budget.js';
 import { severityRank } from '../audit/finding.js';
 import { MANUAL_REVIEW } from '../audit/standards.js';
 import type { Evidence, Finding, FindingKind, JourneyResult, Run, Severity } from '../core/types.js';
@@ -474,7 +475,11 @@ ${metricCell(p, 'LCP')}${metricCell(p, 'CLS')}${metricCell(p, 'TBT')}${metricCel
     )
     .join('');
   return `<div class="tablewrap" tabindex="0" role="region"${attrs({ 'aria-label': 'pages.table' })}><table class="pages"><thead><tr><th><span class="sr">Screenshot</span></th><th>${T('th.page')}</th><th>${T('th.viewport')}</th><th>${T('th.http')}</th><th>LCP</th><th>CLS</th><th>TBT</th><th>Transfer</th><th>${T('th.jserr')}</th><th>${T('th.failedReq')}</th></tr></thead><tbody>${rows}</tbody></table></div>
-<p class="muted">${T('pages.note', { t: run.settings.throttle ? I18N.en['pages.throttled'] : I18N.en['pages.unthrottled'] })}</p>`;
+<p class="muted">${T('pages.note', { t: run.settings.throttle ? I18N.en['pages.throttled'] : I18N.en['pages.unthrottled'] })}</p>${
+    run.budgets?.length
+      ? `<ul class="muted" lang="en">${run.budgets.map((b) => `<li>${esc(budgetLine(b))}</li>`).join('')}</ul>`
+      : ''
+  }`;
 }
 
 function compareHtml(cmp: RunComparison): string {

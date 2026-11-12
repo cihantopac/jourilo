@@ -1,5 +1,12 @@
 import { existsSync, writeSync } from 'node:fs';
 import { resolve } from 'node:path';
+import {
+  budgetFailed,
+  budgetLimitation,
+  budgetLine,
+  evaluateBudgets,
+  parseBudgets,
+} from '../../audit/budget.js';
 import { type AuditOptions, runAudit, STOP_GRACE_MS } from '../../audit/engine.js';
 import { severityRank } from '../../audit/finding.js';
 import { exitCodeForOutcome, runOutcome } from '../../audit/outcome.js';
@@ -62,6 +69,7 @@ export const AUDIT_OPTIONS: OptionSpec = {
   brand: { type: 'string' },
   runs: { type: 'string' },
   'fail-on': { type: 'string' },
+  budget: { type: 'string' },
   'max-duration': { type: 'string' },
   'run-id': { type: 'string' },
   evidence: { type: 'string' },
@@ -136,6 +144,7 @@ export async function auditCommand(
   const failOn = str(ctx, 'fail-on') as Severity | undefined;
   if (failOn && !SEVERITIES.includes(failOn))
     throw new JouriloError('USAGE', `--fail-on must be one of ${SEVERITIES.join(', ')}.`);
+  const budgetSpecs = parseBudgets(str(ctx, 'budget'));
   const state = parseStateOptions(ctx);
   const auth = str(ctx, 'auth');
   if (auth && !existsSync(auth)) throw new JouriloError('NOT_FOUND', `Auth state file not found: ${auth}`);
@@ -209,14 +218,19 @@ export async function auditCommand(
       ctx.log(`Mapped ${located} finding(s) to likely source locations in ${repo}`);
     }
     run.outcome = runOutcome(run);
+    if (budgetSpecs.length) {
+      run.budgets = evaluateBudgets(run.pages, budgetSpecs);
+      for (const b of run.budgets) if (b.ok === null) run.limitations.push(budgetLimitation(b));
+    }
     ctx.ws.saveRun(run);
     const reports = writeReports(runDir, run, undefined, {
       sarif: flag(ctx, 'sarif'),
       history: ctx.ws.listRuns(),
     });
-    const gate = failOn
+    const severityGate = failOn
       ? run.findings.some((f) => f.kind === 'defect' && severityRank(f.severity) <= severityRank(failOn))
       : false;
+    const gate = severityGate || budgetFailed(run.budgets);
     return {
       data: {
         runId: run.id,
@@ -263,6 +277,7 @@ export function summaryText(run: Run, reportPath: string): string {
     );
   }
   if (run.findings.filter((f) => f.kind === 'defect').length > top.length) lines.push('  …');
+  if (run.budgets?.length) lines.push('', ...run.budgets.map((b) => `  ${budgetLine(b)}`));
   lines.push('', `  Report: ${reportPath}`, `  Run id: ${run.id}`, '');
   return lines.join('\n');
 }
@@ -285,7 +300,7 @@ export const audit: Command = {
   summary:
     'Audit a website URL or a static build directory in a real browser (accessibility, UX, responsive, performance, reliability, conversion).',
   usage:
-    'jourilo audit <url|dir> [--pages 6] [--viewports desktop,mobile] [--url /path ...] [--repo .] [--fail-on serious]',
+    'jourilo audit <url|dir> [--pages 6] [--viewports desktop,mobile] [--url /path ...] [--repo .] [--fail-on serious] [--budget LCP=2000]',
   options: AUDIT_OPTIONS,
   details: `Options:
   --pages N            Pages to audit after discovery (default 6; 1 = only the target; 0 is a usage error)
@@ -321,6 +336,9 @@ ${networkOptionsHelp(23)}
                        also lets a --setup-journey submit forms
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
+  --budget LIST        Exit 1 when a lab metric exceeds its limit, e.g. LCP=2000,CLS=0.05,TBT=300 (LCP, CLS, INP, FCP,
+                       TTFB, TBT; ms, CLS unitless). Each capture's median is compared and the worst capture decides;
+                       a metric no page measured (INP) is reported as not measured, not as a pass. Combines with --fail-on
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
   --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused (exit 2) if its
                        directory exists, even without a run.json (left by a crashed run)

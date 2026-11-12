@@ -55,7 +55,7 @@ Options:
 Audit a website URL or a static build directory in a real browser (accessibility, UX, responsive, performance, reliability, conversion).
 
 ```
-jourilo audit <url|dir> [--pages 6] [--viewports desktop,mobile] [--url /path ...] [--repo .] [--fail-on serious]
+jourilo audit <url|dir> [--pages 6] [--viewports desktop,mobile] [--url /path ...] [--repo .] [--fail-on serious] [--budget LCP=2000]
 ```
 
 ```
@@ -110,6 +110,9 @@ Options:
                        also lets a --setup-journey submit forms
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
+  --budget LIST        Exit 1 when a lab metric exceeds its limit, e.g. LCP=2000,CLS=0.05,TBT=300 (LCP, CLS, INP, FCP,
+                       TTFB, TBT; ms, CLS unitless). Each capture's median is compared and the worst capture decides;
+                       a metric no page measured (INP) is reported as not measured, not as a pass. Combines with --fail-on
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
   --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused (exit 2) if its
                        directory exists, even without a run.json (left by a crashed run)
@@ -178,6 +181,9 @@ Options:
                        also lets a --setup-journey submit forms
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
+  --budget LIST        Exit 1 when a lab metric exceeds its limit, e.g. LCP=2000,CLS=0.05,TBT=300 (LCP, CLS, INP, FCP,
+                       TTFB, TBT; ms, CLS unitless). Each capture's median is compared and the worst capture decides;
+                       a metric no page measured (INP) is reported as not measured, not as a pass. Combines with --fail-on
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
   --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused (exit 2) if its
                        directory exists, even without a run.json (left by a crashed run)
@@ -246,6 +252,9 @@ Options:
                        also lets a --setup-journey submit forms
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
+  --budget LIST        Exit 1 when a lab metric exceeds its limit, e.g. LCP=2000,CLS=0.05,TBT=300 (LCP, CLS, INP, FCP,
+                       TTFB, TBT; ms, CLS unitless). Each capture's median is compared and the worst capture decides;
+                       a metric no page measured (INP) is reported as not measured, not as a pass. Combines with --fail-on
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
   --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused (exit 2) if its
                        directory exists, even without a run.json (left by a crashed run)

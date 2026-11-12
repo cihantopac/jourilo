@@ -154,6 +154,22 @@
       "description": "Why a partial run stopped.",
       "enum": ["signal", "max-duration"]
     },
+    "budgets": {
+      "description": "`--budget` results: per metric, the worst capture's value (the median with --runs N). `ok` is null when no capture measured the metric.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["metric", "limit", "worst", "url", "viewport", "ok"],
+        "properties": {
+          "metric": { "type": "string" },
+          "limit": { "type": "number" },
+          "worst": { "type": ["number", "null"] },
+          "url": { "type": ["string", "null"] },
+          "viewport": { "type": ["string", "null"] },
+          "ok": { "type": ["boolean", "null"] }
+        }
+      }
+    },
     "sample": {
       "description": "Present when discovery found more pages than were audited.",
       "type": "object",

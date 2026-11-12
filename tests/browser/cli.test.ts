@@ -197,6 +197,56 @@ describe('cli', () => {
   });
 });
 
+describe('cli --budget', () => {
+  const site = [
+    'audit',
+    'fixtures/sites/acme-saas',
+    '--pages',
+    '1',
+    '--viewports',
+    'mobile',
+    '--no-forms',
+    '-q',
+  ];
+  const runOf = (json: string) => {
+    const out = JSON.parse(json);
+    return JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8')) as Run;
+  };
+  it('an exceeded budget exits 1 and names it', () => {
+    const text = jourilo(...site, '--budget', 'LCP=1');
+    expect(text.status).toBe(1);
+    expect(text.stdout).toContain('Budget exceeded: LCP');
+    const r = jourilo(...site, '--budget', 'LCP=1', '--json');
+    expect(r.status).toBe(1);
+    const run = runOf(r.stdout);
+    expect(run.budgets?.[0]).toMatchObject({ metric: 'LCP', limit: 1, ok: false, viewport: 'mobile' });
+    expect(run.budgets?.[0]?.worst).toBeGreaterThan(1);
+  }, 240_000);
+  it('a met budget exits 0', () => {
+    const r = jourilo(...site, '--budget', 'LCP=600000', '--json');
+    expect(r.status).toBe(0);
+    expect(runOf(r.stdout).budgets?.[0]).toMatchObject({ metric: 'LCP', limit: 600000, ok: true });
+  }, 120_000);
+  it('a budget on a metric that was not measured is ok: null with a limitation, exit unchanged', () => {
+    const r = jourilo(...site, '--budget', 'INP=200', '--json');
+    expect(r.status).toBe(0);
+    const run = runOf(r.stdout);
+    expect(run.budgets?.[0]).toEqual({
+      metric: 'INP',
+      limit: 200,
+      worst: null,
+      url: null,
+      viewport: null,
+      ok: null,
+    });
+    expect(run.limitations.join(' ')).toContain('Budget INP=200 was not checked');
+  }, 120_000);
+  it('a budget combines with --fail-on, and an unknown metric is a usage error', () => {
+    expect(jourilo(...site, '--budget', 'FOO=1').status).toBe(2);
+    expect(jourilo(...site, '--budget', 'LCP=600000', '--fail-on', 'serious').status).toBe(1);
+  }, 240_000);
+});
+
 describe('cli no page loaded', () => {
   it('an unresolvable host exits 5 and still writes the run', () => {
     const r = jourilo(
