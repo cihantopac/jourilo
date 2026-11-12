@@ -5,7 +5,7 @@ import { exitCodeForOutcome, runOutcome } from '../../audit/outcome.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { JouriloError } from '../../core/errors.js';
 import { displayPath } from '../../core/fs-safety.js';
-import { serveStatic } from '../../core/static-server.js';
+import { isDirectoryTarget, servedPort, serveStatic } from '../../core/static-server.js';
 import { loadContext } from '../../integrations/context.js';
 import type { JourneySpec } from '../../journeys/schema.js';
 import { unifiedDiff } from '../../repair/diff.js';
@@ -27,7 +27,7 @@ import {
 } from '../../repair/transaction.js';
 import { compareRuns, type MetricDelta } from '../../report/compare.js';
 import { writeReports } from '../../report/index.js';
-import { type Command, flag, list, str } from '../framework.js';
+import { type Command, denyLocalFrom, flag, list, refuseDenyLocalWebkit, str } from '../framework.js';
 import { loadJourneys } from './journeys.js';
 
 export const optimize: Command = {
@@ -151,6 +151,26 @@ function metricSummary(metrics: MetricDelta[]): string[] {
   return lines;
 }
 
+/** A `verify --target` that is not a directory must be an http(s) URL; anything else is a typo, not a crash. */
+function verifyTargetUrl(target: string): URL {
+  const hint = 'Give a directory to serve, or a URL that starts with http:// or https://.';
+  if (existsSync(target))
+    throw new JouriloError('INVALID_INPUT', `--target ${target} is a file, not a directory or a URL.`, hint);
+  let url: URL | undefined;
+  try {
+    url = new URL(target);
+  } catch {
+    url = undefined;
+  }
+  if (!url || (url.protocol !== 'http:' && url.protocol !== 'https:') || !url.hostname)
+    throw new JouriloError(
+      'INVALID_INPUT',
+      `--target ${target} is neither an existing directory nor an http(s) URL.`,
+      hint,
+    );
+  return url;
+}
+
 export const verify: Command = {
   name: 'verify',
   summary:
@@ -159,30 +179,37 @@ export const verify: Command = {
   options: {
     target: { type: 'string' },
     'fail-on-regression': { type: 'boolean' },
+    'deny-local': { type: 'boolean' },
     repo: { type: 'string' },
   },
   details: `Options:
   --target URL|DIR       Where to repeat the audit (default: the baseline run's target)
   --repo PATH            Repository for source mapping (default: the baseline run's repo)
+  --deny-local           Refuse a local target (localhost, 127.0.0.1, [::1], *.localhost, *.test) with exit 3; a redirect to one is blocked by the network guard and listed in the limitations;
+                         JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3)
   --fail-on-regression   Exit 1 when new serious or critical defects appear`,
   async run(ctx) {
+    // An explicit --target replaces the baseline's served directory, so a URL target is not ignored.
+    const target = str(ctx, 'target');
+    const targetDir = target !== undefined && isDirectoryTarget(target);
+    const targetUrl = target !== undefined && !targetDir ? verifyTargetUrl(target) : undefined;
     const base = ctx.ws.loadRun(ctx.positionals[0] ?? 'latest').run;
+    refuseDenyLocalWebkit(denyLocalFrom(ctx), String(base.browser.name ?? 'chromium'));
     const scope = base.settings.scope as { urls: string[]; viewports: string[] } | undefined;
     if (!scope)
       throw new JouriloError(
         'INVALID_INPUT',
         `Run ${base.id} has no recorded scope (created by an older version or by journeys).`,
       );
-    // An explicit --target replaces the baseline's served directory, so a URL target is not ignored.
-    const target = str(ctx, 'target');
-    const servedDir = target
-      ? existsSync(target)
-        ? resolve(target)
-        : undefined
-      : (base.settings.servedDir as string | undefined);
+    const servedDir =
+      target !== undefined
+        ? targetDir
+          ? resolve(target)
+          : undefined
+        : (base.settings.servedDir as string | undefined);
     const server = servedDir ? await serveStatic(servedDir) : undefined;
     try {
-      const origin = server?.url ?? new URL(target ?? scope.urls[0]!).origin;
+      const origin = server?.url ?? (targetUrl ?? new URL(scope.urls[0]!)).origin;
       const urls = scope.urls.map((u) => {
         const x = new URL(u);
         return `${x.pathname}${x.search}`;
@@ -212,6 +239,9 @@ export const verify: Command = {
         headed: false,
         respectRobots: base.settings.respectRobots !== false,
         allowPrivate: base.settings.hostClass === 'private',
+        ...(denyLocalFrom(ctx)
+          ? { denyLocal: true, ...(server ? { servedPort: servedPort(server) } : {}) }
+          : {}),
         keyboard: base.settings.keyboard !== false,
         throttle: base.settings.throttle === true,
         // Same number of visits as the baseline, so medians are compared with medians.

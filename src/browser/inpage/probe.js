@@ -434,12 +434,15 @@
   for (const fs of document.querySelectorAll('fieldset')) {
     if (!isVisible(fs)) continue;
     const legend = fs.querySelector(':scope > legend');
-    if (!legend || !text(legend))
-      structure.fieldsets.push({
-        selector: selectorOf(fs),
-        rect: rectOf(fs),
-        issue: legend ? 'empty legend' : 'no legend',
-      });
+    if (legend && text(legend)) continue;
+    if ((fs.getAttribute('aria-label') || '').trim()) continue;
+    const labelledBy = (fs.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean);
+    if (labelledBy.some((id) => text(document.getElementById(id)))) continue;
+    structure.fieldsets.push({
+      selector: selectorOf(fs),
+      rect: rectOf(fs),
+      issue: legend ? 'empty legend' : 'no name',
+    });
   }
   const radiosByName = new Map();
   for (const r of document.querySelectorAll('input[type="radio"][name]')) {

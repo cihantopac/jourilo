@@ -130,6 +130,8 @@ export interface PageObservation {
   widgets?: WidgetCheck | null;
   /** Requests the read-only guard aborted while keys were pressed and widgets operated. */
   blockedActions?: BlockedRequest[];
+  /** Main-frame redirect hops seen before a navigation error (at most 10; internal). */
+  redirects?: { status: number; from: string; to: string }[];
   /** Steps that could not run, with the reason; becomes run limitations. */
   errors: string[];
 }
@@ -254,6 +256,8 @@ async function settle(page: Page, timeoutMs: number): Promise<void> {
 
 const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
 
+const HIDDEN_SKIP_RULES = new Set(['color-contrast', 'color-contrast-enhanced']);
+
 async function runAxe(page: Page): Promise<PageObservation['axe']> {
   await page.addScriptTag({ content: axe.source });
   const raw = (await page.evaluate(
@@ -263,6 +267,52 @@ async function runAxe(page: Page): Promise<PageObservation['axe']> {
     incomplete: RawAxe[];
     testEngine: { version: string };
   };
+  // Manual-review contrast listings skip content assistive technology never presents (F25). Decide in the page,
+  // where the elements still exist; a target that cannot be resolved (closed shadow root, cross-origin frame) stays.
+  const hiddenFlags = (await page
+    .evaluate(
+      `(${String((groups: (string | string[])[][]) =>
+        groups.map((target) => {
+          try {
+            let root: Document | ShadowRoot = document;
+            let el: Element | null = null;
+            const chain: Element[] = [];
+            for (let i = 0; i < target.length; i++) {
+              const part = target[i] as string | string[];
+              const hops = Array.isArray(part) ? part : [part];
+              for (let h = 0; h < hops.length; h++) {
+                el = root.querySelector(hops[h] as string);
+                if (!el) return false;
+                chain.push(el);
+                if (h < hops.length - 1) {
+                  if (!el.shadowRoot) return false;
+                  root = el.shadowRoot;
+                }
+              }
+              if (i < target.length - 1) {
+                const doc: Document | null | undefined = (el as HTMLIFrameElement | null)?.contentDocument;
+                if (!doc) return false;
+                root = doc;
+              }
+            }
+            return chain.some((c) => c.closest('[aria-hidden="true"]') !== null);
+          } catch {
+            return false;
+          }
+        }),
+      )})(${JSON.stringify(
+        raw.incomplete.flatMap((r) => (HIDDEN_SKIP_RULES.has(r.id) ? r.nodes.map((n) => n.target) : [])),
+      )})`,
+    )
+    .catch(() => [])) as boolean[];
+  {
+    let q = 0;
+    for (const r of raw.incomplete) {
+      if (!HIDDEN_SKIP_RULES.has(r.id)) continue;
+      r.nodes = r.nodes.filter(() => !hiddenFlags[q++]);
+    }
+    raw.incomplete = raw.incomplete.filter((r) => !HIDDEN_SKIP_RULES.has(r.id) || r.nodes.length > 0);
+  }
   const map = (r: RawAxe): AxeIssue => ({
     id: r.id,
     impact: r.impact ?? null,
@@ -352,6 +402,12 @@ async function applyThrottle(page: Page): Promise<boolean> {
   }
 }
 
+/** The screenshots a capture of `url` in `vp` writes, relative to the run directory. */
+export function captureScreenshotFiles(url: string, vp: Viewport): { full: string; fold: string } {
+  const base = `${slug(new URL(url).pathname.replace(/^\/$/, 'home'), 40)}-${shortHash(url).slice(0, 6)}-${vp.name}`;
+  return { full: join('screenshots', `${base}.jpg`), fold: join('screenshots', `${base}-fold.jpg`) };
+}
+
 export async function capturePage(
   ctx: BrowserContext,
   url: string,
@@ -377,6 +433,21 @@ export async function capturePage(
     keyboard: null,
     errors: [],
   };
+  const redirects: NonNullable<PageObservation['redirects']> = [];
+  page.on('response', (res) => {
+    const status = res.status();
+    if (status < 300 || status >= 400 || redirects.length >= 10) return;
+    if (!res.request().isNavigationRequest() || res.request().frame() !== page.mainFrame()) return;
+    const location = res.headers().location;
+    if (!location) return;
+    let to = location;
+    try {
+      to = new URL(location, res.url()).href;
+    } catch {
+      // keep the raw header value
+    }
+    redirects.push({ status, from: redactUrl(res.url()), to: redactUrl(to) });
+  });
   try {
     if (opts.throttle && !(await applyThrottle(page)))
       obs.errors.push('Throttling is only available in Chromium.');
@@ -386,6 +457,7 @@ export async function capturePage(
       response = await page.goto(url, { waitUntil: 'load', timeout: timeoutMs });
     } catch (err) {
       obs.errors.push(`navigation: ${(err as Error).message.split('\n')[0]}`);
+      if (redirects.length) obs.redirects = redirects;
       return obs;
     }
     // The network guard answers 502 itself when DNS or the connection fails: nothing was loaded.
@@ -423,11 +495,9 @@ export async function capturePage(
     }
 
     if (opts.screenshots !== false) {
-      const base = `${slug(new URL(url).pathname.replace(/^\/$/, 'home'), 40)}-${shortHash(url).slice(0, 6)}-${vp.name}`;
       const mask = [...DEFAULT_MASK, ...(opts.mask ?? [])].map((s) => page.locator(s));
       const mode = opts.evidence ?? 'full';
-      const full = join('screenshots', `${base}.jpg`);
-      const fold = join('screenshots', `${base}-fold.jpg`);
+      const { full, fold } = captureScreenshotFiles(url, vp);
       try {
         const height = Math.min(obs.probe?.scroll.height ?? vp.height, FULL_PAGE_MAX_HEIGHT[mode]);
         if (mode === 'minimal' && height <= vp.height) {

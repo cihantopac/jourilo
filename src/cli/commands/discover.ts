@@ -4,7 +4,7 @@ import { runAudit } from '../../audit/engine.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { discoverRepository, type ProductProfile } from '../../discovery/repo.js';
 import { buildSiteProfile, type SiteProfile } from '../../discovery/site.js';
-import { type Command, flag, num, requirePositional } from '../framework.js';
+import { type Command, denyLocalFrom, flag, pagesOption, requirePositional } from '../framework.js';
 
 function repoText(p: ProductProfile): string {
   const v = (xs: { value: string }[]) => (xs.length ? xs.map((x) => x.value).join(', ') : '—');
@@ -67,16 +67,19 @@ export const discover: Command = {
   name: 'discover',
   summary:
     'Product intelligence: map a repository (frameworks, routes, design system, i18n, auth, analytics) or a website (pages, conversion points, services).',
-  usage: 'jourilo discover <path|url> [--pages 10] [--ignore-robots] [--allow-private]',
+  usage: 'jourilo discover <path|url> [--pages 10] [--ignore-robots] [--allow-private] [--deny-local]',
   options: {
     pages: { type: 'string' },
     'allow-private': { type: 'boolean' },
+    'deny-local': { type: 'boolean' },
     'ignore-robots': { type: 'boolean' },
   },
   details: `Options:
   --pages N         Pages to read when mapping a website (default 10)
   --ignore-robots   Ignore robots.txt (only for sites you own or are authorized to test)
-  --allow-private   Allow private-network hosts (10.x, 192.168.x, ...)`,
+  --allow-private   Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local      Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
+                    JOURILO_DENY_LOCAL=1 does the same`,
   async run(ctx) {
     const target = requirePositional(ctx, 0, 'path|url', discover.usage);
     ctx.ws.ensure();
@@ -89,12 +92,13 @@ export const discover: Command = {
     const { run, observations } = await runAudit(ctx.ws, {
       target,
       viewports: parseViewports('desktop'),
-      maxPages: num(ctx, 'pages', 10),
+      maxPages: pagesOption(ctx, 10),
       maxDepth: 3,
       browser: 'chromium',
       headed: false,
       respectRobots: !flag(ctx, 'ignore-robots'),
       allowPrivate: flag(ctx, 'allow-private'),
+      ...(denyLocalFrom(ctx) ? { denyLocal: true } : {}),
       keyboard: false,
       throttle: false,
       timeoutMs: 30_000,

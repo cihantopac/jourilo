@@ -1,14 +1,27 @@
 // Node-side fetches (robots.txt, sitemaps) and the guard's resolver must apply the address policy on every hop.
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   guardedFetchText,
   loopbackRedirectVerdict,
   redirectEscape,
   resolveAllowed,
+  startNetGuard,
+  upstreamFailureWording,
 } from '../../src/core/net-guard.js';
-import { type AddressPolicy, addressVerdict } from '../../src/core/url-safety.js';
+import {
+  type AddressPolicy,
+  addressVerdict,
+  checkTarget,
+  checkTargetDetailed,
+  isLocalHostname,
+  LookupFailed,
+  resolveInChild,
+} from '../../src/core/url-safety.js';
 
 const pub: AddressPolicy = { target: 'public', allowPrivate: false };
 
@@ -49,6 +62,16 @@ describe('redirect checks', () => {
     expect(
       loopbackRedirectVerdict('http://localhost:3000/', from, { target: 'local', allowPrivate: false }),
     ).toBeNull();
+    const served = {
+      target: 'local' as const,
+      allowPrivate: false,
+      denyLocal: true,
+      allowLoopbackPorts: [4321],
+    };
+    const page = new URL('http://127.0.0.1:4321/');
+    expect(loopbackRedirectVerdict('http://127.0.0.1:4321/b', page, served)).toBeNull();
+    expect(loopbackRedirectVerdict('http://localhost:4321/b', page, served)).toMatch(/refused/);
+    expect(loopbackRedirectVerdict('http://127.0.0.1:9999/b', page, served)).toMatch(/refused/);
     expect(redirectEscape('http://127.0.0.1/', null, pub)).toBeNull();
     expect(redirectEscape('http://127.0.0.1/', 'https://shop.example/', pub)).toMatch(/refused/);
   });
@@ -116,5 +139,237 @@ describe('guardedFetchText', () => {
       }),
     ).toBeNull();
     expect(internalHits).toEqual([]);
+  });
+});
+
+describe('resolver timeout', () => {
+  it('rejects with the unresolved wording when the resolver never answers', async () => {
+    const never = () => new Promise<never>(() => undefined);
+    const err = await resolveAllowed('slow.example', 80, pub, {
+      resolve: never,
+      resolveTimeoutMs: 50,
+    }).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(upstreamFailureWording((err as Error).message)).toBe('the host name could not be resolved');
+  });
+});
+
+describe('checkTargetDetailed', () => {
+  it('marks an unresolvable .test name and leaves .localhost alone', async () => {
+    const never = () => new Promise<never>(() => undefined);
+    const bad = await checkTargetDetailed(new URL('http://nope.test/'), {
+      resolver: never,
+      resolveTimeoutMs: 50,
+    });
+    expect(bad).toEqual({ hostClass: 'local', unresolved: true });
+    const ok = await checkTargetDetailed(new URL('http://app.localhost/'), { resolver: never });
+    expect(ok).toEqual({ hostClass: 'local' });
+  });
+});
+
+describe('checkTarget', () => {
+  it('does not pre-resolve a local name (only the audit engine needs the answer)', async () => {
+    let called = false;
+    const resolver = async () => {
+      called = true;
+      throw new Error('nope');
+    };
+    expect(await checkTarget(new URL('http://nope.test/'), { resolver })).toBe('local');
+    expect(called).toBe(false);
+  });
+});
+
+describe('resolveInChild', () => {
+  it('resolves a real name through the child', async () => {
+    const answers = await resolveInChild('localhost', 5000);
+    expect(answers.length).toBeGreaterThan(0);
+    expect(answers[0]).toHaveProperty('address');
+  });
+
+  it('passes an option-like host as data and executes nothing', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'jourilo-inject-'));
+    try {
+      const marker = join(dir, 'marker');
+      const hosts = [
+        `--eval=require("fs").writeFileSync(${JSON.stringify(marker)},"x");x.test`,
+        '--eval=process.exit(7);x.test',
+        '--require=x.test',
+        '-p',
+      ];
+      for (const host of hosts) {
+        const out = await resolveInChild(host, 5000).catch((e: unknown) => e);
+        // A normal outcome: a lookup failure (or, never executed, an empty/real answer) - not an exit-7 crash.
+        expect(Array.isArray(out) || out instanceof LookupFailed).toBe(true);
+      }
+      expect(existsSync(marker)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports a lookup error as LookupFailed', async () => {
+    await expect(resolveInChild('does-not-exist.invalid', 5000)).rejects.toBeInstanceOf(LookupFailed);
+  });
+
+  it('fails open when the child cannot be started or crashes', async () => {
+    const spawnError = (_f: string, _a: string[], _o: unknown, cb: (e: Error, out: string) => void) => {
+      cb(Object.assign(new Error('spawn EPERM'), { code: 'EPERM' }), '');
+    };
+    expect(await resolveInChild('app.test', 5000, spawnError as never)).toEqual([]);
+    const crash = (_f: string, _a: string[], _o: unknown, cb: (e: Error, out: string) => void) => {
+      cb(Object.assign(new Error('boom'), { code: 1 }), '');
+    };
+    expect(await resolveInChild('app.test', 5000, crash as never)).toEqual([]);
+    const throws = () => {
+      throw new Error('sync spawn failure');
+    };
+    expect(await resolveInChild('app.test', 5000, throws as never)).toEqual([]);
+  });
+
+  it('counts the timeout kill as unresolved', async () => {
+    const killed = (_f: string, _a: string[], _o: unknown, cb: (e: Error, out: string) => void) => {
+      cb(Object.assign(new Error('killed'), { killed: true }), '');
+    };
+    await expect(resolveInChild('app.test', 5000, killed as never)).rejects.toBeInstanceOf(LookupFailed);
+  });
+});
+
+describe('--deny-local', () => {
+  const deny = { allowPrivate: false, denyLocal: true } as const;
+  const refused = (u: string) => checkTarget(new URL(u), { denyLocal: true });
+
+  it('refuses localhost, 127.0.0.1, [::1] and *.test / *.localhost with UNSAFE_URL, before any lookup', async () => {
+    let looked = false;
+    const resolver = async () => {
+      looked = true;
+      return [];
+    };
+    for (const u of [
+      'http://localhost:3000/',
+      'http://127.0.0.1/',
+      'http://[::1]/',
+      'http://app.test/',
+      'http://app.localhost/',
+    ]) {
+      await expect(refused(u)).rejects.toMatchObject({ code: 'UNSAFE_URL' });
+      await expect(checkTargetDetailed(new URL(u), { denyLocal: true, resolver })).rejects.toThrow(
+        /--deny-local is set/,
+      );
+    }
+    expect(looked).toBe(false);
+  });
+  it('still allows local targets without the option, and public hosts with it', async () => {
+    expect(await checkTarget(new URL('http://localhost:3000/'))).toBe('local');
+    expect(await checkTarget(new URL('http://app.test/'))).toBe('local');
+    expect(await checkTarget(new URL('https://example.com/'), { denyLocal: true, resolveDns: false })).toBe(
+      'public',
+    );
+  });
+  it('blocks loopback destinations even for a local target or with --allow-private', async () => {
+    expect(addressVerdict('127.0.0.1', { target: 'local', allowPrivate: true, denyLocal: true }).ok).toBe(
+      false,
+    );
+    expect(addressVerdict('127.0.0.1', { target: 'local', allowPrivate: false }).ok).toBe(true);
+    expect(await resolveAllowed('127.0.0.1', 80, { target: 'local', ...deny })).toHaveProperty('blocked');
+  });
+  it('blocks a redirect from a public page to localhost or a *.test name, and says so', async () => {
+    const from = new URL('https://example.test.public/a');
+    const policy: AddressPolicy = { target: 'public', allowPrivate: true, denyLocal: true };
+    expect(loopbackRedirectVerdict('http://127.0.0.1/', from, policy)).toMatch(/--deny-local/);
+    expect(loopbackRedirectVerdict('http://app.test/', from, policy)).toMatch(/--deny-local/);
+    expect(redirectEscape('http://localhost/', 'https://shop.example/', policy)).toMatch(/--deny-local/);
+    // The guard resolves a public name for the first hop and refuses the loopback hop.
+    const resolve = async (h: string) =>
+      h === 'example.test.public' ? [{ address: '93.184.216.34', family: 4 }] : [];
+    expect(await resolveAllowed('example.test.public', 443, policy, { resolve })).toMatchObject({
+      address: '93.184.216.34',
+    });
+    expect(await resolveAllowed('127.0.0.1', 80, policy, { resolve })).toHaveProperty('blocked');
+  });
+});
+
+describe('--deny-local hardening', () => {
+  it('normalises a trailing dot', async () => {
+    for (const h of ['localhost.', 'foo.localhost.', 'app.test.', 'LOCALHOST.'])
+      expect(isLocalHostname(h)).toBe(true);
+    await expect(checkTarget(new URL('http://localhost./'), { denyLocal: true })).rejects.toMatchObject({
+      code: 'UNSAFE_URL',
+    });
+    await expect(checkTarget(new URL('http://app.test./'), { denyLocal: true })).rejects.toMatchObject({
+      code: 'UNSAFE_URL',
+    });
+  });
+  it('refuses a public-looking name that resolves to loopback', async () => {
+    const resolver = async () => [{ address: '127.0.0.1', family: 4 }];
+    await expect(
+      checkTarget(new URL('http://127.0.0.1.nip.io/'), { denyLocal: true, resolver }),
+    ).rejects.toThrow(/--deny-local is set/);
+    expect(await checkTarget(new URL('http://127.0.0.1.nip.io/'), { resolver }).catch((e) => e.code)).toBe(
+      'UNSAFE_URL',
+    ); // still refused as before: a public target may not reach loopback
+  });
+  it('refuses a redirect to every loopback form, also with --allow-private', () => {
+    const from = new URL('https://shop.example/a');
+    const policy: AddressPolicy = { target: 'public', allowPrivate: true, denyLocal: true };
+    for (const to of [
+      'http://[::ffff:127.0.0.1]/',
+      'http://localhost./',
+      'http://127.1.2.3:6379/',
+      'http://[::1]/',
+      'http://0.0.0.0/',
+      'http://app.test./',
+    ])
+      expect(loopbackRedirectVerdict(to, from, policy), to).toMatch(/--deny-local/);
+  });
+  it('lets a directory target reach only its own static server port', () => {
+    const policy: AddressPolicy = {
+      target: 'local',
+      allowPrivate: false,
+      denyLocal: true,
+      allowLoopbackPorts: [4173],
+    };
+    expect(addressVerdict('127.0.0.1', policy, 4173).ok).toBe(true);
+    expect(addressVerdict('127.0.0.1', policy, 6379).ok).toBe(false);
+    expect(addressVerdict('::1', policy, 4173).ok).toBe(false);
+    const from = new URL('http://127.0.0.1:4173/');
+    expect(loopbackRedirectVerdict('http://127.0.0.1:4173/b', from, policy)).toBeNull();
+    expect(loopbackRedirectVerdict('http://localhost:6379/', from, policy)).toMatch(/--deny-local/);
+  });
+  it('the guard answers 403 and records --deny-local for a redirect hop to localhost', async () => {
+    const upstream = http.createServer((_req, res) => {
+      res.writeHead(302, { location: 'http://localhost:6379/' }).end();
+    });
+    await new Promise<void>((r) => upstream.listen(0, '127.0.0.1', r));
+    const port = (upstream.address() as AddressInfo).port;
+    const guard = await startNetGuard(
+      { target: 'local', allowPrivate: false, denyLocal: true, allowLoopbackPorts: [port] },
+      { resolve: async () => [{ address: '127.0.0.1', family: 4 }] },
+    );
+    const proxy = new URL(guard.url);
+    const viaProxy = (url: string) =>
+      new Promise<{ status: number; location?: string }>((resolve, reject) => {
+        http
+          .get(
+            { host: proxy.hostname, port: proxy.port, path: url, headers: { host: new URL(url).host } },
+            (res) => {
+              res.resume();
+              resolve({ status: res.statusCode ?? 0, location: res.headers.location });
+            },
+          )
+          .on('error', reject);
+      });
+    try {
+      // The guard reads the upstream's 302 and refuses it before the browser could follow it.
+      expect((await viaProxy(`http://127.0.0.1:${port}/`)).status).toBe(403);
+      expect(guard.blocked[0]!.reason).toContain('--deny-local');
+      expect(guard.blocked[0]!.reason).toContain('localhost:6379');
+      // A direct request to another loopback port is refused too.
+      expect((await viaProxy('http://localhost:6379/')).status).toBe(403);
+      expect(guard.blocked[1]).toMatchObject({ host: 'localhost', port: 6379 });
+      expect(guard.blocked[1]!.reason).toContain('--deny-local');
+    } finally {
+      await guard.close();
+      await new Promise((r) => upstream.close(r));
+    }
   });
 });

@@ -179,7 +179,9 @@ export function keyboardFindings(obs: PageObservation): Finding[] {
   const vp = obs.viewport.name;
   const shot = obs.screenshot ? { file: obs.screenshot } : {};
 
-  const invisible = kb.stops.filter((s) => s.indicatorChecked && s.indicatorChanges.length === 0);
+  // A stop without a box (a 0 x 0 element, a dev-server overlay) cannot show an indicator and is not page content.
+  const boxed = kb.stops.filter((s) => !s.boxless);
+  const invisible = boxed.filter((s) => s.indicatorChecked && s.indicatorChanges.length === 0);
   if (invisible.length) {
     out.push(
       makeFinding({
@@ -192,7 +194,7 @@ export function keyboardFindings(obs: PageObservation): Finding[] {
         provenance: 'measured',
         url: obs.url,
         viewport: vp,
-        description: `${invisible.length} of ${kb.stops.length} elements reached with Tab look exactly the same focused and unfocused (outline, box-shadow, border, background, color, underline and the parent's styles were compared).`,
+        description: `${invisible.length} of ${boxed.length} elements reached with Tab look exactly the same focused and unfocused (outline, box-shadow, border, background, color, underline and the parent's styles were compared).`,
         impact: 'Keyboard users cannot see where they are on the page, so they cannot operate it reliably.',
         recommendation:
           'Do not remove the focus outline without a replacement. Add a clearly visible :focus-visible style (e.g. a 2 px outline with 3:1 contrast) to the shared button/link/input components.',
@@ -644,11 +646,11 @@ export function structureFindings(obs: PageObservation): Finding[] {
         provenance: 'measured',
         url: obs.url,
         viewport: vp,
-        description: `${st.fieldsets.length} fieldset(s) have no legend or an empty one, so the group of fields has no name.`,
+        description: `${st.fieldsets.length} fieldset(s) have no legend, aria-label or aria-labelledby (or an empty one), so the group of fields has no name.`,
         impact:
           'Screen-reader users hear the fields without the question they answer (e.g. "Yes / No" without "Do you have a passport?").',
         recommendation:
-          'Give every fieldset a first-child <legend> with the group question; remove fieldsets used only for styling.',
+          'Give every fieldset a first-child <legend> with the group question (or an aria-label / aria-labelledby that names it); remove fieldsets used only for styling.',
         standards: [wcag('1.3.1'), wcag('3.3.2')],
         evidence: ev(st.fieldsets, (i) => st.fieldsets[i]!.issue),
         occurrences: st.fieldsets.length,

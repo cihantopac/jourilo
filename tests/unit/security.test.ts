@@ -8,6 +8,7 @@ import {
   addressVerdict,
   checkTarget,
   classifyIp,
+  crawlKey,
   isCrawlable,
   isPrivateIp,
   normalizeForCrawl,
@@ -174,7 +175,8 @@ describe('url safety', () => {
     expect(isCrawlable('https://shop.test/logout', o)).toBe(false);
     expect(isCrawlable('https://shop.test/account/delete', o)).toBe(false);
     expect(isCrawlable('https://shop.test/report.pdf', o)).toBe(false);
-    expect(normalizeForCrawl('https://shop.test/a/?utm_source=x&id=2#top')).toBe('https://shop.test/a?id=2');
+    expect(normalizeForCrawl('https://shop.test/a/?utm_source=x&id=2#top')).toBe('https://shop.test/a/?id=2');
+    expect(crawlKey('https://shop.test/a/?utm_source=x&id=2#top')).toBe('https://shop.test/a?id=2');
   });
 });
 

@@ -1,13 +1,13 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, writeSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { type AuditOptions, runAudit } from '../../audit/engine.js';
+import { type AuditOptions, runAudit, STOP_GRACE_MS } from '../../audit/engine.js';
 import { severityRank } from '../../audit/finding.js';
 import { exitCodeForOutcome, runOutcome } from '../../audit/outcome.js';
 import type { BrowserName } from '../../browser/runtime.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { JouriloError } from '../../core/errors.js';
 import { displayPath } from '../../core/fs-safety.js';
-import { serveStatic } from '../../core/static-server.js';
+import { isDirectoryTarget, servedPort, serveStatic } from '../../core/static-server.js';
 import type { Category, Run, Severity } from '../../core/types.js';
 import { loadContext } from '../../integrations/context.js';
 import { locateFindings } from '../../repair/locate.js';
@@ -16,12 +16,16 @@ import {
   type Command,
   type CommandResult,
   type Context,
+  denyLocalFrom,
   flag,
   list,
+  maxDurationOption,
   num,
   type OptionSpec,
+  pagesOption,
   parseEvidence,
   parseStateOptions,
+  refuseDenyLocalWebkit,
   requirePositional,
   str,
 } from '../framework.js';
@@ -39,6 +43,7 @@ export const AUDIT_OPTIONS: OptionSpec = {
   throttle: { type: 'boolean' },
   'ignore-robots': { type: 'boolean' },
   'allow-private': { type: 'boolean' },
+  'deny-local': { type: 'boolean' },
   mask: { type: 'string', multiple: true },
   auth: { type: 'string' },
   locale: { type: 'string' },
@@ -61,17 +66,35 @@ export const AUDIT_OPTIONS: OptionSpec = {
 const SEVERITIES: Severity[] = ['critical', 'serious', 'moderate', 'minor'];
 const BROWSERS: BrowserName[] = ['chromium', 'firefox', 'webkit', 'chrome', 'msedge'];
 
+/** The line a second stop signal leaves before the process quits (JSON with --json, like other errors). */
+export function stoppedTwiceLine(json: boolean): string {
+  const message = 'A second stop signal: quitting at once (exit 130). No run was written for this audit.';
+  return json
+    ? `${JSON.stringify({ type: 'error', error: { code: 'STOPPED_TWICE', message } })}\n`
+    : `jourilo: ${message}\n`;
+}
+
 /**
- * The first SIGINT/SIGTERM, or the end of the --max-duration budget, stops the audit with a partial run; a second
- * signal exits at once. `dispose` removes the handlers and the timer, so they never outlive the command.
+ * The first SIGINT/SIGTERM, or the end of the --max-duration budget, stops the audit with a partial run: the page in
+ * progress gets STOP_GRACE_MS to finish, then it is abandoned. A second signal exits at once, after one line on
+ * stderr. `dispose` removes the handlers and the timer, so they never outlive the command.
  */
 function stopController(ctx: Context, maxDurationS: number | undefined) {
   const controller = new AbortController();
+  const grace = `${STOP_GRACE_MS / 1000} s`;
   let signals = 0;
   const onSignal = () => {
-    if (++signals > 1) process.exit(130);
+    if (++signals > 1) {
+      // Synchronous: the line must be on stderr before the process ends.
+      try {
+        writeSync(2, stoppedTwiceLine(ctx.json));
+      } catch {
+        // stderr may be closed; quitting matters more than the line.
+      }
+      process.exit(130);
+    }
     ctx.log(
-      'Stopping: the current page finishes, then a partial run is written (signal again to quit now) …',
+      `Stopping: the page in progress gets up to ${grace} to finish, then a partial run is written (signal again to quit now) …`,
     );
     controller.abort('signal');
   };
@@ -79,7 +102,9 @@ function stopController(ctx: Context, maxDurationS: number | undefined) {
   process.on('SIGTERM', onSignal);
   const timer = maxDurationS
     ? setTimeout(() => {
-        ctx.log(`--max-duration ${maxDurationS}s reached: stopping after the current page …`);
+        ctx.log(
+          `--max-duration ${maxDurationS}s reached: the page in progress gets up to ${grace} to finish, then a partial run is written …`,
+        );
         controller.abort('max-duration');
       }, maxDurationS * 1000)
     : undefined;
@@ -102,6 +127,7 @@ export async function auditCommand(
   const browser = (str(ctx, 'browser') ?? 'chromium') as BrowserName;
   if (!BROWSERS.includes(browser))
     throw new JouriloError('USAGE', `--browser must be one of ${BROWSERS.join(', ')}.`);
+  refuseDenyLocalWebkit(denyLocalFrom(ctx), browser);
   const failOn = str(ctx, 'fail-on') as Severity | undefined;
   if (failOn && !SEVERITIES.includes(failOn))
     throw new JouriloError('USAGE', `--fail-on must be one of ${SEVERITIES.join(', ')}.`);
@@ -109,8 +135,8 @@ export async function auditCommand(
   const auth = str(ctx, 'auth');
   if (auth && !existsSync(auth)) throw new JouriloError('NOT_FOUND', `Auth state file not found: ${auth}`);
 
-  const maxDuration = str(ctx, 'max-duration') === undefined ? undefined : num(ctx, 'max-duration', 0);
-  if (maxDuration === 0) throw new JouriloError('USAGE', '--max-duration must be more than 0 seconds.');
+  const maxDuration = maxDurationOption(ctx);
+  const maxPages = pagesOption(ctx, 6);
 
   const evidence = parseEvidence(ctx);
   const setupRef = str(ctx, 'setup-journey');
@@ -119,19 +145,21 @@ export async function auditCommand(
   const stop = stopController(ctx, maxDuration);
   let server: Awaited<ReturnType<typeof serveStatic>> | undefined;
   try {
-    const isDir =
-      !/^[a-z]+:\/\//i.test(targetArg) && existsSync(targetArg) && statSync(targetArg).isDirectory();
+    const isDir = isDirectoryTarget(targetArg);
     server = isDir ? await serveStatic(resolve(targetArg)) : undefined;
     const repo = str(ctx, 'repo') ?? (isDir ? resolve(targetArg) : undefined);
     const opts: AuditOptions = {
       target: server ? server.url : targetArg,
       viewports: parseViewports(str(ctx, 'viewports')),
-      maxPages: num(ctx, 'pages', 6),
+      maxPages,
       maxDepth: num(ctx, 'depth', 3),
       browser,
       headed: flag(ctx, 'headed'),
       respectRobots: !flag(ctx, 'ignore-robots'),
       allowPrivate: flag(ctx, 'allow-private'),
+      ...(denyLocalFrom(ctx)
+        ? { denyLocal: true, ...(server ? { servedPort: servedPort(server) } : {}) }
+        : {}),
       keyboard: !flag(ctx, 'no-keyboard'),
       throttle: flag(ctx, 'throttle'),
       runs: num(ctx, 'runs', 1),
@@ -240,7 +268,8 @@ function partialLines(run: Run): string[] {
 function noPageLines(run: Run): string[] {
   if (run.outcome !== 'no-page-loaded') return [];
   const first = run.findings.find((f) => f.ruleId === 'jourilo/page-unreachable');
-  return [`No page could be loaded from ${run.target}.`, ...(first ? [`  ${first.description}`] : []), ''];
+  const why = first?.description ?? run.limitations.find((l) => l.includes('could not be resolved'));
+  return [`No page could be loaded from ${run.target}.`, ...(why ? [`  ${why}`] : []), ''];
 }
 
 export const audit: Command = {
@@ -251,7 +280,7 @@ export const audit: Command = {
     'jourilo audit <url|dir> [--pages 6] [--viewports desktop,mobile] [--url /path ...] [--repo .] [--fail-on serious]',
   options: AUDIT_OPTIONS,
   details: `Options:
-  --pages N            Pages to audit after discovery (default 6; 1 = only the target)
+  --pages N            Pages to audit after discovery (default 6; 1 = only the target; 0 is a usage error)
   --depth N            Link depth for discovery (default 3)
   --url PATH           Audit exactly these paths/URLs on the target origin (repeatable; skips discovery)
   --include PATH       Add pages to discovery (repeatable)
@@ -273,6 +302,8 @@ export const audit: Command = {
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
+                       JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3). For hosted integrations; a directory target is still served
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -282,9 +313,11 @@ export const audit: Command = {
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
-  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused if the run exists
-  --max-duration SECS  Stop after this many seconds and write a partial run (exit 6), as SIGINT/SIGTERM do;
-                       a second signal quits at once (exit 130)`,
+  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused (exit 2) if its
+                       directory exists, even without a run.json (left by a crashed run)
+  --max-duration SECS  Stop after this many seconds (1 to 86400) and write a partial run (exit 6), as SIGINT/SIGTERM do;
+                       the page in progress gets up to 3 s to finish, then it is left out; a second signal quits at
+                       once (exit 130) after one line on stderr (STOPPED_TWICE with --json)`,
   run: (ctx) => auditCommand(ctx, audit.usage),
 };
 

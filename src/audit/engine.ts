@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import type { Browser } from 'playwright-core';
 import {
   capturePage,
+  captureScreenshotFiles,
   measureVitals,
   medianVitals,
   newContext,
@@ -36,13 +37,13 @@ import type {
   Viewport,
 } from '../core/types.js';
 import { RUN_SCHEMA_VERSION } from '../core/types.js';
-import { checkTarget, type HostClass, parseTargetUrl } from '../core/url-safety.js';
+import { checkTargetDetailed, type HostClass, parseTargetUrl } from '../core/url-safety.js';
 import { VERSION } from '../core/version.js';
 import type { Workspace } from '../core/workspace.js';
-import { crawl } from '../discovery/crawl.js';
+import { crawl, explicitRobotsOverrides, robotsOverrideLimitation } from '../discovery/crawl.js';
 import type { ExperienceContext } from '../integrations/context.js';
 import { designFindings, respectLockedBrand } from '../integrations/design-rules.js';
-import { probeFormValidation } from '../journeys/forms.js';
+import { formScreenshotFile, probeFormValidation } from '../journeys/forms.js';
 import { runJourney } from '../journeys/runner.js';
 import { testData } from '../journeys/safety.js';
 import type { JourneySpec } from '../journeys/schema.js';
@@ -80,6 +81,10 @@ export interface AuditOptions {
   headed: boolean;
   respectRobots: boolean;
   allowPrivate: boolean;
+  /** Refuse local targets (see `--deny-local`), also when reached by redirect. */
+  denyLocal?: boolean;
+  /** With denyLocal and a served directory: the static server's port, the only loopback port that stays reachable. */
+  servedPort?: number;
   keyboard: boolean;
   throttle: boolean;
   timeoutMs: number;
@@ -114,9 +119,9 @@ export interface AuditOptions {
   context?: ExperienceContext;
   onProgress?: (msg: string) => void;
   /**
-   * Stops the run early: the page in progress finishes, nothing new starts, and the run is built from what was
-   * collected (`stoppedBy` set). Abort with the reason `'max-duration'` when a time budget ran out; any other
-   * reason counts as a signal. The caller then owns SIGINT/SIGTERM: Playwright's own handlers, which would close
+   * Stops the run early: the page in progress gets STOP_GRACE_MS to finish (then it is abandoned and left out),
+   * nothing new starts, and the run is built from what was collected (`stoppedBy` set). Abort with the reason
+   * `'max-duration'` when a time budget ran out; any other reason counts as a signal. The caller then owns SIGINT/SIGTERM: Playwright's own handlers, which would close
    * the browser at once, are turned off.
    */
   signal?: AbortSignal;
@@ -130,6 +135,8 @@ export interface AuditOutput {
 
 /** Thrown at a stop point once `AuditOptions.signal` is aborted; ends the browsing phase, not the run. */
 class AuditStopped extends Error {}
+/** A local name that does not resolve: no capture can succeed, so none is started. */
+class NameUnresolved extends Error {}
 
 /**
  * Settles with `p`, or rejects with AuditStopped as soon as `signal` aborts. Used for steps worth abandoning
@@ -144,6 +151,58 @@ function untilStopped<T>(p: Promise<T>, signal: AbortSignal | undefined): Promis
     signal.addEventListener('abort', onAbort, { once: true });
     p.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
   });
+}
+
+/** How long the page (or form probe, or metrics visit) in progress may still take once a stop is requested. */
+export const STOP_GRACE_MS = 3000;
+const ABANDONED = Symbol('abandoned');
+
+/**
+ * Settles with `work` when it finishes, also after a stop, but waits no longer than STOP_GRACE_MS once `signal`
+ * aborts: then `abandon` runs (it closes the context the work runs in) and AuditStopped is thrown, so the
+ * unfinished work is left out of the run. Keeps a stop within a few seconds of the --max-duration limit even
+ * while a slow page loads (F32).
+ */
+async function withinGrace<T>(
+  work: Promise<T>,
+  signal: AbortSignal | undefined,
+  abandon: () => Promise<unknown>,
+): Promise<T> {
+  if (!signal) return work;
+  work.catch(() => undefined);
+  let timer: NodeJS.Timeout | undefined;
+  let onAbort: () => void = () => undefined;
+  const expired = new Promise<typeof ABANDONED>((resolve) => {
+    onAbort = () => {
+      timer = setTimeout(() => resolve(ABANDONED), STOP_GRACE_MS);
+    };
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    const first = await Promise.race([work, expired]);
+    if (first !== ABANDONED) return first as T;
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener('abort', onAbort);
+  }
+  await abandon().catch(() => undefined);
+  throw new AuditStopped();
+}
+
+/** Waits (at most `ms`) for abandoned work to settle, so it writes nothing after its files are removed. */
+async function settled(work: Promise<unknown>, ms: number): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  await Promise.race([
+    work.then(
+      () => undefined,
+      () => undefined,
+    ),
+    new Promise((r) => {
+      timer = setTimeout(r, ms);
+    }),
+  ]);
+  clearTimeout(timer);
 }
 
 function stopLimitation(
@@ -168,7 +227,10 @@ function stateOptions(opts: AuditOptions): { timezoneId?: string; clock?: string
 
 const RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
-/** Checked before any browser work; a run that exists is never overwritten. */
+/**
+ * Checked before any browser work. A run that exists is never overwritten, and neither is a directory without
+ * run.json (left by a crashed run): its leftovers would enter the new run's manifest (F33).
+ */
 function resolveRunId(ws: Workspace, requested: string | undefined): string {
   if (requested === undefined) return newRunId();
   if (!RUN_ID_PATTERN.test(requested))
@@ -177,8 +239,15 @@ function resolveRunId(ws: Workspace, requested: string | undefined): string {
       `Invalid run id "${requested}".`,
       'Use 1-64 letters, digits, "_" or "-", starting with a letter or digit.',
     );
-  if (existsSync(join(ws.runDir(requested), 'run.json')))
+  const dir = ws.runDir(requested);
+  if (existsSync(join(dir, 'run.json')))
     throw new JouriloError('INVALID_INPUT', `Run ${requested} already exists.`, 'Pick another --run-id.');
+  if (existsSync(dir))
+    throw new JouriloError(
+      'INVALID_INPUT',
+      `The directory of run ${requested} already exists (${dir}) without a finished run, probably left by a run that did not finish.`,
+      'Pick another --run-id, or remove that directory first.',
+    );
   return requested;
 }
 
@@ -187,7 +256,12 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
   // Read before any browser work, so a corrupt dismissed.json fails fast instead of losing a finished audit.
   const dismissals = loadDismissals(ws);
   const target = parseTargetUrl(opts.target);
-  const hostClass: HostClass = await checkTarget(target, { allowPrivate: opts.allowPrivate });
+  const check = await checkTargetDetailed(target, {
+    allowPrivate: opts.allowPrivate,
+    // The target of a served directory is Jourilo's own server; the guard still confines the page.
+    ...(opts.denyLocal && opts.servedPort === undefined ? { denyLocal: true } : {}),
+  });
+  const hostClass: HostClass = check.hostClass;
   const log = opts.onProgress ?? (() => undefined);
   const runDir = ws.createRunDir(id);
   const startedAt = new Date().toISOString();
@@ -200,7 +274,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
   // Pages known up front (--url, or only the target) need no discovery.
   let urls: { url: string; role?: string }[] | undefined;
   if (opts.urls?.length) {
-    urls = opts.urls.map((u) => ({ url: new URL(u, target).toString() }));
+    urls = [...new Set(opts.urls.map((u) => new URL(u, target).toString()))].map((url) => ({ url }));
     for (const u of urls) {
       if (new URL(u.url).origin !== target.origin)
         throw new JouriloError('UNSAFE_URL', `--url ${u.url} is not on the target origin ${target.origin}.`);
@@ -224,19 +298,29 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
   // Closes the browser first, so a setup journey abandoned by a stop cannot write its state after the removal.
   const endBrowsing = async () => {
     if (session) network = session.report();
-    await session?.close();
+    const closing = session;
     session = undefined;
-    rmSync(setupState, { force: true });
+    await closeBrowsing(closing, setupState);
   };
   try {
     try {
+      if (check.unresolved) throw new NameUnresolved();
       log(`Starting ${opts.browser} …`);
       halt();
       // Not abandoned midway: a browser still launching would be left running.
       session = await openGuardedBrowser(
         opts.browser,
         opts.headed,
-        { target: hostClass, allowPrivate: opts.allowPrivate },
+        {
+          target: hostClass,
+          allowPrivate: opts.allowPrivate,
+          ...(opts.denyLocal
+            ? {
+                denyLocal: true,
+                ...(opts.servedPort === undefined ? {} : { allowLoopbackPorts: [opts.servedPort] }),
+              }
+            : {}),
+        },
         signal !== undefined,
       );
       const browser: Browser = session.browser;
@@ -308,6 +392,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         const robotsSkips = found.skipped.filter((s) => s.reason === 'robots.txt').length;
         if (robotsSkips)
           limitations.push(`${robotsSkips} URL(s) were skipped because robots.txt disallows them.`);
+        for (const u of found.robotsOverridden) limitations.push(robotsOverrideLimitation(u));
         if (found.sitemapRebasedFrom)
           limitations.push(
             `The sitemap lists ${found.sitemapRebasedFrom} URLs; their paths were audited on the local server instead.`,
@@ -315,12 +400,24 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         if (!found.robots && opts.respectRobots && hostClass === 'public')
           limitations.push('No robots.txt was found; crawling stayed on the target origin.');
         urls = discovered.length ? discovered : [{ url: target.toString() }];
+      } else if (opts.respectRobots) {
+        // Pages known up front skip discovery, but robots.txt is still read: a disallowed page is audited because
+        // it was requested, and the run says so.
+        halt();
+        for (const u of await untilStopped(
+          explicitRobotsOverrides(
+            urls.map((x) => x.url),
+            session.guard.policy,
+          ),
+          signal,
+        ))
+          limitations.push(robotsOverrideLimitation(u));
       }
       log(
         `Auditing ${urls.length} page(s) × ${opts.viewports.length} viewport(s) in ${opts.browser} ${browserVersion}`,
       );
 
-      // 2. Capture every page in every viewport. A stop lets the page in progress finish.
+      // 2. Capture every page in every viewport. A stop gives the page in progress STOP_GRACE_MS to finish.
       for (const vp of opts.viewports) {
         halt();
         const ctx = await newContext(browser, vp, {
@@ -333,7 +430,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
           for (const { url } of urls) {
             halt();
             log(`  ${vp.name.padEnd(8)} ${redactUrl(url)}`);
-            const obs = await capturePage(ctx, url, vp, {
+            const capture = capturePage(ctx, url, vp, {
               runDir,
               guardToken: session.guard.token,
               timeoutMs: opts.timeoutMs,
@@ -346,6 +443,12 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
               axe: !opts.inventoryOnly,
               throttle: opts.throttle,
               ...(opts.evidence ? { evidence: opts.evidence } : {}),
+            });
+            const obs = await withinGrace(capture, signal, async () => {
+              await ctx.close();
+              await settled(capture, 1000);
+              const { full, fold } = captureScreenshotFiles(url, vp);
+              for (const f of [full, fold]) rmSync(join(runDir, f), { force: true });
             });
             observations.push(obs);
           }
@@ -362,13 +465,18 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
           for (let k = 1; k < runs; k++) {
             halt();
             log(`  metrics  ${obs.viewport.name.padEnd(8)} ${obs.url} (run ${k + 1}/${runs})`);
-            const v = await measureVitals(browser, obs.finalUrl, obs.viewport, {
-              runDir,
-              timeoutMs: opts.timeoutMs,
-              throttle: opts.throttle,
-              ...(storageState ? { storageState } : {}),
-              ...stateOptions(opts),
-            });
+            // An abandoned visit ends when the browser closes; the first sample stands.
+            const v = await withinGrace(
+              measureVitals(browser, obs.finalUrl, obs.viewport, {
+                runDir,
+                timeoutMs: opts.timeoutMs,
+                throttle: opts.throttle,
+                ...(storageState ? { storageState } : {}),
+                ...stateOptions(opts),
+              }),
+              signal,
+              async () => undefined,
+            );
             if (v) samples.push(v);
           }
           const m = medianVitals(samples);
@@ -399,7 +507,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
             for (const form of probeable.slice(0, 3)) {
               halt();
               log(`  form     ${o.url} ${form.selector}`);
-              const r = await probeFormValidation(
+              const probe = probeFormValidation(
                 ctx,
                 o.finalUrl,
                 form,
@@ -407,6 +515,11 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
                 { hostClass, allowSubmit: opts.allowSubmit ?? false, allowDestructive: false },
                 runDir,
               );
+              const r = await withinGrace(probe, signal, async () => {
+                await ctx.close();
+                await settled(probe, 1000);
+                rmSync(join(runDir, formScreenshotFile(o.finalUrl, form.selector, vp)), { force: true });
+              });
               formFindings.push(...r.findings);
               if (r.result.outcome === 'blocked')
                 limitations.push(`Form ${form.selector} on ${o.url} was not submitted: ${r.result.detail}`);
@@ -426,9 +539,14 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         );
       }
     } catch (err) {
-      if (!(err instanceof AuditStopped)) throw err;
-      stoppedBy = signal?.reason === 'max-duration' ? 'max-duration' : 'signal';
-      log(`Stopped early (${stoppedBy}); writing a partial run …`);
+      if (err instanceof NameUnresolved) {
+        const msg = `No page was loaded: the host name ${target.hostname} could not be resolved (no hosts entry or local DNS answer).`;
+        log(msg);
+        limitations.push(msg);
+      } else if (err instanceof AuditStopped) {
+        stoppedBy = signal?.reason === 'max-duration' ? 'max-duration' : 'signal';
+        log(`Stopped early (${stoppedBy}); writing a partial run …`);
+      } else throw err;
     }
     await endBrowsing();
     if (stoppedBy)
@@ -508,6 +626,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       title: o.title,
       viewport: o.viewport.name,
       ...(o.screenshot ? { screenshot: o.screenshot } : {}),
+      ...(o.foldScreenshot ? { foldScreenshot: o.foldScreenshot } : {}),
       loadMs: o.loadMs,
       metrics: o.vitals ? toMetrics(o.vitals, o.vitalsSpread, o.vitalsRuns) : [],
       consoleErrors: o.console.filter((c) => c.type !== 'warning').length,
@@ -567,6 +686,18 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
     return { run, runDir, observations };
   } finally {
     await endBrowsing();
+  }
+}
+
+/** Closes the browser, then removes the setup journey's session state even when closing throws (the error is reported). */
+export async function closeBrowsing(
+  session: { close(): Promise<unknown> } | undefined,
+  setupState: string,
+): Promise<void> {
+  try {
+    await session?.close();
+  } finally {
+    rmSync(setupState, { force: true });
   }
 }
 

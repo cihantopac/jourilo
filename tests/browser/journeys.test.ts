@@ -1,7 +1,15 @@
 // Journeys end-to-end on the acme-saas fixture: suggestion derives the expected journeys from real pages, the
 // runner reports real outcomes, and the safety policy blocks risky steps.
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -287,25 +295,29 @@ describe('journeys', () => {
   });
 });
 
+function writeFlakyLab(): void {
+  mkdirSync(join(ws, 'journeys'), { recursive: true });
+  writeFileSync(
+    join(ws, 'journeys', 'flaky-lab.json'),
+    JSON.stringify({
+      version: 1,
+      id: 'flaky-lab',
+      name: 'Flaky by test data',
+      start: '/flaky.html',
+      steps: [
+        { action: 'fill', target: { label: 'Email' }, value: '{{email}}' },
+        { action: 'click', target: { role: 'button', name: 'Continue' } },
+        { action: 'screenshot' },
+        { action: 'screenshot' },
+      ],
+      success: [{ description: 'No script errors', noPageErrors: true }],
+    }),
+  );
+}
+
 describe('journeys --repeat --evidence minimal', () => {
   it('keeps every screenshot the representative attempt refers to', () => {
-    mkdirSync(join(ws, 'journeys'), { recursive: true });
-    writeFileSync(
-      join(ws, 'journeys', 'flaky-lab.json'),
-      JSON.stringify({
-        version: 1,
-        id: 'flaky-lab',
-        name: 'Flaky by test data',
-        start: '/flaky.html',
-        steps: [
-          { action: 'fill', target: { label: 'Email' }, value: '{{email}}' },
-          { action: 'click', target: { role: 'button', name: 'Continue' } },
-          { action: 'screenshot' },
-          { action: 'screenshot' },
-        ],
-        success: [{ description: 'No script errors', noPageErrors: true }],
-      }),
-    );
+    writeFlakyLab();
     const r = jourilo(
       'journeys',
       'run',
@@ -331,6 +343,36 @@ describe('journeys --repeat --evidence minimal', () => {
     ].filter((f): f is string => !!f);
     expect(files.length).toBeGreaterThan(0);
     for (const f of files) expect(existsSync(join(out.runDir, f)), f).toBe(true);
+  }, 120_000);
+
+  it('repeat attempts keep their own step screenshots', () => {
+    writeFlakyLab();
+    const r = jourilo(
+      'journeys',
+      'run',
+      'flaky-lab',
+      '--base',
+      'fixtures/apps/journey-lab',
+      '--repeat',
+      '2',
+      '--timeout',
+      '2',
+    );
+    const out = JSON.parse(r.stdout) as {
+      runDir: string;
+      journeys: { steps: { screenshot?: string }[] }[];
+    };
+    const shots = out.journeys[0]!.steps.map((s) => s.screenshot).filter((f): f is string => !!f);
+    expect(shots.length).toBeGreaterThan(0);
+    for (const f of shots) {
+      expect(f).toMatch(/-a[12]-\d\d\.jpg$/);
+      expect(existsSync(join(out.runDir, f)), f).toBe(true);
+    }
+    const files = readdirSync(join(out.runDir, 'screenshots')).filter((f) =>
+      f.startsWith('journey-flaky-lab-'),
+    );
+    expect(files.some((f) => f.includes('-a1-'))).toBe(true);
+    expect(files.some((f) => f.includes('-a2-'))).toBe(true);
   }, 120_000);
 
   it('inventories only toggles that can make a journey, before applying the cap', () => {

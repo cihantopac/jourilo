@@ -97,7 +97,11 @@ const STATE = `(controls, mode) => {
   if (mode === 'same') {
     const d = window.__jouriloDialog;
     const ae = document.activeElement;
-    return { dialogOpen: visible(d) && (d.tagName !== 'DIALOG' || d.open), unlabelled: false, focusInDialog: !!d && !!ae && d.contains(ae), focusables: 0, controlledVisible: null, activeSelector: ae && ae !== document.body ? (ae.id ? '#' + ae.id : ae.tagName.toLowerCase()) : null };
+    let deep = ae;
+    while (deep && deep.shadowRoot && deep.shadowRoot.activeElement) deep = deep.shadowRoot.activeElement;
+    // A focus guard (Base UI, Radix, React Aria, Headless UI) is an empty sentinel; focus parked there is not an escape.
+    const onSentinel = !!deep && deep !== document.body && !(deep.textContent || '').trim() && (deep.getAttribute('aria-hidden') === 'true' || deep.getAttributeNames().some((n) => /focus-?guard|focus-?trap|data-.*sentinel/i.test(n)));
+    return { dialogOpen: visible(d) && (d.tagName !== 'DIALOG' || d.open), unlabelled: false, focusInDialog: !!d && !!ae && d.contains(ae), onSentinel, focusables: 0, controlledVisible: null, activeSelector: ae && ae !== document.body ? (ae.id ? '#' + ae.id : ae.tagName.toLowerCase()) : null };
   }
   const dialogs = Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"], dialog[open], [aria-modal="true"]')).filter(visible);
   let d = dialogs[dialogs.length - 1] || null;
@@ -128,10 +132,29 @@ const STATE = `(controls, mode) => {
   };
 }`;
 
+// Resolves once the deep active element (through shadow roots) is unchanged on four consecutive animation frames
+// (about 64 ms; two frames raced a 30 ms guard timer), or after 250 ms. Dialog libraries park focus on a guard and wrap it a tick later.
+const WAIT_FOCUS_STABLE = `new Promise((resolve) => {
+  const deepActive = () => { let a = document.activeElement; while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement; return a; };
+  const start = performance.now();
+  let last = deepActive();
+  let same = 0;
+  const tick = () => {
+    const now = deepActive();
+    same = now === last ? same + 1 : 0;
+    last = now;
+    if (same >= 4 || performance.now() - start >= 250) resolve(true);
+    else requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+})`;
+
 type State = {
   dialogOpen: boolean;
   unlabelled: boolean;
   focusInDialog: boolean;
+  /** Focus sits on an empty focus-guard sentinel (only reported by the "same" mode). */
+  onSentinel?: boolean;
   focusables: number;
   controlledVisible: boolean | null;
   activeSelector: string | null;
@@ -294,8 +317,9 @@ export async function checkWidgets(page: Page): Promise<WidgetCheck> {
       } else {
         // A modal layer must keep Tab inside it while it is open.
         for (let k = 0; k <= after.focusables; k++) await page.keyboard.press('Tab');
+        await page.evaluate(WAIT_FOCUS_STABLE).catch(() => undefined);
         const tabbed = await state(t.controls, 'same');
-        if (tabbed.dialogOpen && !tabbed.focusInDialog)
+        if (tabbed.dialogOpen && !tabbed.focusInDialog && !tabbed.onSentinel)
           issue(
             'dialog-focus-escapes',
             `Pressing Tab ${after.focusables + 1} time(s) moved focus out of the open dialog to ${tabbed.activeSelector ?? 'the page'}.`,

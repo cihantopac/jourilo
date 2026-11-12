@@ -1,4 +1,5 @@
 // Before/after comparison of two runs by finding fingerprint, plus lab metric deltas per page and viewport.
+import { fingerprintPath } from '../audit/finding.js';
 import type { Finding, MetricValue, Run } from '../core/types.js';
 
 export interface MetricDelta {
@@ -46,14 +47,7 @@ export interface RunComparison {
   regressionFree: boolean;
 }
 
-function pathKey(u: string): string {
-  try {
-    const x = new URL(u);
-    return `${x.pathname}${x.search}`;
-  } catch {
-    return u;
-  }
-}
+const pathKey = fingerprintPath;
 
 export function compareRuns(base: Run, head: Run): RunComparison {
   const before = new Map(base.findings.map((f) => [f.fingerprint, f]));

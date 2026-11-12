@@ -25,6 +25,16 @@
       "rule": "jourilo/focus-visible",
       "path": "/pressed-tools",
       "why": "the pressed toggle's state rule sets its own outline over :focus-visible (real-site case, 2026-11-03)"
+    },
+    {
+      "rule": "jourilo/dialog-focus-containment",
+      "path": "/dialog-escapes",
+      "why": "a modal dialog with no focus trap: Tab walks out into the page and focus stays there after the stability wait"
+    },
+    {
+      "rule": "jourilo/dialog-focus-containment",
+      "path": "/dialog-escapes-empty",
+      "why": "focus escapes to empty focusable page elements that are not guards (no aria-hidden, no guard attribute); the walk ends on one of them"
     }
   ],
   "sources": [{ "rule": "jourilo/focus-visible", "path": "/pressed-tools", "file": "style.css" }],
@@ -118,6 +128,16 @@
       "rule": "jourilo/expanded-state",
       "path": "/disclosure-overlay",
       "why": "an aria-expanded + aria-controls disclosure with a large absolute panel is not a dialog (real-site false positive, 2026-11-02)"
+    },
+    {
+      "rule": "jourilo/dialog-focus-containment",
+      "path": "/dialog-guards",
+      "why": "Base UI / Radix / React Aria park focus on an empty aria-hidden focus guard for a tick before wrapping it into the dialog (real-site false positive F30, 2026-11-09)"
+    },
+    {
+      "rule": "jourilo/dialog-focus-containment",
+      "path": "/dialog-guards-slow",
+      "why": "the Tab walk ends on a focus guard whose wrap lags past the stability window (F30: the audit read focus on the guard)"
     }
   ],
   "maxDefects": {
@@ -129,10 +149,12 @@
       "/launcher",
       "/composite-ok",
       "/focus-sibling",
-      "/disclosure-overlay"
+      "/disclosure-overlay",
+      "/dialog-guards",
+      "/dialog-guards-slow"
     ]
   },
   "audit": {
-    "maxPages": 10
+    "maxPages": 16
   }
 }

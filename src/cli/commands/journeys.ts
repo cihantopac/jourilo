@@ -10,7 +10,7 @@ import { applyDismissals, loadDismissals } from '../../core/dismissals.js';
 import { JouriloError } from '../../core/errors.js';
 import { displayPath } from '../../core/fs-safety.js';
 import { newRunId } from '../../core/hash.js';
-import { serveStatic } from '../../core/static-server.js';
+import { isDirectoryTarget, servedPort, serveStatic } from '../../core/static-server.js';
 import type { Finding, JourneyResult, Run } from '../../core/types.js';
 import { RUN_SCHEMA_VERSION } from '../../core/types.js';
 import { checkTarget, parseTargetUrl } from '../../core/url-safety.js';
@@ -26,11 +26,14 @@ import { writeReports } from '../../report/index.js';
 import {
   type Command,
   type Context,
+  denyLocalFrom,
   flag,
   list,
   num,
+  pagesOption,
   parseEvidence,
   parseStateOptions,
+  refuseDenyLocalWebkit,
   str,
 } from '../framework.js';
 
@@ -85,7 +88,7 @@ async function suggest(ctx: Context) {
   if (!target || ctx.ws.listRuns().some((r) => r.id === target) || target === 'latest') {
     run = ctx.ws.loadRun(target ?? 'latest').run;
   } else {
-    const isDir = existsSync(target) && !target.includes('://');
+    const isDir = isDirectoryTarget(target);
     const server = isDir ? await serveStatic(resolve(target)) : undefined;
     try {
       ctx.log('Discovering pages to derive journeys (no audit rules applied) …');
@@ -93,12 +96,15 @@ async function suggest(ctx: Context) {
         await runAudit(ctx.ws, {
           target: server?.url ?? target,
           viewports: parseViewports('desktop'),
-          maxPages: num(ctx, 'pages', 8),
+          maxPages: pagesOption(ctx, 8),
           maxDepth: 3,
           browser: 'chromium',
           headed: false,
           respectRobots: true,
           allowPrivate: flag(ctx, 'allow-private'),
+          ...(denyLocalFrom(ctx)
+            ? { denyLocal: true, ...(server ? { servedPort: servedPort(server) } : {}) }
+            : {}),
           keyboard: false,
           throttle: false,
           timeoutMs: 30_000,
@@ -203,17 +209,25 @@ async function runCmd(ctx: Context) {
     );
   const state = parseStateOptions(ctx);
   const evidence = parseEvidence(ctx);
-  const isDir = existsSync(baseArg) && !baseArg.includes('://');
+  const isDir = isDirectoryTarget(baseArg);
   const server = isDir ? await serveStatic(resolve(baseArg)) : undefined;
   try {
     const base = parseTargetUrl(server?.url ?? baseArg);
-    const hostClass = await checkTarget(base, { allowPrivate: flag(ctx, 'allow-private') });
+    const denyLocal = denyLocalFrom(ctx);
+    refuseDenyLocalWebkit(denyLocal, (str(ctx, 'browser') ?? 'chromium') as string);
+    const hostClass = await checkTarget(base, {
+      allowPrivate: flag(ctx, 'allow-private'),
+      denyLocal: denyLocal && !server,
+    });
     const id = newRunId();
     const runDir = ctx.ws.createRunDir(id);
     const browserName = (str(ctx, 'browser') ?? 'chromium') as BrowserName;
     const session = await openGuardedBrowser(browserName, flag(ctx, 'headed'), {
       target: hostClass,
       allowPrivate: flag(ctx, 'allow-private'),
+      ...(denyLocal
+        ? { denyLocal: true, ...(server ? { allowLoopbackPorts: [servedPort(server)] } : {}) }
+        : {}),
     });
     const browser = session.browser;
     const browserVersion = browser.version();
@@ -283,6 +297,7 @@ async function runCmd(ctx: Context) {
               ...(str(ctx, 'auth') ? { storageState: str(ctx, 'auth')! } : {}),
               ...state,
               ...(evidence ? { evidence } : {}),
+              ...(repeat > 1 ? { attempt: k + 1 } : {}),
               ...(saveAuth ? { saveAuth } : {}),
               ...(allowOrigins.length ? { allowOrigins } : {}),
               log: k === 0 ? ctx.log : undefined,
@@ -388,6 +403,7 @@ export const journeys: Command = {
     'allow-submit': { type: 'boolean' },
     'allow-destructive': { type: 'boolean' },
     'allow-private': { type: 'boolean' },
+    'deny-local': { type: 'boolean' },
     'allow-origin': { type: 'string', multiple: true },
     'fail-on-failure': { type: 'boolean' },
     browser: { type: 'string' },
@@ -413,6 +429,8 @@ Suggest options:
   --pages N              Pages to read when deriving journeys from a site (default 8)
   --force                Overwrite journey files that already exist (by default existing files are kept)
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
+                         JOURILO_DENY_LOCAL=1 does the same
 
 Run options:
   --base URL|DIR         The site or static build to run against (required)
@@ -433,6 +451,8 @@ Run options:
   --evidence MODE        full (default) or minimal: keep only the screenshots of the failed step, the step before it and the last step
   --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
+                         JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3)
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission

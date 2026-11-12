@@ -65,8 +65,8 @@ export function journeyStepsToKeep(steps: Pick<JourneyStepResult, 'status'>[]): 
 
 /**
  * Minimal journey evidence, applied to the attempt that is reported: its failed step, the step before it and its
- * final step keep a screenshot. Attempts share file names, so the files of every attempt are deleted except the kept
- * ones, and only the reported attempt's steps stay linked.
+ * final step keep a screenshot. With `--repeat` each attempt has its own file names, so the files of every attempt are
+ * deleted except the kept ones, and only the reported attempt's steps stay linked.
  */
 export function pruneJourneyScreenshots(
   runDir: string,

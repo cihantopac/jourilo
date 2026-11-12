@@ -143,6 +143,8 @@ export interface PageCapture {
   title: string;
   viewport: string;
   screenshot?: string;
+  /** The first-screen screenshot (equals `screenshot` when the page fits in one screen under `--evidence minimal`). */
+  foldScreenshot?: string;
   loadMs: number;
   metrics: MetricValue[];
   consoleErrors: number;

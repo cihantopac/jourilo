@@ -11,7 +11,14 @@ import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import https from 'node:https';
 import net, { isIP, type Socket } from 'node:net';
 import type { Duplex } from 'node:stream';
-import { type AddressPolicy, addressVerdict, classifyIp } from './url-safety.js';
+import {
+  type AddressPolicy,
+  addressVerdict,
+  classifyIp,
+  isLocalHostname,
+  RESOLVE_TIMEOUT_MS,
+  withTimeout,
+} from './url-safety.js';
 
 export interface BlockedConnection {
   host: string;
@@ -35,6 +42,8 @@ export type Verdict = { ok: true } | { ok: false; reason: string };
 export interface GuardDeps {
   resolve?: (host: string) => Promise<LookupAddress[]>;
   verdict?: (address: string, port: number) => Verdict;
+  /** Limit for one name lookup (default 5 s). */
+  resolveTimeoutMs?: number;
 }
 
 const systemResolve = (host: string) =>
@@ -54,12 +63,16 @@ export async function resolveAllowed(
   deps: GuardDeps = {},
 ): Promise<{ address: string; family: number } | { blocked: string }> {
   const h = host.replace(/^\[|\]$/g, '');
-  const verdict = deps.verdict ?? ((ip: string) => addressVerdict(ip, policy));
+  const verdict = deps.verdict ?? ((ip: string, port: number) => addressVerdict(ip, policy, port));
   let addrs: LookupAddress[];
   if (isIP(h)) addrs = [{ address: h, family: isIP(h) }];
   else {
     try {
-      addrs = await (deps.resolve ?? systemResolve)(h);
+      addrs = await withTimeout(
+        (deps.resolve ?? systemResolve)(h),
+        deps.resolveTimeoutMs ?? RESOLVE_TIMEOUT_MS,
+        `DNS lookup failed for ${h} (timed out)`,
+      );
     } catch (err) {
       throw Object.assign(new Error(`DNS lookup failed for ${h}`), { cause: err });
     }
@@ -122,6 +135,17 @@ export function loopbackRedirectVerdict(location: string, from: URL, policy: Add
   } catch {
     return null;
   }
+  if (policy.denyLocal) {
+    const h = to.hostname
+      .replace(/^\[|\]$/g, '')
+      .toLowerCase()
+      .replace(/\.$/, '');
+    const local = isLocalHostname(h) || (isIP(h) !== 0 && classifyIp(h) === 'loopback');
+    const port = Number(to.port || (to.protocol === 'https:' ? 443 : 80));
+    const own = policy.allowLoopbackPorts?.includes(port) && h === '127.0.0.1';
+    if (local && !own)
+      return `redirect from ${from.host} to ${to.host} (a local address) refused: --deny-local is set.`;
+  }
   if (!isLoopbackName(to.hostname)) return null;
   if (policy.target === 'local' || policy.allowPrivate) return null;
   return `redirect from ${from.host} to ${to.host} (this machine) refused.`;
@@ -180,9 +204,11 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
     blocked.push({ host, port, reason });
   };
   const sockets = new Set<Duplex>();
+  // Idempotent: a kept-alive upstream socket is reported again for every request it carries.
   const track = <T extends Duplex>(s: T): T => {
+    if (sockets.has(s)) return s;
     sockets.add(s);
-    s.on('close', () => sockets.delete(s));
+    s.once('close', () => sockets.delete(s));
     return s;
   };
 
@@ -280,7 +306,15 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
           res.writeHead(up.statusCode ?? 502, up.statusMessage, out);
           up.pipe(res);
         });
-        upstream.on('error', (err) => fail(502, err.message));
+        upstream.on('socket', (s) => track(s));
+        // A request the browser gave up on (its page closed, an abandoned page) ends upstream too: a server that never
+        // answers would otherwise keep the connection, and so Jourilo's process, alive after the audit.
+        res.on('close', () => {
+          if (!res.writableFinished) upstream.destroy();
+        });
+        upstream.on('error', (err) => {
+          if (!res.destroyed) fail(502, err.message);
+        });
         req.pipe(upstream);
       },
       (err: Error) => fail(502, err.message),

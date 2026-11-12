@@ -324,6 +324,10 @@
         "title": { "type": "string" },
         "viewport": { "type": "string" },
         "screenshot": { "type": "string", "description": "Path relative to the run directory." },
+        "foldScreenshot": {
+          "type": "string",
+          "description": "First-screen screenshot, relative to the run directory."
+        },
         "loadMs": { "type": "number" },
         "metrics": { "type": "array", "items": { "$ref": "#/$defs/metric" } },
         "consoleErrors": { "type": "integer" },

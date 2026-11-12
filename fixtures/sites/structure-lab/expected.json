@@ -7,6 +7,15 @@
       "why": "fieldset without legend and with an empty legend"
     },
     {
+      "rule": "jourilo/fieldset-legend",
+      "path": "/named",
+      "evidenceExactly": [
+        "#ctl-unresolved",
+        "#ctl-blank"
+      ],
+      "why": "aria-labelledby that resolves to nothing and a blank aria-label are not names; the aria-label and resolving aria-labelledby fieldsets are"
+    },
+    {
       "rule": "jourilo/radio-group",
       "path": "/broken",
       "why": "radio pair not grouped"
@@ -32,6 +41,14 @@
       "path": "/trap-documented",
       "kind": "needs-review",
       "why": "held focus with a documented, working Ctrl+M exit"
+    },
+    {
+      "rule": "axe-review/color-contrast",
+      "path": "/banner",
+      "evidenceExactly": [
+        "ctl-banner"
+      ],
+      "why": "visible text over a background image stays in manual review"
     }
   ],
   "mustNotFind": [
@@ -57,6 +74,11 @@
       "path": "/trap-documented",
       "kind": "defect",
       "why": "WCAG 2.1.2 allows a documented way out that works"
+    },
+    {
+      "rule": "axe-review/color-contrast",
+      "path": "/glyphs",
+      "why": "aria-hidden decorative glyphs in a fallback font are not read as text (F25)"
     }
   ],
   "maxDefects": {

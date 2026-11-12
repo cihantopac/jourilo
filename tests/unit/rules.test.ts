@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergeFindings } from '../../src/audit/finding.js';
+import { makeFinding, mergeFindings } from '../../src/audit/finding.js';
 import {
   axeFindings,
   keyboardFindings,
@@ -260,6 +260,49 @@ describe('experience rules', () => {
     expect(f[0]!.severity).toBe('serious');
     expect(f[0]!.description).toContain('290 px');
   });
+  it('overflow with offenders stays a defect', () => {
+    const f = responsiveFindings(
+      obs({
+        screenshot: 'screenshots/a.jpg',
+        probe: probe({
+          overflow: {
+            docWidth: 420,
+            viewportWidth: 375,
+            offenders: [{ selector: '.strip', rect, right: 420, width: 400, tag: 'div' }],
+          },
+        }),
+      }),
+    );
+    expect(f[0]!.kind).toBe('defect');
+    expect(f[0]!.confidence).toBe('high');
+  });
+  it('overflow without offenders is a needs-review item', () => {
+    const input = {
+      screenshot: 'screenshots/a.jpg',
+      probe: probe({ overflow: { docWidth: 420, viewportWidth: 375, offenders: [] } }),
+    };
+    const f = responsiveFindings(obs(input));
+    expect(f).toHaveLength(1);
+    expect(f[0]!.kind).toBe('needs-review');
+    expect(f[0]!.confidence).toBe('low');
+    expect(f[0]!.severity).toBe('serious');
+    expect(f[0]!.description).toContain('no element could be located');
+    expect(f[0]!.evidence.length).toBeGreaterThan(0);
+    expect(f[0]!.evidence.some((e) => e.file === 'screenshots/a.jpg')).toBe(true);
+    const withOffender = responsiveFindings(
+      obs({
+        ...input,
+        probe: probe({
+          overflow: {
+            docWidth: 420,
+            viewportWidth: 375,
+            offenders: [{ selector: '.strip', rect, right: 420, width: 400, tag: 'div' }],
+          },
+        }),
+      }),
+    );
+    expect(f[0]!.fingerprint).toBe(withOffender[0]!.fingerprint);
+  });
   it('does not flag pages that fit', () => {
     expect(responsiveFindings(obs())).toEqual([]);
   });
@@ -284,6 +327,30 @@ describe('experience rules', () => {
       ['jourilo/failed-requests', 'serious'],
       ['jourilo/failed-third-party', 'minor'],
     ]);
+  });
+  it('redacts secrets in the redirect hops of an unreachable page', () => {
+    const f = reliabilityFindings(
+      obs({
+        errors: ['navigation: net::ERR_TOO_MANY_REDIRECTS at https://example.test/a?token=secret'],
+        redirects: [
+          {
+            status: 302,
+            from: 'https://example.test/a?token=secret',
+            to: 'https://example.test/b?token=secret',
+          },
+          {
+            status: 302,
+            from: 'https://example.test/b?token=secret',
+            to: 'https://example.test/a?token=secret',
+          },
+        ],
+      }),
+    );
+    const unreachable = f.find((x) => x.ruleId === 'jourilo/page-unreachable')!;
+    expect(unreachable).toBeDefined();
+    expect(JSON.stringify([unreachable.title, unreachable.description, unreachable.evidence])).not.toContain(
+      'secret',
+    );
   });
   it('labels lab metrics and ignores good values', () => {
     const vitals = {
@@ -330,6 +397,39 @@ describe('conversion rules', () => {
 });
 
 describe('merge', () => {
+  const mk = (
+    offenders: { selector: string; rect: typeof rect; right: number; width: number; tag: string }[],
+    vp: 'desktop' | 'mobile',
+  ) =>
+    responsiveFindings(
+      obs({
+        viewport: VIEWPORTS[vp]!,
+        probe: probe({ overflow: { docWidth: 420, viewportWidth: 375, offenders } }),
+      }),
+    );
+  const located = [{ selector: '.strip', rect, right: 420, width: 400, tag: 'div' }];
+  it('lets a located defect win over a review item in either viewport order', () => {
+    const review = mk([], 'desktop');
+    const defect = mk(located, 'mobile');
+    for (const order of [
+      [...review, ...defect],
+      [...defect, ...review],
+    ]) {
+      const merged = mergeFindings(order);
+      expect(merged).toHaveLength(1);
+      expect(merged[0]!.kind).toBe('defect');
+      expect(merged[0]!.confidence).toBe('high');
+      expect(merged[0]!.description).toContain('Widest culprit');
+      expect(merged[0]!.description).not.toContain('no element could be located');
+    }
+  });
+  it('leaves merges of equal kind unchanged', () => {
+    const merged = mergeFindings([...mk([], 'desktop'), ...mk([], 'mobile')]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]!.kind).toBe('needs-review');
+    expect(merged[0]!.confidence).toBe('low');
+    expect(merged[0]!.description).toContain('no element could be located');
+  });
   it('folds the same defect seen in two viewports into one finding', () => {
     const a = responsiveFindings(
       obs({ probe: probe({ overflow: { docWidth: 500, viewportWidth: 390, offenders: [] } }) }),
@@ -404,5 +504,22 @@ describe('keyboard trap advice', () => {
     expect(adviceKey('press Esc to leave the editor')).toBe('Escape');
     expect(adviceKey('Use Ctrl+Shift+F6 to move on')).toBe('Control+Shift+F6');
     expect(adviceKey('How to go the next element')).toBeNull();
+  });
+});
+
+describe('fingerprint page identity', () => {
+  it('does not change when a page URL carries trailing slashes', () => {
+    const base = {
+      ruleId: 'axe/html-has-lang',
+      severity: 'serious',
+      title: 't',
+      evidence: [],
+    } as unknown as Parameters<typeof makeFinding>[0];
+    const fp = (url: string) => makeFinding({ ...base, url }).fingerprint;
+    expect(fp('https://x.test/de/')).toBe(fp('https://x.test/de'));
+    expect(fp('https://x.test/de//')).toBe(fp('https://x.test/de'));
+    expect(fp('https://x.test/de/?a=1')).toBe(fp('https://x.test/de?a=1'));
+    expect(fp('https://x.test/')).not.toBe(fp('https://x.test/de'));
+    expect(fp('https://x.test/')).toBe(fp('https://x.test'));
   });
 });

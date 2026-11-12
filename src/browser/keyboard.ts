@@ -18,7 +18,16 @@ export interface FocusStop {
   /** Selector of the content covering the element, when obscured. */
   coverSelector?: string;
   inModal: boolean;
+  /**
+   * The stop has no box to draw an indicator on (its rect, measured while focused, is at most 1 px wide or tall and
+   * no descendant is larger, and it has no text or accessible name) or is a dev-server overlay. It is not page content and is not judged for focus-visible.
+   */
+  boxless?: boolean;
 }
+
+/** Dev-server overlays that take focus but are not part of the audited page. */
+export const DEV_OVERLAY =
+  'nextjs-portal, vite-error-overlay, astro-dev-toolbar, #webpack-dev-server-client-overlay';
 
 export interface KeyboardWalk {
   stops: FocusStop[];
@@ -31,7 +40,8 @@ export interface KeyboardWalk {
   skipsLinks?: boolean;
 }
 
-// Plain JS evaluated in the page; returns data about the element (or null for body/document).
+// Plain JS evaluated in the page; returns data about the element (or null for body/document). It runs while the
+// element has focus, so the rect of an element that is off-screen until focused is its focused rect.
 const FOCUS_INFO = `(el) => {
   if (!el || el === document.body || el === document.documentElement) return null;
   const sx = window.scrollX, sy = window.scrollY;
@@ -91,6 +101,17 @@ const FOCUS_INFO = `(el) => {
     if (!hit || hit === el || el.contains(hit) || hit.contains(el)) { visiblePts++; continue; }
     if (isCover(hit)) cover = cover || hit;
   }
+  const noBox = (e) => { const b = e.getBoundingClientRect(); return b.width <= 1 || b.height <= 1; };
+  const rootHost = el.getRootNode && el.getRootNode().host;
+  // A stop with text or an accessible name is content a person can reach, so a hidden one is a real focus-visible
+  // failure (a clipped skip link that stays 1 x 1 while focused), not a stop without a box.
+  const labelledBy = (el.getAttribute('aria-labelledby') || '').split(/\\s+/).filter(Boolean)
+    .map((id) => { const n = document.getElementById(id); return n ? (n.textContent || '') : ''; }).join('').trim();
+  const hasName = !!((el.textContent || '').trim() || (el.getAttribute('aria-label') || '').trim() || labelledBy ||
+    (el.getAttribute('title') || '').trim() || (el.getAttribute('alt') || '').trim());
+  const boxless = !!(el.matches(${JSON.stringify(DEV_OVERLAY)}) || (rootHost && rootHost.matches(${JSON.stringify(DEV_OVERLAY)})) ||
+    (noBox(el) && !hasName && !Array.from(el.querySelectorAll('*')).some((d) => !noBox(d)) &&
+      !(el.shadowRoot && Array.from(el.shadowRoot.querySelectorAll('*')).some((d) => !noBox(d)))));
   const name = (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('title') || '').replace(/\\s+/g, ' ').trim().slice(0, 80);
   // The element's identity as markup (like an axe node's html), so a state rule (.tool[aria-pressed]) can be found.
   const attrs = ['id', 'class', 'role', 'aria-pressed', 'aria-expanded', 'aria-selected', 'aria-checked', 'aria-current', 'data-state']
@@ -103,6 +124,7 @@ const FOCUS_INFO = `(el) => {
     obscured: !selfHidden && inViewport > 0 && visiblePts === 0 && !!cover,
     coverSelector: cover ? sel(cover) : undefined,
     inModal: !!el.closest('[aria-modal="true"], dialog[open]'),
+    boxless,
   };
 }`;
 

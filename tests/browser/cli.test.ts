@@ -1,5 +1,14 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
@@ -29,6 +38,135 @@ describe('cli', () => {
     expect(JSON.parse(r.stderr).error.code).toBe('UNSAFE_URL');
     expect(jourilo('nope').status).toBe(2);
   });
+  it('--deny-local refuses local targets, as does JOURILO_DENY_LOCAL=1', () => {
+    for (const t of ['localhost:3000', 'http://127.0.0.1/', 'http://[::1]/', 'http://app.test/']) {
+      const r = jourilo('audit', t, '--deny-local', '--json');
+      expect(r.status, t).toBe(3);
+      expect(JSON.parse(r.stderr).error.code).toBe('UNSAFE_URL');
+      expect(JSON.parse(r.stderr).error.message).toContain('--deny-local');
+    }
+    for (const value of ['1', 'true', 'yes']) {
+      const r = spawnSync(
+        process.execPath,
+        [cli, 'discover', 'http://app.test/', '--workspace', ws, '--json'],
+        { encoding: 'utf8', cwd: root, env: { ...process.env, JOURILO_DENY_LOCAL: value } },
+      );
+      expect(r.status, value).toBe(3);
+    }
+    const dir = join(ws, 'journeys');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, 'home.json'),
+      JSON.stringify({
+        version: 1,
+        id: 'home',
+        name: 'Home',
+        start: '/',
+        steps: [{ action: 'click', target: { role: 'link', name: 'Home' } }],
+        success: [{ description: 'Stays home', url: '/' }],
+      }),
+    );
+    const j = jourilo('journeys', 'run', 'home', '--base', 'http://localhost:1/', '--deny-local', '--json');
+    expect(j.status).toBe(3);
+  });
+  it('JOURILO_DENY_LOCAL: off values allow local targets; on, yes and unrecognised values enable it (fail closed)', () => {
+    for (const value of ['0', 'false', 'OFF', ' no ', 'on', 'yes', 'maybe']) {
+      const r = spawnSync(
+        process.execPath,
+        [
+          cli,
+          'audit',
+          'http://localhost:1/',
+          '--pages',
+          '1',
+          '--viewports',
+          'mobile',
+          '--workspace',
+          ws,
+          '--json',
+        ],
+        { encoding: 'utf8', cwd: root, env: { ...process.env, JOURILO_DENY_LOCAL: value } },
+      );
+      const enabled = ['on', 'yes', 'maybe'].includes(value);
+      if (enabled) expect(r.status, value).toBe(3);
+      else expect(r.status, value).not.toBe(3);
+      expect(r.stderr.includes('not recognised'), value).toBe(value === 'maybe');
+      if (value === 'maybe') {
+        // Under --json every stderr line stays JSON.
+        for (const line of r.stderr.split('\n').filter(Boolean))
+          expect(() => JSON.parse(line), line).not.toThrow();
+      }
+      expect(r.stdout).not.toContain('JOURILO_DENY_LOCAL');
+    }
+  }, 180_000);
+  it('--deny-local with --browser webkit is refused up front (exit 3), before any browser starts', () => {
+    const r = spawnSync(
+      process.execPath,
+      [
+        cli,
+        'audit',
+        'https://example.com/',
+        '--deny-local',
+        '--browser',
+        'webkit',
+        '--workspace',
+        ws,
+        '--json',
+      ],
+      { encoding: 'utf8', cwd: root },
+    );
+    expect(r.status).toBe(3);
+    expect(r.stderr).toContain('chromium or firefox');
+    expect(r.stderr).not.toContain('Starting ');
+  }, 60_000);
+  it('--deny-local keeps confining a served directory: another loopback port is blocked, the page loads', async () => {
+    const other = http.createServer((_req, res) => res.end('secret'));
+    await new Promise<void>((r) => other.listen(0, '127.0.0.1', r));
+    const port = (other.address() as AddressInfo).port;
+    const dir = join(ws, 'deny-local-site');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, 'index.html'),
+      `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Denied</title></head><body><main><h1>Hello</h1><script>fetch('http://127.0.0.1:${port}/').catch(()=>{})</script></main></body></html>`,
+    );
+    try {
+      const r = await new Promise<{ status: number | null; stdout: string }>((resolve) => {
+        const c = spawn(
+          process.execPath,
+          [
+            cli,
+            'audit',
+            dir,
+            '--pages',
+            '1',
+            '--viewports',
+            'mobile',
+            '--deny-local',
+            '--json',
+            '--workspace',
+            ws,
+          ],
+          { cwd: root },
+        );
+        let stdout = '';
+        c.stdout.on('data', (d) => (stdout += d));
+        c.on('close', (status) => resolve({ status, stdout }));
+      });
+      expect(r.status).not.toBe(3);
+      expect(r.status).not.toBe(5);
+      const summary = JSON.parse(r.stdout.trim().split('\n').pop()!) as { runDir: string };
+      const run = JSON.parse(readFileSync(join(summary.runDir, 'run.json'), 'utf8')) as Run;
+      expect(run.pages.length).toBe(1);
+      expect(run.limitations.join(' ')).toContain('--deny-local');
+      expect(run.limitations.join(' ')).toContain(`127.0.0.1:${port}`);
+    } finally {
+      await new Promise((res) => other.close(res));
+    }
+  }, 180_000);
+  it('without the option a local target is still allowed', () => {
+    const r = jourilo('audit', 'http://localhost:1/', '--pages', '1', '--viewports', 'mobile', '--json');
+    expect(r.status).not.toBe(3);
+  }, 120_000);
   it('audits a static directory, writes reports and gates on severity', () => {
     const r = jourilo(
       'audit',
@@ -90,6 +228,28 @@ describe('cli no page loaded', () => {
   });
 });
 
+describe('cli unresolvable local name', () => {
+  it('an unresolvable .test name exits 5 quickly', () => {
+    const t0 = Date.now();
+    const r = jourilo(
+      'audit',
+      'http://does-not-exist.test/',
+      '--pages',
+      '1',
+      '--viewports',
+      'desktop',
+      '--json',
+      '-q',
+    );
+    expect(Date.now() - t0).toBeLessThan(10_000);
+    expect(r.status).toBe(5);
+    expect(r.stdout).toContain('"outcome":"no-page-loaded"');
+    const out = JSON.parse(r.stdout);
+    const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8'));
+    expect(run.limitations.some((l: string) => l.includes('could not be resolved'))).toBe(true);
+  });
+});
+
 describe('cli verify against an unreachable target', () => {
   it('claims no fixes and exits 5', () => {
     const a = jourilo(
@@ -113,6 +273,67 @@ describe('cli verify against an unreachable target', () => {
     expect(text.status).toBe(5);
     expect(text.stdout).toMatch(/no comparison was possible/i);
     expect(text.stdout).not.toMatch(/fixed \d/);
+  });
+  it('verify --target that is neither a path nor an http(s) URL is INVALID_INPUT', () => {
+    const vws = join(root, 'tests', '.tmp', 'cli-verify-ws');
+    rmSync(vws, { recursive: true, force: true });
+    mkdirSync(join(vws, 'runs', 'base-1'), { recursive: true });
+    writeFileSync(
+      join(vws, 'runs', 'base-1', 'run.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        id: 'base-1',
+        mode: 'website',
+        target: 'http://127.0.0.1:1/',
+        startedAt: '2026-11-12T00:00:00.000Z',
+        browser: { name: 'chromium', version: 'x' },
+        viewports: [],
+        settings: { scope: { urls: ['http://127.0.0.1:1/'], viewports: ['desktop'] } },
+        pages: [],
+        journeys: [],
+        findings: [],
+        limitations: [],
+      }),
+    );
+    for (const t of ['package.json', 'no-such-dir', 'localhost:3000', 'htp://localhost:3000', 'ftp://x/']) {
+      const r = spawnSync(
+        process.execPath,
+        [cli, 'verify', 'base-1', '--target', t, '--json', '--workspace', vws],
+        { encoding: 'utf8', cwd: root },
+      );
+      expect(r.status, `${t}: ${r.stderr}`).toBe(2);
+      const err = JSON.parse(r.stderr.trim().split('\n').pop()!).error;
+      expect(err.code, t).toBe('INVALID_INPUT');
+      expect(err.message, t).toContain(t);
+    }
+  });
+});
+
+describe('cli --run-id', () => {
+  it('--run-id is refused when its directory exists', () => {
+    const dir = join(ws, 'runs', 'left-by-a-crash');
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(join(dir, 'screenshots'), { recursive: true });
+    writeFileSync(join(dir, 'screenshots', 'x.jpg'), 'old');
+    const r = jourilo(
+      'audit',
+      'fixtures/sites/acme-saas',
+      '--pages',
+      '1',
+      '--viewports',
+      'desktop',
+      '--run-id',
+      'left-by-a-crash',
+      '--json',
+    );
+    expect(r.status, r.stderr).toBe(2);
+    const err = JSON.parse(r.stderr.trim().split('\n').pop()!).error;
+    expect(err.code).toBe('INVALID_INPUT');
+    expect(err.message).toContain('left-by-a-crash');
+    // Untouched: no run.json, no report, no new screenshot.
+    expect(readdirSync(dir)).toEqual(['screenshots']);
+    expect(readdirSync(join(dir, 'screenshots'))).toEqual(['x.jpg']);
+    expect(readFileSync(join(dir, 'screenshots', 'x.jpg'), 'utf8')).toBe('old');
   });
 });
 
@@ -158,6 +379,50 @@ describe('cli forged guard signal', () => {
       srv.close();
     }
   });
+});
+
+describe('cli redirect loop', () => {
+  it('a redirect loop is named with its chain', async () => {
+    const srv = http.createServer((req, res) => {
+      const next = req.url === '/a' ? '/b' : req.url === '/b' ? '/a' : '/';
+      res.writeHead(req.url === '/' ? 307 : 302, { location: next }).end();
+    });
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+    const port = (srv.address() as AddressInfo).port;
+    try {
+      const child = spawn(
+        process.execPath,
+        [
+          cli,
+          'audit',
+          `http://127.0.0.1:${port}/`,
+          '--pages',
+          '1',
+          '--viewports',
+          'desktop',
+          '--json',
+          '-q',
+          '--workspace',
+          ws,
+        ],
+        { cwd: root },
+      );
+      let stdout = '';
+      child.stdout.on('data', (d) => {
+        stdout += d;
+      });
+      const code = await new Promise((r) => child.on('close', r));
+      expect(code).toBe(5);
+      const out = JSON.parse(stdout);
+      const f = out.findings.find((x: { ruleId: string }) => x.ruleId === 'jourilo/page-unreachable');
+      expect(f.title).toBe('Page redirects to itself in a loop');
+      expect(f.description).toContain('redirect loop');
+      expect(f.description).toMatch(/307 \/ → \//);
+      expect(f.recommendation).toMatch(/redirect|host/i);
+    } finally {
+      srv.close();
+    }
+  }, 120_000);
 });
 
 describe('cli state options', () => {
@@ -245,6 +510,118 @@ async function auditUntil(
   return { code, out, run, afterSignalMs: signalledAt ? Date.now() - signalledAt : 0 };
 }
 
+interface TimedAudit {
+  code: number | null;
+  stdout: string;
+  /** Every stderr line, parsed (all are JSON with --json). */
+  lines: { type: string; message?: string; error?: { code: string; message: string } }[];
+  wallMs: number;
+  /** From spawn until the browser is up (the first progress line after "Starting …"). */
+  launchMs: number;
+  /** From the first signal until the process ended (0 without a signal). */
+  afterSignalMs: number;
+  /** Browser profiles left in the run's own temp directory and processes still using it. */
+  leftovers: string[];
+}
+
+/**
+ * Spawns an audit with --json and its own temp directory, so the browser profile Playwright creates there (and
+ * every process started with it) belongs to this run alone. `signalWhen` decides, per progress line, whether to send
+ * SIGTERM; it may fire more than once.
+ */
+async function timedAudit(
+  args: string[],
+  signalWhen?: (msg: string, signalsSent: number) => boolean,
+): Promise<TimedAudit> {
+  const tmp = mkdtempSync(join(root, 'tests', '.tmp', 'stop-tmp-'));
+  const t0 = Date.now();
+  const child = spawn(process.execPath, [cli, 'audit', ...args, '--json', '--workspace', ws], {
+    cwd: root,
+    env: { ...process.env, TMPDIR: tmp, TEMP: tmp, TMP: tmp },
+  });
+  let stdout = '';
+  let buffered = '';
+  let starting = false;
+  let launchMs = 0;
+  let signals = 0;
+  let signalledAt = 0;
+  const lines: TimedAudit['lines'] = [];
+  child.stdout.on('data', (d) => {
+    stdout += d;
+  });
+  child.stderr.on('data', (d) => {
+    buffered += d;
+    const parts = buffered.split('\n');
+    buffered = parts.pop() ?? '';
+    for (const part of parts) {
+      let msg: TimedAudit['lines'][number];
+      try {
+        msg = JSON.parse(part) as TimedAudit['lines'][number];
+      } catch {
+        msg = { type: 'raw', message: part };
+      }
+      lines.push(msg);
+      if (msg.type !== 'progress') continue;
+      if (starting && !launchMs) launchMs = Date.now() - t0;
+      if (msg.message?.startsWith('Starting ')) starting = true;
+      if (signalWhen?.(msg.message ?? '', signals)) {
+        signals++;
+        signalledAt ||= Date.now();
+        child.kill('SIGTERM');
+      }
+    }
+  });
+  const code = await new Promise<number | null>((r) => child.on('close', r));
+  const end = Date.now();
+  if (buffered.trim()) lines.push(JSON.parse(buffered));
+  const leftovers = readdirSync(tmp).filter((n) => n.startsWith('playwright'));
+  if (process.platform !== 'win32') {
+    const p = spawnSync('pgrep', ['-f', tmp], { encoding: 'utf8' });
+    if (p.stdout?.trim()) leftovers.push(`processes ${p.stdout.trim().split('\n').join(', ')}`);
+  }
+  rmSync(tmp, { recursive: true, force: true });
+  return {
+    code,
+    stdout,
+    lines,
+    wallMs: end - t0,
+    launchMs,
+    afterSignalMs: signalledAt ? end - signalledAt : 0,
+    leftovers,
+  };
+}
+
+/** A local site whose `/` page holds a required-field form and an image; `hang` decides which image requests never end. */
+async function slowSite(hang: (n: number) => boolean) {
+  let images = 0;
+  const srv = http.createServer((req, res) => {
+    if (req.url === '/') {
+      res.writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store' }).end(
+        `<!doctype html><html lang="en"><title>Sign in</title><main><h1>Sign in</h1>
+<img src="/pixel.svg" width="10" height="10" alt="">
+<form action="/login" method="post"><label>Email <input type="email" name="email" autocomplete="email" required></label>
+<label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+<button type="submit">Sign in</button></form></main></html>`,
+      );
+    } else if (req.url === '/pixel.svg') {
+      // Never answered: the page's load event waits for it.
+      if (hang(++images)) return;
+      res
+        .writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': 'no-store' })
+        .end('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>');
+    } else res.writeHead(404).end();
+  });
+  await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+  return {
+    url: `http://127.0.0.1:${(srv.address() as AddressInfo).port}/`,
+    close: () =>
+      new Promise((r) => {
+        srv.closeAllConnections();
+        srv.close(r);
+      }),
+  };
+}
+
 describe('cli stop early', () => {
   const site = ['fixtures/sites/acme-saas', '--pages', '6', '--viewports', 'desktop', '--no-forms'];
 
@@ -252,7 +629,13 @@ describe('cli stop early', () => {
   it.skipIf(process.platform === 'win32')(
     'SIGTERM during an audit writes a partial run and exits 6',
     async () => {
-      const r = await auditUntil(site, (m) => m.startsWith('desktop') && m.includes('http'));
+      // Stop when the second page starts, so the first one is complete: the page in progress gets only
+      // STOP_GRACE_MS, and acme-saas's slow assets can take longer than that on a slow runner.
+      let started = 0;
+      const r = await auditUntil(
+        site,
+        (m) => m.startsWith('desktop') && m.includes('http') && ++started === 2,
+      );
       expect(r.code).toBe(6);
       expect(r.out.outcome).toBe('partial');
       expect(r.run.outcome).toBe('partial');
@@ -274,6 +657,88 @@ describe('cli stop early', () => {
     expect(r.run.outcome).toBe('partial');
     expect(r.run.stoppedBy).toBe('max-duration');
   }, 120_000);
+
+  it('--max-duration stops within 5 s of the limit', async () => {
+    // acme-saas with forms on: slow assets (up to 4.3 s) and form probes are in progress when the limit is reached.
+    const r = await timedAudit([
+      'fixtures/sites/acme-saas',
+      '--pages',
+      '6',
+      '--viewports',
+      'desktop',
+      '--max-duration',
+      '3',
+    ]);
+    console.log(`--max-duration 3: wall ${r.wallMs} ms, launch ${r.launchMs} ms`);
+    expect(r.code).toBe(6);
+    expect(JSON.parse(r.stdout).stoppedBy).toBe('max-duration');
+    expect(r.launchMs).toBeGreaterThan(0);
+    expect(r.wallMs).toBeLessThan((3 + 5) * 1000 + r.launchMs);
+    expect(r.leftovers).toEqual([]);
+  }, 120_000);
+
+  it('--max-duration abandons a page that does not finish loading', async () => {
+    const site = await slowSite(() => true);
+    try {
+      const r = await timedAudit([site.url, '--url', '/', '--viewports', 'desktop', '--max-duration', '3']);
+      console.log(`--max-duration 3 on a hanging page: wall ${r.wallMs} ms, launch ${r.launchMs} ms`);
+      expect(r.code).toBe(6);
+      expect(r.wallMs).toBeLessThan((3 + 5) * 1000 + r.launchMs);
+      expect(r.leftovers).toEqual([]);
+      const out = JSON.parse(r.stdout) as { runDir: string };
+      const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8')) as Run;
+      expect(run.stoppedBy).toBe('max-duration');
+      // The abandoned page is left out, and the limitation counts it as not audited.
+      expect(run.pages).toEqual([]);
+      expect(run.limitations.some((l) => l.includes('1 of 1 planned page captures'))).toBe(true);
+      expect(readdirSync(join(out.runDir, 'screenshots'))).toEqual([]);
+    } finally {
+      await site.close();
+    }
+  }, 120_000);
+
+  it.skipIf(process.platform === 'win32')(
+    'a stop during a form probe ends within 5 s',
+    async () => {
+      // The capture loads the image; the form probe's own visit waits for it forever.
+      const site = await slowSite((n) => n > 1);
+      try {
+        const r = await timedAudit(
+          [site.url, '--url', '/', '--viewports', 'desktop', '--no-keyboard'],
+          (m, sent) => sent === 0 && m.startsWith('form'),
+        );
+        console.log(`stop during a form probe: ${r.afterSignalMs} ms after the signal`);
+        expect(r.code).toBe(6);
+        expect(r.afterSignalMs).toBeGreaterThan(0);
+        expect(r.afterSignalMs).toBeLessThan(5000);
+        expect(r.leftovers).toEqual([]);
+        const run = JSON.parse(readFileSync(join(JSON.parse(r.stdout).runDir, 'run.json'), 'utf8')) as Run;
+        expect(run.stoppedBy).toBe('signal');
+        expect(run.pages).toHaveLength(1);
+      } finally {
+        await site.close();
+      }
+    },
+    120_000,
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'a second signal prints a line before exiting 130',
+    async () => {
+      const r = await timedAudit(
+        ['fixtures/sites/acme-saas', '--pages', '6', '--viewports', 'desktop', '--no-forms'],
+        (m, sent) => (sent === 0 && m.startsWith('desktop')) || (sent === 1 && m.startsWith('Stopping')),
+      );
+      expect(r.code).toBe(130);
+      expect(r.stdout).toBe('');
+      const last = r.lines.at(-1)!;
+      expect(last.type).toBe('error');
+      expect(last.error?.code).toBe('STOPPED_TWICE');
+      expect(last.error?.message).toMatch(/second stop signal/i);
+      expect(r.leftovers).toEqual([]);
+    },
+    120_000,
+  );
 
   it.skipIf(process.platform === 'win32')(
     'stop before the first page',
@@ -317,6 +782,21 @@ describe('cli --evidence minimal', () => {
     const bytes = readdirSync(shots).reduce((n, f) => n + statSync(join(shots, f)).size, 0);
     return { run, bytes, runDir: out.runDir };
   };
+
+  it('every capture records its first-screen file', () => {
+    for (const mode of ['full', 'minimal']) {
+      const { run, runDir } = audit(['--evidence', mode]);
+      expect(run.pages.length).toBeGreaterThan(0);
+      for (const p of run.pages) {
+        expect(p.foldScreenshot, `${p.url} ${p.viewport} (${mode})`).toBeTruthy();
+        expect(existsSync(join(runDir, p.foldScreenshot!))).toBe(true);
+      }
+      if (mode === 'minimal') {
+        const single = run.pages.filter((p) => p.foldScreenshot === p.screenshot);
+        expect(single.length).toBeGreaterThan(0);
+      }
+    }
+  }, 240_000);
 
   it('--evidence minimal at least halves the evidence on acme-saas', () => {
     const full = audit([]);

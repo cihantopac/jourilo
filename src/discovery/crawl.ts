@@ -3,7 +3,7 @@
 import type { BrowserContext } from 'playwright-core';
 import { guardedFetchText } from '../core/net-guard.js';
 import { redactUrl } from '../core/redact.js';
-import { type AddressPolicy, isCrawlable, normalizeForCrawl } from '../core/url-safety.js';
+import { type AddressPolicy, crawlKey, isCrawlable, normalizeForCrawl } from '../core/url-safety.js';
 import { isAllowed, parseRobots, type RobotsRules } from './robots.js';
 
 export const USER_AGENT_TOKEN = 'Jourilo';
@@ -51,6 +51,8 @@ export interface CrawlOptions {
 export interface CrawlResult {
   pages: { url: string; depth: number; role: string; score: number }[];
   skipped: { url: string; reason: string }[];
+  /** Explicitly requested URLs that robots.txt disallows; they are audited anyway. */
+  robotsOverridden: string[];
   robots: RobotsRules | null;
   sitemapUrls: number;
   /** The sitemap's own origin when its URLs were mapped onto a local target. */
@@ -72,6 +74,28 @@ export async function loadRobots(
 ): Promise<RobotsRules | null> {
   const text = await fetchText(`${origin}/robots.txt`, timeoutMs, policy);
   return text === null ? null : parseRobots(text, USER_AGENT_TOKEN);
+}
+
+/** The limitation recorded when robots.txt disallows a page that was audited because it was requested explicitly. */
+export function robotsOverrideLimitation(url: string): string {
+  return `robots.txt disallows ${url}; it was audited because it was requested explicitly.`;
+}
+
+/** Explicitly requested pages (--url, or the lone target) that robots.txt disallows. They are audited anyway. */
+export async function explicitRobotsOverrides(
+  urls: string[],
+  policy: AddressPolicy,
+  timeoutMs = 8000,
+): Promise<string[]> {
+  const out: string[] = [];
+  const rules = new Map<string, RobotsRules | null>();
+  for (const raw of urls) {
+    const u = new URL(raw);
+    if (!rules.has(u.origin)) rules.set(u.origin, await loadRobots(u.origin, policy, timeoutMs));
+    const r = rules.get(u.origin);
+    if (r && !isAllowed(r, `${u.pathname}${u.search}`)) out.push(redactUrl(u.toString()));
+  }
+  return out;
 }
 
 async function sitemapUrls(
@@ -118,27 +142,36 @@ export async function crawl(ctx: BrowserContext, start: string, opts: CrawlOptio
   const origin = new URL(start).origin;
   const robots = opts.respectRobots ? await loadRobots(origin, opts.policy) : null;
   const skipped: CrawlResult['skipped'] = [];
-  const seen = new Map<string, number>();
+  const robotsOverridden: string[] = [];
+  // Deduplicated on crawlKey (`/a` and `/a/` are one page); the first form seen is the one that is audited.
+  const seen = new Map<string, { url: string; depth: number; blocked: boolean }>();
   const queue: { url: string; depth: number }[] = [];
-  const push = (raw: string, depth: number) => {
+  const push = (raw: string, depth: number, explicit = false) => {
     let n: string;
+    let key: string;
     try {
       n = normalizeForCrawl(raw);
+      key = crawlKey(raw);
     } catch {
       return;
     }
-    if (seen.has(n) || !isCrawlable(n, origin)) return;
+    if (seen.has(key) || !isCrawlable(n, origin)) return;
     const u = new URL(n);
     if (robots && !isAllowed(robots, `${u.pathname}${u.search}`)) {
-      skipped.push({ url: redactUrl(n), reason: 'robots.txt' });
-      seen.set(n, depth);
-      return;
+      if (explicit) {
+        // The user asked for this page by name: audit it and say so.
+        robotsOverridden.push(redactUrl(n));
+      } else {
+        skipped.push({ url: redactUrl(n), reason: 'robots.txt' });
+        seen.set(key, { url: n, depth, blocked: true });
+        return;
+      }
     }
-    seen.set(n, depth);
+    seen.set(key, { url: n, depth, blocked: false });
     queue.push({ url: n, depth });
   };
-  push(start, 0);
-  for (const extra of opts.include ?? []) push(new URL(extra, start).toString(), 0);
+  push(start, 0, true);
+  for (const extra of opts.include ?? []) push(new URL(extra, start).toString(), 0, true);
   const fromSitemap = await sitemapUrls(origin, robots, opts.timeoutMs, opts.policy);
   for (const u of fromSitemap.urls) push(u, 1);
 
@@ -173,9 +206,9 @@ export async function crawl(ctx: BrowserContext, start: string, opts: CrawlOptio
     await page.close().catch(() => undefined);
   }
 
-  const ranked = [...seen.entries()]
-    .filter(([u]) => !skipped.some((s) => s.url === redactUrl(u) && s.reason === 'robots.txt'))
-    .map(([url, depth]) => ({ url, depth, role: pageRole(url), score: rankUrl(url, depth) }))
+  const ranked = [...seen.values()]
+    .filter((e) => !e.blocked)
+    .map(({ url, depth }) => ({ url, depth, role: pageRole(url), score: rankUrl(url, depth) }))
     .sort((a, b) => b.score - a.score);
   // Diversity: prefer one page per role before taking a second page of the same role.
   const picked: typeof ranked = [];
@@ -191,9 +224,12 @@ export async function crawl(ctx: BrowserContext, start: string, opts: CrawlOptio
     if (picked.length >= opts.maxPages) break;
     if (!picked.includes(p)) picked.push(p);
   }
+  // Only pages that were actually audited carry the note.
+  const auditedOverrides = robotsOverridden.filter((u) => picked.some((p) => redactUrl(p.url) === u));
   return {
     pages: picked,
     skipped,
+    robotsOverridden: auditedOverrides,
     robots,
     sitemapUrls: fromSitemap.urls.length,
     sitemapRebasedFrom: fromSitemap.rebasedFrom,

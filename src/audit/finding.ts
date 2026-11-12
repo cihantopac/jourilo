@@ -17,12 +17,23 @@ export function pathOf(url: string): string {
   }
 }
 
+/** The page identity used in fingerprints and run comparison: trailing slashes are dropped from a non-root path, so `/de` and `/de/` are one page. */
+export function fingerprintPath(url: string): string {
+  try {
+    const u = new URL(url);
+    const path = u.pathname === '/' ? '/' : u.pathname.replace(/\/+$/, '') || '/';
+    return `${path}${u.search}`;
+  } catch {
+    return url;
+  }
+}
+
 export function makeFinding(input: FindingInput): Finding {
   const { key, occurrences, reproduction, ...rest } = input;
   const finding: Finding = {
     ...rest,
     // Viewport is deliberately not part of the fingerprint: the same defect seen at two widths is one finding.
-    fingerprint: shortHash(input.ruleId, pathOf(input.url), key ?? '', input.journey ?? ''),
+    fingerprint: shortHash(input.ruleId, fingerprintPath(input.url), key ?? '', input.journey ?? ''),
     occurrences: occurrences ?? 1,
     reproduction: reproduction ?? defaultReproduction(input),
   };
@@ -42,6 +53,13 @@ export function severityRank(s: Severity): number {
   return SEVERITY_ORDER.indexOf(s);
 }
 
+const KIND_STRENGTH: Record<Finding['kind'], number> = { 'needs-review': 0, hypothesis: 1, defect: 2 };
+const CONFIDENCE_STRENGTH: Record<Finding['confidence'], number> = { low: 0, medium: 1, high: 2 };
+
+function strength(f: Finding): number {
+  return KIND_STRENGTH[f.kind] * 10 + CONFIDENCE_STRENGTH[f.confidence];
+}
+
 /**
  * Folds findings that share a fingerprint (same rule, page and target seen in several viewports) into one,
  * keeping the highest severity and the union of evidence.
@@ -58,6 +76,14 @@ export function mergeFindings(findings: Finding[]): Finding[] {
     viewports.delete('');
     prev.viewport = [...viewports].join(', ');
     if (severityRank(f.severity) < severityRank(prev.severity)) prev.severity = f.severity;
+    // A stronger sighting (a located defect beats a review item) decides what the merged finding says.
+    if (strength(f) > strength(prev)) {
+      prev.kind = f.kind;
+      prev.confidence = f.confidence;
+      prev.title = f.title;
+      prev.description = f.description;
+      prev.recommendation = f.recommendation;
+    }
     prev.occurrences = Math.max(prev.occurrences, f.occurrences);
     for (const e of f.evidence) {
       if (prev.evidence.length >= 12) break;

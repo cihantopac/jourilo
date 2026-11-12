@@ -17,7 +17,7 @@ progress lines on stderr are JSON too: `{"type":"progress","message":"…","at":
 Product intelligence: map a repository (frameworks, routes, design system, i18n, auth, analytics) or a website (pages, conversion points, services).
 
 ```
-jourilo discover <path|url> [--pages 10] [--ignore-robots] [--allow-private]
+jourilo discover <path|url> [--pages 10] [--ignore-robots] [--allow-private] [--deny-local]
 ```
 
 ```
@@ -25,6 +25,8 @@ Options:
   --pages N         Pages to read when mapping a website (default 10)
   --ignore-robots   Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private   Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local      Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
+                    JOURILO_DENY_LOCAL=1 does the same
 ```
 
 ## Audit
@@ -39,7 +41,7 @@ jourilo audit <url|dir> [--pages 6] [--viewports desktop,mobile] [--url /path ..
 
 ```
 Options:
-  --pages N            Pages to audit after discovery (default 6; 1 = only the target)
+  --pages N            Pages to audit after discovery (default 6; 1 = only the target; 0 is a usage error)
   --depth N            Link depth for discovery (default 3)
   --url PATH           Audit exactly these paths/URLs on the target origin (repeatable; skips discovery)
   --include PATH       Add pages to discovery (repeatable)
@@ -61,6 +63,8 @@ Options:
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
+                       JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3). For hosted integrations; a directory target is still served
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -70,9 +74,11 @@ Options:
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
-  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused if the run exists
-  --max-duration SECS  Stop after this many seconds and write a partial run (exit 6), as SIGINT/SIGTERM do;
-                       a second signal quits at once (exit 130)
+  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused (exit 2) if its
+                       directory exists, even without a run.json (left by a crashed run)
+  --max-duration SECS  Stop after this many seconds (1 to 86400) and write a partial run (exit 6), as SIGINT/SIGTERM do;
+                       the page in progress gets up to 3 s to finish, then it is left out; a second signal quits at
+                       once (exit 130) after one line on stderr (STOPPED_TWICE with --json)
 ```
 
 ### `jourilo accessibility`
@@ -85,7 +91,7 @@ jourilo accessibility <url|dir> [audit options]
 
 ```
 Options:
-  --pages N            Pages to audit after discovery (default 6; 1 = only the target)
+  --pages N            Pages to audit after discovery (default 6; 1 = only the target; 0 is a usage error)
   --depth N            Link depth for discovery (default 3)
   --url PATH           Audit exactly these paths/URLs on the target origin (repeatable; skips discovery)
   --include PATH       Add pages to discovery (repeatable)
@@ -107,6 +113,8 @@ Options:
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
+                       JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3). For hosted integrations; a directory target is still served
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -116,9 +124,11 @@ Options:
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
-  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused if the run exists
-  --max-duration SECS  Stop after this many seconds and write a partial run (exit 6), as SIGINT/SIGTERM do;
-                       a second signal quits at once (exit 130)
+  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused (exit 2) if its
+                       directory exists, even without a run.json (left by a crashed run)
+  --max-duration SECS  Stop after this many seconds (1 to 86400) and write a partial run (exit 6), as SIGINT/SIGTERM do;
+                       the page in progress gets up to 3 s to finish, then it is left out; a second signal quits at
+                       once (exit 130) after one line on stderr (STOPPED_TWICE with --json)
 ```
 
 ### `jourilo conversion`
@@ -131,7 +141,7 @@ jourilo conversion <url|dir> [audit options]
 
 ```
 Options:
-  --pages N            Pages to audit after discovery (default 6; 1 = only the target)
+  --pages N            Pages to audit after discovery (default 6; 1 = only the target; 0 is a usage error)
   --depth N            Link depth for discovery (default 3)
   --url PATH           Audit exactly these paths/URLs on the target origin (repeatable; skips discovery)
   --include PATH       Add pages to discovery (repeatable)
@@ -153,6 +163,8 @@ Options:
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
+                       JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3). For hosted integrations; a directory target is still served
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -162,9 +174,11 @@ Options:
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
-  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused if the run exists
-  --max-duration SECS  Stop after this many seconds and write a partial run (exit 6), as SIGINT/SIGTERM do;
-                       a second signal quits at once (exit 130)
+  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused (exit 2) if its
+                       directory exists, even without a run.json (left by a crashed run)
+  --max-duration SECS  Stop after this many seconds (1 to 86400) and write a partial run (exit 6), as SIGINT/SIGTERM do;
+                       the page in progress gets up to 3 s to finish, then it is left out; a second signal quits at
+                       once (exit 130) after one line on stderr (STOPPED_TWICE with --json)
 ```
 
 ## Journeys
@@ -188,6 +202,8 @@ Suggest options:
   --pages N              Pages to read when deriving journeys from a site (default 8)
   --force                Overwrite journey files that already exist (by default existing files are kept)
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
+                         JOURILO_DENY_LOCAL=1 does the same
 
 Run options:
   --base URL|DIR         The site or static build to run against (required)
@@ -208,6 +224,8 @@ Run options:
   --evidence MODE        full (default) or minimal: keep only the screenshots of the failed step, the step before it and the last step
   --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
+                         JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3)
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission
@@ -273,6 +291,8 @@ jourilo verify <baseline-run> [--target url|dir] [--fail-on-regression]
 Options:
   --target URL|DIR       Where to repeat the audit (default: the baseline run's target)
   --repo PATH            Repository for source mapping (default: the baseline run's repo)
+  --deny-local           Refuse a local target (localhost, 127.0.0.1, [::1], *.localhost, *.test) with exit 3; a redirect to one is blocked by the network guard and listed in the limitations;
+                         JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3)
   --fail-on-regression   Exit 1 when new serious or critical defects appear
 ```
 
