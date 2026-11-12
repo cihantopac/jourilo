@@ -196,11 +196,17 @@ export function refuseDenyLocalWebkit(denyLocal: boolean, browser: string): void
     );
 }
 
-/** Options every browsing command shares: the upstream proxy and the host lists (F15). */
+/**
+ * Options every browsing command shares: the upstream proxy and the host lists (F15), and the user agent, extra
+ * headers and certificate checking of the browser (F16).
+ */
 export const NETWORK_OPTIONS: OptionSpec = {
   proxy: { type: 'string' },
   'allow-hosts': { type: 'string', multiple: true },
   'block-hosts': { type: 'string', multiple: true },
+  'user-agent': { type: 'string' },
+  'extra-header': { type: 'string', multiple: true },
+  'ignore-https-errors': { type: 'boolean' },
 };
 
 /** The `details` lines for NETWORK_OPTIONS, indented to a command's option column. */
@@ -215,7 +221,103 @@ export function networkOptionsHelp(column: number): string {
     `${pad('--allow-hosts LIST')}Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);`,
     `${cont}the target's own host is always allowed. Other hosts are refused and listed in the limitations`,
     `${pad('--block-hosts LIST')}Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations`,
+    `${pad('--user-agent UA')}Send this User-Agent (also navigator.userAgent) instead of the browser's own; recorded in the run`,
+    `${pad('--extra-header H')}Add a request header "Name: value" (repeatable), sent only to the target's origin, never`,
+    `${cont}to other hosts: Jourilo makes those requests itself, so the headers cannot follow a redirect`,
+    `${cont}elsewhere (a redirect is followed without them). The run records the names, never the values`,
+    `  --ignore-https-errors`,
+    `${cont}Accept invalid or self-signed certificates in the browser (test environments only); the network`,
+    `${cont}guard still checks every destination, and the run lists it in the limitations`,
   ].join('\n');
+}
+
+/** RFC 9110 field-name token. */
+const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+/**
+ * Headers an `--extra-header` may not set: hop-by-hop headers (RFC 9110 7.6.1, plus Proxy-Connection), which belong to
+ * one connection and not to the request, and headers the browser's network stack owns (Host, Content-Length, and
+ * Cookie, which `--auth` sets).
+ */
+const REFUSED_HEADERS = new Set([
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'proxy-connection',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+  'host',
+  'content-length',
+  'cookie',
+]);
+
+/**
+ * `--extra-header "Name: value"` (repeatable). A malformed, duplicate or refused header is a usage error that names
+ * the header but never repeats its value, which may be a credential.
+ */
+export function extraHeadersFrom(ctx: Context): Record<string, string> | undefined {
+  // Not `list`: a header value may contain commas.
+  const given = ctx.values['extra-header'];
+  const raws = Array.isArray(given) ? given : typeof given === 'string' ? [given] : [];
+  if (!raws.length) return undefined;
+  const usage = (why: string, hint = 'Example: --extra-header "X-Staging-Access: <token>"') =>
+    new JouriloError('USAGE', `--extra-header: ${why}`, hint);
+  const out: Record<string, string> = {};
+  const seen = new Set<string>();
+  raws.forEach((raw, i) => {
+    const colon = raw.indexOf(':');
+    const name = colon < 0 ? '' : raw.slice(0, colon).trim();
+    if (colon < 0 || !name) throw usage(`header ${i + 1} is not "Name: value" (the value is not shown).`);
+    if (!HEADER_NAME.test(name))
+      throw usage(`header ${i + 1} has an invalid name (letters, digits and !#$%&'*+.^_\`|~- only).`);
+    const value = raw.slice(colon + 1).trim();
+    // Control characters (CR/LF above all) could split one header into several.
+    if (!value || /[\u0000-\u0008\u000a-\u001f\u007f]/.test(value))
+      throw usage(`${name} has an empty value or one with control characters (the value is not shown).`);
+    const key = name.toLowerCase();
+    if (REFUSED_HEADERS.has(key))
+      throw usage(
+        `${name} cannot be set: it belongs to the connection or to the browser's network stack.`,
+        key === 'cookie'
+          ? 'Use --auth FILE (a Playwright storage state) for cookies.'
+          : 'Remove it; hop-by-hop headers, Host and Content-Length are set by the browser.',
+      );
+    if (seen.has(key)) throw usage(`${name} is given twice.`);
+    seen.add(key);
+    out[name] = value;
+  });
+  return out;
+}
+
+/** `--user-agent UA`: any printable text; empty or with control characters is a usage error. */
+export function userAgentFrom(ctx: Context): string | undefined {
+  const ua = str(ctx, 'user-agent');
+  if (ua === undefined) return undefined;
+  const v = ua.trim();
+  if (!v || /[\u0000-\u001f\u007f]/.test(v))
+    throw new JouriloError(
+      'USAGE',
+      '--user-agent is empty or has control characters.',
+      'Example: --user-agent "Mozilla/5.0 (compatible; MyAudit/1.0)"',
+    );
+  return v;
+}
+
+/** The browser's request options: user agent, extra headers (target origin only) and certificate checking (F16). */
+export function requestOptionsFrom(ctx: Context): {
+  userAgent?: string;
+  extraHeaders?: Record<string, string>;
+  ignoreHttpsErrors?: boolean;
+} {
+  const userAgent = userAgentFrom(ctx);
+  const extraHeaders = extraHeadersFrom(ctx);
+  return {
+    ...(userAgent ? { userAgent } : {}),
+    ...(extraHeaders ? { extraHeaders } : {}),
+    ...(flag(ctx, 'ignore-https-errors') ? { ignoreHttpsErrors: true } : {}),
+  };
 }
 
 const HOST_PATTERN = /^(\*\.)?[a-z0-9_]([a-z0-9_-]*[a-z0-9_])?(\.[a-z0-9_]([a-z0-9_-]*[a-z0-9_])?)*\.?$/i;
@@ -290,13 +392,20 @@ export function proxyFrom(ctx: Context, target: URL): AddressPolicy['upstream'] 
 }
 
 /**
- * Proxy and host lists for a browsing command, ready to spread into its audit options. The target's own host joins
- * `--allow-hosts` later (`hostListsFor`), when the target is known for certain.
+ * Proxy, host lists and request options for a browsing command, ready to spread into its audit options. The target's
+ * own host joins `--allow-hosts` later (`hostListsFor`), when the target is known for certain.
  */
 export function networkFrom(
   ctx: Context,
   target: string,
-): { upstream?: Upstream; allowHosts?: string[]; blockHosts?: string[] } {
+): {
+  upstream?: Upstream;
+  allowHosts?: string[];
+  blockHosts?: string[];
+  userAgent?: string;
+  extraHeaders?: Record<string, string>;
+  ignoreHttpsErrors?: boolean;
+} {
   const { allowHosts, blockHosts } = hostListsFrom(ctx);
   let url: URL | undefined;
   try {
@@ -309,6 +418,7 @@ export function networkFrom(
     ...(upstream ? { upstream } : {}),
     ...(allowHosts.length ? { allowHosts } : {}),
     ...(blockHosts.length ? { blockHosts } : {}),
+    ...requestOptionsFrom(ctx),
   };
 }
 

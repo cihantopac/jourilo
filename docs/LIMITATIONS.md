@@ -118,6 +118,22 @@ Stated so nobody mistakes silence for a pass.
 - `--allow-hosts` and `--block-hosts` refuse hosts by name (`*.example.com` matches its subdomains, not
   `example.com`); the target's own host is always allowed. Refused requests are listed in the run's limitations.
 - Lab timings include one local proxy hop per connection.
+- `--extra-header "Name: value"` is sent only with requests to the target's origin (scheme, host and port), never to
+  another origin. Playwright would carry an overridden header along every hop of a redirect chain, so Jourilo makes
+  each request to the target's origin itself (through the guard) without following redirects and hands the response
+  to the browser: a redirect, even within the origin, is followed without the headers and listed in the limitations,
+  and the lab timings of those requests include that step. A target that redirects (for example `http://` to
+  `https://`, or `/` to `/en/`) is best given at its final URL. WebSockets, `robots.txt` and sitemaps are requested
+  without the headers; in WebKit a redirect from the target's origin fails. Header values are never written to
+  `run.json`, reports, progress lines or the manifest (only the names are kept), and `journeys run --trace` is refused
+  with `--extra-header` because a trace records header values. `Cookie`, `Host`, `Content-Length` and hop-by-hop
+  headers (`Connection`, `Keep-Alive`, `Proxy-*`, `TE`, `Trailer`, `Transfer-Encoding`, `Upgrade`) are refused; use
+  `--auth` for cookies. `jourilo verify` cannot replay headers it never stored: give them again.
+- `--ignore-https-errors` changes certificate checking in the browser only. The guard still checks every destination
+  (it sees each CONNECT before any TLS), and the run lists the setting in its limitations. `robots.txt` and sitemaps
+  are still fetched with certificate checking, so on a self-signed site they are treated as missing.
+- `--user-agent` replaces the browser's User-Agent header and `navigator.userAgent`. `robots.txt` is still read and
+  matched as Jourilo's own user agent.
 
 ## Reports
 

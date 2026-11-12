@@ -8,7 +8,8 @@ Every command prints human-readable text, or JSON with `--json`. Errors go to st
 6 stopped early by SIGINT/SIGTERM or `--max-duration` (a partial run is still written; a second signal exits 130).
 
 Global options: `--json`, `--workspace DIR` (default `.jourilo`, or `JOURILO_WORKSPACE`), `--quiet`. With `--json`,
-progress lines on stderr are JSON too: `{"type":"progress","message":"…","at":"<ISO time>"}`.
+progress lines on stderr are JSON too: `{"type":"progress","message":"…","at":"<ISO time>"}`. `--workspace` is also
+the output directory: every run is written to `DIR/runs/<id>/` (there is no separate `--output-dir`).
 
 ## Understand
 
@@ -34,6 +35,13 @@ Options:
   --allow-hosts LIST  Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
                       the target's own host is always allowed. Other hosts are refused and listed in the limitations
   --block-hosts LIST  Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
+  --user-agent UA     Send this User-Agent (also navigator.userAgent) instead of the browser's own; recorded in the run
+  --extra-header H    Add a request header "Name: value" (repeatable), sent only to the target's origin, never
+                      to other hosts: Jourilo makes those requests itself, so the headers cannot follow a redirect
+                      elsewhere (a redirect is followed without them). The run records the names, never the values
+  --ignore-https-errors
+                      Accept invalid or self-signed certificates in the browser (test environments only); the network
+                      guard still checks every destination, and the run lists it in the limitations
 ```
 
 ## Audit
@@ -79,6 +87,13 @@ Options:
   --allow-hosts LIST   Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
                        the target's own host is always allowed. Other hosts are refused and listed in the limitations
   --block-hosts LIST   Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
+  --user-agent UA      Send this User-Agent (also navigator.userAgent) instead of the browser's own; recorded in the run
+  --extra-header H     Add a request header "Name: value" (repeatable), sent only to the target's origin, never
+                       to other hosts: Jourilo makes those requests itself, so the headers cannot follow a redirect
+                       elsewhere (a redirect is followed without them). The run records the names, never the values
+  --ignore-https-errors
+                       Accept invalid or self-signed certificates in the browser (test environments only); the network
+                       guard still checks every destination, and the run lists it in the limitations
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -136,6 +151,13 @@ Options:
   --allow-hosts LIST   Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
                        the target's own host is always allowed. Other hosts are refused and listed in the limitations
   --block-hosts LIST   Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
+  --user-agent UA      Send this User-Agent (also navigator.userAgent) instead of the browser's own; recorded in the run
+  --extra-header H     Add a request header "Name: value" (repeatable), sent only to the target's origin, never
+                       to other hosts: Jourilo makes those requests itself, so the headers cannot follow a redirect
+                       elsewhere (a redirect is followed without them). The run records the names, never the values
+  --ignore-https-errors
+                       Accept invalid or self-signed certificates in the browser (test environments only); the network
+                       guard still checks every destination, and the run lists it in the limitations
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -193,6 +215,13 @@ Options:
   --allow-hosts LIST   Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
                        the target's own host is always allowed. Other hosts are refused and listed in the limitations
   --block-hosts LIST   Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
+  --user-agent UA      Send this User-Agent (also navigator.userAgent) instead of the browser's own; recorded in the run
+  --extra-header H     Add a request header "Name: value" (repeatable), sent only to the target's origin, never
+                       to other hosts: Jourilo makes those requests itself, so the headers cannot follow a redirect
+                       elsewhere (a redirect is followed without them). The run records the names, never the values
+  --ignore-https-errors
+                       Accept invalid or self-signed certificates in the browser (test environments only); the network
+                       guard still checks every destination, and the run lists it in the limitations
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -239,6 +268,13 @@ Suggest options:
   --allow-hosts LIST     Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
                          the target's own host is always allowed. Other hosts are refused and listed in the limitations
   --block-hosts LIST     Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
+  --user-agent UA        Send this User-Agent (also navigator.userAgent) instead of the browser's own; recorded in the run
+  --extra-header H       Add a request header "Name: value" (repeatable), sent only to the target's origin, never
+                         to other hosts: Jourilo makes those requests itself, so the headers cannot follow a redirect
+                         elsewhere (a redirect is followed without them). The run records the names, never the values
+  --ignore-https-errors
+                         Accept invalid or self-signed certificates in the browser (test environments only); the network
+                         guard still checks every destination, and the run lists it in the limitations
 
 Run options:
   --base URL|DIR         The site or static build to run against (required)
@@ -251,7 +287,8 @@ Run options:
   --allow-submit         Allow form submission on non-local hosts (authorized test environments only)
   --allow-destructive    Allow irreversible/payment actions — local hosts with sandbox data only
   --allow-origin ORIGIN  Let the page navigate to another origin you are authorized to test (e.g. a test IdP)
-  --trace                Record a Playwright trace per journey (contains typed values; keep private)
+  --trace                Record a Playwright trace per journey (contains typed values; keep private);
+                         refused with --extra-header, since a trace records header values
   --auth FILE            Playwright storage state for signed-in journeys
   --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
   --timezone ZONE        IANA time zone for the page (e.g. Europe/Istanbul)
@@ -268,6 +305,13 @@ Run options:
   --allow-hosts LIST     Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
                          the target's own host is always allowed. Other hosts are refused and listed in the limitations
   --block-hosts LIST     Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
+  --user-agent UA        Send this User-Agent (also navigator.userAgent) instead of the browser's own; recorded in the run
+  --extra-header H       Add a request header "Name: value" (repeatable), sent only to the target's origin, never
+                         to other hosts: Jourilo makes those requests itself, so the headers cannot follow a redirect
+                         elsewhere (a redirect is followed without them). The run records the names, never the values
+  --ignore-https-errors
+                         Accept invalid or self-signed certificates in the browser (test environments only); the network
+                         guard still checks every destination, and the run lists it in the limitations
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission
@@ -342,7 +386,16 @@ Options:
   --allow-hosts LIST     Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
                          the target's own host is always allowed. Other hosts are refused and listed in the limitations
   --block-hosts LIST     Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
-                         Without --allow-hosts / --block-hosts, the baseline run's lists are used again
+  --user-agent UA        Send this User-Agent (also navigator.userAgent) instead of the browser's own; recorded in the run
+  --extra-header H       Add a request header "Name: value" (repeatable), sent only to the target's origin, never
+                         to other hosts: Jourilo makes those requests itself, so the headers cannot follow a redirect
+                         elsewhere (a redirect is followed without them). The run records the names, never the values
+  --ignore-https-errors
+                         Accept invalid or self-signed certificates in the browser (test environments only); the network
+                         guard still checks every destination, and the run lists it in the limitations
+                         Without --allow-hosts / --block-hosts, the baseline run's lists are used again; so are its
+                         --user-agent and --ignore-https-errors. Header values are never stored: a baseline that sent
+                         --extra-header needs the headers again (exit 2 without them)
   --fail-on-regression   Exit 1 when new serious or critical defects appear
 ```
 

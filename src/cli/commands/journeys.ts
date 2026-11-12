@@ -5,6 +5,7 @@ import { pruneJourneyScreenshots } from '../../audit/evidence.js';
 import { makeFinding, mergeFindings } from '../../audit/finding.js';
 import type { BrowserName } from '../../browser/runtime.js';
 import { networkLimitations, openGuardedBrowser, proxyLimitation } from '../../browser/session.js';
+import { requestLimitations, targetHeaders } from '../../browser/target-headers.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { applyDismissals, loadDismissals } from '../../core/dismissals.js';
 import { JouriloError } from '../../core/errors.js';
@@ -232,6 +233,14 @@ async function runCmd(ctx: Context) {
         : [],
       network.blockHosts ?? [],
     );
+    // A Playwright trace records request headers, values included.
+    if (network.extraHeaders && flag(ctx, 'trace'))
+      throw new JouriloError(
+        'USAGE',
+        '--trace cannot be combined with --extra-header: a Playwright trace records request headers, values included.',
+        'Run without --trace, or without --extra-header.',
+      );
+    const headers = network.extraHeaders ? targetHeaders(base.origin, network.extraHeaders) : undefined;
     const id = newRunId();
     const runDir = ctx.ws.createRunDir(id);
     const browserName = (str(ctx, 'browser') ?? 'chromium') as BrowserName;
@@ -311,6 +320,9 @@ async function runCmd(ctx: Context) {
               ...(vp ? { viewportOverride: vp } : {}),
               ...(str(ctx, 'auth') ? { storageState: str(ctx, 'auth')! } : {}),
               ...state,
+              ...(network.userAgent ? { userAgent: network.userAgent } : {}),
+              ...(headers ? { extraHeaders: headers } : {}),
+              ...(network.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}),
               ...(evidence ? { evidence } : {}),
               ...(repeat > 1 ? { attempt: k + 1 } : {}),
               ...(saveAuth ? { saveAuth } : {}),
@@ -338,7 +350,14 @@ async function runCmd(ctx: Context) {
       await session.close();
     }
     const guarded = session.report();
-    limitations.push(...proxyLimitation(network.upstream), ...networkLimitations(guarded));
+    limitations.push(
+      ...proxyLimitation(network.upstream),
+      ...networkLimitations(guarded),
+      ...requestLimitations({
+        ...(network.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}),
+        ...(headers ? { headers } : {}),
+      }),
+    );
     findings = mergeFindings(findings);
     const { kept, dismissed } = applyDismissals(findings, dismissals);
     findings = kept;
@@ -362,6 +381,10 @@ async function runCmd(ctx: Context) {
         ...(network.upstream ? { proxy: upstreamLabel(network.upstream) } : {}),
         ...(network.allowHosts ? { allowHosts: network.allowHosts } : {}),
         ...(network.blockHosts ? { blockHosts: network.blockHosts } : {}),
+        // The user agent as given; of the extra headers only the names, never their values.
+        ...(network.userAgent ? { userAgent: network.userAgent } : {}),
+        ...(network.extraHeaders ? { extraHeaders: Object.keys(network.extraHeaders) } : {}),
+        ...(network.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}),
       },
       pages: [],
       journeys,
@@ -463,7 +486,8 @@ Run options:
   --allow-submit         Allow form submission on non-local hosts (authorized test environments only)
   --allow-destructive    Allow irreversible/payment actions — local hosts with sandbox data only
   --allow-origin ORIGIN  Let the page navigate to another origin you are authorized to test (e.g. a test IdP)
-  --trace                Record a Playwright trace per journey (contains typed values; keep private)
+  --trace                Record a Playwright trace per journey (contains typed values; keep private);
+                         refused with --extra-header, since a trace records header values
   --auth FILE            Playwright storage state for signed-in journeys
   --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
   --timezone ZONE        IANA time zone for the page (e.g. Europe/Istanbul)

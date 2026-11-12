@@ -199,7 +199,9 @@ export const verify: Command = {
   --deny-local           Refuse a local target (localhost, 127.0.0.1, [::1], *.localhost, *.test) with exit 3; a redirect to one is blocked by the network guard and listed in the limitations;
                          JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3)
 ${networkOptionsHelp(25)}
-                         Without --allow-hosts / --block-hosts, the baseline run's lists are used again
+                         Without --allow-hosts / --block-hosts, the baseline run's lists are used again; so are its
+                         --user-agent and --ignore-https-errors. Header values are never stored: a baseline that sent
+                         --extra-header needs the headers again (exit 2 without them)
   --fail-on-regression   Exit 1 when new serious or critical defects appear`,
   async run(ctx) {
     // An explicit --target replaces the baseline's served directory, so a URL target is not ignored.
@@ -234,6 +236,19 @@ ${networkOptionsHelp(25)}
         Array.isArray(base.settings[key]) ? (base.settings[key] as string[]) : undefined;
       const allowHosts = network.allowHosts ?? recorded('allowHosts');
       const blockHosts = network.blockHosts ?? recorded('blockHosts');
+      // The baseline's user agent and certificate setting are replayed; header values were never stored, so headers
+      // the baseline sent must be given again, or the pages compared would not be the same (e.g. a gated staging site).
+      const userAgent =
+        network.userAgent ??
+        (typeof base.settings.userAgent === 'string' ? base.settings.userAgent : undefined);
+      const ignoreHttpsErrors = network.ignoreHttpsErrors ?? base.settings.ignoreHttpsErrors === true;
+      const baselineHeaders = recorded('extraHeaders');
+      if (baselineHeaders?.length && !network.extraHeaders)
+        throw new JouriloError(
+          'USAGE',
+          `Run ${base.id} sent extra headers (${baselineHeaders.join(', ')}); their values are not stored, so give them again with --extra-header.`,
+          `Example: --extra-header "${baselineHeaders[0]}: <value>"`,
+        );
       // Replay the state the baseline was audited in, or the comparison would be against the default state.
       const setupId = base.settings.setupJourney as string | undefined;
       let setupJourney: JourneySpec | undefined;
@@ -264,6 +279,9 @@ ${networkOptionsHelp(25)}
         ...(network.upstream ? { upstream: network.upstream } : {}),
         ...(allowHosts ? { allowHosts } : {}),
         ...(blockHosts ? { blockHosts } : {}),
+        ...(userAgent ? { userAgent } : {}),
+        ...(network.extraHeaders ? { extraHeaders: network.extraHeaders } : {}),
+        ...(ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}),
         keyboard: base.settings.keyboard !== false,
         throttle: base.settings.throttle === true,
         // Same number of visits as the baseline, so medians are compared with medians.

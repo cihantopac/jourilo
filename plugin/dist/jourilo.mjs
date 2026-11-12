@@ -39264,7 +39264,10 @@ function refuseDenyLocalWebkit(denyLocal, browser) {
 var NETWORK_OPTIONS = {
   proxy: { type: "string" },
   "allow-hosts": { type: "string", multiple: true },
-  "block-hosts": { type: "string", multiple: true }
+  "block-hosts": { type: "string", multiple: true },
+  "user-agent": { type: "string" },
+  "extra-header": { type: "string", multiple: true },
+  "ignore-https-errors": { type: "boolean" }
 };
 function networkOptionsHelp(column) {
   const pad = (flag2) => `  ${flag2.padEnd(column - 2)}`;
@@ -39276,8 +39279,79 @@ function networkOptionsHelp(column) {
     `${cont}loopback connects directly. The run records the proxy without its credentials`,
     `${pad("--allow-hosts LIST")}Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);`,
     `${cont}the target's own host is always allowed. Other hosts are refused and listed in the limitations`,
-    `${pad("--block-hosts LIST")}Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations`
+    `${pad("--block-hosts LIST")}Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations`,
+    `${pad("--user-agent UA")}Send this User-Agent (also navigator.userAgent) instead of the browser's own; recorded in the run`,
+    `${pad("--extra-header H")}Add a request header "Name: value" (repeatable), sent only to the target's origin, never`,
+    `${cont}to other hosts: Jourilo makes those requests itself, so the headers cannot follow a redirect`,
+    `${cont}elsewhere (a redirect is followed without them). The run records the names, never the values`,
+    `  --ignore-https-errors`,
+    `${cont}Accept invalid or self-signed certificates in the browser (test environments only); the network`,
+    `${cont}guard still checks every destination, and the run lists it in the limitations`
   ].join("\n");
+}
+var HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+var REFUSED_HEADERS = /* @__PURE__ */ new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "proxy-connection",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  "host",
+  "content-length",
+  "cookie"
+]);
+function extraHeadersFrom(ctx) {
+  const given = ctx.values["extra-header"];
+  const raws = Array.isArray(given) ? given : typeof given === "string" ? [given] : [];
+  if (!raws.length) return void 0;
+  const usage2 = (why, hint = 'Example: --extra-header "X-Staging-Access: <token>"') => new JouriloError("USAGE", `--extra-header: ${why}`, hint);
+  const out = {};
+  const seen = /* @__PURE__ */ new Set();
+  raws.forEach((raw, i) => {
+    const colon = raw.indexOf(":");
+    const name = colon < 0 ? "" : raw.slice(0, colon).trim();
+    if (colon < 0 || !name) throw usage2(`header ${i + 1} is not "Name: value" (the value is not shown).`);
+    if (!HEADER_NAME.test(name))
+      throw usage2(`header ${i + 1} has an invalid name (letters, digits and !#$%&'*+.^_\`|~- only).`);
+    const value = raw.slice(colon + 1).trim();
+    if (!value || /[\u0000-\u0008\u000a-\u001f\u007f]/.test(value))
+      throw usage2(`${name} has an empty value or one with control characters (the value is not shown).`);
+    const key = name.toLowerCase();
+    if (REFUSED_HEADERS.has(key))
+      throw usage2(
+        `${name} cannot be set: it belongs to the connection or to the browser's network stack.`,
+        key === "cookie" ? "Use --auth FILE (a Playwright storage state) for cookies." : "Remove it; hop-by-hop headers, Host and Content-Length are set by the browser."
+      );
+    if (seen.has(key)) throw usage2(`${name} is given twice.`);
+    seen.add(key);
+    out[name] = value;
+  });
+  return out;
+}
+function userAgentFrom(ctx) {
+  const ua = str(ctx, "user-agent");
+  if (ua === void 0) return void 0;
+  const v = ua.trim();
+  if (!v || /[\u0000-\u001f\u007f]/.test(v))
+    throw new JouriloError(
+      "USAGE",
+      "--user-agent is empty or has control characters.",
+      'Example: --user-agent "Mozilla/5.0 (compatible; MyAudit/1.0)"'
+    );
+  return v;
+}
+function requestOptionsFrom(ctx) {
+  const userAgent = userAgentFrom(ctx);
+  const extraHeaders = extraHeadersFrom(ctx);
+  return {
+    ...userAgent ? { userAgent } : {},
+    ...extraHeaders ? { extraHeaders } : {},
+    ...flag(ctx, "ignore-https-errors") ? { ignoreHttpsErrors: true } : {}
+  };
 }
 var HOST_PATTERN = /^(\*\.)?[a-z0-9_]([a-z0-9_-]*[a-z0-9_])?(\.[a-z0-9_]([a-z0-9_-]*[a-z0-9_])?)*\.?$/i;
 var IP_PATTERN = /^\[?[0-9a-f:.]+\]?$/i;
@@ -39344,7 +39418,8 @@ function networkFrom(ctx, target) {
   return {
     ...upstream ? { upstream } : {},
     ...allowHosts.length ? { allowHosts } : {},
-    ...blockHosts.length ? { blockHosts } : {}
+    ...blockHosts.length ? { blockHosts } : {},
+    ...requestOptionsFrom(ctx)
   };
 }
 function requirePositional(ctx, index, name, usage2) {
@@ -42004,6 +42079,58 @@ function proxyLimitation(up) {
   ];
 }
 
+// src/browser/target-headers.ts
+function targetHeaders(origin, headers) {
+  return { origin, headers, redirects: /* @__PURE__ */ new Set() };
+}
+function safeUrl(url, base2) {
+  try {
+    return new URL(url, base2);
+  } catch {
+    return void 0;
+  }
+}
+async function sendTargetHeaders(ctx, scope, timeoutMs) {
+  const names = new Set(Object.keys(scope.headers).map((n) => n.toLowerCase()));
+  await ctx.route("**/*", async (route) => {
+    const req = route.request();
+    if (safeUrl(req.url())?.origin !== scope.origin) return route.fallback();
+    const headers = {};
+    for (const [k, v] of Object.entries(req.headers())) if (!names.has(k.toLowerCase())) headers[k] = v;
+    Object.assign(headers, scope.headers);
+    try {
+      const response = await route.fetch({ headers, maxRedirects: 0, timeout: timeoutMs });
+      const status = response.status();
+      const location = response.headers().location;
+      const next = status >= 300 && status < 400 && location ? safeUrl(location, req.url()) : void 0;
+      if (next?.origin === scope.origin && scope.redirects.size < 100)
+        scope.redirects.add(`${redactUrl(req.url())} \u2192 ${redactUrl(next.toString())}`);
+      await route.fulfill({ response });
+    } catch {
+      await route.abort("failed").catch(() => void 0);
+    }
+  });
+}
+function requestLimitations(opts) {
+  const out = [];
+  if (opts.ignoreHttpsErrors)
+    out.push(
+      "Certificate errors were ignored (--ignore-https-errors): the browser accepted invalid, expired or self-signed certificates, so certificate problems of the site were not reported. The network guard still checked every destination."
+    );
+  const h = opts.headers;
+  if (h) {
+    out.push(
+      `Extra headers (${Object.keys(h.headers).join(", ")}) were sent only with requests to ${h.origin}, never to other origins. Jourilo made those requests itself, so the headers could not follow a redirect elsewhere; their lab timings include that step.`
+    );
+    const hops = [...h.redirects];
+    if (hops.length)
+      out.push(
+        `${hops.length} redirect(s) within ${h.origin} were followed without the extra headers (${hops.slice(0, 3).join("; ")}${hops.length > 3 ? "; \u2026" : ""}); a page that needs them is best audited at its final URL.`
+      );
+  }
+  return out;
+}
+
 // src/browser/vitals.ts
 var VITALS_INIT_SCRIPT = `(() => {
   if (window.__jourilo) return;
@@ -42404,12 +42531,16 @@ async function newContext(browser, vp, opts) {
     ...browser.browserType().name() === "firefox" ? {} : { isMobile: vp.isMobile },
     hasTouch: vp.hasTouch,
     locale: opts.locale ?? "en-US",
-    ignoreHTTPSErrors: false,
+    // Certificate checking only: the network guard sees every CONNECT and still checks its destination.
+    ignoreHTTPSErrors: opts.ignoreHttpsErrors === true,
     serviceWorkers: "block",
+    ...opts.userAgent ? { userAgent: opts.userAgent } : {},
     ...opts.timezoneId ? { timezoneId: opts.timezoneId } : {},
     ...opts.storageState ? { storageState: opts.storageState } : {}
   });
   watchContext(browser, ctx);
+  if (opts.extraHeaders && Object.keys(opts.extraHeaders.headers).length)
+    await sendTargetHeaders(ctx, opts.extraHeaders, opts.timeoutMs ?? 3e4);
   if (opts.clock) await ctx.clock.setFixedTime(new Date(opts.clock));
   await ctx.addInitScript({ content: NAME_SHIM });
   await ctx.addInitScript({ content: VITALS_INIT_SCRIPT });
@@ -44351,7 +44482,10 @@ async function runJourney(browser, spec, opts) {
     runDir: opts.runDir,
     ...opts.storageState ? { storageState: opts.storageState } : {},
     ...opts.timezoneId ? { timezoneId: opts.timezoneId } : {},
-    ...opts.clock ? { clock: opts.clock } : {}
+    ...opts.clock ? { clock: opts.clock } : {},
+    ...opts.userAgent ? { userAgent: opts.userAgent } : {},
+    ...opts.extraHeaders ? { extraHeaders: opts.extraHeaders } : {},
+    ...opts.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}
   });
   const tracePath = opts.trace ? join9("traces", `${spec.id}-${vp.name}.zip`) : void 0;
   if (tracePath) await ctx.tracing.start({ screenshots: true, snapshots: true, title: spec.name });
@@ -45695,6 +45829,14 @@ function stateOptions(opts) {
     ...opts.clock ? { clock: opts.clock } : {}
   };
 }
+function contextOptions(opts, headers) {
+  return {
+    ...stateOptions(opts),
+    ...opts.userAgent ? { userAgent: opts.userAgent } : {},
+    ...headers ? { extraHeaders: headers } : {},
+    ...opts.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}
+  };
+}
 var RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 function resolveRunId(ws, requested) {
   if (requested === void 0) return newRunId();
@@ -45726,6 +45868,8 @@ async function runAudit(ws, opts) {
   });
   const hostClass = check.hostClass;
   const hostLists = hostListsFor(target, opts.allowHosts ?? [], opts.blockHosts ?? []);
+  const headers = opts.extraHeaders ? targetHeaders(target.origin, opts.extraHeaders) : void 0;
+  const browsing = contextOptions(opts, headers);
   const log = opts.onProgress ?? (() => void 0);
   const runDir = ws.createRunDir(id);
   const startedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -45800,7 +45944,7 @@ async function runAudit(ws, opts) {
             saveAuth: setupState,
             ...opts.evidence ? { evidence: opts.evidence } : {},
             ...opts.storageState ? { storageState: opts.storageState } : {},
-            ...stateOptions(opts),
+            ...browsing,
             log
           }),
           signal
@@ -45825,8 +45969,9 @@ async function runAudit(ws, opts) {
         log(`Discovering pages on ${target.origin} \u2026`);
         const ctx = await newContext(browser, opts.viewports[0], {
           runDir,
+          timeoutMs: opts.timeoutMs,
           ...storageState ? { storageState } : {},
-          ...stateOptions(opts)
+          ...browsing
         });
         const found = await untilStopped(
           crawl(ctx, target.toString(), {
@@ -45869,8 +46014,9 @@ async function runAudit(ws, opts) {
         halt();
         const ctx = await newContext(browser, vp, {
           runDir,
+          timeoutMs: opts.timeoutMs,
           ...storageState ? { storageState } : {},
-          ...stateOptions(opts),
+          ...browsing,
           ...opts.locale ? { locale: opts.locale } : {}
         });
         try {
@@ -45913,7 +46059,7 @@ async function runAudit(ws, opts) {
                 timeoutMs: opts.timeoutMs,
                 throttle: opts.throttle,
                 ...storageState ? { storageState } : {},
-                ...stateOptions(opts)
+                ...browsing
               }),
               signal,
               async () => void 0
@@ -45931,8 +46077,9 @@ async function runAudit(ws, opts) {
         const vp = opts.viewports.find((v) => !v.hasTouch) ?? opts.viewports[0];
         const ctx = await newContext(browser, vp, {
           runDir,
+          timeoutMs: opts.timeoutMs,
           ...storageState ? { storageState } : {},
-          ...stateOptions(opts)
+          ...browsing
         });
         try {
           for (const o of observations.filter(
@@ -46036,7 +46183,14 @@ async function runAudit(ws, opts) {
         "Throttling simulated a mid-range mobile network and 4\xD7 CPU slowdown (Chromium only)."
       );
     else limitations.push("Measured without network/CPU throttling: real mobile devices are usually slower.");
-    limitations.push(...proxyLimitation(opts.upstream), ...networkLimitations(network));
+    limitations.push(
+      ...proxyLimitation(opts.upstream),
+      ...networkLimitations(network),
+      ...requestLimitations({
+        ...opts.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {},
+        ...headers ? { headers } : {}
+      })
+    );
     const stopped = observations.flatMap((o) => o.blockedActions ?? []);
     if (stopped.length)
       limitations.push(
@@ -46090,6 +46244,10 @@ async function runAudit(ws, opts) {
         ...opts.upstream ? { proxy: upstreamLabel(opts.upstream) } : {},
         ...opts.allowHosts?.length ? { allowHosts: opts.allowHosts } : {},
         ...opts.blockHosts?.length ? { blockHosts: opts.blockHosts } : {},
+        // The user agent as given; of the extra headers only the names, never their values.
+        ...opts.userAgent ? { userAgent: opts.userAgent } : {},
+        ...opts.extraHeaders ? { extraHeaders: Object.keys(opts.extraHeaders) } : {},
+        ...opts.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {},
         axe: observations.find((o) => o.axe)?.axe?.version ?? null,
         hostClass,
         // The exact scope, so `jourilo verify` can repeat this run after a change.
@@ -49633,6 +49791,13 @@ async function runCmd(ctx) {
       network.allowHosts ? [...network.allowHosts, ...list(ctx, "allow-origin").map((o) => parseTargetUrl(o).hostname)] : [],
       network.blockHosts ?? []
     );
+    if (network.extraHeaders && flag(ctx, "trace"))
+      throw new JouriloError(
+        "USAGE",
+        "--trace cannot be combined with --extra-header: a Playwright trace records request headers, values included.",
+        "Run without --trace, or without --extra-header."
+      );
+    const headers = network.extraHeaders ? targetHeaders(base2.origin, network.extraHeaders) : void 0;
     const id = newRunId();
     const runDir = ctx.ws.createRunDir(id);
     const browserName = str(ctx, "browser") ?? "chromium";
@@ -49708,6 +49873,9 @@ async function runCmd(ctx) {
               ...vp ? { viewportOverride: vp } : {},
               ...str(ctx, "auth") ? { storageState: str(ctx, "auth") } : {},
               ...state,
+              ...network.userAgent ? { userAgent: network.userAgent } : {},
+              ...headers ? { extraHeaders: headers } : {},
+              ...network.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {},
               ...evidence ? { evidence } : {},
               ...repeat > 1 ? { attempt: k + 1 } : {},
               ...saveAuth ? { saveAuth } : {},
@@ -49735,7 +49903,14 @@ async function runCmd(ctx) {
       await session.close();
     }
     const guarded = session.report();
-    limitations.push(...proxyLimitation(network.upstream), ...networkLimitations(guarded));
+    limitations.push(
+      ...proxyLimitation(network.upstream),
+      ...networkLimitations(guarded),
+      ...requestLimitations({
+        ...network.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {},
+        ...headers ? { headers } : {}
+      })
+    );
     findings = mergeFindings(findings);
     const { kept, dismissed } = applyDismissals(findings, dismissals);
     findings = kept;
@@ -49758,7 +49933,11 @@ async function runCmd(ctx) {
         ...evidence === "minimal" ? { evidence } : {},
         ...network.upstream ? { proxy: upstreamLabel(network.upstream) } : {},
         ...network.allowHosts ? { allowHosts: network.allowHosts } : {},
-        ...network.blockHosts ? { blockHosts: network.blockHosts } : {}
+        ...network.blockHosts ? { blockHosts: network.blockHosts } : {},
+        // The user agent as given; of the extra headers only the names, never their values.
+        ...network.userAgent ? { userAgent: network.userAgent } : {},
+        ...network.extraHeaders ? { extraHeaders: Object.keys(network.extraHeaders) } : {},
+        ...network.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}
       },
       pages: [],
       journeys: journeys2,
@@ -49847,7 +50026,8 @@ Run options:
   --allow-submit         Allow form submission on non-local hosts (authorized test environments only)
   --allow-destructive    Allow irreversible/payment actions \u2014 local hosts with sandbox data only
   --allow-origin ORIGIN  Let the page navigate to another origin you are authorized to test (e.g. a test IdP)
-  --trace                Record a Playwright trace per journey (contains typed values; keep private)
+  --trace                Record a Playwright trace per journey (contains typed values; keep private);
+                         refused with --extra-header, since a trace records header values
   --auth FILE            Playwright storage state for signed-in journeys
   --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
   --timezone ZONE        IANA time zone for the page (e.g. Europe/Istanbul)
@@ -52176,7 +52356,9 @@ var verify = {
   --deny-local           Refuse a local target (localhost, 127.0.0.1, [::1], *.localhost, *.test) with exit 3; a redirect to one is blocked by the network guard and listed in the limitations;
                          JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3)
 ${networkOptionsHelp(25)}
-                         Without --allow-hosts / --block-hosts, the baseline run's lists are used again
+                         Without --allow-hosts / --block-hosts, the baseline run's lists are used again; so are its
+                         --user-agent and --ignore-https-errors. Header values are never stored: a baseline that sent
+                         --extra-header needs the headers again (exit 2 without them)
   --fail-on-regression   Exit 1 when new serious or critical defects appear`,
   async run(ctx) {
     const target = str(ctx, "target");
@@ -52203,6 +52385,15 @@ ${networkOptionsHelp(25)}
       const recorded = (key) => Array.isArray(base2.settings[key]) ? base2.settings[key] : void 0;
       const allowHosts = network.allowHosts ?? recorded("allowHosts");
       const blockHosts = network.blockHosts ?? recorded("blockHosts");
+      const userAgent = network.userAgent ?? (typeof base2.settings.userAgent === "string" ? base2.settings.userAgent : void 0);
+      const ignoreHttpsErrors = network.ignoreHttpsErrors ?? base2.settings.ignoreHttpsErrors === true;
+      const baselineHeaders = recorded("extraHeaders");
+      if (baselineHeaders?.length && !network.extraHeaders)
+        throw new JouriloError(
+          "USAGE",
+          `Run ${base2.id} sent extra headers (${baselineHeaders.join(", ")}); their values are not stored, so give them again with --extra-header.`,
+          `Example: --extra-header "${baselineHeaders[0]}: <value>"`
+        );
       const setupId = base2.settings.setupJourney;
       let setupJourney;
       if (setupId) {
@@ -52230,6 +52421,9 @@ ${networkOptionsHelp(25)}
         ...network.upstream ? { upstream: network.upstream } : {},
         ...allowHosts ? { allowHosts } : {},
         ...blockHosts ? { blockHosts } : {},
+        ...userAgent ? { userAgent } : {},
+        ...network.extraHeaders ? { extraHeaders: network.extraHeaders } : {},
+        ...ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {},
         keyboard: base2.settings.keyboard !== false,
         throttle: base2.settings.throttle === true,
         // Same number of visits as the baseline, so medians are compared with medians.
@@ -52616,7 +52810,8 @@ function cliMarkdown() {
     "6 stopped early by SIGINT/SIGTERM or `--max-duration` (a partial run is still written; a second signal exits 130).",
     "",
     "Global options: `--json`, `--workspace DIR` (default `.jourilo`, or `JOURILO_WORKSPACE`), `--quiet`. With `--json`,",
-    'progress lines on stderr are JSON too: `{"type":"progress","message":"\u2026","at":"<ISO time>"}`.',
+    'progress lines on stderr are JSON too: `{"type":"progress","message":"\u2026","at":"<ISO time>"}`. `--workspace` is also',
+    "the output directory: every run is written to `DIR/runs/<id>/` (there is no separate `--output-dir`).",
     ""
   ];
   for (const [title, names] of GROUPS) {

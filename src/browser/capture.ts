@@ -20,6 +20,7 @@ import {
 import PROBE_SOURCE from './inpage/probe.js?raw';
 import { type KeyboardWalk, keyboardWalk } from './keyboard.js';
 import { watchContext } from './session.js';
+import { sendTargetHeaders, type TargetHeaders } from './target-headers.js';
 import { type RawVitals, READ_VITALS_SCRIPT, VITALS_INIT_SCRIPT } from './vitals.js';
 import { checkWidgets, type WidgetCheck } from './widgets.js';
 
@@ -163,6 +164,12 @@ export interface CaptureOptions {
   throttle?: boolean;
   /** `minimal`: JPEG quality 55 and full-page height capped at 6000 px (default `full`). */
   evidence?: EvidenceMode;
+  /** `--user-agent`: the User-Agent header and navigator.userAgent. */
+  userAgent?: string;
+  /** `--extra-header`: headers sent only with requests to the target's origin (see target-headers.ts). */
+  extraHeaders?: TargetHeaders;
+  /** `--ignore-https-errors`: the browser accepts invalid certificates; the network guard still checks destinations. */
+  ignoreHttpsErrors?: boolean;
 }
 
 export async function newContext(
@@ -177,12 +184,17 @@ export async function newContext(
     ...(browser.browserType().name() === 'firefox' ? {} : { isMobile: vp.isMobile }),
     hasTouch: vp.hasTouch,
     locale: opts.locale ?? 'en-US',
-    ignoreHTTPSErrors: false,
+    // Certificate checking only: the network guard sees every CONNECT and still checks its destination.
+    ignoreHTTPSErrors: opts.ignoreHttpsErrors === true,
     serviceWorkers: 'block',
+    ...(opts.userAgent ? { userAgent: opts.userAgent } : {}),
     ...(opts.timezoneId ? { timezoneId: opts.timezoneId } : {}),
     ...(opts.storageState ? { storageState: opts.storageState } : {}),
   });
   watchContext(browser, ctx);
+  // First route of the context, so later ones (the request guard) run before it. None without extra headers.
+  if (opts.extraHeaders && Object.keys(opts.extraHeaders.headers).length)
+    await sendTargetHeaders(ctx, opts.extraHeaders, opts.timeoutMs ?? 30_000);
   // Freezes Date only; timers and animations keep running.
   if (opts.clock) await ctx.clock.setFixedTime(new Date(opts.clock));
   await ctx.addInitScript({ content: NAME_SHIM });

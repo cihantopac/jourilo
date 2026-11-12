@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   type Command,
   type Context,
+  extraHeadersFrom,
   maxDurationOption,
   pagesOption,
   parse,
@@ -64,6 +65,47 @@ describe('limits', () => {
     expect(pagesOption(ctxWith({}), 6)).toBe(6);
     expect(pagesOption(ctxWith({ pages: '1' }), 6)).toBe(1);
     expect(pagesOption(ctxWith({ pages: '40' }), 6)).toBe(40);
+  });
+});
+
+describe('request options', () => {
+  it('--extra-header parses "Name: value", rejects a malformed or hop-by-hop header with USAGE', () => {
+    expect(extraHeadersFrom(ctxWith({}))).toBeUndefined();
+    expect(
+      extraHeadersFrom(
+        ctxWith({ 'extra-header': ['X-Test: 1', 'Authorization:Bearer abc def', 'X-Spaced:   v  '] }),
+      ),
+    ).toEqual({ 'X-Test': '1', Authorization: 'Bearer abc def', 'X-Spaced': 'v' });
+    const secret = 's3cret-v4lue';
+    for (const raw of [
+      `NoColon ${secret}`,
+      `: ${secret}`,
+      `Bad Name: ${secret}`,
+      'X-Empty:',
+      `X-Ctl: a\r\nInjected: ${secret}`,
+      `X-Nul: a\u0000${secret}`,
+      // Hop-by-hop headers, and headers the browser's network stack owns.
+      `Connection: ${secret}`,
+      `Keep-Alive: ${secret}`,
+      `Proxy-Authenticate: ${secret}`,
+      `proxy-authorization: ${secret}`,
+      `Proxy-Connection: ${secret}`,
+      `TE: ${secret}`,
+      `Trailer: ${secret}`,
+      `Transfer-Encoding: ${secret}`,
+      `Upgrade: ${secret}`,
+      `Host: ${secret}`,
+      `Content-Length: ${secret}`,
+      `Cookie: ${secret}`,
+    ]) {
+      const err = thrown(() => extraHeadersFrom(ctxWith({ 'extra-header': [raw] })));
+      expect(err.code, raw).toBe('USAGE');
+      expect(err.message, raw).toContain('--extra-header');
+      // A header value may be a credential: it is never repeated.
+      expect(`${err.message} ${err.hint ?? ''}`, raw).not.toContain(secret);
+    }
+    const dup = thrown(() => extraHeadersFrom(ctxWith({ 'extra-header': ['X-A: 1', 'x-a: 2'] })));
+    expect(dup.code).toBe('USAGE');
   });
 });
 

@@ -5,6 +5,7 @@ import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Browser } from 'playwright-core';
 import {
+  type CaptureOptions,
   capturePage,
   captureScreenshotFiles,
   measureVitals,
@@ -20,6 +21,7 @@ import {
   openGuardedBrowser,
   proxyLimitation,
 } from '../browser/session.js';
+import { requestLimitations, type TargetHeaders, targetHeaders } from '../browser/target-headers.js';
 import { toMetrics } from '../browser/vitals.js';
 import { conversionFindings } from '../conversion/rules.js';
 import { applyDismissals, loadDismissals } from '../core/dismissals.js';
@@ -99,6 +101,12 @@ export interface AuditOptions {
   allowHosts?: string[];
   /** `--block-hosts`: these hosts are refused. */
   blockHosts?: string[];
+  /** `--user-agent`: replaces the browser's User-Agent; recorded in the run. */
+  userAgent?: string;
+  /** `--extra-header`: sent only to the target's origin; only the names are recorded. */
+  extraHeaders?: Record<string, string>;
+  /** `--ignore-https-errors`: the browser accepts invalid certificates; the guard still checks destinations. */
+  ignoreHttpsErrors?: boolean;
   keyboard: boolean;
   throttle: boolean;
   timeoutMs: number;
@@ -239,6 +247,19 @@ function stateOptions(opts: AuditOptions): { timezoneId?: string; clock?: string
   };
 }
 
+/** What every browser context of the run starts with: page state, and the request options of F16. */
+function contextOptions(
+  opts: AuditOptions,
+  headers: TargetHeaders | undefined,
+): Pick<CaptureOptions, 'timezoneId' | 'clock' | 'userAgent' | 'extraHeaders' | 'ignoreHttpsErrors'> {
+  return {
+    ...stateOptions(opts),
+    ...(opts.userAgent ? { userAgent: opts.userAgent } : {}),
+    ...(headers ? { extraHeaders: headers } : {}),
+    ...(opts.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}),
+  };
+}
+
 const RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
 /**
@@ -277,6 +298,8 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
   });
   const hostClass: HostClass = check.hostClass;
   const hostLists = hostListsFor(target, opts.allowHosts ?? [], opts.blockHosts ?? []);
+  const headers = opts.extraHeaders ? targetHeaders(target.origin, opts.extraHeaders) : undefined;
+  const browsing = contextOptions(opts, headers);
   const log = opts.onProgress ?? (() => undefined);
   const runDir = ws.createRunDir(id);
   const startedAt = new Date().toISOString();
@@ -362,7 +385,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
             saveAuth: setupState,
             ...(opts.evidence ? { evidence: opts.evidence } : {}),
             ...(opts.storageState ? { storageState: opts.storageState } : {}),
-            ...stateOptions(opts),
+            ...browsing,
             log,
           }),
           signal,
@@ -391,8 +414,9 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         log(`Discovering pages on ${target.origin} …`);
         const ctx = await newContext(browser, opts.viewports[0]!, {
           runDir,
+          timeoutMs: opts.timeoutMs,
           ...(storageState ? { storageState } : {}),
-          ...stateOptions(opts),
+          ...browsing,
         });
         const found = await untilStopped(
           crawl(ctx, target.toString(), {
@@ -439,8 +463,9 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         halt();
         const ctx = await newContext(browser, vp, {
           runDir,
+          timeoutMs: opts.timeoutMs,
           ...(storageState ? { storageState } : {}),
-          ...stateOptions(opts),
+          ...browsing,
           ...(opts.locale ? { locale: opts.locale } : {}),
         });
         try {
@@ -489,7 +514,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
                 timeoutMs: opts.timeoutMs,
                 throttle: opts.throttle,
                 ...(storageState ? { storageState } : {}),
-                ...stateOptions(opts),
+                ...browsing,
               }),
               signal,
               async () => undefined,
@@ -509,8 +534,9 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         const vp = opts.viewports.find((v) => !v.hasTouch) ?? opts.viewports[0]!;
         const ctx = await newContext(browser, vp, {
           runDir,
+          timeoutMs: opts.timeoutMs,
           ...(storageState ? { storageState } : {}),
-          ...stateOptions(opts),
+          ...browsing,
         });
         try {
           for (const o of observations.filter(
@@ -628,7 +654,14 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       );
     else limitations.push('Measured without network/CPU throttling: real mobile devices are usually slower.');
 
-    limitations.push(...proxyLimitation(opts.upstream), ...networkLimitations(network));
+    limitations.push(
+      ...proxyLimitation(opts.upstream),
+      ...networkLimitations(network),
+      ...requestLimitations({
+        ...(opts.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}),
+        ...(headers ? { headers } : {}),
+      }),
+    );
     const stopped = observations.flatMap((o) => o.blockedActions ?? []);
     if (stopped.length)
       limitations.push(
@@ -685,6 +718,10 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         ...(opts.upstream ? { proxy: upstreamLabel(opts.upstream) } : {}),
         ...(opts.allowHosts?.length ? { allowHosts: opts.allowHosts } : {}),
         ...(opts.blockHosts?.length ? { blockHosts: opts.blockHosts } : {}),
+        // The user agent as given; of the extra headers only the names, never their values.
+        ...(opts.userAgent ? { userAgent: opts.userAgent } : {}),
+        ...(opts.extraHeaders ? { extraHeaders: Object.keys(opts.extraHeaders) } : {}),
+        ...(opts.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}),
         axe: observations.find((o) => o.axe)?.axe?.version ?? null,
         hostClass,
         // The exact scope, so `jourilo verify` can repeat this run after a change.

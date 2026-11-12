@@ -73,6 +73,19 @@
           "items": { "type": "string" },
           "description": "--block-hosts patterns."
         },
+        "userAgent": {
+          "type": "string",
+          "description": "--user-agent the browser sent instead of its own."
+        },
+        "extraHeaders": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Names of the --extra-header headers, sent only to the target's origin; their values are never stored."
+        },
+        "ignoreHttpsErrors": {
+          "type": "boolean",
+          "description": "--ignore-https-errors: the browser accepted invalid certificates; the network guard still checked every destination."
+        },
         "scope": {
           "type": "object",
           "properties": {

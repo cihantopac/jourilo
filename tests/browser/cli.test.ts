@@ -10,9 +10,10 @@ import {
   writeFileSync,
 } from 'node:fs';
 import http from 'node:http';
+import https from 'node:https';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Run } from '../../src/core/types.js';
 
 const root = join(import.meta.dirname, '..', '..');
@@ -473,6 +474,188 @@ describe('cli state options', () => {
       await new Promise((r) => server.close(r));
     }
   }, 120_000);
+});
+
+/** Runs `jourilo audit … --json -q` without blocking this process (the test's own servers must keep answering). */
+async function auditAsync(args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  const child = spawn(process.execPath, [cli, 'audit', ...args, '--json', '-q', '--workspace', ws], {
+    cwd: root,
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (d) => {
+    stdout += d;
+  });
+  child.stderr.on('data', (d) => {
+    stderr += d;
+  });
+  const code = await new Promise<number | null>((r) => child.on('close', r));
+  return { code, stdout, stderr };
+}
+
+/** Every file of a run directory, as text (screenshots are skipped). */
+function runFilesText(runDir: string): string {
+  const out: string[] = [];
+  const walk = (dir: string) => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name);
+      if (statSync(p).isDirectory()) walk(p);
+      else if (!/\.(jpe?g|png|zip)$/i.test(name)) out.push(readFileSync(p, 'utf8'));
+    }
+  };
+  walk(runDir);
+  return out.join('\n');
+}
+
+describe('cli request options (F16)', () => {
+  const SECRET = 'Bearer s3cret-header-value';
+  const UA = 'JouriloFieldTest/1.0 (+staging)';
+  const targetSeen: { url: string; xTest?: string; auth?: string; ua?: string }[] = [];
+  const otherSeen: { url: string; xTest?: string; auth?: string }[] = [];
+  let target: http.Server;
+  let other: http.Server;
+  let result: { code: number | null; stdout: string; stderr: string };
+  let run: Run;
+  let runDir: string;
+
+  beforeAll(async () => {
+    other = http.createServer((req, res) => {
+      otherSeen.push({
+        url: req.url ?? '',
+        xTest: req.headers['x-test'] as string | undefined,
+        auth: req.headers.authorization,
+      });
+      if (req.url === '/s.js') res.writeHead(200, { 'content-type': 'text/javascript' }).end('void 0;');
+      else res.writeHead(200, { 'content-type': 'image/gif' }).end();
+    });
+    await new Promise<void>((r) => other.listen(0, '127.0.0.1', () => r()));
+    // Another origin: same host, another port.
+    const otherOrigin = `http://127.0.0.1:${(other.address() as AddressInfo).port}`;
+    target = http.createServer((req, res) => {
+      targetSeen.push({
+        url: req.url ?? '',
+        xTest: req.headers['x-test'] as string | undefined,
+        auth: req.headers.authorization,
+        ua: req.headers['user-agent'],
+      });
+      // A request to the target that redirects to another origin must not carry the headers there.
+      if (req.url === '/away.gif') return res.writeHead(302, { location: `${otherOrigin}/landed.gif` }).end();
+      // A redirect within the origin is followed too, without the headers, and listed in the limitations.
+      if (req.url === '/hop.gif') return res.writeHead(302, { location: '/hop-landed.gif' }).end();
+      if (req.url!.endsWith('.gif')) return res.writeHead(200, { 'content-type': 'image/gif' }).end();
+      res
+        .writeHead(200, { 'content-type': 'text/html' })
+        .end(`<!doctype html><html lang="en"><title>Headers</title><main><h1>Headers</h1>
+<img src="/away.gif" alt="" width="1" height="1"><img src="/hop.gif" alt="" width="1" height="1">
+<script src="${otherOrigin}/s.js"></script>
+<script>document.title = navigator.userAgent;</script></main>`);
+    });
+    await new Promise<void>((r) => target.listen(0, '127.0.0.1', () => r()));
+    result = await auditAsync([
+      `http://127.0.0.1:${(target.address() as AddressInfo).port}/`,
+      '--pages',
+      '1',
+      '--viewports',
+      'desktop',
+      '--no-keyboard',
+      '--no-forms',
+      '--user-agent',
+      UA,
+      '--extra-header',
+      'X-Test: 1',
+      '--extra-header',
+      `Authorization: ${SECRET}`,
+    ]);
+    runDir = JSON.parse(result.stdout).runDir;
+    run = JSON.parse(readFileSync(join(runDir, 'run.json'), 'utf8')) as Run;
+  }, 180_000);
+
+  afterAll(async () => {
+    await new Promise((r) => target.close(r));
+    await new Promise((r) => other.close(r));
+  });
+
+  it('extra headers reach only the target origin', () => {
+    expect(result.code, result.stderr).toBe(0);
+    const page = targetSeen.find((s) => s.url === '/');
+    expect(page?.xTest).toBe('1');
+    expect(page?.auth).toBe(SECRET);
+    expect(targetSeen.find((s) => s.url === '/away.gif')?.xTest).toBe('1');
+    // The script from the other origin, and the redirect from the target to it.
+    expect(otherSeen.map((s) => s.url).sort()).toEqual(['/landed.gif', '/s.js']);
+    for (const s of otherSeen) {
+      expect(s.xTest, s.url).toBeUndefined();
+      expect(s.auth, s.url).toBeUndefined();
+    }
+    expect(targetSeen.find((s) => s.url === '/hop.gif')?.xTest).toBe('1');
+    expect(targetSeen.find((s) => s.url === '/hop-landed.gif')?.xTest).toBeUndefined();
+    expect(
+      run.limitations.some((l) => /redirect\(s\) within .*\/hop\.gif → .*\/hop-landed\.gif/.test(l)),
+    ).toBe(true);
+  });
+
+  it('--user-agent is sent and recorded', () => {
+    expect(targetSeen.find((s) => s.url === '/')?.ua).toBe(UA);
+    expect(run.pages[0]!.title).toBe(UA);
+    expect(run.settings.userAgent).toBe(UA);
+  });
+
+  it('header values are redacted in run.json settings', () => {
+    expect(run.settings.extraHeaders).toEqual(['X-Test', 'Authorization']);
+    expect(run.limitations.some((l) => l.includes('X-Test') && l.includes('Authorization'))).toBe(true);
+    // Not in run.json, the manifest, the reports, or anything printed.
+    const text = `${runFilesText(runDir)}\n${result.stdout}\n${result.stderr}`;
+    expect(text).not.toContain('s3cret-header-value');
+    expect(readFileSync(join(runDir, 'manifest.json'), 'utf8')).not.toContain('s3cret');
+  });
+
+  it('verify asks for the headers again: their values were never stored', () => {
+    const r = jourilo('verify', run.id, '--json');
+    expect(r.status).toBe(2);
+    const err = JSON.parse(r.stderr.trim().split('\n').pop()!).error;
+    expect(err.code).toBe('USAGE');
+    expect(err.message).toContain('X-Test, Authorization');
+    expect(r.stderr).not.toContain('s3cret');
+  });
+});
+
+describe('cli --ignore-https-errors (F16)', () => {
+  it('--ignore-https-errors audits a self-signed local https server and adds a limitation', async () => {
+    const certs = join(root, 'tests', 'certs');
+    const server = https.createServer(
+      {
+        key: readFileSync(join(certs, 'localhost-key.pem')),
+        cert: readFileSync(join(certs, 'localhost-cert.pem')),
+      },
+      (_req, res) => {
+        res
+          .writeHead(200, { 'content-type': 'text/html' })
+          .end('<!doctype html><html lang="en"><title>TLS</title><main><h1>Self-signed</h1></main>');
+      },
+    );
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    try {
+      const url = `https://127.0.0.1:${(server.address() as AddressInfo).port}/`;
+      const args = [url, '--pages', '1', '--viewports', 'desktop', '--no-keyboard', '--no-forms'];
+      // Without the flag the certificate is refused: no page loaded.
+      const refused = await auditAsync(args);
+      expect(refused.code, refused.stderr).toBe(5);
+      expect(JSON.parse(refused.stdout).outcome).toBe('no-page-loaded');
+
+      const accepted = await auditAsync([...args, '--ignore-https-errors']);
+      expect(accepted.code, accepted.stderr).toBe(0);
+      const out = JSON.parse(accepted.stdout);
+      expect(out.outcome).toBe('complete');
+      const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8')) as Run;
+      expect(run.pages[0]!.title).toBe('TLS');
+      expect(run.settings.ignoreHttpsErrors).toBe(true);
+      expect(run.limitations.some((l) => /--ignore-https-errors/.test(l) && /certificate/i.test(l))).toBe(
+        true,
+      );
+    } finally {
+      await new Promise((r) => server.close(r));
+    }
+  }, 240_000);
 });
 
 /** Spawns an audit with --json, sends `signal` once a progress line matches `when`, and returns the outcome. */
