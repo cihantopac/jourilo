@@ -4,6 +4,96 @@ All notable changes are documented here. The project follows [Semantic Versionin
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-13
+
+The rest of the field feedback from the portfolio site and the container adapter (F8, F15, F16, F21, F22, F23, F26,
+F29, F31, F35, F36 and F38 in [docs/FIELD-FEEDBACK.md](docs/FIELD-FEEDBACK.md)): contrast over images is decided,
+runs work behind corporate proxies and with custom headers, and automation gets budgets, a rule registry, structured
+progress and stable evidence. `RUN_SCHEMA_VERSION` stays 1; every new field is optional and old runs still load. No
+new runtime dependencies. No run shows WCAG conformance.
+
+### Upgrade notes
+
+- `rules list --json` prints an object, `{ jourilo, axe, rules }`, with the Jourilo and axe-core versions; the rules
+  are in `rules`. A rule's `kind` may be `varies`.
+- Screenshot file names no longer contain the host or port, so the same page gets the same name on every origin.
+  Existing runs keep their files; new runs use the new names once.
+- Performance evidence has one item per metric and viewport, with values rounded (milliseconds to the nearest 10,
+  CLS to 3 decimals). Snapshot consumers see changed evidence once; fingerprints are unchanged and the raw values
+  stay in `run.pages[].metrics`.
+- `run.json` `settings.scope.urls` is redacted like other URLs. `verify` refuses (exit 2) a baseline whose scope has
+  redacted query values, and names the pages: audit them again and verify against the new run.
+- Jourilo now reads `HTTPS_PROXY` / `HTTP_PROXY` (either case) and `NO_PROXY`. A variable that is not a usable
+  `http://` proxy (for example `socks5://…`) fails every browsing command with exit 2, unless `NO_PROXY=*` is set or
+  the variable is unset.
+- Plain `http://` pages through an upstream proxy are tunnelled to port 80 (`CONNECT <ip>:80`); the proxy must allow
+  that. A proxy that refuses it fails those requests with a message that asks for the target's `https://` URL.
+- Contrast over an image, gradient or overlapping element that was a "needs review" item may now be a decided
+  defect (`jourilo/contrast-over-image`, serious), so it can fail `--fail-on serious`.
+
+### Added
+
+- **Contrast over images (F8).** axe-core's undecided contrast nodes over an image, gradient or overlap are decided
+  from the rendered pixels inside the text's line boxes (at most 30 per capture). The worst tile decides: a fail is
+  `jourilo/contrast-over-image` (WCAG 1.4.3), a clear pass removes the review item, the rest stay for review.
+- **Upstream proxy and host lists (F15).** `--proxy` (or `HTTPS_PROXY` / `HTTP_PROXY`) chains to an `http://` proxy
+  behind the network guard, which still resolves and checks every destination and tunnels only to the checked
+  address. `NO_PROXY` is decided per destination host. `--allow-hosts` and `--block-hosts` limit the hosts a run may
+  reach; refused requests are listed in the limitations.
+- **Request options (F16).** `--user-agent`, `--extra-header "Name: value"` (repeatable, sent only to the target's
+  origin) and `--ignore-https-errors` (browser only; the guard still checks every destination).
+- **Chromium sandbox (F21).** `--chromium-sandbox` / `JOURILO_CHROMIUM_SANDBOX=1` keeps Chromium's process sandbox
+  (opt-in). A Chromium run writes `browser.pids` in its directory so an integrator can clean up after a `SIGKILL`.
+- **Pages and captures (F22).** `summary.urls` and `summary.captures` next to `summary.pages` (which still counts
+  captures); `sample` records how many discovered pages a run left out, and the report header shows pages and
+  captures.
+- **Redirect chains and keyboard traps (F23).** `jourilo/redirect-chain` (minor) for a page reached through 3 or more
+  redirects. A keyboard trap is found wherever focus starts, also on a page where nothing else is focusable.
+- **Rule registry (F26).** `jourilo rules list [--json]` lists every native, performance, axe and axe-review rule with
+  its category, severity and kind.
+- **Budgets (F29).** `--budget LCP=2000,CLS=0.05,TBT=300` exits 1 when the worst capture's value exceeds a limit; a
+  metric no capture measured is "not measured", not a pass. Recorded as `budgets` in `run.json` and in `--json`.
+- **Wait for an element (F31).** `--wait-for <selector>` captures each page once the element is visible; if it never
+  appears, the page is still audited, with a limitation. Each capture records how it loaded (`pages[].load`).
+- **Structured progress (F35).** With `--json`, audit progress lines carry `phase`, `done`, `total`, `url` and
+  `viewport`. `manifest.json` names the Jourilo, browser and axe-core versions and the scope.
+
+### Changed
+
+- **Stable evidence (F36).** Performance evidence is keyed by metric and viewport with rounded values (see the
+  upgrade notes). CLS includes font-swap shifts, which are real layout shift; the variance is documented.
+- **Screenshot names (F38)** use the page's path and query, not its origin. A page on another origin than the run's
+  first page adds an origin tag.
+
+### Fixed
+
+- Failed-navigation URLs are redacted with the URL redactor, so a token in a failing target URL no longer appears in
+  `page-unreachable` text.
+- Turkish capitals match in the in-page probe lexicon (form purpose, trust and pricing signals).
+- The dialog focus-guard wait has a timer fallback, so its 250 ms cap holds when animation frames stall.
+- The HTML report falls back to `foldScreenshot`, so a page under `--evidence minimal` does not show "no screenshot".
+- Focus held by a `role="dialog"` or `role="alertdialog"` element is not reported as a keyboard trap (cookie walls).
+- Network evidence is not repeated when desktop and mobile findings merge, and evidence that names its viewport is
+  never dropped by the merge cap.
+- The fixture server accepts only same-origin redirect paths without control characters.
+
+### Security
+
+- Proxy credentials stay in the guard: the run records the proxy as `http://host:port`, and only checked addresses
+  reach the proxy (`CONNECT <ip>:<port>`, never a host name). A proxy's refusal, `407` or failure is the guard's own
+  error, never shown as the page.
+- `--extra-header` values go only to the target's origin and are never written to `run.json`, reports, progress
+  lines or the manifest; `journeys run --trace` is refused with `--extra-header`.
+- `settings.scope.urls` and failed-navigation URLs are redacted.
+- The guard destroys tunnels that open after it closes, verifies an IP-literal HTTPS target against its own address
+  inside a proxy tunnel, and keeps the framing of chunked request bodies.
+
+### Docs
+
+- `docs/RELEASE-1.3.md`, decisions D19 and D20, the new flags in `docs/WORKFLOW.md`, new limitations, the proxy,
+  header and redaction changes in `docs/SECURITY-REVIEW.md` and `docs/PRIVACY.md`, and F44 in
+  `docs/FIELD-FEEDBACK.md`.
+
 ## [1.2.1] - 2026-11-12
 
 Field feedback from a second run of the container adapter (F19-F40 in

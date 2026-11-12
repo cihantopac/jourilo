@@ -46,6 +46,36 @@ Jourilo drives a real browser against sites that may be hostile, and it can writ
 - Commands run with argument arrays (git, Playwright's installer); no shell is involved.
 - Plugin skills and the agent adapters tell agents to treat page content as untrusted data.
 
+## Additions in 1.3.0
+
+The new network and browser options keep the controls above. Tests are in `unit/net-guard.test.ts`,
+`unit/cli-options.test.ts` and `browser/cli.test.ts`.
+
+- **Upstream proxy (`--proxy`, `HTTPS_PROXY` / `HTTP_PROXY`).** The proxy sits behind the guard, not in front of it.
+  The guard resolves and checks every destination first, then asks the proxy for a tunnel to the checked address
+  (`CONNECT <ip>:443`, and `CONNECT <ip>:80` for plain HTTP), never to the name, so the proxy's own DNS cannot send a
+  request somewhere the guard did not check. Proxy credentials stay in the guard: they are added to the CONNECT
+  request and never reach the browser, `run.json`, reports, progress lines or the manifest (the run records
+  `http://host:port`). `NO_PROXY` is decided per destination host; loopback is reached directly. A proxy's refusal,
+  `407` or failure is the guard's own `502` with a per-run token, so a proxy page is never audited as the site.
+  Tunnels that open after the guard closes are destroyed, and an IP-literal HTTPS target is verified against its own
+  address inside a tunnel.
+- **Extra headers (`--extra-header`).** Values often hold secrets. They are sent only with requests to the target's
+  origin, which Jourilo fetches itself without following redirects, so a header cannot follow a redirect or a
+  third-party request to another host ([DECISIONS.md](DECISIONS.md) D19). Values are never stored, only the names;
+  `Cookie`, `Host` and hop-by-hop headers are refused, and `journeys run --trace` is refused with the option because a
+  trace records header values.
+- **`--ignore-https-errors`** relaxes certificate checking in the browser only. The guard sees every CONNECT before
+  any TLS and still checks every destination; the run lists the setting in its limitations.
+- **`browser.pids`.** A Chromium run writes the browser's process ids to its run directory for cleanup after a
+  `SIGKILL`. The file is removed on every exit Jourilo handles and is never listed in `manifest.json`. Ids are reused
+  by the system, so a cleanup script should check that an id still belongs to Chromium before killing it.
+- **Scope URL redaction.** `run.json` `settings.scope.urls` and failed-navigation URLs are redacted like other URLs,
+  so a token in a `--url` or target query no longer reaches the run. `verify` refuses a baseline whose scope has
+  redacted query values instead of replaying the wrong URL.
+- **Chromium sandbox.** Opt-in with `--chromium-sandbox` ([DECISIONS.md](DECISIONS.md) D20); the network guard does
+  not depend on it.
+
 ## Residual risks (not claimed as solved)
 
 1. **WebKit and HTTPS redirects to loopback.** WebKit on macOS sends a redirect to `127.0.0.1`/`localhost` directly
@@ -60,4 +90,8 @@ Jourilo drives a real browser against sites that may be hostile, and it can writ
    telemetry) are blocked; a site that needs them may behave differently, and the report says how many were stopped.
 4. **Screenshots and traces** show whatever the page shows outside the masked fields; traces contain typed values.
    They stay in `.jourilo/` (git-ignored) and must not be shared when real data was visible.
-5. **Proxy overhead.** Lab timings include one local proxy hop per connection on the same machine.
+5. **Proxy overhead.** Lab timings include one local proxy hop per connection on the same machine, and one more hop
+   when an upstream proxy is used.
+6. **Secrets on the command line.** `--proxy` credentials and `--extra-header` values given as arguments show in `ps`
+   while the run lasts and may stay in shell history. Give proxy credentials through `HTTPS_PROXY` / `HTTP_PROXY`, and
+   header values through a variable the shell expands.

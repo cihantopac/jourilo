@@ -49,7 +49,10 @@ Stated so nobody mistakes silence for a pass.
   the text color the 20 % of pixels farthest from it count as its background. The worst tile decides, so text over a
   busy photo that fails somewhere is not passed. At most 30 such nodes are sampled per capture; the rest stay
   manual-review items. A decided pass removes the review item. A light and dark pattern finer than one tile can be
-  averaged into a pass, and text not rendered in its computed color (under a tint) stays for review.
+  averaged into a pass, and text not rendered in its computed color (under a tint) stays for review. Pieces of a
+  line box narrower than 16 px are not sampled. Sampling scrolls to each node, which can start lazy loading or
+  scroll-triggered animations before the later checks of that capture, and on a page with many such nodes it adds
+  noticeable time to the capture.
 
 ## Performance
 
@@ -61,7 +64,9 @@ Stated so nobody mistakes silence for a pass.
   unchanged), so TTFB under `--throttle` is not meaningful for local targets.
 - INP is approximated from scripted journey interactions; it is not field INP.
 - A redirect chain is counted from the HTTP redirects (3xx) of the navigation to the page, at most 10 of them. A
-  redirect made by a script or a `<meta http-equiv="refresh">` is not counted.
+  redirect made by a script or a `<meta http-equiv="refresh">` is not counted. With `--extra-header`, redirects
+  from the target's origin are handed to the browser by Jourilo and may not be counted, so `jourilo/redirect-chain`
+  can be missed (never reported wrongly).
 - `--wait-for SELECTOR` costs time: a capture whose element never appears waits up to `--timeout` before it is
   audited as it is, and the extra lab visits of `--runs N` wait for the element only where the capture found it.
 - With `--throttle` and `--extra-header`, the target-origin responses Jourilo fetches itself and hands to the browser
@@ -135,9 +140,13 @@ Stated so nobody mistakes silence for a pass.
   sees only addresses. Many proxies refuse tunnels to port 80 (or to any port but 443): plain-HTTP requests then fail
   with "the upstream proxy refuses tunnels to port 80; give the target's https:// URL", so audit the target at its
   `https://` URL. A proxy that answers the tunnel with a 5xx could not reach the site; that request fails with "the
-  upstream proxy could not open the connection" instead. A proxy's refusal, its `407` or an unreachable proxy is reported as a failed request, never as a
-  page. Only `http://` proxies are supported; loopback addresses are reached directly. `NO_PROXY` is decided per destination host, as curl and browsers do (`NO_PROXY=*` means no proxy;
-  CIDR ranges are not supported). The run records the proxy as `http://host:port` without its credentials.
+  upstream proxy could not open the connection" instead. A proxy's refusal, its `407` or an unreachable proxy is
+  reported as a failed request, never as a page. Only `http://` proxies are supported; loopback addresses are reached
+  directly. `NO_PROXY` is decided per destination host, as curl and browsers do (`NO_PROXY=*` means no proxy; CIDR
+  ranges are not supported). The run records the proxy as `http://host:port` without its credentials. A tunnel
+  is accepted only when the proxy answers `200`. Jourilo reads `HTTPS_PROXY` / `HTTP_PROXY` from the environment: a
+  value that is not a usable `http://` proxy (for example `socks5://…`) fails every browsing command with exit 2;
+  set `NO_PROXY=*` or unset the variable to go direct.
 - Because the guard resolves every name itself (so that it can check the address), a network where only the proxy can
   resolve external names cannot be audited through the proxy. Command-line arguments show in `ps` and in shell
   history: give proxy credentials through `HTTPS_PROXY` / `HTTP_PROXY` rather than `--proxy`, and keep an
@@ -147,11 +156,13 @@ Stated so nobody mistakes silence for a pass.
   `example.com`); the target's own host is always allowed. Refused requests are listed in the run's limitations.
   Only the host given as the target is added to `--allow-hosts`, not the hosts it redirects to: a target that
   redirects to `www.` (or another host) needs that host in the list too, or is best given at its final URL.
+  `jourilo verify` uses the baseline's lists again when none are given and cannot drop them: to verify without a
+  list, audit again without it.
 - Lab timings include one local proxy hop per connection.
 - Layout shift (CLS) includes shifts caused by font swaps, so it varies with font caching and font loading. That is
   real layout shift for a visitor, so it stays in the metric. Performance evidence in findings has one item per metric
-  and viewport, with milliseconds rounded to the nearest 10 and CLS to 3 decimals, so snapshots stay stable, and up to
-  five layout-shift items per viewport; the raw values are in `run.pages[].metrics`, which `--budget` reads.
+  and viewport, with milliseconds rounded to the nearest 10 and CLS to 3 decimals, so snapshots change less often (a
+  value close to a rounding boundary can still flip between runs), and up to five layout-shift items per viewport; the raw values are in `run.pages[].metrics`, which `--budget` reads.
 - `--extra-header "Name: value"` is sent only with requests to the target's origin (scheme, host and port), never to
   another origin. Playwright would carry an overridden header along every hop of a redirect chain, so Jourilo makes
   each request to the target's origin itself (through the guard) without following redirects and hands the response
@@ -165,7 +176,8 @@ Stated so nobody mistakes silence for a pass.
   `--auth` for cookies. `jourilo verify` cannot replay headers it never stored: give them again. Because Jourilo
   fetches those responses whole before handing them to the browser, a streaming response from the target's origin
   (server-sent events, long polling) reaches the page only when it ends, and fails once `--timeout` passes; a large
-  response is held in memory. A header value must be Latin-1 text (a usage error otherwise).
+  response is held in memory. A header value must be Latin-1 text (a usage error otherwise). A certificate or
+  connection error on one of those requests is listed as a failed request without its reason.
 - `--ignore-https-errors` changes certificate checking in the browser only. The guard still checks every destination
   (it sees each CONNECT before any TLS), and the run lists the setting in its limitations. `robots.txt` and sitemaps
   are still fetched with certificate checking, so on a self-signed site they are treated as missing.
@@ -203,4 +215,15 @@ Stated so nobody mistakes silence for a pass.
 - History in the report lists earlier runs of the same target with defect counts; it does not normalize for different
   page sets or viewports (use `verify` for like-for-like comparisons).
 - Screenshots are capped at 12 000 px height.
+- Screenshot names come from the page's path and query, so `--url /a?x=1` and `--url /a?x=1#top` write the same file.
+  A form-probe screenshot is named from the page's final URL, so a start URL that redirects to another host gets a
+  name with an origin tag.
+- Before/after pairs in `compare` and `verify` reports need the full-page screenshot; a page kept only as a first
+  screen (`--evidence minimal`) has no pair image.
+- One cause seen on many pages is reported once per page when the evidence differs between pages, for example by a
+  CSP nonce in a console message (F44 in [FIELD-FEEDBACK.md](FIELD-FEEDBACK.md)).
+- On a partial run (stopped early, exit 6), `sample.audited` and the manifest's `scope.urls` count the pages that
+  were planned, not only those that finished; `pages` lists what finished.
+- `jourilo verify` does not apply the baseline's `--budget`; it compares metrics with their ranges. Give `--budget`
+  to a new `audit` to gate on it.
 - `jourilo verify` cannot replay a baseline whose scope URLs had query values redacted (`?access_token=…`, `?code=…`): it refuses with exit 2; audit those pages again and verify against the new run.

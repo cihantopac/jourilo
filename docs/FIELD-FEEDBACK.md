@@ -2,7 +2,7 @@
 
 Experience reports from using Jourilo on real projects. Items are triaged against the code when they arrive and
 recurrences are counted; each release plan is made from the whole list at once. F1–F23 came from 1.1.0 and drove 1.2.0;
-F24–F41 came from 1.2.0 and drive 1.2.1 and 1.3.0; F42–F43 came on 2026-11-12.
+F24–F41 came from 1.2.0 and drove 1.2.1 and 1.3.0; F42–F44 came on 2026-11-12.
 
 ## How to report
 
@@ -60,6 +60,7 @@ One entry per problem, in this shape:
 | F41 | Frameva     | Run setup     | No way to preload `localStorage` / `sessionStorage` for an audit                                                   | Partly (see note) |
 | F42 | Frameva     | Run setup     | A stale dev server on the target port answered 500 for every chunk; reported as site defects                       | Gap               |
 | F43 | Frameva     | Run output    | With `--repo`, `.jourilo` inside the audited repository tripped its own non-git conformance check                  | Partly (see note) |
+| F44 | Frameva     | Findings      | One cause (a CSP-blocked script) came back as 8 console-error and 8 failed-request findings, one per page          | Gap               |
 
 ## Notes per item
 
@@ -147,7 +148,13 @@ One entry per problem, in this shape:
   `JOURILO_WORKSPACE`), and `.jourilo/.gitignore` with `*` has kept it out of git since 1.0. A conformance check that
   does not use git still sees it. Open: say in the docs how to put runs outside the audited repository, and consider a
   warning when the workspace is inside `--repo`.
+- **F44** — 2026-11-12, on 1.2.1 as Frameva's production engine on frameva.io: a real defect (Cloudflare's e-mail
+  obfuscation decoder blocked by the site's CSP, giving a console error, React error #418 and a failed request on
+  every page) came back as 8 console-error and 8 failed-request findings whose evidence differed only by the CSP
+  nonce. Proposed: collapse findings whose evidence differs only in volatile tokens into one finding with a list of
+  affected URLs. Needs its own fixture and review, so it is not in 1.3.0.
 - **F27 again** — the same report (on 1.1.0) found the `aria-label` fieldset false positive; fixed in 1.2.1.
+- **F27 in the field** — the 2026-11-12 Frameva report on 1.2.1 confirms the fix.
 - **F26, F29, F31, F35, F36, F38** — Features for 1.3.0.
 - **F37** — Decided: without a located element the finding becomes a low-confidence review item.
 
@@ -254,6 +261,29 @@ Done in 1.2.1 unless a row says otherwise; the rest is planned for 1.3.0
 | F42 | Triaged 2026-11-12; release not decided                                                        |
 | F43 | Triaged 2026-11-12; release not decided                                                        |
 
+## Status after 1.3.0
+
+Done in 1.3.0 ([plan](superpowers/plans/2026-11-11-jourilo-1.3.0.md), [RELEASE-1.3.md](RELEASE-1.3.md)) unless a row
+says otherwise. Earlier items are in the tables above; F10 stays declined (D3).
+
+| #   | Status                                                                                    |
+| --- | ----------------------------------------------------------------------------------------- |
+| F8  | Done: contrast over images decided from rendered pixels (`jourilo/contrast-over-image`)   |
+| F15 | Done: `--proxy` / `HTTPS_PROXY` behind the guard, `--allow-hosts`, `--block-hosts`        |
+| F16 | Done: `--user-agent`, `--extra-header` (target origin only), `--ignore-https-errors`      |
+| F21 | Done: opt-in `--chromium-sandbox`; `browser.pids` for cleanup                             |
+| F22 | Done: `summary.urls` and `summary.captures`; `sample` and a limitation for left-out pages |
+| F23 | Done: `jourilo/redirect-chain`; keyboard traps found wherever focus starts                |
+| F26 | Done: `rules list --json`                                                                 |
+| F29 | Done: `--budget`                                                                          |
+| F31 | Done: `--wait-for` and `pages[].load`                                                     |
+| F35 | Done: progress `phase` / `done` / `total`; versions and scope in `manifest.json`          |
+| F36 | Done: one rounded evidence item per metric and viewport; CLS variance documented          |
+| F38 | Done: screenshot names from path and query, not origin                                    |
+| F42 | Open: intake for 1.4.0, not yet decided                                                   |
+| F43 | Documented: `--workspace` outside the audited repository ([WORKFLOW.md](WORKFLOW.md))     |
+| F44 | Open: intake for 1.4.0, not yet decided                                                   |
+
 ## Recurrence
 
 Count each project that reports the same item again here; recurrence decides priority in each release plan.
@@ -286,7 +316,7 @@ Count each project that reports the same item again here; recurrence decides pri
 | F24  | Frameva (5 reports)                   |
 | F25  | Frameva (2 reports)                   |
 | F26  | Frameva                               |
-| F27  | Frameva (2 reports)                   |
+| F27  | Frameva (2 reports; fix confirmed)    |
 | F28  | Frameva                               |
 | F29  | Frameva                               |
 | F30  | Frameva                               |
@@ -303,3 +333,4 @@ Count each project that reports the same item again here; recurrence decides pri
 | F41  | Frameva                               |
 | F42  | Frameva                               |
 | F43  | Frameva                               |
+| F44  | Frameva (frameva.io, 1.2.1)           |

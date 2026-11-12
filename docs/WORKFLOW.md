@@ -58,6 +58,37 @@ jourilo audit https://example.com --max-duration 600 --run-id nightly-2026-11-03
   to 3 s to finish, then it is left out, so the run ends within a few seconds of the limit. `--run-id ID` names the run
   so a retried job does not create a second one; an id whose directory already exists is refused (exit 2), also when
   a crashed run left it without a `run.json`.
+- `--wait-for SELECTOR` captures each page once that element is visible, for client-rendered pages. If it never
+  appears within `--timeout`, the page is still audited as it is, with a limitation; each capture records how it
+  loaded.
+
+## Networks, headers and containers
+
+```bash
+HTTPS_PROXY=http://user:pass@proxy.corp:3128 jourilo audit https://staging.example.com
+jourilo audit https://staging.example.com --extra-header "Authorization: Bearer $STAGING_TOKEN" --allow-hosts cdn.example.com
+jourilo audit https://localhost:8443 --ignore-https-errors --chromium-sandbox
+```
+
+These options exist on `audit`, `discover`, `journeys run` and `verify`; [CLI.md](CLI.md) has the details.
+
+- `--proxy URL` (or `HTTPS_PROXY` / `HTTP_PROXY`, and `NO_PROXY`) chains to an `http://` proxy behind the network
+  guard. The guard still checks every destination and gives the proxy only checked addresses. Prefer the variable
+  for credentials: arguments show in `ps`. Plain `http://` pages need the proxy to allow `CONNECT` to port 80.
+- `--allow-hosts LIST` limits the hosts a run may reach (the target's own host is always allowed); `--block-hosts
+  LIST` refuses hosts such as trackers. Refused requests are listed in the run's limitations.
+- `--user-agent UA` replaces the browser's User-Agent. `--extra-header "Name: value"` (repeatable) is sent only to the
+  target's origin, and only the header names are recorded ([DECISIONS.md](DECISIONS.md) D19).
+- `--ignore-https-errors` accepts self-signed certificates in the browser, for test environments; the guard still
+  checks every destination.
+- `--chromium-sandbox` (or `JOURILO_CHROMIUM_SANDBOX=1`) keeps Chromium's process sandbox, which is off by default so
+  that the browser starts in containers ([DECISIONS.md](DECISIONS.md) D20). A Chromium run writes `browser.pids` in
+  its run directory, so a job that had to `SIGKILL` Jourilo can stop the browser too.
+
+Runs are written to `.jourilo/` in the working directory, or to the directory `--workspace DIR` /
+`JOURILO_WORKSPACE` names. A tool that
+checks the audited repository without git (so without `.jourilo/.gitignore`) still sees that directory: to keep runs
+out of an audited repository, pass `--workspace <a directory outside it>`.
 
 When an automated job runs Jourilo, read the exit code: 0 ok, 1 failed gate or error, 2 usage, 3 refused for safety,
 4 browser unavailable, **5 no page could be loaded** (a run is written, with outcome `no-page-loaded`), **6 stopped
@@ -67,6 +98,11 @@ early** by SIGINT, SIGTERM or `--max-duration` (a partial run is written; the pa
 a phase is over when the next phase's first line arrives, or when the run ends (see
 [RUN-FORMAT.md](RUN-FORMAT.md#progress-lines)). Every run also has `manifest.json` (sha256 per artifact, the Jourilo, browser and axe-core versions, and the scope) and
 follows [`schemas/run.schema.json`](../schemas/run.schema.json) ([RUN-FORMAT.md](RUN-FORMAT.md)).
+
+Two gates for CI: `--fail-on SEVERITY` (exit 1 on a defect at or above it) and `--budget LCP=2000,CLS=0.05,TBT=300`
+(exit 1 when the worst capture exceeds a lab-metric limit; a metric no capture measured, such as INP, is reported as
+not measured, not as a pass). `jourilo rules list --json` prints every rule a run can report, with its category,
+severity and kind, and the Jourilo and axe-core versions (`{ jourilo, axe, rules }`).
 
 ## Dismissing a false positive
 
