@@ -831,11 +831,13 @@ describe('cli --chromium-sandbox and browser.pids (F21)', () => {
   let site: http.Server;
   let release: () => void = () => undefined;
   let held: Promise<void>;
+  let pageRequested: () => void = () => undefined;
   let url: string;
 
   beforeAll(async () => {
     rmSync(sandboxWs, { recursive: true, force: true });
     site = http.createServer((req, res) => {
+      if (req.url === '/') pageRequested();
       const send = () =>
         res
           .writeHead(200, { 'content-type': 'text/html' })
@@ -878,6 +880,9 @@ describe('cli --chromium-sandbox and browser.pids (F21)', () => {
   async function holdAudit(extra: string[], argv?: string[]) {
     held = new Promise<void>((r) => {
       release = r;
+    });
+    const requested = new Promise<void>((r) => {
+      pageRequested = r;
     });
     const child = spawn(
       process.execPath,
@@ -925,7 +930,7 @@ describe('cli --chromium-sandbox and browser.pids (F21)', () => {
       throw new Error(`browser.pids never appeared: ${stderr}`);
     }
     const pids = readFileSync(file, 'utf8').split('\n').filter(Boolean).map(Number);
-    return { child, file, pids, closed, result: () => ({ stdout, stderr }) };
+    return { child, file, pids, closed, requested, result: () => ({ stdout, stderr }) };
   }
 
   it.skipIf(!posix)(
@@ -980,6 +985,9 @@ describe('cli --chromium-sandbox and browser.pids (F21)', () => {
     'a second signal (exit 130) leaves no browser.pids behind',
     async () => {
       const held2 = await holdAudit([]);
+      // browser.pids appears at launch, before the capture: signal only once the page request is held, so the
+      // first SIGTERM cannot finish the run cleanly (exit 6) before the second one arrives.
+      await held2.requested;
       held2.child.kill('SIGTERM');
       await new Promise((r) => setTimeout(r, 1500));
       held2.child.kill('SIGTERM');

@@ -63,14 +63,17 @@ export function redactUrlsIn(input: string): string {
   return redactText(out);
 }
 
-/** Paths of URLs whose query holds a value that `redactUrl` replaced (a sensitive key set to "redacted"). */
+/**
+ * Paths of URLs whose query holds a value that `redactUrl` replaced: a sensitive key set to "redacted", or to
+ * "[redacted]" when `redactText` rewrote the pair afterwards (`token=`, `password=`, `secret=`, `api_key=`).
+ */
 export function redactedQueryPaths(urls: string[]): string[] {
   const paths = new Set<string>();
   for (const raw of urls) {
     try {
       const u = new URL(raw);
       for (const [k, v] of u.searchParams) {
-        if (v === 'redacted' && SENSITIVE_PARAM.test(k)) paths.add(u.pathname);
+        if (/^\[?redacted\]?$/.test(v) && SENSITIVE_PARAM.test(k)) paths.add(u.pathname);
       }
     } catch {
       // not a URL: nothing to replay either
