@@ -1,6 +1,7 @@
 import { existsSync, writeSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  budgetCoverageLimitations,
   budgetFailed,
   budgetLimitation,
   budgetLine,
@@ -226,6 +227,7 @@ export async function auditCommand(
     if (budgetSpecs.length) {
       run.budgets = evaluateBudgets(run.pages, budgetSpecs);
       for (const b of run.budgets) if (b.ok === null) run.limitations.push(budgetLimitation(b));
+      run.limitations.push(...budgetCoverageLimitations(run.pages, run.budgets));
     }
     ctx.ws.saveRun(run);
     const reports = writeReports(runDir, run, undefined, {
@@ -246,6 +248,7 @@ export async function auditCommand(
         summary: run.summary,
         findings: run.findings,
         limitations: run.limitations,
+        ...(run.budgets ? { budgets: run.budgets } : {}),
         gateFailed: gate,
       },
       text: summaryText(run, reports.html),

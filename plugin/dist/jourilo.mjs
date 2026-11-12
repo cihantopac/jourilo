@@ -39787,6 +39787,19 @@ function budgetLine(b) {
   }
   return b.ok ? `Budget met: ${b.metric} ${b.worst}${unit} within ${b.limit}${unit} (worst: ${path2} [${b.viewport}])` : `Budget exceeded: ${b.metric} ${b.worst}${unit} over ${b.limit}${unit} (worst: ${path2} [${b.viewport}])`;
 }
+function budgetCoverageLimitations(pages, budgets) {
+  const loaded = pages.filter((p) => p.status !== null);
+  const out = [];
+  for (const b of budgets) {
+    if (b.ok === null) continue;
+    const measured = loaded.filter((p) => p.metrics.some((m) => m.name === b.metric)).length;
+    if (measured < loaded.length)
+      out.push(
+        `Budget ${b.metric}=${b.limit} was checked on ${measured} of ${loaded.length} captures; the others did not measure it.`
+      );
+  }
+  return out;
+}
 
 // src/audit/engine.ts
 import { existsSync as existsSync6, rmSync as rmSync3 } from "node:fs";
@@ -50552,6 +50565,7 @@ async function auditCommand(ctx, usage2, categories) {
     if (budgetSpecs.length) {
       run.budgets = evaluateBudgets(run.pages, budgetSpecs);
       for (const b of run.budgets) if (b.ok === null) run.limitations.push(budgetLimitation(b));
+      run.limitations.push(...budgetCoverageLimitations(run.pages, run.budgets));
     }
     ctx.ws.saveRun(run);
     const reports = writeReports(runDir, run, void 0, {
@@ -50570,6 +50584,7 @@ async function auditCommand(ctx, usage2, categories) {
         summary: run.summary,
         findings: run.findings,
         limitations: run.limitations,
+        ...run.budgets ? { budgets: run.budgets } : {},
         gateFailed: gate
       },
       text: summaryText(run, reports.html),

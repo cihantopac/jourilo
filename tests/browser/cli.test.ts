@@ -218,6 +218,8 @@ describe('cli --budget', () => {
     expect(text.stdout).toContain('Budget exceeded: LCP');
     const r = jourilo(...site, '--budget', 'LCP=1', '--json');
     expect(r.status).toBe(1);
+    // The --json stdout carries the budgets itself, not only run.json.
+    expect(JSON.parse(r.stdout).budgets[0]).toMatchObject({ metric: 'LCP', limit: 1, ok: false });
     const run = runOf(r.stdout);
     expect(run.budgets?.[0]).toMatchObject({ metric: 'LCP', limit: 1, ok: false, viewport: 'mobile' });
     expect(run.budgets?.[0]?.worst).toBeGreaterThan(1);
@@ -230,6 +232,7 @@ describe('cli --budget', () => {
   it('a budget on a metric that was not measured is ok: null with a limitation, exit unchanged', () => {
     const r = jourilo(...site, '--budget', 'INP=200', '--json');
     expect(r.status).toBe(0);
+    expect(JSON.parse(r.stdout).budgets[0]).toMatchObject({ metric: 'INP', worst: null, ok: null });
     const run = runOf(r.stdout);
     expect(run.budgets?.[0]).toEqual({
       metric: 'INP',
@@ -241,10 +244,30 @@ describe('cli --budget', () => {
     });
     expect(run.limitations.join(' ')).toContain('Budget INP=200 was not checked');
   }, 120_000);
-  it('a budget combines with --fail-on, and an unknown metric is a usage error', () => {
+  it('an unknown metric is a usage error', () => {
     expect(jourilo(...site, '--budget', 'FOO=1').status).toBe(2);
+  }, 60_000);
+  it('a budget failure and --fail-on each give exit 1 on their own (clean-shop has no defects)', () => {
+    const clean = [
+      'audit',
+      'fixtures/sites/clean-shop',
+      '--pages',
+      '1',
+      '--viewports',
+      'mobile',
+      '--no-forms',
+      '-q',
+    ];
+    // --fail-on minor reaches nothing here, so exit 1 can only come from the budget.
+    const failed = jourilo(...clean, '--budget', 'LCP=1', '--fail-on', 'minor', '--json');
+    expect(failed.status).toBe(1);
+    expect(JSON.parse(failed.stdout).gateFailed).toBe(true);
+    const met = jourilo(...clean, '--budget', 'LCP=600000', '--fail-on', 'minor', '--json');
+    expect(met.status).toBe(0);
+    expect(JSON.parse(met.stdout).gateFailed).toBe(false);
+    // The other way: a met budget does not hide a --fail-on failure.
     expect(jourilo(...site, '--budget', 'LCP=600000', '--fail-on', 'serious').status).toBe(1);
-  }, 240_000);
+  }, 360_000);
 });
 
 describe('cli no page loaded', () => {

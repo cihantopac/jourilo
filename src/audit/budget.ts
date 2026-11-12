@@ -72,3 +72,21 @@ export function budgetLine(b: BudgetResult): string {
     ? `Budget met: ${b.metric} ${b.worst}${unit} within ${b.limit}${unit} (worst: ${path} [${b.viewport}])`
     : `Budget exceeded: ${b.metric} ${b.worst}${unit} over ${b.limit}${unit} (worst: ${path} [${b.viewport}])`;
 }
+
+/**
+ * A decided budget that some loaded captures never measured says so: "within the limit" would otherwise claim
+ * pages that were not checked.
+ */
+export function budgetCoverageLimitations(pages: PageCapture[], budgets: BudgetResult[]): string[] {
+  const loaded = pages.filter((p) => p.status !== null);
+  const out: string[] = [];
+  for (const b of budgets) {
+    if (b.ok === null) continue;
+    const measured = loaded.filter((p) => p.metrics.some((m) => m.name === b.metric)).length;
+    if (measured < loaded.length)
+      out.push(
+        `Budget ${b.metric}=${b.limit} was checked on ${measured} of ${loaded.length} captures; the others did not measure it.`,
+      );
+  }
+  return out;
+}

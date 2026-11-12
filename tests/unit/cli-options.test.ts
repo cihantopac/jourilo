@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { evaluateBudgets, parseBudgets } from '../../src/audit/budget.js';
+import { budgetCoverageLimitations, evaluateBudgets, parseBudgets } from '../../src/audit/budget.js';
 import {
   type Command,
   type Context,
@@ -229,5 +229,23 @@ describe('evaluateBudgets', () => {
     expect(evaluateBudgets(pages, [{ metric: 'INP', limit: 200 }])).toEqual([
       { metric: 'INP', limit: 200, worst: null, url: null, viewport: null, ok: null },
     ]);
+  });
+});
+
+describe('budgetCoverageLimitations', () => {
+  const cap = (status: number | null, lcp?: number) =>
+    ({
+      status,
+      metrics: lcp === undefined ? [] : [{ name: 'LCP', value: lcp, unit: 'ms', source: 'lab' }],
+    }) as never;
+  const decided = { metric: 'LCP', limit: 2000, worst: 900, url: 'http://a/', viewport: 'desktop', ok: true };
+  it('says so when a decided budget was checked on only some of the loaded captures', () => {
+    expect(
+      budgetCoverageLimitations([cap(200, 900), cap(200), cap(200, 800), cap(200, 700)], [decided]),
+    ).toEqual(['Budget LCP=2000 was checked on 3 of 4 captures; the others did not measure it.']);
+  });
+  it('is silent when every loaded capture measured it, ignoring captures that never loaded, and for ok: null', () => {
+    expect(budgetCoverageLimitations([cap(200, 900), cap(null)], [decided])).toEqual([]);
+    expect(budgetCoverageLimitations([cap(200)], [{ ...decided, worst: null, ok: null }])).toEqual([]);
   });
 });
