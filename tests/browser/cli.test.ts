@@ -1388,4 +1388,100 @@ describe('cli --wait-for (F31)', () => {
       await site.close();
     }
   }, 120_000);
+
+  it('rejects an invalid selector without leaving a run directory, and a retry with the same --run-id works', async () => {
+    const site = await lateHeadingSite();
+    try {
+      const runDir = join(ws, 'runs', 'bad-selector-retry');
+      rmSync(runDir, { recursive: true, force: true });
+      const bad = await auditAsync([
+        site.url,
+        ...base,
+        '--wait-for',
+        'div[[',
+        '--run-id',
+        'bad-selector-retry',
+      ]);
+      expect(bad.code).toBe(2);
+      expect(bad.stderr).toContain('not a valid selector');
+      expect(existsSync(runDir)).toBe(false);
+      const retry = await auditAsync([
+        site.url,
+        ...base,
+        '--wait-for',
+        '#ready',
+        '--run-id',
+        'bad-selector-retry',
+      ]);
+      expect(retry.code, retry.stderr).toBe(0);
+      expect(existsSync(join(runDir, 'run.json'))).toBe(true);
+    } finally {
+      await site.close();
+    }
+  }, 240_000);
+
+  it('form-validation probes wait for the element too (a form rendered late)', async () => {
+    const srv = http.createServer((_req, res) => {
+      res
+        .writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store' })
+        .end(`<!doctype html><html lang="en"><head><title>Late form</title></head><body><main id="app"><p>Loading…</p></main>
+<script>setTimeout(() => { document.getElementById('app').innerHTML = '<h1>Contact</h1><form id="late" novalidate><label>Email <input name="email" type="email" required></label><button type="submit">Send</button></form>'; }, 1500);</script></body></html>`);
+    });
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+    const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}/`;
+    try {
+      const args = ['--pages', '1', '--viewports', 'desktop', '--no-keyboard', '--wait-for', '#late'];
+      const r = await auditAsync([url, ...args]);
+      expect(r.code, r.stderr).toBe(0);
+      const run = loadRun(r.stdout);
+      expect(run.pages[0]!.load).toMatchObject({ waitedFor: '#late', found: true });
+      // The probe reached the form on its own fresh load (it would be skipped as "form not found" otherwise).
+      expect(run.findings.some((f) => f.ruleId === 'ux/no-validation-feedback')).toBe(true);
+    } finally {
+      srv.closeAllConnections();
+      await new Promise((r) => srv.close(r));
+    }
+  }, 240_000);
+
+  it('skips a form probe when the element does not appear on its fresh load, with a limitation', async () => {
+    // The capture's load renders the element; every later load of the page does not, so the probe cannot reach
+    // the state the audit captured and must not report a validation result for it.
+    const paths: string[] = [];
+    const srv = http.createServer((req, res) => {
+      if (req.url !== '/') return res.writeHead(404).end();
+      paths.push(req.url);
+      const ready = paths.length === 1 ? '<p id="ready">Ready</p>' : '';
+      res
+        .writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store' })
+        .end(
+          `<!doctype html><html lang="en"><head><title>Once</title></head><body><main><h1>Contact</h1>${ready}<form id="f" novalidate><label>Email <input name="email" type="email" required></label><button type="submit">Send</button></form></main></body></html>`,
+        );
+    });
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+    const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}/`;
+    try {
+      const args = [
+        '--pages',
+        '1',
+        '--viewports',
+        'desktop',
+        '--no-keyboard',
+        '--timeout',
+        '4',
+        '--wait-for',
+        '#ready',
+      ];
+      const r = await auditAsync([url, ...args]);
+      expect(r.code, r.stderr).toBe(0);
+      const run = loadRun(r.stdout);
+      expect(run.pages[0]!.load).toMatchObject({ waitedFor: '#ready', found: true });
+      expect(run.findings.some((f) => f.ruleId === 'ux/no-validation-feedback')).toBe(false);
+      expect(
+        run.limitations.some((l) => l.includes('#f') && /not probed/.test(l) && l.includes('#ready')),
+      ).toBe(true);
+    } finally {
+      srv.closeAllConnections();
+      await new Promise((r) => srv.close(r));
+    }
+  }, 240_000);
 });

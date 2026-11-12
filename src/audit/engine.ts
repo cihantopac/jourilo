@@ -387,7 +387,15 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       );
       const browser: Browser = session.browser;
       browserVersion = browser.version();
-      if (opts.waitFor) await checkSelector(browser, opts.waitFor);
+      if (opts.waitFor) {
+        try {
+          await checkSelector(browser, opts.waitFor);
+        } catch (err) {
+          // Nothing was captured: do not leave an empty run directory that would block a retry with this --run-id.
+          if (!existsSync(join(runDir, 'run.json'))) rmSync(runDir, { recursive: true, force: true });
+          throw err;
+        }
+      }
       // The header route tells the guard's own CONNECT failures from pages by this token.
       if (headers) headers.guardToken = session.guard.token;
       halt();
@@ -592,6 +600,12 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
                 vp,
                 { hostClass, allowSubmit: opts.allowSubmit ?? false, allowDestructive: false },
                 runDir,
+                // Wait as the capture did; a capture that never found the element took its forms from the page
+                // as it was, which a plain fresh load reproduces.
+                {
+                  ...(opts.waitFor && o.load?.found !== false ? { waitFor: opts.waitFor } : {}),
+                  timeoutMs: opts.timeoutMs,
+                },
               );
               const r = await withinGrace(probe, signal, async () => {
                 await ctx.close();
@@ -602,6 +616,8 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
               if (r.result.outcome === 'blocked')
                 limitations.push(`Form ${form.selector} on ${o.url} was not submitted: ${r.result.detail}`);
               if (r.result.outcome === 'simulated') simulated.push(`${form.selector} on ${o.url}`);
+              if (r.result.outcome === 'skipped')
+                limitations.push(`Form ${form.selector} on ${o.url} was not probed: ${r.result.detail}`);
             }
           }
         } finally {

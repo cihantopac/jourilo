@@ -284,7 +284,7 @@ async function settle(page: Page, timeoutMs: number): Promise<boolean> {
 }
 
 /** `--wait-for`: true when the selector's first match became visible within `timeoutMs`. */
-async function waitForElement(page: Page, selector: string, timeoutMs: number): Promise<boolean> {
+export async function waitForElement(page: Page, selector: string, timeoutMs: number): Promise<boolean> {
   try {
     await page.locator(selector).first().waitFor({ state: 'visible', timeout: timeoutMs });
     return true;

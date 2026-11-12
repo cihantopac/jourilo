@@ -44160,7 +44160,7 @@ var AFTER = `([sel, beforeText]) => {
 function formScreenshotFile(url, selector, vp) {
   return toPosix(`screenshots/form-${shortHash(url, selector).slice(0, 8)}-${vp.name}.jpg`);
 }
-async function probeFormValidation(ctx, url, form, vp, policy, runDir) {
+async function probeFormValidation(ctx, url, form, vp, policy, runDir, wait) {
   const page = await ctx.newPage();
   const guard = await installRequestGuard(page, {
     ...policy,
@@ -44177,6 +44177,19 @@ async function probeFormValidation(ctx, url, form, vp, policy, runDir) {
   try {
     await page.goto(url, { waitUntil: "load", timeout: 3e4 });
     await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
+    if (wait?.waitFor) {
+      const found = await waitForElement(page, wait.waitFor, wait.timeoutMs ?? 3e4);
+      if (!found)
+        return {
+          result: {
+            ...base2,
+            outcome: "skipped",
+            detail: `--wait-for ${JSON.stringify(wait.waitFor)} was not visible on the probe's fresh load`
+          },
+          findings
+        };
+      await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
+    }
     const before = await page.evaluate(`(${BEFORE})(${JSON.stringify(form.selector)})`);
     if (!before) return { result: { ...base2, outcome: "error", detail: "form not found" }, findings };
     const verdict = checkAction(
@@ -46199,7 +46212,14 @@ async function runAudit(ws, opts) {
       );
       const browser = session.browser;
       browserVersion = browser.version();
-      if (opts.waitFor) await checkSelector(browser, opts.waitFor);
+      if (opts.waitFor) {
+        try {
+          await checkSelector(browser, opts.waitFor);
+        } catch (err) {
+          if (!existsSync6(join11(runDir, "run.json"))) rmSync3(runDir, { recursive: true, force: true });
+          throw err;
+        }
+      }
       if (headers) headers.guardToken = session.guard.token;
       halt();
       if (opts.setupJourney) {
@@ -46381,7 +46401,13 @@ async function runAudit(ws, opts) {
                 form,
                 vp,
                 { hostClass, allowSubmit: opts.allowSubmit ?? false, allowDestructive: false },
-                runDir
+                runDir,
+                // Wait as the capture did; a capture that never found the element took its forms from the page
+                // as it was, which a plain fresh load reproduces.
+                {
+                  ...opts.waitFor && o.load?.found !== false ? { waitFor: opts.waitFor } : {},
+                  timeoutMs: opts.timeoutMs
+                }
               );
               const r = await withinGrace(probe, signal, async () => {
                 await ctx.close();
@@ -46392,6 +46418,8 @@ async function runAudit(ws, opts) {
               if (r.result.outcome === "blocked")
                 limitations.push(`Form ${form.selector} on ${o.url} was not submitted: ${r.result.detail}`);
               if (r.result.outcome === "simulated") simulated.push(`${form.selector} on ${o.url}`);
+              if (r.result.outcome === "skipped")
+                limitations.push(`Form ${form.selector} on ${o.url} was not probed: ${r.result.detail}`);
             }
           }
         } finally {
