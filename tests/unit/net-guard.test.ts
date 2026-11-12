@@ -531,6 +531,38 @@ describe('upstream proxy: plain HTTP, request framing and the guard lifetime', (
     }
   });
 
+  it('a 4xx CONNECT answer is a port refusal; a 5xx is a connection failure, not a refusal', async () => {
+    for (const [answer, wording] of [
+      [
+        '405 Method Not Allowed',
+        "the upstream proxy refuses tunnels to port 80; give the target's https:// URL",
+      ],
+      ['502 Bad Gateway', 'the upstream proxy could not open the connection'],
+      ['503 Service Unavailable', 'the upstream proxy could not open the connection'],
+    ] as const) {
+      const proxy = http.createServer((_req, res) => res.writeHead(200).end('<html>proxy page</html>'));
+      proxy.on('connect', (_req, client: net.Socket) =>
+        client.end(`HTTP/1.1 ${answer}\r\ncontent-type: text/html\r\n\r\n<html>proxy error page</html>`),
+      );
+      const proxyPort = await listen(proxy);
+      const guard = await startNetGuard(
+        { ...pub, upstream: { host: '127.0.0.1', port: proxyPort } },
+        { resolve: resolveExample },
+      );
+      try {
+        const res = await getVia(guard.url, 'http://example.com/', { host: 'example.com' });
+        expect(res.status, answer).toBe(502);
+        expect(res.body, answer).not.toContain('proxy error page');
+        expect(String(res.headers['x-jourilo-guard-upstream-error']), answer).toBe(
+          `${guard.token} ${wording}`,
+        );
+      } finally {
+        await guard.close();
+        await closeServer(proxy);
+      }
+    }
+  });
+
   it("a proxy 407 or an unreachable proxy is the guard's own 502 with the token signal", async () => {
     const asking = http.createServer((_req, res) =>
       res.writeHead(407, { 'proxy-authenticate': 'Basic' }).end('<html>proxy login page</html>'),

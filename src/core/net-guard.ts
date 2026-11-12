@@ -11,8 +11,8 @@
 // proxy's own DNS cannot send a request somewhere the guard did not check. Plain HTTP takes the same tunnel
 // (`CONNECT 93.184.216.34:80`), and the original request, Host header included, is sent inside it: an absolute-URI
 // request would make the proxy rebuild Host from the address (RFC 9112 3.2.2), so a name-based site would answer as
-// its default host. A proxy that refuses tunnels to port 80 fails the request with the guard's own 502, never its
-// page. Loopback addresses a local target may reach, and hosts NO_PROXY matches, connect directly (the proxy's
+// its default host. A proxy that refuses tunnels to port 80 (a 4xx other than 407) fails the request with the guard's
+// own 502, never its page; a 5xx means the proxy could not reach the site. Loopback addresses a local target may reach, and hosts NO_PROXY matches, connect directly (the proxy's
 // loopback is another machine).
 import { randomBytes } from 'node:crypto';
 import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
@@ -458,13 +458,12 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
       },
       (status, reason) => {
         req.resume();
-        // A proxy that answers a plain-HTTP tunnel with anything but 2xx or 407 refuses that port (403/405 for a
-        // non-SSL port is common): say so in fixed wording, the proxy's page is never shown.
+        // A proxy that answers a plain-HTTP tunnel with a 4xx other than 407 refuses that port (403/405 for a
+        // non-SSL port is common): say so in fixed wording, the proxy's page is never shown. A 5xx means the proxy
+        // could not reach the site, which is not a policy refusal, so it keeps the "could not open" wording.
         const answered = /^upstream proxy: answered (\d{3})/.exec(reason)?.[1];
-        fail(
-          status,
-          answered && answered !== '407' ? `upstream proxy: refuses tunnels to port ${port}` : reason,
-        );
+        const refusesPort = answered?.startsWith('4') && answered !== '407';
+        fail(status, refusesPort ? `upstream proxy: refuses tunnels to port ${port}` : reason);
       },
     );
   });

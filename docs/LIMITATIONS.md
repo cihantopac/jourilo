@@ -134,7 +134,8 @@ Stated so nobody mistakes silence for a pass.
   (with its original `Host` header) is sent inside the tunnel. A proxy that allows destinations by host name therefore
   sees only addresses. Many proxies refuse tunnels to port 80 (or to any port but 443): plain-HTTP requests then fail
   with "the upstream proxy refuses tunnels to port 80; give the target's https:// URL", so audit the target at its
-  `https://` URL. A proxy's refusal, its `407` or an unreachable proxy is reported as a failed request, never as a
+  `https://` URL. A proxy that answers the tunnel with a 5xx could not reach the site; that request fails with "the
+  upstream proxy could not open the connection" instead. A proxy's refusal, its `407` or an unreachable proxy is reported as a failed request, never as a
   page. Only `http://` proxies are supported; loopback addresses are reached directly. `NO_PROXY` is decided per destination host, as curl and browsers do (`NO_PROXY=*` means no proxy;
   CIDR ranges are not supported). The run records the proxy as `http://host:port` without its credentials.
 - Because the guard resolves every name itself (so that it can check the address), a network where only the proxy can

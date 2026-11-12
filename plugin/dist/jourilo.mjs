@@ -40709,10 +40709,8 @@ async function startNetGuard(policy, deps = {}) {
       (status, reason) => {
         req.resume();
         const answered = /^upstream proxy: answered (\d{3})/.exec(reason)?.[1];
-        fail(
-          status,
-          answered && answered !== "407" ? `upstream proxy: refuses tunnels to port ${port2}` : reason
-        );
+        const refusesPort = answered?.startsWith("4") && answered !== "407";
+        fail(status, refusesPort ? `upstream proxy: refuses tunnels to port ${port2}` : reason);
       }
     );
   });
