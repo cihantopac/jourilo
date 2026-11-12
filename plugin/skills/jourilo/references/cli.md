@@ -22,11 +22,18 @@ jourilo discover <path|url> [--pages 10] [--ignore-robots] [--allow-private] [--
 
 ```
 Options:
-  --pages N         Pages to read when mapping a website (default 10)
-  --ignore-robots   Ignore robots.txt (only for sites you own or are authorized to test)
-  --allow-private   Allow private-network hosts (10.x, 192.168.x, ...)
-  --deny-local      Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
-                    JOURILO_DENY_LOCAL=1 does the same
+  --pages N           Pages to read when mapping a website (default 10)
+  --ignore-robots     Ignore robots.txt (only for sites you own or are authorized to test)
+  --allow-private     Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local        Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
+                      JOURILO_DENY_LOCAL=1 does the same
+  --proxy URL         Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
+                      default HTTPS_PROXY / HTTP_PROXY (either case), skipped for a target that NO_PROXY matches.
+                      The guard still checks every destination, then tunnels to the checked address (CONNECT ip:port);
+                      loopback connects directly. The run records the proxy without its credentials
+  --allow-hosts LIST  Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
+                      the target's own host is always allowed. Other hosts are refused and listed in the limitations
+  --block-hosts LIST  Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
 ```
 
 ## Audit
@@ -65,6 +72,13 @@ Options:
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
   --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                        JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3). For hosted integrations; a directory target is still served
+  --proxy URL          Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
+                       default HTTPS_PROXY / HTTP_PROXY (either case), skipped for a target that NO_PROXY matches.
+                       The guard still checks every destination, then tunnels to the checked address (CONNECT ip:port);
+                       loopback connects directly. The run records the proxy without its credentials
+  --allow-hosts LIST   Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
+                       the target's own host is always allowed. Other hosts are refused and listed in the limitations
+  --block-hosts LIST   Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -115,6 +129,13 @@ Options:
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
   --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                        JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3). For hosted integrations; a directory target is still served
+  --proxy URL          Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
+                       default HTTPS_PROXY / HTTP_PROXY (either case), skipped for a target that NO_PROXY matches.
+                       The guard still checks every destination, then tunnels to the checked address (CONNECT ip:port);
+                       loopback connects directly. The run records the proxy without its credentials
+  --allow-hosts LIST   Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
+                       the target's own host is always allowed. Other hosts are refused and listed in the limitations
+  --block-hosts LIST   Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -165,6 +186,13 @@ Options:
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
   --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                        JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3). For hosted integrations; a directory target is still served
+  --proxy URL          Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
+                       default HTTPS_PROXY / HTTP_PROXY (either case), skipped for a target that NO_PROXY matches.
+                       The guard still checks every destination, then tunnels to the checked address (CONNECT ip:port);
+                       loopback connects directly. The run records the proxy without its credentials
+  --allow-hosts LIST   Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
+                       the target's own host is always allowed. Other hosts are refused and listed in the limitations
+  --block-hosts LIST   Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -204,6 +232,13 @@ Suggest options:
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
   --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                          JOURILO_DENY_LOCAL=1 does the same
+  --proxy URL            Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
+                         default HTTPS_PROXY / HTTP_PROXY (either case), skipped for a target that NO_PROXY matches.
+                         The guard still checks every destination, then tunnels to the checked address (CONNECT ip:port);
+                         loopback connects directly. The run records the proxy without its credentials
+  --allow-hosts LIST     Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
+                         the target's own host is always allowed. Other hosts are refused and listed in the limitations
+  --block-hosts LIST     Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
 
 Run options:
   --base URL|DIR         The site or static build to run against (required)
@@ -226,6 +261,13 @@ Run options:
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
   --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                          JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3)
+  --proxy URL            Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
+                         default HTTPS_PROXY / HTTP_PROXY (either case), skipped for a target that NO_PROXY matches.
+                         The guard still checks every destination, then tunnels to the checked address (CONNECT ip:port);
+                         loopback connects directly. The run records the proxy without its credentials
+  --allow-hosts LIST     Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
+                         the target's own host is always allowed. Other hosts are refused and listed in the limitations
+  --block-hosts LIST     Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission
@@ -293,6 +335,14 @@ Options:
   --repo PATH            Repository for source mapping (default: the baseline run's repo)
   --deny-local           Refuse a local target (localhost, 127.0.0.1, [::1], *.localhost, *.test) with exit 3; a redirect to one is blocked by the network guard and listed in the limitations;
                          JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3)
+  --proxy URL            Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
+                         default HTTPS_PROXY / HTTP_PROXY (either case), skipped for a target that NO_PROXY matches.
+                         The guard still checks every destination, then tunnels to the checked address (CONNECT ip:port);
+                         loopback connects directly. The run records the proxy without its credentials
+  --allow-hosts LIST     Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
+                         the target's own host is always allowed. Other hosts are refused and listed in the limitations
+  --block-hosts LIST     Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
+                         Without --allow-hosts / --block-hosts, the baseline run's lists are used again
   --fail-on-regression   Exit 1 when new serious or critical defects appear
 ```
 

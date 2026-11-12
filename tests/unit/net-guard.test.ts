@@ -1,7 +1,7 @@
 // Node-side fetches (robots.txt, sitemaps) and the guard's resolver must apply the address policy on every hop.
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import http from 'node:http';
-import type { AddressInfo } from 'node:net';
+import net, { type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -139,6 +139,40 @@ describe('guardedFetchText', () => {
       }),
     ).toBeNull();
     expect(internalHits).toEqual([]);
+  });
+  it('fetches through the upstream proxy with the checked address, and honours --block-hosts', async () => {
+    const connects: string[] = [];
+    const proxy = http.createServer();
+    proxy.on('connect', (req, client: net.Socket) => {
+      connects.push(req.url ?? '');
+      const up = net.connect(sitePort, '127.0.0.1', () => {
+        client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+        up.pipe(client);
+        client.pipe(up);
+      });
+      up.on('error', () => client.destroy());
+    });
+    const proxyPort = await listen(proxy);
+    const policy: AddressPolicy = {
+      ...pub,
+      upstream: { host: '127.0.0.1', port: proxyPort },
+      blockHosts: ['*.tracker.test'],
+    };
+    const opts = {
+      timeoutMs: 3000,
+      userAgent: 'test',
+      deps: { resolve: async () => [{ address: '93.184.216.34', family: 4 }] },
+    };
+    try {
+      expect(await guardedFetchText(`http://site.example:${sitePort}/robots.txt`, policy, opts)).toContain(
+        'Disallow: /admin',
+      );
+      expect(connects).toEqual([`93.184.216.34:${sitePort}`]);
+      expect(await guardedFetchText('http://x.tracker.test/robots.txt', policy, opts)).toBeNull();
+      expect(connects).toHaveLength(1);
+    } finally {
+      await new Promise((r) => proxy.close(r));
+    }
   });
 });
 

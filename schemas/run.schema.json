@@ -59,6 +59,20 @@
         },
         "axe": { "type": ["string", "null"] },
         "hostClass": { "type": "string" },
+        "proxy": {
+          "type": "string",
+          "description": "Upstream proxy the run chained to behind the network guard (scheme://host:port, never credentials)."
+        },
+        "allowHosts": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "--allow-hosts patterns as given; the target's own host was always allowed."
+        },
+        "blockHosts": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "--block-hosts patterns."
+        },
         "scope": {
           "type": "object",
           "properties": {

@@ -1,5 +1,6 @@
 import { type ParseArgsConfig, parseArgs } from 'node:util';
 import { JouriloError } from '../core/errors.js';
+import { type AddressPolicy, noProxyMatches, type Upstream } from '../core/url-safety.js';
 import { Workspace } from '../core/workspace.js';
 
 export type OptionSpec = NonNullable<ParseArgsConfig['options']>;
@@ -193,6 +194,122 @@ export function refuseDenyLocalWebkit(denyLocal: boolean, browser: string): void
       '--deny-local cannot be combined with --browser webkit: WebKit sends HTTPS redirects outside the network guard, so a redirect to a local address could not be blocked.',
       'Use --browser chromium or firefox.',
     );
+}
+
+/** Options every browsing command shares: the upstream proxy and the host lists (F15). */
+export const NETWORK_OPTIONS: OptionSpec = {
+  proxy: { type: 'string' },
+  'allow-hosts': { type: 'string', multiple: true },
+  'block-hosts': { type: 'string', multiple: true },
+};
+
+/** The `details` lines for NETWORK_OPTIONS, indented to a command's option column. */
+export function networkOptionsHelp(column: number): string {
+  const pad = (flag: string) => `  ${flag.padEnd(column - 2)}`;
+  const cont = ' '.repeat(column);
+  return [
+    `${pad('--proxy URL')}Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;`,
+    `${cont}default HTTPS_PROXY / HTTP_PROXY (either case), skipped for a target that NO_PROXY matches.`,
+    `${cont}The guard still checks every destination, then tunnels to the checked address (CONNECT ip:port);`,
+    `${cont}loopback connects directly. The run records the proxy without its credentials`,
+    `${pad('--allow-hosts LIST')}Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);`,
+    `${cont}the target's own host is always allowed. Other hosts are refused and listed in the limitations`,
+    `${pad('--block-hosts LIST')}Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations`,
+  ].join('\n');
+}
+
+const HOST_PATTERN = /^(\*\.)?[a-z0-9_]([a-z0-9_-]*[a-z0-9_])?(\.[a-z0-9_]([a-z0-9_-]*[a-z0-9_])?)*\.?$/i;
+const IP_PATTERN = /^\[?[0-9a-f:.]+\]?$/i;
+
+/** `--allow-hosts` and `--block-hosts`: lower-case host names or `*.suffix` patterns; anything else is a usage error. */
+export function hostListsFrom(ctx: Context): { allowHosts: string[]; blockHosts: string[] } {
+  const read = (key: string) =>
+    list(ctx, key).map((p) => {
+      if (!HOST_PATTERN.test(p) && !IP_PATTERN.test(p))
+        throw new JouriloError(
+          'USAGE',
+          `--${key} ${p} is not a host name or a *.domain pattern.`,
+          'Example: --allow-hosts example.com,*.cdn.example.com',
+        );
+      return p.toLowerCase().replace(/^\[|\]$/g, '');
+    });
+  return { allowHosts: read('allow-hosts'), blockHosts: read('block-hosts') };
+}
+
+function envValue(...names: string[]): { name: string; value: string } | undefined {
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) return { name, value };
+  }
+  return undefined;
+}
+
+/**
+ * The upstream proxy for a run against `target`: `--proxy URL`, else HTTPS_PROXY / HTTP_PROXY (lower case first,
+ * the variable for the target's scheme first). NO_PROXY (either case) is honoured for the target: when it matches,
+ * the run goes direct. Only plain `http://` proxies are supported (a scheme-less value means http). An invalid value
+ * is a usage error that never repeats the value, since it may hold credentials.
+ */
+export function proxyFrom(ctx: Context, target: URL): AddressPolicy['upstream'] {
+  const flagValue = str(ctx, 'proxy');
+  const https = target.protocol === 'https:';
+  const env = https
+    ? envValue('https_proxy', 'HTTPS_PROXY', 'http_proxy', 'HTTP_PROXY')
+    : envValue('http_proxy', 'HTTP_PROXY', 'https_proxy', 'HTTPS_PROXY');
+  const source = flagValue !== undefined ? { name: '--proxy', value: flagValue } : env;
+  if (!source) return undefined;
+  const noProxy = envValue('no_proxy', 'NO_PROXY')?.value ?? '';
+  const port = Number(target.port || (https ? 443 : 80));
+  if (noProxy && noProxyMatches(target.hostname, port, noProxy)) return undefined;
+  const usage = (why: string) =>
+    new JouriloError(
+      'USAGE',
+      `${source.name}: ${why}`,
+      'Expected http://host:port or http://user:password@host:port (the value is not shown, it may hold credentials).',
+    );
+  let url: URL;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(source.value) ? source.value : `http://${source.value}`);
+  } catch {
+    throw usage('not a valid proxy URL.');
+  }
+  if (url.protocol !== 'http:')
+    throw usage(`only http:// proxies are supported (got ${url.protocol.replace(/:$/, '')}).`);
+  if (!url.hostname) throw usage('the proxy URL has no host.');
+  let auth: string | undefined;
+  try {
+    auth =
+      url.username || url.password
+        ? `${decodeURIComponent(url.username)}:${decodeURIComponent(url.password)}`
+        : undefined;
+  } catch {
+    throw usage('the credentials in the proxy URL are not valid percent-encoding.');
+  }
+  const up: Upstream = { host: url.hostname.replace(/^\[|\]$/g, ''), port: Number(url.port || 80) };
+  return auth ? { ...up, auth } : up;
+}
+
+/**
+ * Proxy and host lists for a browsing command, ready to spread into its audit options. The target's own host joins
+ * `--allow-hosts` later (`hostListsFor`), when the target is known for certain.
+ */
+export function networkFrom(
+  ctx: Context,
+  target: string,
+): { upstream?: Upstream; allowHosts?: string[]; blockHosts?: string[] } {
+  const { allowHosts, blockHosts } = hostListsFrom(ctx);
+  let url: URL | undefined;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(target) ? target : `https://${target}`);
+  } catch {
+    url = undefined; // the audit itself reports an invalid target
+  }
+  const upstream = url ? proxyFrom(ctx, url) : undefined;
+  return {
+    ...(upstream ? { upstream } : {}),
+    ...(allowHosts.length ? { allowHosts } : {}),
+    ...(blockHosts.length ? { blockHosts } : {}),
+  };
 }
 
 export function requirePositional(ctx: Context, index: number, name: string, usage: string): string {

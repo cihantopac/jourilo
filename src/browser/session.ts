@@ -3,7 +3,7 @@
 import type { Browser, BrowserContext } from 'playwright-core';
 import { type BlockedConnection, type NetGuard, redirectEscape, startNetGuard } from '../core/net-guard.js';
 import { redactUrl } from '../core/redact.js';
-import type { AddressPolicy } from '../core/url-safety.js';
+import { type AddressPolicy, type Upstream, upstreamLabel } from '../core/url-safety.js';
 import { type BrowserName, launchBrowser } from './runtime.js';
 
 export interface NetworkReport {
@@ -68,8 +68,14 @@ export function networkLimitations(r: NetworkReport): string[] {
       .slice(0, 3)
       .map((b) => `${b.host}:${b.port}`)
       .join(', ')}${bs.length > 3 ? ', …' : ''}`;
-  const denied = r.blocked.filter((b) => b.reason.includes('--deny-local'));
-  const other = r.blocked.filter((b) => !b.reason.includes('--deny-local'));
+  const byName = (b: BlockedConnection) => /--(allow|block)-hosts/.test(b.reason);
+  const listed = r.blocked.filter(byName);
+  const denied = r.blocked.filter((b) => !byName(b) && b.reason.includes('--deny-local'));
+  const other = r.blocked.filter((b) => !byName(b) && !b.reason.includes('--deny-local'));
+  if (listed.length)
+    out.push(
+      `The network guard refused ${listed.length} connection(s) to hosts excluded by --allow-hosts / --block-hosts (${list(listed)}); content that depends on them was not loaded.`,
+    );
   if (denied.length)
     out.push(
       `The network guard refused ${denied.length} connection(s) to local addresses because --deny-local is set (${list(denied)}); content that depends on them was not loaded.`,
@@ -83,4 +89,12 @@ export function networkLimitations(r: NetworkReport): string[] {
       `SECURITY: ${r.escaped.length} redirect(s) from the target reached this machine outside the network guard (${r.escaped[0]!.url}). This browser follows HTTPS redirects to loopback addresses directly; use Chromium or Firefox for untrusted sites.`,
     );
   return out;
+}
+
+/** The limitation line of a run that chained to an upstream proxy (named without its credentials). */
+export function proxyLimitation(up: Upstream | undefined): string[] {
+  if (!up) return [];
+  return [
+    `Requests went through the upstream proxy ${upstreamLabel(up)}: the network guard checked every destination first and tunnelled to the checked address; loopback addresses were reached directly. Timings include the proxy hop.`,
+  ];
 }

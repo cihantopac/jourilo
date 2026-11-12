@@ -109,6 +109,14 @@ Stated so nobody mistakes silence for a pass.
   reach only its own port. It does not cover other private ranges (use the default guard for public targets), and it
   is refused with `--browser webkit` because WebKit's HTTPS redirects bypass the proxy. A blocked request appears in
   the run's limitations and can show as an error page for that URL.
+- `--proxy` (or `HTTPS_PROXY` / `HTTP_PROXY`, skipped when `NO_PROXY` matches the target) chains to an upstream HTTP
+  proxy behind the guard. The guard still resolves and checks every destination, then asks the proxy for a tunnel to
+  the checked address (`CONNECT 93.184.216.34:443`), never to the name: a proxy that allows destinations by host name
+  sees only addresses. Only `http://` proxies are supported; loopback addresses are reached directly. The run records
+  the proxy as `http://host:port` without its credentials. `NO_PROXY` is matched against the target only, not each
+  request.
+- `--allow-hosts` and `--block-hosts` refuse hosts by name (`*.example.com` matches its subdomains, not
+  `example.com`); the target's own host is always allowed. Refused requests are listed in the run's limitations.
 - Lab timings include one local proxy hop per connection.
 
 ## Reports

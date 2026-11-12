@@ -20,6 +20,9 @@ import {
   flag,
   list,
   maxDurationOption,
+  NETWORK_OPTIONS,
+  networkFrom,
+  networkOptionsHelp,
   num,
   type OptionSpec,
   pagesOption,
@@ -61,6 +64,7 @@ export const AUDIT_OPTIONS: OptionSpec = {
   'max-duration': { type: 'string' },
   'run-id': { type: 'string' },
   evidence: { type: 'string' },
+  ...NETWORK_OPTIONS,
 };
 
 const SEVERITIES: Severity[] = ['critical', 'serious', 'moderate', 'minor'];
@@ -148,8 +152,9 @@ export async function auditCommand(
     const isDir = isDirectoryTarget(targetArg);
     server = isDir ? await serveStatic(resolve(targetArg)) : undefined;
     const repo = str(ctx, 'repo') ?? (isDir ? resolve(targetArg) : undefined);
+    const auditTarget = server ? server.url : targetArg;
     const opts: AuditOptions = {
-      target: server ? server.url : targetArg,
+      target: auditTarget,
       viewports: parseViewports(str(ctx, 'viewports')),
       maxPages,
       maxDepth: num(ctx, 'depth', 3),
@@ -160,6 +165,7 @@ export async function auditCommand(
       ...(denyLocalFrom(ctx)
         ? { denyLocal: true, ...(server ? { servedPort: servedPort(server) } : {}) }
         : {}),
+      ...networkFrom(ctx, auditTarget),
       keyboard: !flag(ctx, 'no-keyboard'),
       throttle: flag(ctx, 'throttle'),
       runs: num(ctx, 'runs', 1),
@@ -304,6 +310,7 @@ export const audit: Command = {
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
   --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                        JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3). For hosted integrations; a directory target is still served
+${networkOptionsHelp(23)}
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)

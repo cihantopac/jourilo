@@ -4,7 +4,7 @@ import { runAudit, summarize } from '../../audit/engine.js';
 import { pruneJourneyScreenshots } from '../../audit/evidence.js';
 import { makeFinding, mergeFindings } from '../../audit/finding.js';
 import type { BrowserName } from '../../browser/runtime.js';
-import { networkLimitations, openGuardedBrowser } from '../../browser/session.js';
+import { networkLimitations, openGuardedBrowser, proxyLimitation } from '../../browser/session.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { applyDismissals, loadDismissals } from '../../core/dismissals.js';
 import { JouriloError } from '../../core/errors.js';
@@ -13,7 +13,7 @@ import { newRunId } from '../../core/hash.js';
 import { isDirectoryTarget, servedPort, serveStatic } from '../../core/static-server.js';
 import type { Finding, JourneyResult, Run } from '../../core/types.js';
 import { RUN_SCHEMA_VERSION } from '../../core/types.js';
-import { checkTarget, parseTargetUrl } from '../../core/url-safety.js';
+import { checkTarget, hostListsFor, parseTargetUrl, upstreamLabel } from '../../core/url-safety.js';
 import { VERSION } from '../../core/version.js';
 import type { Workspace } from '../../core/workspace.js';
 import { runJourney } from '../../journeys/runner.js';
@@ -29,6 +29,9 @@ import {
   denyLocalFrom,
   flag,
   list,
+  NETWORK_OPTIONS,
+  networkFrom,
+  networkOptionsHelp,
   num,
   pagesOption,
   parseEvidence,
@@ -105,6 +108,7 @@ async function suggest(ctx: Context) {
           ...(denyLocalFrom(ctx)
             ? { denyLocal: true, ...(server ? { servedPort: servedPort(server) } : {}) }
             : {}),
+          ...networkFrom(ctx, server?.url ?? target),
           keyboard: false,
           throttle: false,
           timeoutMs: 30_000,
@@ -219,6 +223,15 @@ async function runCmd(ctx: Context) {
       allowPrivate: flag(ctx, 'allow-private'),
       denyLocal: denyLocal && !server,
     });
+    const network = networkFrom(ctx, base.toString());
+    // An --allow-origin the journey may navigate to is allowed by --allow-hosts too.
+    const hostLists = hostListsFor(
+      base,
+      network.allowHosts
+        ? [...network.allowHosts, ...list(ctx, 'allow-origin').map((o) => parseTargetUrl(o).hostname)]
+        : [],
+      network.blockHosts ?? [],
+    );
     const id = newRunId();
     const runDir = ctx.ws.createRunDir(id);
     const browserName = (str(ctx, 'browser') ?? 'chromium') as BrowserName;
@@ -228,6 +241,8 @@ async function runCmd(ctx: Context) {
       ...(denyLocal
         ? { denyLocal: true, ...(server ? { allowLoopbackPorts: [servedPort(server)] } : {}) }
         : {}),
+      ...hostLists,
+      ...(network.upstream ? { upstream: network.upstream } : {}),
     });
     const browser = session.browser;
     const browserVersion = browser.version();
@@ -322,8 +337,8 @@ async function runCmd(ctx: Context) {
     } finally {
       await session.close();
     }
-    const network = session.report();
-    limitations.push(...networkLimitations(network));
+    const guarded = session.report();
+    limitations.push(...proxyLimitation(network.upstream), ...networkLimitations(guarded));
     findings = mergeFindings(findings);
     const { kept, dismissed } = applyDismissals(findings, dismissals);
     findings = kept;
@@ -344,6 +359,9 @@ async function runCmd(ctx: Context) {
         hostClass,
         ...state,
         ...(evidence === 'minimal' ? { evidence } : {}),
+        ...(network.upstream ? { proxy: upstreamLabel(network.upstream) } : {}),
+        ...(network.allowHosts ? { allowHosts: network.allowHosts } : {}),
+        ...(network.blockHosts ? { blockHosts: network.blockHosts } : {}),
       },
       pages: [],
       journeys,
@@ -354,7 +372,7 @@ async function runCmd(ctx: Context) {
         ...limitations,
         'Journeys prove that a scripted path works (or not) in one browser; they do not measure how real people choose paths.',
       ],
-      ...(network.blocked.length || network.escaped.length ? { network } : {}),
+      ...(guarded.blocked.length || guarded.escaped.length ? { network: guarded } : {}),
     };
     const repo = str(ctx, 'repo') ?? (isDir ? resolve(baseArg) : undefined);
     if (repo) locateFindings(run, repo);
@@ -418,6 +436,7 @@ export const journeys: Command = {
     timezone: { type: 'string' },
     clock: { type: 'string' },
     evidence: { type: 'string' },
+    ...NETWORK_OPTIONS,
   },
   details: `Subcommands:
   suggest [url|dir|run]  Derive journeys from a site (or an existing run) into .jourilo/journeys/*.json
@@ -431,6 +450,7 @@ Suggest options:
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
   --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                          JOURILO_DENY_LOCAL=1 does the same
+${networkOptionsHelp(25)}
 
 Run options:
   --base URL|DIR         The site or static build to run against (required)
@@ -453,6 +473,7 @@ Run options:
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
   --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                          JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3)
+${networkOptionsHelp(25)}
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission

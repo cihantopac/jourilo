@@ -18,6 +18,7 @@ import {
   type NetworkReport,
   networkLimitations,
   openGuardedBrowser,
+  proxyLimitation,
 } from '../browser/session.js';
 import { toMetrics } from '../browser/vitals.js';
 import { conversionFindings } from '../conversion/rules.js';
@@ -37,7 +38,14 @@ import type {
   Viewport,
 } from '../core/types.js';
 import { RUN_SCHEMA_VERSION } from '../core/types.js';
-import { checkTargetDetailed, type HostClass, parseTargetUrl } from '../core/url-safety.js';
+import {
+  checkTargetDetailed,
+  type HostClass,
+  hostListsFor,
+  parseTargetUrl,
+  type Upstream,
+  upstreamLabel,
+} from '../core/url-safety.js';
 import { VERSION } from '../core/version.js';
 import type { Workspace } from '../core/workspace.js';
 import { crawl, explicitRobotsOverrides, robotsOverrideLimitation } from '../discovery/crawl.js';
@@ -85,6 +93,12 @@ export interface AuditOptions {
   denyLocal?: boolean;
   /** With denyLocal and a served directory: the static server's port, the only loopback port that stays reachable. */
   servedPort?: number;
+  /** Chain to this upstream proxy behind the network guard (`--proxy`, HTTPS_PROXY). */
+  upstream?: Upstream;
+  /** `--allow-hosts`: only these hosts and the target's own host may be reached. */
+  allowHosts?: string[];
+  /** `--block-hosts`: these hosts are refused. */
+  blockHosts?: string[];
   keyboard: boolean;
   throttle: boolean;
   timeoutMs: number;
@@ -262,6 +276,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
     ...(opts.denyLocal && opts.servedPort === undefined ? { denyLocal: true } : {}),
   });
   const hostClass: HostClass = check.hostClass;
+  const hostLists = hostListsFor(target, opts.allowHosts ?? [], opts.blockHosts ?? []);
   const log = opts.onProgress ?? (() => undefined);
   const runDir = ws.createRunDir(id);
   const startedAt = new Date().toISOString();
@@ -320,6 +335,8 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
                 ...(opts.servedPort === undefined ? {} : { allowLoopbackPorts: [opts.servedPort] }),
               }
             : {}),
+          ...hostLists,
+          ...(opts.upstream ? { upstream: opts.upstream } : {}),
         },
         signal !== undefined,
       );
@@ -611,7 +628,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       );
     else limitations.push('Measured without network/CPU throttling: real mobile devices are usually slower.');
 
-    limitations.push(...networkLimitations(network));
+    limitations.push(...proxyLimitation(opts.upstream), ...networkLimitations(network));
     const stopped = observations.flatMap((o) => o.blockedActions ?? []);
     if (stopped.length)
       limitations.push(
@@ -664,6 +681,10 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         ...(opts.setupJourney ? { setupJourney: opts.setupJourney.id } : {}),
         ...(opts.timezoneId ? { timezoneId: opts.timezoneId } : {}),
         ...(opts.clock ? { clock: opts.clock } : {}),
+        // The proxy without its credentials, and the host lists as given.
+        ...(opts.upstream ? { proxy: upstreamLabel(opts.upstream) } : {}),
+        ...(opts.allowHosts?.length ? { allowHosts: opts.allowHosts } : {}),
+        ...(opts.blockHosts?.length ? { blockHosts: opts.blockHosts } : {}),
         axe: observations.find((o) => o.axe)?.axe?.version ?? null,
         hostClass,
         // The exact scope, so `jourilo verify` can repeat this run after a change.
