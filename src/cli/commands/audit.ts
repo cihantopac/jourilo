@@ -201,7 +201,7 @@ export async function auditCommand(
       mode: repo ? 'repository' : 'website',
       forms: !flag(ctx, 'no-forms'),
       allowSubmit: flag(ctx, 'allow-submit'),
-      onProgress: ctx.log,
+      onProgress: ctx.progress,
       signal: stop.signal,
     };
     if (
@@ -221,7 +221,10 @@ export async function auditCommand(
     if (repo) run.settings.repo = repo;
     if (repo) {
       const located = locateFindings(run, repo);
-      ctx.log(`Mapped ${located} finding(s) to likely source locations in ${repo}`);
+      ctx.progress({
+        phase: 'report',
+        message: `Mapped ${located} finding(s) to likely source locations in ${repo}`,
+      });
     }
     run.outcome = runOutcome(run);
     if (budgetSpecs.length) {

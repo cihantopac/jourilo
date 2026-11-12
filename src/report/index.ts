@@ -29,6 +29,6 @@ export function writeReports(
     writeFileSync(out.sarif, `${JSON.stringify(renderSarif(run), null, 2)}\n`);
   }
   // Last, so it covers the reports just written; a rewrite of the reports regenerates it.
-  writeManifest(dir, run.id);
+  writeManifest(dir, run);
   return out;
 }

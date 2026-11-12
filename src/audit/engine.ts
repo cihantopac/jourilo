@@ -27,6 +27,7 @@ import { conversionFindings } from '../conversion/rules.js';
 import { applyDismissals, loadDismissals } from '../core/dismissals.js';
 import { JouriloError } from '../core/errors.js';
 import { newRunId } from '../core/hash.js';
+import type { ProgressEvent } from '../core/progress.js';
 import { redactUrl } from '../core/redact.js';
 import type {
   Category,
@@ -143,7 +144,8 @@ export interface AuditOptions {
   runs?: number;
   /** Optional brand/search context (jourilo.context/v1). */
   context?: ExperienceContext;
-  onProgress?: (msg: string) => void;
+  /** Progress with its phase and counts (F35); `message` is the plain progress line. */
+  onProgress?: (event: ProgressEvent) => void;
   /**
    * Stops the run early: the page in progress gets STOP_GRACE_MS to finish (then it is abandoned and left out),
    * nothing new starts, and the run is built from what was collected (`stoppedBy` set). Abort with the reason
@@ -320,7 +322,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
   const hostLists = hostListsFor(target, opts.allowHosts ?? [], opts.blockHosts ?? []);
   const headers = opts.extraHeaders ? targetHeaders(target.origin, opts.extraHeaders) : undefined;
   const browsing = contextOptions(opts, headers);
-  const log = opts.onProgress ?? (() => undefined);
+  const progress = opts.onProgress ?? (() => undefined);
   const runDir = ws.createRunDir(id);
   const startedAt = new Date().toISOString();
   const limitations: string[] = [];
@@ -364,7 +366,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
   try {
     try {
       if (check.unresolved) throw new NameUnresolved();
-      log(`Starting ${opts.browser} …`);
+      progress({ phase: 'launch', message: `Starting ${opts.browser} …` });
       halt();
       // Not abandoned midway: a browser still launching would be left running.
       session = await openGuardedBrowser(
@@ -404,7 +406,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       // `journeys run`, starts from --auth, and its resulting storage state replaces --auth for every capture.
       if (opts.setupJourney) {
         const spec = opts.setupJourney;
-        log(`Running setup journey ${spec.id} …`);
+        progress({ phase: 'setup', message: `Running setup journey ${spec.id} …` });
         const { result } = await untilStopped(
           runJourney(browser, spec, {
             base: target,
@@ -419,7 +421,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
             ...(opts.evidence ? { evidence: opts.evidence } : {}),
             ...(opts.storageState ? { storageState: opts.storageState } : {}),
             ...browsing,
-            log,
+            log: (message) => progress({ phase: 'setup', message }),
           }),
           signal,
         );
@@ -444,7 +446,11 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       // 1. Discover pages.
       if (!urls) {
         halt();
-        log(`Discovering pages on ${target.origin} …`);
+        progress({
+          phase: 'discover',
+          message: `Discovering pages on ${target.origin} …`,
+          url: target.origin,
+        });
         const ctx = await newContext(browser, opts.viewports[0]!, {
           runDir,
           timeoutMs: opts.timeoutMs,
@@ -495,9 +501,14 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         ))
           limitations.push(robotsOverrideLimitation(u));
       }
-      log(
-        `Auditing ${urls.length} page(s) × ${opts.viewports.length} viewport(s) in ${opts.browser} ${browserVersion}`,
-      );
+      // Captures, metrics visits and form probes are counted in advance; `done` is how many finished before a line.
+      const captures = urls.length * opts.viewports.length;
+      progress({
+        phase: 'capture',
+        message: `Auditing ${urls.length} page(s) × ${opts.viewports.length} viewport(s) in ${opts.browser} ${browserVersion}`,
+        done: 0,
+        total: captures,
+      });
 
       // 2. Capture every page in every viewport. A stop gives the page in progress STOP_GRACE_MS to finish.
       for (const vp of opts.viewports) {
@@ -512,7 +523,14 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         try {
           for (const { url } of urls) {
             halt();
-            log(`  ${vp.name.padEnd(8)} ${redactUrl(url)}`);
+            progress({
+              phase: 'capture',
+              message: `  ${vp.name.padEnd(8)} ${redactUrl(url)}`,
+              done: observations.length,
+              total: captures,
+              url: redactUrl(url),
+              viewport: vp.name,
+            });
             const capture = capturePage(ctx, url, vp, {
               runDir,
               guardToken: session.guard.token,
@@ -543,12 +561,21 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
 
       // 2b. Repeated cold-cache visits for lab metrics: report medians, not a single noisy sample.
       if (runs > 1) {
-        for (const obs of observations) {
-          if (!obs.vitals || (obs.status ?? 200) >= 400) continue;
-          const samples = [obs.vitals];
+        const measured = observations.filter((o) => o.vitals && (o.status ?? 200) < 400);
+        const visits = measured.length * (runs - 1);
+        let visited = 0;
+        for (const obs of measured) {
+          const samples = [obs.vitals!];
           for (let k = 1; k < runs; k++) {
             halt();
-            log(`  metrics  ${obs.viewport.name.padEnd(8)} ${obs.url} (run ${k + 1}/${runs})`);
+            progress({
+              phase: 'metrics',
+              message: `  metrics  ${obs.viewport.name.padEnd(8)} ${obs.url} (run ${k + 1}/${runs})`,
+              done: visited++,
+              total: visits,
+              url: obs.url,
+              viewport: obs.viewport.name,
+            });
             // An abandoned visit ends when the browser closes; the first sample stands.
             const v = await withinGrace(
               measureVitals(browser, obs.finalUrl, obs.viewport, {
@@ -581,44 +608,54 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
           ...(storageState ? { storageState } : {}),
           ...browsing,
         });
+        // Only forms whose input is clearly needed: a known purpose, or fields marked required. A generic form with
+        // optional fields may legitimately accept an empty submission. At most three per page.
+        const probes = observations
+          .filter((x) => x.viewport.name === vp.name && (x.status ?? 200) < 400)
+          .flatMap((o) =>
+            (o.probe?.inventory.forms ?? [])
+              .filter(
+                (f) => f.purpose !== 'search' && (f.purpose !== 'other' || f.fields.some((x) => x.required)),
+              )
+              .slice(0, 3)
+              .map((form) => ({ o, form })),
+          );
         try {
-          for (const o of observations.filter(
-            (x) => x.viewport.name === vp.name && (x.status ?? 200) < 400,
-          )) {
-            // Only forms whose input is clearly needed: a known purpose, or fields marked required. A generic form
-            // with optional fields may legitimately accept an empty submission.
-            const probeable = (o.probe?.inventory.forms ?? []).filter(
-              (f) => f.purpose !== 'search' && (f.purpose !== 'other' || f.fields.some((x) => x.required)),
+          for (const [i, { o, form }] of probes.entries()) {
+            halt();
+            progress({
+              phase: 'forms',
+              message: `  form     ${o.url} ${form.selector}`,
+              done: i,
+              total: probes.length,
+              url: o.url,
+              viewport: vp.name,
+            });
+            const probe = probeFormValidation(
+              ctx,
+              o.finalUrl,
+              form,
+              vp,
+              { hostClass, allowSubmit: opts.allowSubmit ?? false, allowDestructive: false },
+              runDir,
+              // Wait as the capture did; a capture that never found the element took its forms from the page
+              // as it was, which a plain fresh load reproduces.
+              {
+                ...(opts.waitFor && o.load?.found !== false ? { waitFor: opts.waitFor } : {}),
+                timeoutMs: opts.timeoutMs,
+              },
             );
-            for (const form of probeable.slice(0, 3)) {
-              halt();
-              log(`  form     ${o.url} ${form.selector}`);
-              const probe = probeFormValidation(
-                ctx,
-                o.finalUrl,
-                form,
-                vp,
-                { hostClass, allowSubmit: opts.allowSubmit ?? false, allowDestructive: false },
-                runDir,
-                // Wait as the capture did; a capture that never found the element took its forms from the page
-                // as it was, which a plain fresh load reproduces.
-                {
-                  ...(opts.waitFor && o.load?.found !== false ? { waitFor: opts.waitFor } : {}),
-                  timeoutMs: opts.timeoutMs,
-                },
-              );
-              const r = await withinGrace(probe, signal, async () => {
-                await ctx.close();
-                await settled(probe, 1000);
-                rmSync(join(runDir, formScreenshotFile(o.finalUrl, form.selector, vp)), { force: true });
-              });
-              formFindings.push(...r.findings);
-              if (r.result.outcome === 'blocked')
-                limitations.push(`Form ${form.selector} on ${o.url} was not submitted: ${r.result.detail}`);
-              if (r.result.outcome === 'simulated') simulated.push(`${form.selector} on ${o.url}`);
-              if (r.result.outcome === 'skipped')
-                limitations.push(`Form ${form.selector} on ${o.url} was not probed: ${r.result.detail}`);
-            }
+            const r = await withinGrace(probe, signal, async () => {
+              await ctx.close();
+              await settled(probe, 1000);
+              rmSync(join(runDir, formScreenshotFile(o.finalUrl, form.selector, vp)), { force: true });
+            });
+            formFindings.push(...r.findings);
+            if (r.result.outcome === 'blocked')
+              limitations.push(`Form ${form.selector} on ${o.url} was not submitted: ${r.result.detail}`);
+            if (r.result.outcome === 'simulated') simulated.push(`${form.selector} on ${o.url}`);
+            if (r.result.outcome === 'skipped')
+              limitations.push(`Form ${form.selector} on ${o.url} was not probed: ${r.result.detail}`);
           }
         } finally {
           await ctx.close().catch(() => undefined);
@@ -635,11 +672,11 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
     } catch (err) {
       if (err instanceof NameUnresolved) {
         const msg = `No page was loaded: the host name ${target.hostname} could not be resolved (no hosts entry or local DNS answer).`;
-        log(msg);
+        progress({ phase: 'launch', message: msg });
         limitations.push(msg);
       } else if (err instanceof AuditStopped) {
         stoppedBy = signal?.reason === 'max-duration' ? 'max-duration' : 'signal';
-        log(`Stopped early (${stoppedBy}); writing a partial run …`);
+        progress({ phase: 'report', message: `Stopped early (${stoppedBy}); writing a partial run …` });
       } else throw err;
     }
     await endBrowsing();

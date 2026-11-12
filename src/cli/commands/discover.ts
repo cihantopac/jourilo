@@ -119,7 +119,7 @@ ${networkOptionsHelp(22)}`,
       mask: [],
       inventoryOnly: true,
       mode: 'website',
-      onProgress: ctx.log,
+      onProgress: ctx.progress,
     });
     const profile = buildSiteProfile(run, observations);
     const file = join(ctx.ws.root, 'site.json');

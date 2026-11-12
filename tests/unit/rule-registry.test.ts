@@ -27,7 +27,14 @@ function idsInSrc(): Set<string> {
 }
 
 function ctx(values: Context['values'], positionals: string[]): Context {
-  return { values, positionals, json: Boolean(values.json), ws: undefined as never, log: () => undefined };
+  return {
+    values,
+    positionals,
+    json: Boolean(values.json),
+    ws: undefined as never,
+    log: () => undefined,
+    progress: () => undefined,
+  };
 }
 
 describe('rule registry', () => {

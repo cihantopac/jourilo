@@ -6,6 +6,7 @@ import {
   chromiumSandboxFrom,
   extraHeadersFrom,
   maxDurationOption,
+  type ProgressEvent,
   pagesOption,
   parse,
   parseStateOptions,
@@ -181,6 +182,67 @@ describe('progress lines', () => {
   it('stay plain text without --json and silent with --quiet', () => {
     expect(captured([])).toBe('  desktop  http://127.0.0.1/\n');
     expect(captured(['--json', '-q'])).toBe('');
+  });
+
+  const captureEvent: ProgressEvent = {
+    phase: 'capture',
+    message: '  desktop  http://127.0.0.1/a',
+    done: 2,
+    total: 6,
+    url: 'http://127.0.0.1/a',
+    viewport: 'desktop',
+  };
+  function progressed(argv: string[], event: ProgressEvent): string {
+    let out = '';
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      out += String(chunk);
+      return true;
+    });
+    parse(cmd, argv).progress(event);
+    return out;
+  }
+
+  it('capture progress lines carry phase, done, total, url and viewport', () => {
+    const raw = progressed(['--json'], captureEvent);
+    const line = JSON.parse(raw);
+    // The message text is the one of the plain line, trimmed as before; the new fields are additive.
+    expect(line).toEqual({
+      type: 'progress',
+      phase: 'capture',
+      message: 'desktop  http://127.0.0.1/a',
+      done: 2,
+      total: 6,
+      url: 'http://127.0.0.1/a',
+      viewport: 'desktop',
+      at: expect.any(String),
+    });
+    expect(Object.keys(line)[0]).toBe('type');
+    expect(Object.keys(line).at(-1)).toBe('at');
+    // A count the engine cannot know is left out, never guessed.
+    expect(JSON.parse(progressed(['--json'], { phase: 'launch', message: 'Starting chromium …' }))).toEqual({
+      type: 'progress',
+      phase: 'launch',
+      message: 'Starting chromium …',
+      at: expect.any(String),
+    });
+  });
+
+  it('text mode output is unchanged', () => {
+    expect(progressed([], captureEvent)).toBe('  desktop  http://127.0.0.1/a\n');
+    expect(progressed(['-q'], captureEvent)).toBe('');
+    expect(progressed(['--json', '-q'], captureEvent)).toBe('');
+  });
+
+  it('the url of a progress event is redacted like the message', () => {
+    const line = JSON.parse(
+      progressed(['--json'], {
+        phase: 'capture',
+        message: 'desktop  x',
+        url: 'http://user:pw@127.0.0.1/a?token=s3cret&page=2',
+      }),
+    );
+    expect(line.url).toBe('http://redacted@127.0.0.1/a?token=[redacted]&page=2');
+    expect(JSON.stringify(line)).not.toContain('s3cret');
   });
 });
 

@@ -1,9 +1,12 @@
 import { type ParseArgsConfig, parseArgs } from 'node:util';
 import { JouriloError } from '../core/errors.js';
+import type { ProgressEvent } from '../core/progress.js';
+import { redactUrl } from '../core/redact.js';
 import { type AddressPolicy, noProxyMatches, type Upstream } from '../core/url-safety.js';
 import { Workspace } from '../core/workspace.js';
 
 export type OptionSpec = NonNullable<ParseArgsConfig['options']>;
+export type { ProgressEvent, ProgressPhase } from '../core/progress.js';
 
 export interface Context {
   values: Record<string, string | boolean | string[] | undefined>;
@@ -15,6 +18,11 @@ export interface Context {
    * `{"type":"progress","message":...,"at":ISO}`.
    */
   log: (msg: string) => void;
+  /**
+   * A progress line with its phase and counts (F35): plain text prints only `message`, exactly as `log` would; with
+   * --json the line is `{"type":"progress","phase":...,"message":...,"done"?,"total"?,"url"?,"viewport"?,"at":ISO}`.
+   */
+  progress: (event: ProgressEvent) => void;
 }
 
 export interface CommandResult {
@@ -57,19 +65,22 @@ export function parse(cmd: Command, argv: string[]): Context {
   const values = parsed.values as Context['values'];
   const quiet = Boolean(values.quiet);
   const json = Boolean(values.json);
+  // The message keeps its place after the event's own fields; `at` is always last.
+  const write = (fields: Partial<ProgressEvent>, msg: string) => {
+    if (quiet) return;
+    process.stderr.write(
+      json
+        ? `${JSON.stringify({ type: 'progress', ...fields, message: msg.trim(), at: new Date().toISOString() })}\n`
+        : `${msg}\n`,
+    );
+  };
   return {
     values,
     positionals: parsed.positionals,
     json,
     ws: new Workspace(values.workspace as string | undefined),
-    log: (msg) => {
-      if (quiet) return;
-      process.stderr.write(
-        json
-          ? `${JSON.stringify({ type: 'progress', message: msg.trim(), at: new Date().toISOString() })}\n`
-          : `${msg}\n`,
-      );
-    },
+    log: (msg) => write({}, msg),
+    progress: (event) => write(event.url ? { ...event, url: redactUrl(event.url) } : event, event.message),
   };
 }
 

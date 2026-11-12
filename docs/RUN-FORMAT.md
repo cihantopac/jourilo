@@ -36,6 +36,22 @@ manifest is described there as `#/$defs/manifest`. The TypeScript source of trut
 measured the metric (for example INP, which a scripted visit does not produce): that is neither a pass nor a fail,
 and `limitations` says so. A failed budget exits 1, like `--fail-on`; exit 5 and 6 keep their codes.
 
+## manifest.json
+
+`manifest.json` lists every artifact of the run (`files`: `path`, `bytes`, `sha256`; the browser's transient
+`browser.pids` is never listed) and, since 1.3.0, what produced them:
+
+- `tool`: `{ name: "jourilo", version }`, the release that made the run.
+- `browser`: `{ name, version }`, as in `run.json`.
+- `axe`: `{ version }`, the axe-core version the pages were checked with (`settings.axe`), or the bundled axe-core when
+  no page was checked (for example `discover`).
+- `scope`: `{ target, urls, viewports }`: the redacted target, the audited URLs (`settings.scope.urls`, or the captured
+  pages for journey runs), redacted like other URLs, and the viewport names.
+
+The manifest is rewritten whenever the reports are (`report`, `compare`, `finding`), and these fields are taken from
+the run.
+No secret (proxy credentials, `--extra-header` values) is ever written to it.
+
 ## Validating
 
 Use any draft 2020-12 validator against `schemas/run.schema.json`. Only the required keys are guaranteed; treat

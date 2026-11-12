@@ -56,8 +56,11 @@ export function cliMarkdown(): string {
     '6 stopped early by SIGINT/SIGTERM or `--max-duration` (a partial run is still written; a second signal exits 130).',
     '',
     'Global options: `--json`, `--workspace DIR` (default `.jourilo`, or `JOURILO_WORKSPACE`), `--quiet`. With `--json`,',
-    'progress lines on stderr are JSON too: `{"type":"progress","message":"…","at":"<ISO time>"}`. `--workspace` is also',
-    'the output directory: every run is written to `DIR/runs/<id>/` (there is no separate `--output-dir`).',
+    'progress lines on stderr are JSON too: `{"type":"progress","message":"…","at":"<ISO time>"}`. Lines from the audit',
+    'pipeline also carry `phase` (launch, discover, setup, capture, metrics, forms, rules or report) and, where known',
+    'exactly, `done` (steps of that phase finished before this one), `total`, `url` (redacted) and `viewport`; the',
+    '`message` text is the same as the plain line. `--workspace` is also the output directory: every run is written to',
+    '`DIR/runs/<id>/` (there is no separate `--output-dir`).',
     '',
   ];
   for (const [title, names] of GROUPS) {

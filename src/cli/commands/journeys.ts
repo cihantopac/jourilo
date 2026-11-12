@@ -96,7 +96,10 @@ async function suggest(ctx: Context) {
     const isDir = isDirectoryTarget(target);
     const server = isDir ? await serveStatic(resolve(target)) : undefined;
     try {
-      ctx.log('Discovering pages to derive journeys (no audit rules applied) …');
+      ctx.progress({
+        phase: 'discover',
+        message: 'Discovering pages to derive journeys (no audit rules applied) …',
+      });
       run = (
         await runAudit(ctx.ws, {
           target: server?.url ?? target,
@@ -118,7 +121,7 @@ async function suggest(ctx: Context) {
           mask: [],
           forms: false,
           mode: isDir ? 'repository' : 'website',
-          onProgress: ctx.log,
+          onProgress: ctx.progress,
         })
       ).run;
     } finally {

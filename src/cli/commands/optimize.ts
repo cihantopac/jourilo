@@ -299,7 +299,7 @@ ${networkOptionsHelp(25)}
         ...(base.settings.evidence === 'minimal' ? { evidence: 'minimal' as const } : {}),
         ...(setupJourney ? { setupJourney } : {}),
         ...(repo ? { context: loadContext(repo) } : {}),
-        onProgress: ctx.log,
+        onProgress: ctx.progress,
       });
       if (servedDir) {
         run.target = `${displayPath(servedDir)} (served at ${server!.url})`;

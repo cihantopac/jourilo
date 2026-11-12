@@ -245,19 +245,19 @@ var require_axe = __commonJS({
           return o2 && "function" == typeof Symbol && o2.constructor === Symbol && o2 !== Symbol.prototype ? "symbol" : typeof o2;
         }, _typeof(o);
       }
-      var axe3 = axe3 || {};
-      axe3.version = "4.14.0";
+      var axe4 = axe4 || {};
+      axe4.version = "4.14.0";
       if (typeof define === "function" && define.amd) {
         define("axe-core", [], function() {
-          return axe3;
+          return axe4;
         });
       }
       if ((typeof module === "undefined" ? "undefined" : _typeof(module)) === "object" && module.exports && typeof axeFunction.toString === "function") {
-        axe3.source = "(" + axeFunction.toString() + ')(typeof window === "object" ? window : this);';
-        module.exports = axe3;
+        axe4.source = "(" + axeFunction.toString() + ')(typeof window === "object" ? window : this);';
+        module.exports = axe4;
       }
       if (typeof window2.getComputedStyle === "function") {
-        window2.axe = axe3;
+        window2.axe = axe4;
       }
       var commons;
       "use strict";
@@ -7868,7 +7868,7 @@ var require_axe = __commonJS({
         }
         var aggregate_checks_default = aggregateChecks;
         function _finalizeRuleResult(ruleResult) {
-          var rule2 = axe3._audit.rules.find(function(_ref) {
+          var rule2 = axe4._audit.rules.find(function(_ref) {
             var id2 = _ref.id;
             return id2 === ruleResult.id;
           });
@@ -14642,10 +14642,10 @@ var require_axe = __commonJS({
         var src_default = color_default;
         var import_from2 = __toModule(require_from3());
         import_dot["default"].templateSettings.strip = false;
-        axe3._memoizedFns = [];
+        axe4._memoizedFns = [];
         function memoizeImplementation(fn, options) {
           var memoized = (0, import_memoizee["default"])(fn, options);
-          axe3._memoizedFns.push(memoized);
+          axe4._memoizedFns.push(memoized);
           return memoized;
         }
         var memoize_default = memoizeImplementation;
@@ -14711,7 +14711,7 @@ var require_axe = __commonJS({
           if (!id2) {
             return;
           }
-          var selectorData = axe3._selectorData;
+          var selectorData = axe4._selectorData;
           var root = elm.getRootNode && elm.getRootNode() || document2;
           var rootId = selectorData._rootMap.get(root);
           var nodeIdx = selectorData._elmToIdx.get(elm);
@@ -15311,10 +15311,10 @@ var require_axe = __commonJS({
         }
         function generateSelector(elm) {
           var _ref44 = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {}, _ref44$toRoot = _ref44.toRoot, toRoot = _ref44$toRoot === void 0 ? false : _ref44$toRoot;
-          if (!axe3._selectorData) {
+          if (!axe4._selectorData) {
             throw new Error("Expect axe._selectorData to be set up");
           }
-          var selectorData = axe3._selectorData;
+          var selectorData = axe4._selectorData;
           var elmToIdx = selectorData._elmToIdx;
           var targetIdx = elmToIdx.get(elm);
           if (targetIdx === void 0) {
@@ -15689,7 +15689,7 @@ var require_axe = __commonJS({
             this.nodeIndexes = [this._virtualNode.nodeIndex];
           }
           this.source = null;
-          if (!axe3._audit.noHtml) {
+          if (!axe4._audit.noHtml) {
             var _this$spec$source;
             this.source = (_this$spec$source = this.spec.source) !== null && _this$spec$source !== void 0 ? _this$spec$source : _getElementSource(this._element);
           }
@@ -16231,7 +16231,7 @@ var require_axe = __commonJS({
         uuid.parse = parse22;
         uuid.unparse = unparse;
         uuid.BufferClass = BufferClass;
-        axe3._uuid = v1();
+        axe4._uuid = v1();
         var uuid_default = v4;
         var errorTypes = Object.freeze(["EvalError", "RangeError", "ReferenceError", "SyntaxError", "TypeError", "URIError"]);
         function stringifyMessage(_ref50) {
@@ -16289,11 +16289,11 @@ var require_axe = __commonJS({
         function getSource() {
           var application = "axeAPI";
           var version = "";
-          if (typeof axe3 !== "undefined" && axe3._audit && axe3._audit.application) {
-            application = axe3._audit.application;
+          if (typeof axe4 !== "undefined" && axe4._audit && axe4._audit.application) {
+            application = axe4._audit.application;
           }
-          if (typeof axe3 !== "undefined") {
-            version = axe3.version;
+          if (typeof axe4 !== "undefined") {
+            version = axe4.version;
           }
           return application + "." + version;
         }
@@ -16342,13 +16342,13 @@ var require_axe = __commonJS({
         function postMessage(win, data, sendToParent, replyHandler) {
           sendToParent ? assertIsParentWindow(win) : assertIsFrameWindow(win);
           if (data.message instanceof Error && !sendToParent) {
-            axe3.log(data.message);
+            axe4.log(data.message);
             return false;
           }
           var dataString = stringifyMessage(_extends({
             messageId: createMessageId()
           }, data));
-          var allowedOrigins = axe3._audit.allowedOrigins;
+          var allowedOrigins = axe4._audit.allowedOrigins;
           if (!allowedOrigins || !allowedOrigins.length) {
             return false;
           }
@@ -16369,7 +16369,7 @@ var require_axe = __commonJS({
         }
         function processError(win, error, channelId) {
           if (!win.parent !== window2) {
-            return axe3.log(error);
+            return axe4.log(error);
           }
           try {
             postMessage(win, {
@@ -16380,7 +16380,7 @@ var require_axe = __commonJS({
               keepalive: true
             }, true);
           } catch (err2) {
-            return axe3.log(err2);
+            return axe4.log(err2);
           }
         }
         function createResponder(win, channelId) {
@@ -16395,7 +16395,7 @@ var require_axe = __commonJS({
           };
         }
         function originIsAllowed(origin) {
-          var allowedOrigins = axe3._audit.allowedOrigins;
+          var allowedOrigins = axe4._audit.allowedOrigins;
           return allowedOrigins && allowedOrigins.includes("*") || allowedOrigins.includes(origin);
         }
         function messageHandler(_ref51, topicHandler) {
@@ -16407,7 +16407,7 @@ var require_axe = __commonJS({
               return;
             }
             if (message instanceof Error && win.parent !== window2) {
-              axe3.log(message);
+              axe4.log(message);
               return false;
             }
             try {
@@ -16422,7 +16422,7 @@ var require_axe = __commonJS({
               processError(win, error, channelId);
             }
           } catch (error) {
-            axe3.log(error);
+            axe4.log(error);
             return false;
           }
         }
@@ -16440,7 +16440,7 @@ var require_axe = __commonJS({
           try {
             replyHandler(message, keepalive, responder);
           } catch (error) {
-            axe3.log(error);
+            axe4.log(error);
             responder(error, keepalive);
           }
         }
@@ -16488,7 +16488,7 @@ var require_axe = __commonJS({
           try {
             topicHandler(message, keepalive, responder);
           } catch (error) {
-            axe3.log(error);
+            axe4.log(error);
             responder(error, keepalive);
           }
         }
@@ -16563,7 +16563,7 @@ var require_axe = __commonJS({
         }
         function err(message, node) {
           var selector;
-          if (axe3._tree) {
+          if (axe4._tree) {
             selector = _getSelector(node);
           }
           return new Error(message + ": " + (selector || node));
@@ -19343,7 +19343,7 @@ var require_axe = __commonJS({
           if (!mapElRootNode || mapElRootNode.nodeType !== 9) {
             return true;
           }
-          var refs = query_selector_all_default(axe3._tree, 'img[usemap="#'.concat(escape_selector_default(mapElName), '"]'));
+          var refs = query_selector_all_default(axe4._tree, 'img[usemap="#'.concat(escape_selector_default(mapElName), '"]'));
           if (!refs || !refs.length) {
             return true;
           }
@@ -19834,7 +19834,7 @@ var require_axe = __commonJS({
               parentVNode = get_node_from_tree_default(node.parentNode);
             }
             if (!_vNode) {
-              _vNode = new axe3.VirtualNode(node, parentVNode);
+              _vNode = new axe4.VirtualNode(node, parentVNode);
             }
             _vNode._stackingOrder = createStackingOrder(_vNode, parentVNode, nodeIndex++);
             var scrollRegionParent = findScrollRegionParent(parentVNode);
@@ -20114,13 +20114,13 @@ var require_axe = __commonJS({
         }
         var getModalDialog = memoize_default(function getModalDialogMemoized() {
           var _dialogs$find;
-          if (!axe3._tree) {
+          if (!axe4._tree) {
             return null;
           }
           if (typeof document2.elementsFromPoint !== "function" || typeof document2.elementFromPoint !== "function") {
             return null;
           }
-          var dialogs = query_selector_all_filter_default(axe3._tree[0], "dialog[open]", function(vNode) {
+          var dialogs = query_selector_all_filter_default(axe4._tree[0], "dialog[open]", function(vNode) {
             var rect = vNode.boundingClientRect;
             var stack = document2.elementsFromPoint(rect.left + 1, rect.top + 1);
             return stack.includes(vNode.actualNode) && _isVisibleOnScreen(vNode);
@@ -20149,7 +20149,7 @@ var require_axe = __commonJS({
         var get_modal_dialog_default = getModalDialog;
         function getNodeFromGrid(dialog) {
           _createGrid();
-          var grid = axe3._tree[0]._grid;
+          var grid = axe4._tree[0]._grid;
           var viewRect = new window2.DOMRect(0, 0, window2.innerWidth, window2.innerHeight);
           if (!grid) {
             return;
@@ -21848,7 +21848,7 @@ var require_axe = __commonJS({
             return accName || step(virtualNode, context);
           }, "");
           if (context.debug) {
-            axe3.log(accessibleName || "{empty-value}", actualNode, context);
+            axe4.log(accessibleName || "{empty-value}", actualNode, context);
           }
           return accessibleName;
         }
@@ -21891,7 +21891,7 @@ var require_axe = __commonJS({
             return step(virtualNode, context);
           }, "");
           if (context.debug) {
-            axe3.log(accessibleName || "{empty-value}", virtualNode.actualNode, context);
+            axe4.log(accessibleName || "{empty-value}", virtualNode.actualNode, context);
           }
           return accessibleName;
         }
@@ -22229,7 +22229,7 @@ var require_axe = __commonJS({
         var visualRoles = ["checkbox", "img", "meter", "progressbar", "scrollbar", "radio", "slider", "spinbutton", "textbox"];
         function isVisualContent(el) {
           var _nodeLookup24 = _nodeLookup(el), vNode = _nodeLookup24.vNode;
-          var role = axe3.commons.aria.getExplicitRole(vNode);
+          var role = axe4.commons.aria.getExplicitRole(vNode);
           if (role) {
             return visualRoles.indexOf(role) !== -1;
           }
@@ -22282,7 +22282,7 @@ var require_axe = __commonJS({
             return true;
           }
           if (virtualNode.props.nodeType === 1 && is_visual_content_default(virtualNode)) {
-            return !!axe3.commons.text.accessibleTextVirtual(virtualNode);
+            return !!axe4.commons.text.accessibleTextVirtual(virtualNode);
           }
           return virtualNode.children.some(function(child) {
             return !child.attr("lang") && _hasLangText(child) && !_isHiddenForEveryone(child);
@@ -22367,7 +22367,7 @@ var require_axe = __commonJS({
         function getRoleType(role) {
           var _window3;
           if (role instanceof abstract_virtual_node_default || (_window3 = window2) !== null && _window3 !== void 0 && _window3.Node && role instanceof window2.Node) {
-            role = axe3.commons.aria.getRole(role);
+            role = axe4.commons.aria.getRole(role);
           }
           var roleDef = standards_default.ariaRoles[role];
           return (roleDef === null || roleDef === void 0 ? void 0 : roleDef.type) || null;
@@ -22455,7 +22455,7 @@ var require_axe = __commonJS({
           if (cache_default.get("isModalOpen")) {
             return cache_default.get("isModalOpen");
           }
-          var definiteModals = query_selector_all_filter_default(axe3._tree[0], "dialog, [role=dialog], [aria-modal=true]", _isVisibleOnScreen);
+          var definiteModals = query_selector_all_filter_default(axe4._tree[0], "dialog, [role=dialog], [aria-modal=true]", _isVisibleOnScreen);
           if (definiteModals.length) {
             cache_default.set("isModalOpen", true);
             return true;
@@ -22844,9 +22844,9 @@ var require_axe = __commonJS({
         function generateFirstPageLink() {
           var firstPageLink;
           if (!window2.location.origin) {
-            firstPageLink = query_selector_all_default(axe3._tree, 'a:not([href^="#"]):not([href^="/#"]):not([href^="javascript:"])')[0];
+            firstPageLink = query_selector_all_default(axe4._tree, 'a:not([href^="#"]):not([href^="/#"]):not([href^="javascript:"])')[0];
           } else {
-            firstPageLink = query_selector_all_default(axe3._tree, 'a[href]:not([href^="javascript:"])').find(function(link) {
+            firstPageLink = query_selector_all_default(axe4._tree, 'a[href]:not([href^="javascript:"])').find(function(link) {
               return !_isCurrentPageLink(link.actualNode);
             });
           }
@@ -22889,7 +22889,7 @@ var require_axe = __commonJS({
           if (!mapElRootNode || mapElRootNode.nodeType !== 9) {
             return false;
           }
-          var refs = query_selector_all_default(axe3._tree, 'img[usemap="#'.concat(escape_selector_default(mapElName), '"]'));
+          var refs = query_selector_all_default(axe4._tree, 'img[usemap="#'.concat(escape_selector_default(mapElName), '"]'));
           if (!refs || !refs.length) {
             return false;
           }
@@ -23511,7 +23511,7 @@ var require_axe = __commonJS({
             if (!failingChecks[key2].length) {
               return;
             }
-            var sum = axe3._audit.data.failureSummaries[key2];
+            var sum = axe4._audit.data.failureSummaries[key2];
             if (sum && typeof sum.failureMessage === "function") {
               return sum.failureMessage(failingChecks[key2].map(function(check) {
                 return check.message || "";
@@ -23523,7 +23523,7 @@ var require_axe = __commonJS({
         }
         var failure_summary_default = failureSummary;
         function incompleteFallbackMessage() {
-          var message = axe3._audit.data.incompleteFallbackMessage;
+          var message = axe4._audit.data.incompleteFallbackMessage;
           if (typeof message === "function") {
             message = message();
           }
@@ -23534,7 +23534,7 @@ var require_axe = __commonJS({
         }
         var resultKeys = constants_default.resultGroups;
         function processAggregate(results, options) {
-          var resultObject = axe3.utils.aggregateResult(results);
+          var resultObject = axe4.utils.aggregateResult(results);
           resultKeys.forEach(function(key2) {
             if (options.resultTypes && !options.resultTypes.includes(key2)) {
               (resultObject[key2] || []).forEach(function(ruleResult) {
@@ -23586,7 +23586,7 @@ var require_axe = __commonJS({
           var runOptions = arguments.length > 1 ? arguments[1] : void 0;
           elmSpec = node_serializer_default.dqElmToSpec(elmSpec, runOptions);
           var serialElm = {};
-          if (axe3._audit.noHtml) {
+          if (axe4._audit.noHtml) {
             serialElm.html = null;
           } else {
             var _elmSpec$source;
@@ -23659,7 +23659,7 @@ var require_axe = __commonJS({
         }
         var process_message_default = processMessage;
         function getCheckMessage(checkId, type2, data) {
-          var check = axe3._audit.data.checks[checkId];
+          var check = axe4._audit.data.checks[checkId];
           if (!check) {
             throw new Error("Cannot get message for unknown check: ".concat(checkId, "."));
           }
@@ -23709,10 +23709,10 @@ var require_axe = __commonJS({
           return {
             testEngine: {
               name: "axe-core",
-              version: axe3.version
+              version: axe4.version
             },
             testRunner: {
-              name: axe3._audit.brand
+              name: axe4._audit.brand
             },
             testEnvironment: getTestEnvironment(win),
             timestamp: (/* @__PURE__ */ new Date()).toISOString(),
@@ -23993,7 +23993,7 @@ var require_axe = __commonJS({
           });
         }
         function _getRule(ruleId) {
-          var rule2 = axe3._audit.rules.find(function(_ref96) {
+          var rule2 = axe4._audit.rules.find(function(_ref96) {
             var id2 = _ref96.id;
             return id2 === ruleId;
           });
@@ -24656,7 +24656,7 @@ var require_axe = __commonJS({
         }
         var query_selector_all_filter_default = querySelectorAllFilter;
         function preloadCssom(_ref98) {
-          var _ref98$treeRoot = _ref98.treeRoot, treeRoot = _ref98$treeRoot === void 0 ? axe3._tree[0] : _ref98$treeRoot;
+          var _ref98$treeRoot = _ref98.treeRoot, treeRoot = _ref98$treeRoot === void 0 ? axe4._tree[0] : _ref98$treeRoot;
           var rootNodes = getAllRootNodesInTree(treeRoot);
           if (!rootNodes.length) {
             return Promise.resolve();
@@ -24774,7 +24774,7 @@ var require_axe = __commonJS({
           });
         }
         function preloadMedia(_ref100) {
-          var _ref100$treeRoot = _ref100.treeRoot, treeRoot = _ref100$treeRoot === void 0 ? axe3._tree[0] : _ref100$treeRoot;
+          var _ref100$treeRoot = _ref100.treeRoot, treeRoot = _ref100$treeRoot === void 0 ? axe4._tree[0] : _ref100$treeRoot;
           var mediaVirtualNodes = query_selector_all_filter_default(treeRoot, "video[autoplay], audio[autoplay]", function(_ref101) {
             var actualNode = _ref101.actualNode;
             if (actualNode.preload === "none" && actualNode.readyState === 0 && actualNode.networkState !== actualNode.NETWORK_LOADING) {
@@ -24880,9 +24880,9 @@ var require_axe = __commonJS({
           return config;
         }
         function _publishMetaData(ruleResult) {
-          var checksData = axe3._audit.data.checks || {};
-          var rulesData = axe3._audit.data.rules || {};
-          var rule2 = find_by_default(axe3._audit.rules, "id", ruleResult.id) || {};
+          var checksData = axe4._audit.data.checks || {};
+          var rulesData = axe4._audit.data.rules || {};
+          var rule2 = find_by_default(axe4._audit.rules, "id", ruleResult.id) || {};
           ruleResult.tags = clone2(rule2.tags || []);
           var shouldBeTrue = extender(checksData, true, rule2);
           var shouldBeFalse = extender(checksData, false, rule2);
@@ -24949,7 +24949,7 @@ var require_axe = __commonJS({
         var query_selector_all_default = querySelectorAll;
         function matchTags(rule2, runOnly) {
           var include, exclude;
-          var defaultExclude = axe3._audit && axe3._audit.tagExclude ? axe3._audit.tagExclude : [];
+          var defaultExclude = axe4._audit && axe4._audit.tagExclude ? axe4._audit.tagExclude : [];
           if (runOnly.hasOwnProperty("include") || runOnly.hasOwnProperty("exclude")) {
             include = runOnly.include || [];
             include = Array.isArray(include) ? include : [include];
@@ -25034,9 +25034,9 @@ var require_axe = __commonJS({
         function _select(selector, context) {
           var result = [];
           var candidate;
-          if (axe3._selectCache) {
-            for (var j = 0, l = axe3._selectCache.length; j < l; j++) {
-              var item = axe3._selectCache[j];
+          if (axe4._selectCache) {
+            for (var j = 0, l = axe4._selectCache.length; j < l; j++) {
+              var item = axe4._selectCache[j];
               if (item.selector === selector) {
                 return item.result;
               }
@@ -25049,8 +25049,8 @@ var require_axe = __commonJS({
             var nodes = query_selector_all_filter_default(candidate, selector, isInContext);
             result = mergeArrayUniques(result, nodes);
           }
-          if (axe3._selectCache) {
-            axe3._selectCache.push({
+          if (axe4._selectCache) {
+            axe4._selectCache.push({
               selector,
               result
             });
@@ -25247,7 +25247,7 @@ var require_axe = __commonJS({
           var options = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : {};
           var tags = [];
           var ruleIds = [];
-          axe3._audit.rules.forEach(function(rule2) {
+          axe4._audit.rules.forEach(function(rule2) {
             ruleIds.push(rule2.id);
             rule2.tags.forEach(function(tag) {
               if (!tags.includes(tag)) {
@@ -25302,7 +25302,7 @@ var require_axe = __commonJS({
                 return !tags.includes(tag) && !/wcag2[1-3]a{1,3}/.test(tag);
               });
               if (unmatchedTags.length !== 0) {
-                axe3.log("Could not find tags `" + unmatchedTags.join("`, `") + "`");
+                axe4.log("Could not find tags `" + unmatchedTags.join("`, `") + "`");
               }
             } else {
               throw new Error("Unknown runOnly type '".concat(only.type, "'"));
@@ -25406,29 +25406,29 @@ var require_axe = __commonJS({
         function cleanup(resolve10, reject) {
           resolve10 = resolve10 || function res() {
           };
-          reject = reject || axe3.log;
-          if (!axe3._audit) {
+          reject = reject || axe4.log;
+          if (!axe4._audit) {
             throw new Error("No audit configured");
           }
-          var q2 = axe3.utils.queue();
+          var q2 = axe4.utils.queue();
           var cleanupErrors = [];
-          Object.keys(axe3.plugins).forEach(function(key2) {
+          Object.keys(axe4.plugins).forEach(function(key2) {
             q2.defer(function(res) {
               var rej = function rej2(err2) {
                 cleanupErrors.push(err2);
                 res();
               };
               try {
-                axe3.plugins[key2].cleanup(res, rej);
+                axe4.plugins[key2].cleanup(res, rej);
               } catch (err2) {
                 rej(err2);
               }
             });
           });
-          var flattenedTree = axe3.utils.getFlattenedTree(document2.body);
-          axe3.utils.querySelectorAll(flattenedTree, "iframe, frame").forEach(function(node) {
+          var flattenedTree = axe4.utils.getFlattenedTree(document2.body);
+          axe4.utils.querySelectorAll(flattenedTree, "iframe, frame").forEach(function(node) {
             q2.defer(function(res, rej) {
-              return axe3.utils.sendCommandToFrame(node.actualNode, {
+              return axe4.utils.sendCommandToFrame(node.actualNode, {
                 command: "cleanup-plugin"
               }, res, rej);
             });
@@ -25464,7 +25464,7 @@ var require_axe = __commonJS({
           }
         }
         function configure(spec) {
-          var audit2 = axe3._audit;
+          var audit2 = axe4._audit;
           if (!audit2) {
             throw new Error("No audit configured");
           }
@@ -25475,10 +25475,10 @@ var require_axe = __commonJS({
             }
             var _specVersion$split = specVersion.split("-"), _specVersion$split2 = _slicedToArray(_specVersion$split, 2), version = _specVersion$split2[0], canary = _specVersion$split2[1];
             var _version$split$map = version.split(".").map(Number), _version$split$map2 = _slicedToArray(_version$split$map, 3), major = _version$split$map2[0], minor = _version$split$map2[1], patch = _version$split$map2[2];
-            var _axe$version$split = axe3.version.split("-"), _axe$version$split2 = _slicedToArray(_axe$version$split, 2), axeVersion = _axe$version$split2[0], axeCanary = _axe$version$split2[1];
+            var _axe$version$split = axe4.version.split("-"), _axe$version$split2 = _slicedToArray(_axe$version$split, 2), axeVersion = _axe$version$split2[0], axeCanary = _axe$version$split2[1];
             var _axeVersion$split$map = axeVersion.split(".").map(Number), _axeVersion$split$map2 = _slicedToArray(_axeVersion$split$map, 3), axeMajor = _axeVersion$split$map2[0], axeMinor = _axeVersion$split$map2[1], axePatch = _axeVersion$split$map2[2];
             if (major !== axeMajor || axeMinor < minor || axeMinor === minor && axePatch < patch || major === axeMajor && minor === axeMinor && patch === axePatch && canary && canary !== axeCanary) {
-              throw new Error("Configured version ".concat(specVersion, " is not compatible with current axe version ").concat(axe3.version));
+              throw new Error("Configured version ".concat(specVersion, " is not compatible with current axe version ").concat(axe4.version));
             }
           }
           if (spec.reporter && (typeof spec.reporter === "function" || hasReporter(spec.reporter))) {
@@ -25745,7 +25745,7 @@ var require_axe = __commonJS({
         }
         function getRules(tags) {
           tags = tags || [];
-          var _axe$_audit = axe3._audit, rules2 = _axe$_audit.rules, data = _axe$_audit.data, tagExclude = _axe$_audit.tagExclude;
+          var _axe$_audit = axe4._audit, rules2 = _axe$_audit.rules, data = _axe$_audit.data, tagExclude = _axe$_audit.tagExclude;
           var matchingRules = !tags.length ? rules2 : rules2.filter(function(item) {
             return !!tags.filter(function(tag) {
               return item.tags.indexOf(tag) !== -1;
@@ -25855,7 +25855,7 @@ var require_axe = __commonJS({
               if (!cell) {
                 continue;
               }
-              var vNode = axe3.utils.getNodeFromTree(cell);
+              var vNode = axe4.utils.getNodeFromTree(cell);
               if (vNode[property]) {
                 headers = vNode[property];
                 break;
@@ -25865,7 +25865,7 @@ var require_axe = __commonJS({
           }
           headers = (headers || []).concat(cells.filter(predicate));
           cells.forEach(function(tableCell) {
-            var vNode2 = axe3.utils.getNodeFromTree(tableCell);
+            var vNode2 = axe4.utils.getNodeFromTree(tableCell);
             vNode2[property] = headers;
           });
           return headers;
@@ -28039,8 +28039,8 @@ var require_axe = __commonJS({
         }, {
           nodeName: "select",
           condition: function condition2(vNode) {
-            if (!(vNode instanceof axe3.AbstractVirtualNode)) {
-              vNode = axe3.utils.getNodeFromTree(vNode);
+            if (!(vNode instanceof axe4.AbstractVirtualNode)) {
+              vNode = axe4.utils.getNodeFromTree(vNode);
             }
             return Number(vNode.attr("size")) > 1;
           },
@@ -28123,7 +28123,7 @@ var require_axe = __commonJS({
           },
           LI: function LI(_ref116) {
             var node = _ref116.node, out = _ref116.out;
-            var hasImplicitListitemRole = axe3.utils.matchesSelector(node, "ol li, ul li");
+            var hasImplicitListitemRole = axe4.utils.matchesSelector(node, "ol li, ul li");
             if (hasImplicitListitemRole) {
               return out;
             }
@@ -28138,7 +28138,7 @@ var require_axe = __commonJS({
           },
           OPTION: function OPTION(_ref118) {
             var node = _ref118.node;
-            var withinOptionList = axe3.utils.matchesSelector(node, "select > option, datalist > option, optgroup > option");
+            var withinOptionList = axe4.utils.matchesSelector(node, "select > option, datalist > option, optgroup > option");
             return !withinOptionList;
           },
           SELECT: function SELECT(_ref119) {
@@ -28780,7 +28780,7 @@ var require_axe = __commonJS({
           return !regionlessNodes.includes(virtualNode);
         }
         function getRegionlessNodes(options) {
-          var regionlessNodes = findRegionlessElms(axe3._tree[0], options).map(function(vNode) {
+          var regionlessNodes = findRegionlessElms(axe4._tree[0], options).map(function(vNode) {
             while (vNode.parent && !vNode.parent._hasRegionDescendant && vNode.parent.actualNode !== document2.body) {
               vNode = vNode.parent;
             }
@@ -30014,7 +30014,7 @@ var require_axe = __commonJS({
             return true;
           }
           var selector = "h1, h2, h3, h4, h5, h6, [role=heading], iframe, frame";
-          var vNodes = query_selector_all_filter_default(axe3._tree[0], selector, _isVisibleToScreenReaders);
+          var vNodes = query_selector_all_filter_default(axe4._tree[0], selector, _isVisibleToScreenReaders);
           headingOrder = vNodes.map(function(vNode) {
             return {
               ancestry: [_getAncestry(vNode.actualNode)],
@@ -31431,7 +31431,7 @@ var require_axe = __commonJS({
             return;
           }
           cache_default.set(key2, true);
-          var elms = query_selector_all_filter_default(axe3._tree[0], options.selector, function(elm) {
+          var elms = query_selector_all_filter_default(axe4._tree[0], options.selector, function(elm) {
             return _isVisibleToScreenReaders(elm);
           });
           if (typeof options.nativeScopeFilter === "string") {
@@ -32075,14 +32075,14 @@ var require_axe = __commonJS({
             "aria-describedby": function ariaDescribedby(validValue) {
               if (!validValue) {
                 needsReview = 'aria-describedby="'.concat(_getAriaValue(virtualNode, "aria-describedby").value, '"');
-                messageKey = axe3._tree && axe3._tree[0]._hasShadowRoot ? "noIdShadow" : "noId";
+                messageKey = axe4._tree && axe4._tree[0]._hasShadowRoot ? "noIdShadow" : "noId";
               }
               return;
             },
             "aria-labelledby": function ariaLabelledby(validValue) {
               if (!validValue) {
                 needsReview = 'aria-labelledby="'.concat(_getAriaValue(virtualNode, "aria-labelledby").value, '"');
-                messageKey = axe3._tree && axe3._tree[0]._hasShadowRoot ? "noIdShadow" : "noId";
+                messageKey = axe4._tree && axe4._tree[0]._hasShadowRoot ? "noIdShadow" : "noId";
               }
             }
           };
@@ -34327,7 +34327,7 @@ var require_axe = __commonJS({
               var internalsQueue = queue_default();
               internalsQueue.defer(external.loadElementInternals());
               internalsQueue.then(function() {
-                axe3._selectCache = [];
+                axe4._selectCache = [];
                 var allRulesToRun = getRulesToRun(_this20.rules, context, options);
                 var runNowRules = allRulesToRun.now;
                 var runLaterRules = allRulesToRun.later;
@@ -34359,7 +34359,7 @@ var require_axe = __commonJS({
                   }
                   var nowRulesResults = nowRulesAndPreloaderResults[0];
                   if (!runLaterRules.length) {
-                    axe3._selectCache = void 0;
+                    axe4._selectCache = void 0;
                     resolve10(nowRulesResults.filter(function(result) {
                       return !!result;
                     }));
@@ -34371,7 +34371,7 @@ var require_axe = __commonJS({
                     laterRulesQueue.defer(deferredRule);
                   });
                   laterRulesQueue.then(function(laterRuleResults) {
-                    axe3._selectCache = void 0;
+                    axe4._selectCache = void 0;
                     resolve10(nowRulesResults.concat(laterRuleResults).filter(function(result) {
                       return !!result;
                     }));
@@ -34426,7 +34426,7 @@ var require_axe = __commonJS({
             value: function _constructHelpUrls() {
               var _this21 = this;
               var previous = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : null;
-              var version = (axe3.version.match(/^[1-9][0-9]*\.[0-9]+/) || ["x.y"])[0];
+              var version = (axe4.version.match(/^[1-9][0-9]*\.[0-9]+/) || ["x.y"])[0];
               this.rules.forEach(function(rule2) {
                 if (!_this21.data.rules[rule2.id]) {
                   _this21.data.rules[rule2.id] = {};
@@ -34583,7 +34583,7 @@ var require_axe = __commonJS({
         }
         function getHelpUrl(_ref172, ruleId, version) {
           var brand = _ref172.brand, application = _ref172.application, lang = _ref172.lang;
-          return constants_default.helpUrlBase + brand + "/" + (version || axe3.version.substring(0, axe3.version.lastIndexOf("."))) + "/" + ruleId + "?application=" + encodeURIComponent(application) + (lang && lang !== "en" ? "&lang=" + encodeURIComponent(lang) : "");
+          return constants_default.helpUrlBase + brand + "/" + (version || axe4.version.substring(0, axe4.version.lastIndexOf("."))) + "/" + ruleId + "?application=" + encodeURIComponent(application) + (lang && lang !== "en" ? "&lang=" + encodeURIComponent(lang) : "");
         }
         function setupGlobals(context) {
           var hasWindow = window2 && "Node" in window2 && "NodeList" in window2;
@@ -34615,26 +34615,26 @@ var require_axe = __commonJS({
         }
         function teardown() {
           resetGlobals();
-          axe3._memoizedFns.forEach(function(fn) {
+          axe4._memoizedFns.forEach(function(fn) {
             return fn.clear();
           });
           cache_default.clear();
-          axe3._tree = void 0;
-          axe3._selectorData = void 0;
-          axe3._selectCache = void 0;
+          axe4._tree = void 0;
+          axe4._selectorData = void 0;
+          axe4._selectCache = void 0;
         }
         var teardown_default = teardown;
         function runRules(context, options, resolve10, reject) {
           try {
             context = new Context(context);
-            axe3._tree = context.flatTree;
-            axe3._selectorData = _getSelectorData(context.flatTree);
+            axe4._tree = context.flatTree;
+            axe4._selectorData = _getSelectorData(context.flatTree);
           } catch (e) {
             teardown_default();
             return reject(e);
           }
           var q2 = queue_default();
-          var audit2 = axe3._audit;
+          var audit2 = axe4._audit;
           if (options.performanceTimer) {
             performance_timer_default.auditStart();
           }
@@ -34685,7 +34685,7 @@ var require_axe = __commonJS({
           });
         }
         function load(audit2) {
-          axe3._audit = new audit_default(audit2);
+          axe4._audit = new audit_default(audit2);
         }
         function runCommand(data, keepalive, callback) {
           var resolve10 = callback;
@@ -34710,8 +34710,8 @@ var require_axe = __commonJS({
             case "cleanup-plugin":
               return cleanup_default(resolve10, reject);
             default:
-              if (axe3._audit && axe3._audit.commands && axe3._audit.commands[data.command]) {
-                return axe3._audit.commands[data.command](data, callback);
+              if (axe4._audit && axe4._audit.commands && axe4._audit.commands[data.command]) {
+                return axe4._audit.commands[data.command](data, callback);
               }
           }
         }
@@ -34728,7 +34728,7 @@ var require_axe = __commonJS({
           this._collect = spec.collect;
           this._registry = {};
           spec.commands.forEach(function(command) {
-            axe3._audit.registerCommand(command);
+            axe4._audit.registerCommand(command);
           });
         }
         Plugin.prototype.run = function run3() {
@@ -34738,7 +34738,7 @@ var require_axe = __commonJS({
           return this._collect.apply(this, arguments);
         };
         Plugin.prototype.cleanup = function cleanup2(done) {
-          var q2 = axe3.utils.queue();
+          var q2 = axe4.utils.queue();
           var that = this;
           Object.keys(this._registry).forEach(function(key2) {
             q2.defer(function(_done) {
@@ -34751,11 +34751,11 @@ var require_axe = __commonJS({
           this._registry[impl.id] = impl;
         };
         function registerPlugin(plugin) {
-          axe3.plugins[plugin.id] = new Plugin(plugin);
+          axe4.plugins[plugin.id] = new Plugin(plugin);
         }
         var plugins_default = registerPlugin;
         function reset() {
-          var audit2 = axe3._audit;
+          var audit2 = axe4._audit;
           if (!audit2) {
             throw new Error("No audit configured");
           }
@@ -34764,7 +34764,7 @@ var require_axe = __commonJS({
         }
         var reset_default = reset;
         function resetLocale() {
-          var audit2 = axe3._audit;
+          var audit2 = axe4._audit;
           if (!audit2) {
             throw new Error("No audit configured");
           }
@@ -34773,8 +34773,8 @@ var require_axe = __commonJS({
         var reset_locale_default = resetLocale;
         function runVirtualRule(ruleId, vNode) {
           var options = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : {};
-          options.reporter = options.reporter || axe3._audit.reporter || "v1";
-          axe3._selectorData = {};
+          options.reporter = options.reporter || axe4._audit.reporter || "v1";
+          axe4._selectorData = {};
           if (!(vNode instanceof abstract_virtual_node_default)) {
             vNode = new serial_virtual_node_default(vNode);
           }
@@ -34833,7 +34833,7 @@ var require_axe = __commonJS({
             throw typeErr;
           }
           options = clone2(options);
-          options.reporter = (_ref175 = (_options$reporter = options.reporter) !== null && _options$reporter !== void 0 ? _options$reporter : (_axe$_audit2 = axe3._audit) === null || _axe$_audit2 === void 0 ? void 0 : _axe$_audit2.reporter) !== null && _ref175 !== void 0 ? _ref175 : "v1";
+          options.reporter = (_ref175 = (_options$reporter = options.reporter) !== null && _options$reporter !== void 0 ? _options$reporter : (_axe$_audit2 = axe4._audit) === null || _axe$_audit2 === void 0 ? void 0 : _axe$_audit2.reporter) !== null && _ref175 !== void 0 ? _ref175 : "v1";
           return {
             context,
             options,
@@ -34850,12 +34850,12 @@ var require_axe = __commonJS({
           var _normalizeRunParams = normalizeRunParams(args), context = _normalizeRunParams.context, options = _normalizeRunParams.options, _normalizeRunParams$c = _normalizeRunParams.callback, callback = _normalizeRunParams$c === void 0 ? noop2 : _normalizeRunParams$c;
           var _getPromiseHandlers = getPromiseHandlers(callback), thenable = _getPromiseHandlers.thenable, resolve10 = _getPromiseHandlers.resolve, reject = _getPromiseHandlers.reject;
           try {
-            assert_default(axe3._audit, "No audit configured");
-            assert_default(!axe3._running, "Axe is already running. Use `await axe.run()` to wait for the previous run to finish before starting a new run.");
+            assert_default(axe4._audit, "No audit configured");
+            assert_default(!axe4._running, "Axe is already running. Use `await axe.run()` to wait for the previous run to finish before starting a new run.");
           } catch (e) {
             return handleError(e, callback);
           }
-          axe3._running = true;
+          axe4._running = true;
           if (options.performanceTimer) {
             performance_timer_default.start();
           }
@@ -34867,21 +34867,21 @@ var require_axe = __commonJS({
                 performance_timer_default.logMeasures("reporter");
                 performance_timer_default.end();
               }
-              axe3._running = false;
+              axe4._running = false;
               teardown2();
               try {
                 resolve10(results);
               } catch (e) {
-                axe3.log(e);
+                axe4.log(e);
               }
             };
             var wrappedReject = function wrappedReject2(err2) {
-              axe3._running = false;
+              axe4._running = false;
               teardown2();
               try {
                 reject(err2);
               } catch (e) {
-                axe3.log(e);
+                axe4.log(e);
               }
             };
             try {
@@ -34897,11 +34897,11 @@ var require_axe = __commonJS({
             if (options.performanceTimer) {
               performance_timer_default.end();
             }
-            axe3._running = false;
+            axe4._running = false;
             callback(err2);
             reject(err2);
           }
-          axe3._runRules(context, options, handleRunRules, errorRunRules);
+          axe4._runRules(context, options, handleRunRules, errorRunRules);
           return thenable;
         }
         function getPromiseHandlers(callback) {
@@ -34944,18 +34944,18 @@ var require_axe = __commonJS({
             args[_key13] = arguments[_key13];
           }
           var _normalizeRunParams2 = normalizeRunParams(args), options = _normalizeRunParams2.options, context = _normalizeRunParams2.context;
-          assert_default(axe3._audit, "Axe is not configured. Audit is missing.");
-          assert_default(!axe3._running, "Axe is already running. Use `await axe.run()` to wait for the previous run to finish before starting a new run.");
-          var contextObj = new Context(context, axe3._tree);
-          axe3._tree = contextObj.flatTree;
-          axe3._selectorData = _getSelectorData(contextObj.flatTree);
-          axe3._running = true;
+          assert_default(axe4._audit, "Axe is not configured. Audit is missing.");
+          assert_default(!axe4._running, "Axe is already running. Use `await axe.run()` to wait for the previous run to finish before starting a new run.");
+          var contextObj = new Context(context, axe4._tree);
+          axe4._tree = contextObj.flatTree;
+          axe4._selectorData = _getSelectorData(contextObj.flatTree);
+          axe4._running = true;
           options.elementRef = false;
           return new Promise(function(res, rej) {
             if (options.performanceTimer) {
               performance_timer_default.auditStart();
             }
-            axe3._audit.run(contextObj, options, res, rej);
+            axe4._audit.run(contextObj, options, res, rej);
           }).then(function(results) {
             if (options.performanceTimer) {
               performance_timer_default.auditEnd();
@@ -34969,7 +34969,7 @@ var require_axe = __commonJS({
             if (contextObj.initiator) {
               environmentData = _getEnvironmentData();
             }
-            axe3._running = false;
+            axe4._running = false;
             teardown_default();
             return {
               results,
@@ -34977,7 +34977,7 @@ var require_axe = __commonJS({
               environmentData
             };
           })["catch"](function(err2) {
-            axe3._running = false;
+            axe4._running = false;
             teardown_default();
             return Promise.reject(err2);
           });
@@ -34990,10 +34990,10 @@ var require_axe = __commonJS({
             return r.environmentData;
           }) || {}, environmentData = _ref177.environmentData;
           _normalizeRunOptions(options);
-          options.reporter = (_ref178 = (_options$reporter2 = options.reporter) !== null && _options$reporter2 !== void 0 ? _options$reporter2 : (_axe$_audit3 = axe3._audit) === null || _axe$_audit3 === void 0 ? void 0 : _axe$_audit3.reporter) !== null && _ref178 !== void 0 ? _ref178 : "v1";
+          options.reporter = (_ref178 = (_options$reporter2 = options.reporter) !== null && _options$reporter2 !== void 0 ? _options$reporter2 : (_axe$_audit3 = axe4._audit) === null || _axe$_audit3 === void 0 ? void 0 : _axe$_audit3.reporter) !== null && _ref178 !== void 0 ? _ref178 : "v1";
           setFrameSpec(partialResults);
           var results = merge_results_default(partialResults);
-          results = axe3._audit.after(results, options);
+          results = axe4._audit.after(results, options);
           results.forEach(_publishMetaData);
           results = results.map(_finalizeRuleResult);
           return createReport2(results, _extends({
@@ -35036,16 +35036,16 @@ var require_axe = __commonJS({
           });
         }
         function setup2(node) {
-          if (axe3._tree) {
+          if (axe4._tree) {
             throw new Error("Axe is already setup. Call `axe.teardown()` before calling `axe.setup` again.");
           }
           if (node && _typeof(node.documentElement) === "object" && _typeof(node.defaultView) === "object") {
             node = node.documentElement;
           }
           setupGlobals(node);
-          axe3._tree = _getFlattenedTree(node);
-          axe3._selectorData = _getSelectorData(axe3._tree);
-          return axe3._tree[0];
+          axe4._tree = _getFlattenedTree(node);
+          axe4._selectorData = _getSelectorData(axe4._tree);
+          return axe4._tree[0];
         }
         var setup_default = setup2;
         var naReporter = function naReporter2(results, options, callback) {
@@ -35182,46 +35182,46 @@ var require_axe = __commonJS({
           }
         };
         var exposed_for_testing_default = _thisWillBeDeletedDoNotUse;
-        axe3._thisWillBeDeletedDoNotUse = exposed_for_testing_default;
-        axe3.constants = constants_default;
-        axe3.log = log;
-        axe3._setLogger = setLogger;
-        axe3.AbstractVirtualNode = abstract_virtual_node_default;
-        axe3.SerialVirtualNode = serial_virtual_node_default;
-        axe3.VirtualNode = virtual_node_default;
-        axe3._cache = cache_default;
-        axe3.imports = imports_exports;
-        axe3.cleanup = cleanup_default;
-        axe3.configure = configure_default;
-        axe3.externalAPIs = externalAPIs;
-        axe3.frameMessenger = frameMessenger2;
-        axe3.getRules = get_rules_default;
-        axe3._load = load;
-        axe3.plugins = {};
-        axe3.registerPlugin = plugins_default;
-        axe3.hasReporter = hasReporter;
-        axe3.getReporter = getReporter;
-        axe3.addReporter = addReporter;
-        axe3.reset = reset_default;
-        axe3.resetLocale = reset_locale_default;
-        axe3._runRules = runRules;
-        axe3.runVirtualRule = runVirtualRule;
-        axe3.run = run4;
-        axe3.setup = setup_default;
-        axe3.teardown = teardown_default;
-        axe3.runPartial = runPartial;
-        axe3.finishRun = finishRun;
-        axe3.commons = commons_exports;
-        axe3.utils = utils_exports;
-        axe3.addReporter("na", na_default);
-        axe3.addReporter("no-passes", no_passes_default);
-        axe3.addReporter("rawEnv", raw_env_default);
-        axe3.addReporter("raw", raw_default);
-        axe3.addReporter("v1", v1_default);
-        axe3.addReporter("v2", v2_default);
+        axe4._thisWillBeDeletedDoNotUse = exposed_for_testing_default;
+        axe4.constants = constants_default;
+        axe4.log = log;
+        axe4._setLogger = setLogger;
+        axe4.AbstractVirtualNode = abstract_virtual_node_default;
+        axe4.SerialVirtualNode = serial_virtual_node_default;
+        axe4.VirtualNode = virtual_node_default;
+        axe4._cache = cache_default;
+        axe4.imports = imports_exports;
+        axe4.cleanup = cleanup_default;
+        axe4.configure = configure_default;
+        axe4.externalAPIs = externalAPIs;
+        axe4.frameMessenger = frameMessenger2;
+        axe4.getRules = get_rules_default;
+        axe4._load = load;
+        axe4.plugins = {};
+        axe4.registerPlugin = plugins_default;
+        axe4.hasReporter = hasReporter;
+        axe4.getReporter = getReporter;
+        axe4.addReporter = addReporter;
+        axe4.reset = reset_default;
+        axe4.resetLocale = reset_locale_default;
+        axe4._runRules = runRules;
+        axe4.runVirtualRule = runVirtualRule;
+        axe4.run = run4;
+        axe4.setup = setup_default;
+        axe4.teardown = teardown_default;
+        axe4.runPartial = runPartial;
+        axe4.finishRun = finishRun;
+        axe4.commons = commons_exports;
+        axe4.utils = utils_exports;
+        axe4.addReporter("na", na_default);
+        axe4.addReporter("no-passes", no_passes_default);
+        axe4.addReporter("rawEnv", raw_env_default);
+        axe4.addReporter("raw", raw_default);
+        axe4.addReporter("v1", v1_default);
+        axe4.addReporter("v2", v2_default);
       })();
       "use strict";
-      axe3._load({
+      axe4._load({
         lang: "en",
         data: {
           rules: {
@@ -38829,6 +38829,57 @@ var VERSION = true ? "1.2.1" : "0.0.0-dev";
 init_errors();
 import { parseArgs } from "node:util";
 
+// src/core/redact.ts
+var SENSITIVE_PARAM = /^(?:.*[-_])?(token|access[-_]?token|refresh[-_]?token|id[-_]?token|auth|authorization|key|api[-_]?key|apikey|secret|client[-_]?secret|password|passwd|pwd|session|sessionid|sid|jwt|code|signature|sig|otp|ssn|email|phone)$/i;
+var PATTERNS = [
+  // JSON Web Tokens
+  [/\beyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}/g, "[redacted:jwt]"],
+  // Bearer / Basic credentials
+  [/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, "$1 [redacted]"],
+  // Common provider key shapes (Stripe, GitHub, Slack, AWS, Anthropic/OpenAI style)
+  [/\b(sk|pk|rk)_(live|test)_[A-Za-z0-9]{8,}\b/g, "[redacted:key]"],
+  [/\bgh[pousr]_[A-Za-z0-9]{20,}\b/g, "[redacted:key]"],
+  [/\bxox[abposr]-[A-Za-z0-9-]{10,}\b/g, "[redacted:key]"],
+  [/\bAKIA[0-9A-Z]{16}\b/g, "[redacted:key]"],
+  [/\bsk-[A-Za-z0-9_-]{20,}\b/g, "[redacted:key]"],
+  // Card-like digit runs (13-19 digits, optional separators)
+  [/\b(?:\d[ -]?){12,18}\d\b/g, "[redacted:number]"],
+  // E-mail addresses
+  [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[redacted:email]"],
+  // key=value / "key": "value" pairs for sensitive keys
+  [
+    /\b(password|passwd|pwd|secret|token|api[-_]?key|authorization|cookie|set-cookie|session[-_]?id)(["']?\s*[:=]\s*["']?)([^"'\s&,;}]{3,})/gi,
+    "$1$2[redacted]"
+  ]
+];
+function redactText(input) {
+  let out = input;
+  for (const [re, rep] of PATTERNS) out = out.replace(re, rep);
+  return out;
+}
+function redactUrl(raw) {
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    return redactText(raw);
+  }
+  if (url.username || url.password) {
+    url.username = "redacted";
+    url.password = "";
+  }
+  for (const key of [...url.searchParams.keys()]) {
+    if (SENSITIVE_PARAM.test(key)) url.searchParams.set(key, "redacted");
+  }
+  if (url.hash && /(access_token|id_token|token|code)=/i.test(url.hash)) url.hash = "#redacted";
+  return redactText(url.toString()).replace(/redacted%5D/g, "redacted]");
+}
+function excerpt(input, max = 240) {
+  if (!input) return "";
+  const clean = redactText(input.replace(/\s+/g, " ").trim());
+  return clean.length > max ? `${clean.slice(0, max - 1)}\u2026` : clean;
+}
+
 // src/core/url-safety.ts
 init_errors();
 import { execFile } from "node:child_process";
@@ -39151,19 +39202,21 @@ function parse(cmd, argv) {
   const values = parsed.values;
   const quiet = Boolean(values.quiet);
   const json = Boolean(values.json);
+  const write2 = (fields, msg) => {
+    if (quiet) return;
+    process.stderr.write(
+      json ? `${JSON.stringify({ type: "progress", ...fields, message: msg.trim(), at: (/* @__PURE__ */ new Date()).toISOString() })}
+` : `${msg}
+`
+    );
+  };
   return {
     values,
     positionals: parsed.positionals,
     json,
     ws: new Workspace(values.workspace),
-    log: (msg) => {
-      if (quiet) return;
-      process.stderr.write(
-        json ? `${JSON.stringify({ type: "progress", message: msg.trim(), at: (/* @__PURE__ */ new Date()).toISOString() })}
-` : `${msg}
-`
-      );
-    }
+    log: (msg) => write2({}, msg),
+    progress: (event) => write2(event.url ? { ...event, url: redactUrl(event.url) } : event, event.message)
   };
 }
 function str(ctx, key) {
@@ -40752,57 +40805,6 @@ async function guardedFetchText(url, policy, opts) {
     return res.body ?? null;
   }
   return null;
-}
-
-// src/core/redact.ts
-var SENSITIVE_PARAM = /^(?:.*[-_])?(token|access[-_]?token|refresh[-_]?token|id[-_]?token|auth|authorization|key|api[-_]?key|apikey|secret|client[-_]?secret|password|passwd|pwd|session|sessionid|sid|jwt|code|signature|sig|otp|ssn|email|phone)$/i;
-var PATTERNS = [
-  // JSON Web Tokens
-  [/\beyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}/g, "[redacted:jwt]"],
-  // Bearer / Basic credentials
-  [/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, "$1 [redacted]"],
-  // Common provider key shapes (Stripe, GitHub, Slack, AWS, Anthropic/OpenAI style)
-  [/\b(sk|pk|rk)_(live|test)_[A-Za-z0-9]{8,}\b/g, "[redacted:key]"],
-  [/\bgh[pousr]_[A-Za-z0-9]{20,}\b/g, "[redacted:key]"],
-  [/\bxox[abposr]-[A-Za-z0-9-]{10,}\b/g, "[redacted:key]"],
-  [/\bAKIA[0-9A-Z]{16}\b/g, "[redacted:key]"],
-  [/\bsk-[A-Za-z0-9_-]{20,}\b/g, "[redacted:key]"],
-  // Card-like digit runs (13-19 digits, optional separators)
-  [/\b(?:\d[ -]?){12,18}\d\b/g, "[redacted:number]"],
-  // E-mail addresses
-  [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[redacted:email]"],
-  // key=value / "key": "value" pairs for sensitive keys
-  [
-    /\b(password|passwd|pwd|secret|token|api[-_]?key|authorization|cookie|set-cookie|session[-_]?id)(["']?\s*[:=]\s*["']?)([^"'\s&,;}]{3,})/gi,
-    "$1$2[redacted]"
-  ]
-];
-function redactText(input) {
-  let out = input;
-  for (const [re, rep] of PATTERNS) out = out.replace(re, rep);
-  return out;
-}
-function redactUrl(raw) {
-  let url;
-  try {
-    url = new URL(raw);
-  } catch {
-    return redactText(raw);
-  }
-  if (url.username || url.password) {
-    url.username = "redacted";
-    url.password = "";
-  }
-  for (const key of [...url.searchParams.keys()]) {
-    if (SENSITIVE_PARAM.test(key)) url.searchParams.set(key, "redacted");
-  }
-  if (url.hash && /(access_token|id_token|token|code)=/i.test(url.hash)) url.hash = "#redacted";
-  return redactText(url.toString()).replace(/redacted%5D/g, "redacted]");
-}
-function excerpt(input, max = 240) {
-  if (!input) return "";
-  const clean = redactText(input.replace(/\s+/g, " ").trim());
-  return clean.length > max ? `${clean.slice(0, max - 1)}\u2026` : clean;
 }
 
 // src/journeys/safety.ts
@@ -46153,7 +46155,7 @@ async function runAudit(ws, opts) {
   const hostLists = hostListsFor(target, opts.allowHosts ?? [], opts.blockHosts ?? []);
   const headers = opts.extraHeaders ? targetHeaders(target.origin, opts.extraHeaders) : void 0;
   const browsing = contextOptions(opts, headers);
-  const log = opts.onProgress ?? (() => void 0);
+  const progress = opts.onProgress ?? (() => void 0);
   const runDir = ws.createRunDir(id);
   const startedAt = (/* @__PURE__ */ new Date()).toISOString();
   const limitations = [];
@@ -46192,7 +46194,7 @@ async function runAudit(ws, opts) {
   try {
     try {
       if (check.unresolved) throw new NameUnresolved();
-      log(`Starting ${opts.browser} \u2026`);
+      progress({ phase: "launch", message: `Starting ${opts.browser} \u2026` });
       halt();
       session = await openGuardedBrowser(
         opts.browser,
@@ -46224,7 +46226,7 @@ async function runAudit(ws, opts) {
       halt();
       if (opts.setupJourney) {
         const spec = opts.setupJourney;
-        log(`Running setup journey ${spec.id} \u2026`);
+        progress({ phase: "setup", message: `Running setup journey ${spec.id} \u2026` });
         const { result } = await untilStopped(
           runJourney(browser, spec, {
             base: target,
@@ -46239,7 +46241,7 @@ async function runAudit(ws, opts) {
             ...opts.evidence ? { evidence: opts.evidence } : {},
             ...opts.storageState ? { storageState: opts.storageState } : {},
             ...browsing,
-            log
+            log: (message) => progress({ phase: "setup", message })
           }),
           signal
         );
@@ -46260,7 +46262,11 @@ async function runAudit(ws, opts) {
       }
       if (!urls) {
         halt();
-        log(`Discovering pages on ${target.origin} \u2026`);
+        progress({
+          phase: "discover",
+          message: `Discovering pages on ${target.origin} \u2026`,
+          url: target.origin
+        });
         const ctx = await newContext(browser, opts.viewports[0], {
           runDir,
           timeoutMs: opts.timeoutMs,
@@ -46309,9 +46315,13 @@ async function runAudit(ws, opts) {
         ))
           limitations.push(robotsOverrideLimitation(u));
       }
-      log(
-        `Auditing ${urls.length} page(s) \xD7 ${opts.viewports.length} viewport(s) in ${opts.browser} ${browserVersion}`
-      );
+      const captures = urls.length * opts.viewports.length;
+      progress({
+        phase: "capture",
+        message: `Auditing ${urls.length} page(s) \xD7 ${opts.viewports.length} viewport(s) in ${opts.browser} ${browserVersion}`,
+        done: 0,
+        total: captures
+      });
       for (const vp of opts.viewports) {
         halt();
         const ctx = await newContext(browser, vp, {
@@ -46324,7 +46334,14 @@ async function runAudit(ws, opts) {
         try {
           for (const { url } of urls) {
             halt();
-            log(`  ${vp.name.padEnd(8)} ${redactUrl(url)}`);
+            progress({
+              phase: "capture",
+              message: `  ${vp.name.padEnd(8)} ${redactUrl(url)}`,
+              done: observations.length,
+              total: captures,
+              url: redactUrl(url),
+              viewport: vp.name
+            });
             const capture = capturePage(ctx, url, vp, {
               runDir,
               guardToken: session.guard.token,
@@ -46350,12 +46367,21 @@ async function runAudit(ws, opts) {
         }
       }
       if (runs2 > 1) {
-        for (const obs of observations) {
-          if (!obs.vitals || (obs.status ?? 200) >= 400) continue;
+        const measured = observations.filter((o) => o.vitals && (o.status ?? 200) < 400);
+        const visits = measured.length * (runs2 - 1);
+        let visited = 0;
+        for (const obs of measured) {
           const samples = [obs.vitals];
           for (let k = 1; k < runs2; k++) {
             halt();
-            log(`  metrics  ${obs.viewport.name.padEnd(8)} ${obs.url} (run ${k + 1}/${runs2})`);
+            progress({
+              phase: "metrics",
+              message: `  metrics  ${obs.viewport.name.padEnd(8)} ${obs.url} (run ${k + 1}/${runs2})`,
+              done: visited++,
+              total: visits,
+              url: obs.url,
+              viewport: obs.viewport.name
+            });
             const v = await withinGrace(
               measureVitals(browser, obs.finalUrl, obs.viewport, {
                 runDir,
@@ -46385,42 +46411,47 @@ async function runAudit(ws, opts) {
           ...storageState ? { storageState } : {},
           ...browsing
         });
+        const probes = observations.filter((x) => x.viewport.name === vp.name && (x.status ?? 200) < 400).flatMap(
+          (o) => (o.probe?.inventory.forms ?? []).filter(
+            (f) => f.purpose !== "search" && (f.purpose !== "other" || f.fields.some((x) => x.required))
+          ).slice(0, 3).map((form) => ({ o, form }))
+        );
         try {
-          for (const o of observations.filter(
-            (x) => x.viewport.name === vp.name && (x.status ?? 200) < 400
-          )) {
-            const probeable = (o.probe?.inventory.forms ?? []).filter(
-              (f) => f.purpose !== "search" && (f.purpose !== "other" || f.fields.some((x) => x.required))
+          for (const [i, { o, form }] of probes.entries()) {
+            halt();
+            progress({
+              phase: "forms",
+              message: `  form     ${o.url} ${form.selector}`,
+              done: i,
+              total: probes.length,
+              url: o.url,
+              viewport: vp.name
+            });
+            const probe = probeFormValidation(
+              ctx,
+              o.finalUrl,
+              form,
+              vp,
+              { hostClass, allowSubmit: opts.allowSubmit ?? false, allowDestructive: false },
+              runDir,
+              // Wait as the capture did; a capture that never found the element took its forms from the page
+              // as it was, which a plain fresh load reproduces.
+              {
+                ...opts.waitFor && o.load?.found !== false ? { waitFor: opts.waitFor } : {},
+                timeoutMs: opts.timeoutMs
+              }
             );
-            for (const form of probeable.slice(0, 3)) {
-              halt();
-              log(`  form     ${o.url} ${form.selector}`);
-              const probe = probeFormValidation(
-                ctx,
-                o.finalUrl,
-                form,
-                vp,
-                { hostClass, allowSubmit: opts.allowSubmit ?? false, allowDestructive: false },
-                runDir,
-                // Wait as the capture did; a capture that never found the element took its forms from the page
-                // as it was, which a plain fresh load reproduces.
-                {
-                  ...opts.waitFor && o.load?.found !== false ? { waitFor: opts.waitFor } : {},
-                  timeoutMs: opts.timeoutMs
-                }
-              );
-              const r = await withinGrace(probe, signal, async () => {
-                await ctx.close();
-                await settled(probe, 1e3);
-                rmSync3(join11(runDir, formScreenshotFile(o.finalUrl, form.selector, vp)), { force: true });
-              });
-              formFindings.push(...r.findings);
-              if (r.result.outcome === "blocked")
-                limitations.push(`Form ${form.selector} on ${o.url} was not submitted: ${r.result.detail}`);
-              if (r.result.outcome === "simulated") simulated.push(`${form.selector} on ${o.url}`);
-              if (r.result.outcome === "skipped")
-                limitations.push(`Form ${form.selector} on ${o.url} was not probed: ${r.result.detail}`);
-            }
+            const r = await withinGrace(probe, signal, async () => {
+              await ctx.close();
+              await settled(probe, 1e3);
+              rmSync3(join11(runDir, formScreenshotFile(o.finalUrl, form.selector, vp)), { force: true });
+            });
+            formFindings.push(...r.findings);
+            if (r.result.outcome === "blocked")
+              limitations.push(`Form ${form.selector} on ${o.url} was not submitted: ${r.result.detail}`);
+            if (r.result.outcome === "simulated") simulated.push(`${form.selector} on ${o.url}`);
+            if (r.result.outcome === "skipped")
+              limitations.push(`Form ${form.selector} on ${o.url} was not probed: ${r.result.detail}`);
           }
         } finally {
           await ctx.close().catch(() => void 0);
@@ -46437,11 +46468,11 @@ async function runAudit(ws, opts) {
     } catch (err) {
       if (err instanceof NameUnresolved) {
         const msg = `No page was loaded: the host name ${target.hostname} could not be resolved (no hosts entry or local DNS answer).`;
-        log(msg);
+        progress({ phase: "launch", message: msg });
         limitations.push(msg);
       } else if (err instanceof AuditStopped) {
         stoppedBy = signal?.reason === "max-duration" ? "max-duration" : "signal";
-        log(`Stopped early (${stoppedBy}); writing a partial run \u2026`);
+        progress({ phase: "report", message: `Stopped early (${stoppedBy}); writing a partial run \u2026` });
       } else throw err;
     }
     await endBrowsing();
@@ -47189,6 +47220,7 @@ import { writeFileSync as writeFileSync7 } from "node:fs";
 import { join as join15 } from "node:path";
 
 // src/core/manifest.ts
+var import_axe_core2 = __toESM(require_axe(), 1);
 import { createHash as createHash2 } from "node:crypto";
 import { readdirSync as readdirSync5, readFileSync as readFileSync7, writeFileSync as writeFileSync6 } from "node:fs";
 import { join as join14 } from "node:path";
@@ -47203,12 +47235,28 @@ function listFiles(dir, prefix = "") {
   }
   return out;
 }
-function writeManifest(runDir, runId) {
+function scopeOf(run) {
+  const recorded = run.settings.scope;
+  const strings = (v) => Array.isArray(v) && v.every((x) => typeof x === "string") ? v : void 0;
+  const urls = strings(recorded?.urls) ?? run.pages.map((p) => p.url);
+  const viewports = strings(recorded?.viewports) ?? run.viewports.map((v) => v.name);
+  return { target: redactUrl(run.target), urls: [...new Set(urls.map(redactUrl))], viewports };
+}
+function writeManifest(runDir, run) {
   const files = listFiles(runDir).sort().map((path2) => {
     const data = readFileSync7(join14(runDir, path2));
     return { path: path2, bytes: data.length, sha256: createHash2("sha256").update(data).digest("hex") };
   });
-  const manifest = { schemaVersion: 1, runId, files };
+  const axeVersion = run.settings.axe;
+  const manifest = {
+    schemaVersion: 1,
+    runId: run.id,
+    tool: { name: "jourilo", version: run.tool.version },
+    browser: { name: run.browser.name, version: run.browser.version },
+    axe: { version: typeof axeVersion === "string" ? axeVersion : import_axe_core2.default.version },
+    scope: scopeOf(run),
+    files
+  };
   writeFileSync6(join14(runDir, MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}
 `);
   return manifest;
@@ -49433,7 +49481,7 @@ function writeReports(dir, run, cmp, opts = {}) {
     writeFileSync7(out.sarif, `${JSON.stringify(renderSarif(run), null, 2)}
 `);
   }
-  writeManifest(dir, run.id);
+  writeManifest(dir, run);
   return out;
 }
 
@@ -50038,7 +50086,10 @@ async function suggest(ctx) {
     const isDir = isDirectoryTarget(target);
     const server = isDir ? await serveStatic(resolve5(target)) : void 0;
     try {
-      ctx.log("Discovering pages to derive journeys (no audit rules applied) \u2026");
+      ctx.progress({
+        phase: "discover",
+        message: "Discovering pages to derive journeys (no audit rules applied) \u2026"
+      });
       run = (await runAudit(ctx.ws, {
         target: server?.url ?? target,
         viewports: parseViewports("desktop"),
@@ -50057,7 +50108,7 @@ async function suggest(ctx) {
         mask: [],
         forms: false,
         mode: isDir ? "repository" : "website",
-        onProgress: ctx.log
+        onProgress: ctx.progress
       })).run;
     } finally {
       await server?.close();
@@ -50571,7 +50622,7 @@ async function auditCommand(ctx, usage2, categories) {
       mode: repo ? "repository" : "website",
       forms: !flag(ctx, "no-forms"),
       allowSubmit: flag(ctx, "allow-submit"),
-      onProgress: ctx.log,
+      onProgress: ctx.progress,
       signal: stop.signal
     };
     if (flag(ctx, "ignore-robots") && !server && !/^(localhost|127\.|\[::1\])/.test(
@@ -50587,7 +50638,10 @@ async function auditCommand(ctx, usage2, categories) {
     if (repo) run.settings.repo = repo;
     if (repo) {
       const located = locateFindings(run, repo);
-      ctx.log(`Mapped ${located} finding(s) to likely source locations in ${repo}`);
+      ctx.progress({
+        phase: "report",
+        message: `Mapped ${located} finding(s) to likely source locations in ${repo}`
+      });
     }
     run.outcome = runOutcome(run);
     if (budgetSpecs.length) {
@@ -51802,7 +51856,7 @@ ${networkOptionsHelp(22)}`,
       mask: [],
       inventoryOnly: true,
       mode: "website",
-      onProgress: ctx.log
+      onProgress: ctx.progress
     });
     const profile = buildSiteProfile(run, observations);
     const file2 = join22(ctx.ws.root, "site.json");
@@ -52834,7 +52888,7 @@ ${networkOptionsHelp(25)}
         ...base2.settings.evidence === "minimal" ? { evidence: "minimal" } : {},
         ...setupJourney ? { setupJourney } : {},
         ...repo ? { context: loadContext(repo) } : {},
-        onProgress: ctx.log
+        onProgress: ctx.progress
       });
       if (servedDir) {
         run.target = `${displayPath(servedDir)} (served at ${server.url})`;
@@ -52993,7 +53047,7 @@ The current versions are kept and the rollback can be undone. Re-run with --yes 
 };
 
 // src/cli/commands/rules.ts
-var import_axe_core2 = __toESM(require_axe(), 1);
+var import_axe_core3 = __toESM(require_axe(), 1);
 
 // src/audit/rules/registry.ts
 function rule(id, category, kind, severity, title, standards) {
@@ -53359,7 +53413,7 @@ var RULES = [
 init_errors();
 function allRules() {
   const out = [...RULES];
-  for (const r of import_axe_core2.default.getRules(AXE_TAGS)) {
+  for (const r of import_axe_core3.default.getRules(AXE_TAGS)) {
     const standards = wcagFromAxeTags(r.tags).map((s) => `${s.standard} ${s.id}`);
     out.push({
       id: `axe/${r.ruleId}`,
@@ -53387,7 +53441,7 @@ var rules = {
   usage: "jourilo rules list [--json]",
   details: `Subcommand:
   list   Native rules (jourilo/\u2026, perf/\u2026, conv/\u2026, ux/\u2026, a11y/\u2026, journey/\u2026, design/\u2026) and the axe/<id> and
-         axe-review/<id> rules a run enables from axe-core ${import_axe_core2.default.version}. Severity is "varies" when it depends on
+         axe-review/<id> rules a run enables from axe-core ${import_axe_core3.default.version}. Severity is "varies" when it depends on
          what was measured. With --json: one array of {id, category, severity, kind, title, standards}.`,
   async run(ctx) {
     if (ctx.positionals[0] !== "list")
@@ -53548,8 +53602,8 @@ var doctor = {
         }
       }
     }
-    const axe3 = await Promise.resolve().then(() => __toESM(require_axe(), 1));
-    checks.push({ name: "axe-core", ok: true, detail: axe3.default.version });
+    const axe4 = await Promise.resolve().then(() => __toESM(require_axe(), 1));
+    checks.push({ name: "axe-core", ok: true, detail: axe4.default.version });
     const ok = checks.every((c) => c.ok);
     return {
       data: { version: VERSION, ok, checks },
@@ -53621,8 +53675,11 @@ function cliMarkdown() {
     "6 stopped early by SIGINT/SIGTERM or `--max-duration` (a partial run is still written; a second signal exits 130).",
     "",
     "Global options: `--json`, `--workspace DIR` (default `.jourilo`, or `JOURILO_WORKSPACE`), `--quiet`. With `--json`,",
-    'progress lines on stderr are JSON too: `{"type":"progress","message":"\u2026","at":"<ISO time>"}`. `--workspace` is also',
-    "the output directory: every run is written to `DIR/runs/<id>/` (there is no separate `--output-dir`).",
+    'progress lines on stderr are JSON too: `{"type":"progress","message":"\u2026","at":"<ISO time>"}`. Lines from the audit',
+    "pipeline also carry `phase` (launch, discover, setup, capture, metrics, forms, rules or report) and, where known",
+    "exactly, `done` (steps of that phase finished before this one), `total`, `url` (redacted) and `viewport`; the",
+    "`message` text is the same as the plain line. `--workspace` is also the output directory: every run is written to",
+    "`DIR/runs/<id>/` (there is no separate `--output-dir`).",
     ""
   ];
   for (const [title, names] of GROUPS) {

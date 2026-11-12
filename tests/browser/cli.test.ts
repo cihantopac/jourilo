@@ -1485,3 +1485,131 @@ describe('cli --wait-for (F31)', () => {
     }
   }, 240_000);
 });
+
+describe('cli structured progress (F35)', () => {
+  interface ProgressLine {
+    type: string;
+    phase?: string;
+    message: string;
+    done?: number;
+    total?: number;
+    url?: string;
+    viewport?: string;
+  }
+
+  it('audit progress lines carry phase, done and total; manifest.json carries versions and scope', async () => {
+    const srv = http.createServer((req, res) => {
+      const page = (body: string) =>
+        res
+          .writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store' })
+          .end(
+            `<!doctype html><html lang="en"><head><title>P</title></head><body><main>${body}</main></body></html>`,
+          );
+      if (req.url === '/') page('<h1>Home</h1><a href="/b">B</a>');
+      else if (req.url?.startsWith('/b'))
+        page(`<h1>Sign in</h1><form action="/login" method="post">
+<label>Email <input type="email" name="email" autocomplete="email" required></label>
+<label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+<button type="submit">Sign in</button></form>`);
+      else res.writeHead(404).end();
+    });
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+    const origin = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
+    try {
+      const child = spawn(
+        process.execPath,
+        [
+          cli,
+          'audit',
+          `${origin}/`,
+          '--url',
+          '/',
+          '--url',
+          '/b?token=s3cret-query',
+          '--viewports',
+          'desktop,mobile',
+          '--runs',
+          '2',
+          '--no-keyboard',
+          '--extra-header',
+          'X-Key: s3cret-header',
+          '--json',
+          '--workspace',
+          ws,
+        ],
+        { cwd: root },
+      );
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', (d) => {
+        stdout += d;
+      });
+      child.stderr.on('data', (d) => {
+        stderr += d;
+      });
+      const code = await new Promise<number | null>((r) => child.on('close', r));
+      expect(code, stderr).toBe(0);
+      expect(stderr).not.toContain('s3cret');
+      const lines = stderr
+        .split('\n')
+        .filter(Boolean)
+        .map((l) => JSON.parse(l) as ProgressLine)
+        .filter((l) => l.type === 'progress');
+      const phases = ['launch', 'discover', 'setup', 'capture', 'metrics', 'forms', 'rules', 'report'];
+      for (const l of lines) expect(phases, l.message).toContain(l.phase);
+      expect(lines[0]).toMatchObject({ phase: 'launch', message: 'Starting chromium …' });
+
+      // The plan line, then one line per capture: done counts the captures finished before it.
+      const plan = lines.find((l) => l.message.startsWith('Auditing '));
+      expect(plan).toMatchObject({ phase: 'capture', done: 0, total: 4 });
+      const captures = lines.filter((l) => l.phase === 'capture' && l.url);
+      const b = `${origin}/b?token=[redacted]`;
+      expect(captures.map((l) => [l.done, l.total, l.viewport, l.url])).toEqual([
+        [0, 4, 'desktop', `${origin}/`],
+        [1, 4, 'desktop', b],
+        [2, 4, 'mobile', `${origin}/`],
+        [3, 4, 'mobile', b],
+      ]);
+      // The message text is unchanged: the viewport padded to 8, then the redacted URL.
+      expect(captures[1]!.message).toBe(`desktop  ${b}`);
+
+      // One extra metrics visit per capture (--runs 2).
+      const metrics = lines.filter((l) => l.phase === 'metrics');
+      expect(metrics.map((l) => [l.done, l.total])).toEqual([
+        [0, 4],
+        [1, 4],
+        [2, 4],
+        [3, 4],
+      ]);
+      expect(metrics[1]).toMatchObject({
+        viewport: 'desktop',
+        url: b,
+        message: `metrics  desktop  ${b} (run 2/2)`,
+      });
+
+      // The sign-in form on /b, probed once in the desktop viewport.
+      const forms = lines.filter((l) => l.phase === 'forms');
+      expect(forms).toHaveLength(1);
+      expect(forms[0]).toMatchObject({ done: 0, total: 1, viewport: 'desktop', url: b });
+
+      const out = JSON.parse(stdout) as { runDir: string };
+      const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8')) as Run;
+      const manifestText = readFileSync(join(out.runDir, 'manifest.json'), 'utf8');
+      expect(manifestText).not.toContain('s3cret');
+      const manifest = JSON.parse(manifestText);
+      expect(manifest.tool).toEqual(run.tool);
+      expect(manifest.browser).toEqual(run.browser);
+      expect(manifest.browser.version).not.toBe('unknown');
+      expect(manifest.axe).toEqual({ version: run.settings.axe });
+      expect(manifest.scope).toEqual({
+        target: `${origin}/`,
+        urls: [`${origin}/`, b],
+        viewports: ['desktop', 'mobile'],
+      });
+      expect(manifest.files.some((f: { path: string }) => f.path === 'browser.pids')).toBe(false);
+    } finally {
+      srv.closeAllConnections();
+      await new Promise((r) => srv.close(r));
+    }
+  }, 240_000);
+});
