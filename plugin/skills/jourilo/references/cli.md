@@ -545,6 +545,21 @@ Benchmark detection quality on fixture sites with known defects (recall, false p
 jourilo bench [fixtures-dir=fixtures/sites] [--only name] [--record docs/evaluation/bench-history.jsonl]
 ```
 
+### `jourilo rules`
+
+List every rule Jourilo can report, with category, severity and kind (machine-readable with --json).
+
+```
+jourilo rules list [--json]
+```
+
+```
+Subcommand:
+  list   Native rules (jourilo/…, perf/…, conv/…, ux/…, a11y/…, journey/…, design/…) and the axe/<id> and
+         axe-review/<id> rules a run enables from axe-core 4.14.0. Severity is "varies" when it depends on
+         what was measured. With --json: one array of {id, category, severity, kind, title, standards}.
+```
+
 ### `jourilo serve`
 
 Serve a static build directory on 127.0.0.1 (for audits and journeys of static sites).

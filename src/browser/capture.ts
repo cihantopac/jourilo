@@ -274,7 +274,7 @@ async function settle(page: Page, timeoutMs: number): Promise<void> {
   await page.waitForTimeout(300);
 }
 
-const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
+export const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
 
 const HIDDEN_SKIP_RULES = new Set(['color-contrast', 'color-contrast-enhanced']);
 

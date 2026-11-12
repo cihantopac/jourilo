@@ -6,6 +6,7 @@ import { experiment } from './commands/experiment.js';
 import { finding } from './commands/finding.js';
 import { journeys } from './commands/journeys.js';
 import { checkpoint, optimize, rollbackCmd, verify } from './commands/optimize.js';
+import { rules } from './commands/rules.js';
 import { compare, report, runs } from './commands/runs.js';
 import { doctor, serve, setup } from './commands/system.js';
 import type { Command } from './framework.js';
@@ -27,6 +28,7 @@ export const COMMANDS: Command[] = [
   runs,
   bench,
   agent,
+  rules,
   serve,
   setup,
   doctor,
@@ -39,7 +41,7 @@ export const GROUPS: [string, string[]][] = [
   ['Experiment', ['experiment']],
   ['Improve', ['optimize', 'verify', 'checkpoint', 'rollback']],
   ['Results', ['report', 'compare', 'runs', 'finding']],
-  ['System', ['agent', 'bench', 'serve', 'setup', 'doctor']],
+  ['System', ['agent', 'bench', 'rules', 'serve', 'setup', 'doctor']],
 ];
 
 export function cliMarkdown(): string {

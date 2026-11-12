@@ -245,19 +245,19 @@ var require_axe = __commonJS({
           return o2 && "function" == typeof Symbol && o2.constructor === Symbol && o2 !== Symbol.prototype ? "symbol" : typeof o2;
         }, _typeof(o);
       }
-      var axe2 = axe2 || {};
-      axe2.version = "4.14.0";
+      var axe3 = axe3 || {};
+      axe3.version = "4.14.0";
       if (typeof define === "function" && define.amd) {
         define("axe-core", [], function() {
-          return axe2;
+          return axe3;
         });
       }
       if ((typeof module === "undefined" ? "undefined" : _typeof(module)) === "object" && module.exports && typeof axeFunction.toString === "function") {
-        axe2.source = "(" + axeFunction.toString() + ')(typeof window === "object" ? window : this);';
-        module.exports = axe2;
+        axe3.source = "(" + axeFunction.toString() + ')(typeof window === "object" ? window : this);';
+        module.exports = axe3;
       }
       if (typeof window2.getComputedStyle === "function") {
-        window2.axe = axe2;
+        window2.axe = axe3;
       }
       var commons;
       "use strict";
@@ -4376,15 +4376,15 @@ var require_axe = __commonJS({
               var selector = {
                 type: "ruleSet"
               };
-              var rule = parseRule();
-              if (!rule) {
+              var rule2 = parseRule();
+              if (!rule2) {
                 return null;
               }
               var currentRule = selector;
-              while (rule) {
-                rule.type = "rule";
-                currentRule.rule = rule;
-                currentRule = rule;
+              while (rule2) {
+                rule2.type = "rule";
+                currentRule.rule = rule2;
+                currentRule = rule2;
                 skipWhitespace();
                 chr = str3.charAt(pos);
                 if (pos >= l || chr === "," || chr === ")") {
@@ -4394,36 +4394,36 @@ var require_axe = __commonJS({
                   var op = chr;
                   pos++;
                   skipWhitespace();
-                  rule = parseRule();
-                  if (!rule) {
+                  rule2 = parseRule();
+                  if (!rule2) {
                     throw Error('Rule expected after "' + op + '".');
                   }
-                  rule.nestingOperator = op;
+                  rule2.nestingOperator = op;
                 } else {
-                  rule = parseRule();
-                  if (rule) {
-                    rule.nestingOperator = null;
+                  rule2 = parseRule();
+                  if (rule2) {
+                    rule2.nestingOperator = null;
                   }
                 }
               }
               return selector;
             }
             function parseRule() {
-              var rule = null;
+              var rule2 = null;
               while (pos < l) {
                 chr = str3.charAt(pos);
                 if (chr === "*") {
                   pos++;
-                  (rule = rule || {}).tagName = "*";
+                  (rule2 = rule2 || {}).tagName = "*";
                 } else if (utils_1.isIdentStart(chr) || chr === "\\") {
-                  (rule = rule || {}).tagName = getIdent();
+                  (rule2 = rule2 || {}).tagName = getIdent();
                 } else if (chr === ".") {
                   pos++;
-                  rule = rule || {};
-                  (rule.classNames = rule.classNames || []).push(getIdent());
+                  rule2 = rule2 || {};
+                  (rule2.classNames = rule2.classNames || []).push(getIdent());
                 } else if (chr === "#") {
                   pos++;
-                  (rule = rule || {}).id = getIdent();
+                  (rule2 = rule2 || {}).id = getIdent();
                 } else if (chr === "[") {
                   pos++;
                   skipWhitespace();
@@ -4480,8 +4480,8 @@ var require_axe = __commonJS({
                     pos++;
                     attr.value = attrValue;
                   }
-                  rule = rule || {};
-                  (rule.attrs = rule.attrs || []).push(attr);
+                  rule2 = rule2 || {};
+                  (rule2.attrs = rule2.attrs || []).push(attr);
                 } else if (chr === ":") {
                   pos++;
                   var pseudoName = getIdent();
@@ -4527,13 +4527,13 @@ var require_axe = __commonJS({
                     pos++;
                     pseudo.value = value;
                   }
-                  rule = rule || {};
-                  (rule.pseudos = rule.pseudos || []).push(pseudo);
+                  rule2 = rule2 || {};
+                  (rule2.pseudos = rule2.pseudos || []).push(pseudo);
                 } else {
                   break;
                 }
               }
-              return rule;
+              return rule2;
             }
             return parse3();
           }
@@ -7868,15 +7868,15 @@ var require_axe = __commonJS({
         }
         var aggregate_checks_default = aggregateChecks;
         function _finalizeRuleResult(ruleResult) {
-          var rule = axe2._audit.rules.find(function(_ref) {
+          var rule2 = axe3._audit.rules.find(function(_ref) {
             var id2 = _ref.id;
             return id2 === ruleResult.id;
           });
-          if (rule && rule.impact) {
+          if (rule2 && rule2.impact) {
             ruleResult.nodes.forEach(function(node) {
               ["any", "all", "none"].forEach(function(checkType) {
                 (node[checkType] || []).forEach(function(checkResult) {
-                  checkResult.impact = rule.impact;
+                  checkResult.impact = rule2.impact;
                 });
               });
             });
@@ -14642,10 +14642,10 @@ var require_axe = __commonJS({
         var src_default = color_default;
         var import_from2 = __toModule(require_from3());
         import_dot["default"].templateSettings.strip = false;
-        axe2._memoizedFns = [];
+        axe3._memoizedFns = [];
         function memoizeImplementation(fn, options) {
           var memoized = (0, import_memoizee["default"])(fn, options);
-          axe2._memoizedFns.push(memoized);
+          axe3._memoizedFns.push(memoized);
           return memoized;
         }
         var memoize_default = memoizeImplementation;
@@ -14711,7 +14711,7 @@ var require_axe = __commonJS({
           if (!id2) {
             return;
           }
-          var selectorData = axe2._selectorData;
+          var selectorData = axe3._selectorData;
           var root = elm.getRootNode && elm.getRootNode() || document2;
           var rootId = selectorData._rootMap.get(root);
           var nodeIdx = selectorData._elmToIdx.get(elm);
@@ -15311,10 +15311,10 @@ var require_axe = __commonJS({
         }
         function generateSelector(elm) {
           var _ref44 = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {}, _ref44$toRoot = _ref44.toRoot, toRoot = _ref44$toRoot === void 0 ? false : _ref44$toRoot;
-          if (!axe2._selectorData) {
+          if (!axe3._selectorData) {
             throw new Error("Expect axe._selectorData to be set up");
           }
-          var selectorData = axe2._selectorData;
+          var selectorData = axe3._selectorData;
           var elmToIdx = selectorData._elmToIdx;
           var targetIdx = elmToIdx.get(elm);
           if (targetIdx === void 0) {
@@ -15689,7 +15689,7 @@ var require_axe = __commonJS({
             this.nodeIndexes = [this._virtualNode.nodeIndex];
           }
           this.source = null;
-          if (!axe2._audit.noHtml) {
+          if (!axe3._audit.noHtml) {
             var _this$spec$source;
             this.source = (_this$spec$source = this.spec.source) !== null && _this$spec$source !== void 0 ? _this$spec$source : _getElementSource(this._element);
           }
@@ -15963,17 +15963,17 @@ var require_axe = __commonJS({
         function convertExpressions(expressions) {
           return expressions.map(function(exp2) {
             var newExp = [];
-            var rule = exp2.rule;
-            while (rule) {
+            var rule2 = exp2.rule;
+            while (rule2) {
               newExp.push({
-                tag: rule.tagName ? rule.tagName.toLowerCase() : "*",
-                combinator: rule.nestingOperator ? rule.nestingOperator : " ",
-                id: rule.id,
-                attributes: convertAttributes(rule.attrs),
-                classes: convertClasses(rule.classNames),
-                pseudos: convertPseudos(rule.pseudos)
+                tag: rule2.tagName ? rule2.tagName.toLowerCase() : "*",
+                combinator: rule2.nestingOperator ? rule2.nestingOperator : " ",
+                id: rule2.id,
+                attributes: convertAttributes(rule2.attrs),
+                classes: convertClasses(rule2.classNames),
+                pseudos: convertPseudos(rule2.pseudos)
               });
-              rule = rule.rule;
+              rule2 = rule2.rule;
             }
             return newExp;
           });
@@ -16231,7 +16231,7 @@ var require_axe = __commonJS({
         uuid.parse = parse22;
         uuid.unparse = unparse;
         uuid.BufferClass = BufferClass;
-        axe2._uuid = v1();
+        axe3._uuid = v1();
         var uuid_default = v4;
         var errorTypes = Object.freeze(["EvalError", "RangeError", "ReferenceError", "SyntaxError", "TypeError", "URIError"]);
         function stringifyMessage(_ref50) {
@@ -16289,11 +16289,11 @@ var require_axe = __commonJS({
         function getSource() {
           var application = "axeAPI";
           var version = "";
-          if (typeof axe2 !== "undefined" && axe2._audit && axe2._audit.application) {
-            application = axe2._audit.application;
+          if (typeof axe3 !== "undefined" && axe3._audit && axe3._audit.application) {
+            application = axe3._audit.application;
           }
-          if (typeof axe2 !== "undefined") {
-            version = axe2.version;
+          if (typeof axe3 !== "undefined") {
+            version = axe3.version;
           }
           return application + "." + version;
         }
@@ -16342,13 +16342,13 @@ var require_axe = __commonJS({
         function postMessage(win, data, sendToParent, replyHandler) {
           sendToParent ? assertIsParentWindow(win) : assertIsFrameWindow(win);
           if (data.message instanceof Error && !sendToParent) {
-            axe2.log(data.message);
+            axe3.log(data.message);
             return false;
           }
           var dataString = stringifyMessage(_extends({
             messageId: createMessageId()
           }, data));
-          var allowedOrigins = axe2._audit.allowedOrigins;
+          var allowedOrigins = axe3._audit.allowedOrigins;
           if (!allowedOrigins || !allowedOrigins.length) {
             return false;
           }
@@ -16369,7 +16369,7 @@ var require_axe = __commonJS({
         }
         function processError(win, error, channelId) {
           if (!win.parent !== window2) {
-            return axe2.log(error);
+            return axe3.log(error);
           }
           try {
             postMessage(win, {
@@ -16380,7 +16380,7 @@ var require_axe = __commonJS({
               keepalive: true
             }, true);
           } catch (err2) {
-            return axe2.log(err2);
+            return axe3.log(err2);
           }
         }
         function createResponder(win, channelId) {
@@ -16395,7 +16395,7 @@ var require_axe = __commonJS({
           };
         }
         function originIsAllowed(origin) {
-          var allowedOrigins = axe2._audit.allowedOrigins;
+          var allowedOrigins = axe3._audit.allowedOrigins;
           return allowedOrigins && allowedOrigins.includes("*") || allowedOrigins.includes(origin);
         }
         function messageHandler(_ref51, topicHandler) {
@@ -16407,7 +16407,7 @@ var require_axe = __commonJS({
               return;
             }
             if (message instanceof Error && win.parent !== window2) {
-              axe2.log(message);
+              axe3.log(message);
               return false;
             }
             try {
@@ -16422,7 +16422,7 @@ var require_axe = __commonJS({
               processError(win, error, channelId);
             }
           } catch (error) {
-            axe2.log(error);
+            axe3.log(error);
             return false;
           }
         }
@@ -16440,7 +16440,7 @@ var require_axe = __commonJS({
           try {
             replyHandler(message, keepalive, responder);
           } catch (error) {
-            axe2.log(error);
+            axe3.log(error);
             responder(error, keepalive);
           }
         }
@@ -16488,7 +16488,7 @@ var require_axe = __commonJS({
           try {
             topicHandler(message, keepalive, responder);
           } catch (error) {
-            axe2.log(error);
+            axe3.log(error);
             responder(error, keepalive);
           }
         }
@@ -16563,7 +16563,7 @@ var require_axe = __commonJS({
         }
         function err(message, node) {
           var selector;
-          if (axe2._tree) {
+          if (axe3._tree) {
             selector = _getSelector(node);
           }
           return new Error(message + ": " + (selector || node));
@@ -19343,7 +19343,7 @@ var require_axe = __commonJS({
           if (!mapElRootNode || mapElRootNode.nodeType !== 9) {
             return true;
           }
-          var refs = query_selector_all_default(axe2._tree, 'img[usemap="#'.concat(escape_selector_default(mapElName), '"]'));
+          var refs = query_selector_all_default(axe3._tree, 'img[usemap="#'.concat(escape_selector_default(mapElName), '"]'));
           if (!refs || !refs.length) {
             return true;
           }
@@ -19834,7 +19834,7 @@ var require_axe = __commonJS({
               parentVNode = get_node_from_tree_default(node.parentNode);
             }
             if (!_vNode) {
-              _vNode = new axe2.VirtualNode(node, parentVNode);
+              _vNode = new axe3.VirtualNode(node, parentVNode);
             }
             _vNode._stackingOrder = createStackingOrder(_vNode, parentVNode, nodeIndex++);
             var scrollRegionParent = findScrollRegionParent(parentVNode);
@@ -20114,13 +20114,13 @@ var require_axe = __commonJS({
         }
         var getModalDialog = memoize_default(function getModalDialogMemoized() {
           var _dialogs$find;
-          if (!axe2._tree) {
+          if (!axe3._tree) {
             return null;
           }
           if (typeof document2.elementsFromPoint !== "function" || typeof document2.elementFromPoint !== "function") {
             return null;
           }
-          var dialogs = query_selector_all_filter_default(axe2._tree[0], "dialog[open]", function(vNode) {
+          var dialogs = query_selector_all_filter_default(axe3._tree[0], "dialog[open]", function(vNode) {
             var rect = vNode.boundingClientRect;
             var stack = document2.elementsFromPoint(rect.left + 1, rect.top + 1);
             return stack.includes(vNode.actualNode) && _isVisibleOnScreen(vNode);
@@ -20149,7 +20149,7 @@ var require_axe = __commonJS({
         var get_modal_dialog_default = getModalDialog;
         function getNodeFromGrid(dialog) {
           _createGrid();
-          var grid = axe2._tree[0]._grid;
+          var grid = axe3._tree[0]._grid;
           var viewRect = new window2.DOMRect(0, 0, window2.innerWidth, window2.innerHeight);
           if (!grid) {
             return;
@@ -21848,7 +21848,7 @@ var require_axe = __commonJS({
             return accName || step(virtualNode, context);
           }, "");
           if (context.debug) {
-            axe2.log(accessibleName || "{empty-value}", actualNode, context);
+            axe3.log(accessibleName || "{empty-value}", actualNode, context);
           }
           return accessibleName;
         }
@@ -21891,7 +21891,7 @@ var require_axe = __commonJS({
             return step(virtualNode, context);
           }, "");
           if (context.debug) {
-            axe2.log(accessibleName || "{empty-value}", virtualNode.actualNode, context);
+            axe3.log(accessibleName || "{empty-value}", virtualNode.actualNode, context);
           }
           return accessibleName;
         }
@@ -22229,7 +22229,7 @@ var require_axe = __commonJS({
         var visualRoles = ["checkbox", "img", "meter", "progressbar", "scrollbar", "radio", "slider", "spinbutton", "textbox"];
         function isVisualContent(el) {
           var _nodeLookup24 = _nodeLookup(el), vNode = _nodeLookup24.vNode;
-          var role = axe2.commons.aria.getExplicitRole(vNode);
+          var role = axe3.commons.aria.getExplicitRole(vNode);
           if (role) {
             return visualRoles.indexOf(role) !== -1;
           }
@@ -22282,7 +22282,7 @@ var require_axe = __commonJS({
             return true;
           }
           if (virtualNode.props.nodeType === 1 && is_visual_content_default(virtualNode)) {
-            return !!axe2.commons.text.accessibleTextVirtual(virtualNode);
+            return !!axe3.commons.text.accessibleTextVirtual(virtualNode);
           }
           return virtualNode.children.some(function(child) {
             return !child.attr("lang") && _hasLangText(child) && !_isHiddenForEveryone(child);
@@ -22367,7 +22367,7 @@ var require_axe = __commonJS({
         function getRoleType(role) {
           var _window3;
           if (role instanceof abstract_virtual_node_default || (_window3 = window2) !== null && _window3 !== void 0 && _window3.Node && role instanceof window2.Node) {
-            role = axe2.commons.aria.getRole(role);
+            role = axe3.commons.aria.getRole(role);
           }
           var roleDef = standards_default.ariaRoles[role];
           return (roleDef === null || roleDef === void 0 ? void 0 : roleDef.type) || null;
@@ -22455,7 +22455,7 @@ var require_axe = __commonJS({
           if (cache_default.get("isModalOpen")) {
             return cache_default.get("isModalOpen");
           }
-          var definiteModals = query_selector_all_filter_default(axe2._tree[0], "dialog, [role=dialog], [aria-modal=true]", _isVisibleOnScreen);
+          var definiteModals = query_selector_all_filter_default(axe3._tree[0], "dialog, [role=dialog], [aria-modal=true]", _isVisibleOnScreen);
           if (definiteModals.length) {
             cache_default.set("isModalOpen", true);
             return true;
@@ -22844,9 +22844,9 @@ var require_axe = __commonJS({
         function generateFirstPageLink() {
           var firstPageLink;
           if (!window2.location.origin) {
-            firstPageLink = query_selector_all_default(axe2._tree, 'a:not([href^="#"]):not([href^="/#"]):not([href^="javascript:"])')[0];
+            firstPageLink = query_selector_all_default(axe3._tree, 'a:not([href^="#"]):not([href^="/#"]):not([href^="javascript:"])')[0];
           } else {
-            firstPageLink = query_selector_all_default(axe2._tree, 'a[href]:not([href^="javascript:"])').find(function(link) {
+            firstPageLink = query_selector_all_default(axe3._tree, 'a[href]:not([href^="javascript:"])').find(function(link) {
               return !_isCurrentPageLink(link.actualNode);
             });
           }
@@ -22889,7 +22889,7 @@ var require_axe = __commonJS({
           if (!mapElRootNode || mapElRootNode.nodeType !== 9) {
             return false;
           }
-          var refs = query_selector_all_default(axe2._tree, 'img[usemap="#'.concat(escape_selector_default(mapElName), '"]'));
+          var refs = query_selector_all_default(axe3._tree, 'img[usemap="#'.concat(escape_selector_default(mapElName), '"]'));
           if (!refs || !refs.length) {
             return false;
           }
@@ -23511,7 +23511,7 @@ var require_axe = __commonJS({
             if (!failingChecks[key2].length) {
               return;
             }
-            var sum = axe2._audit.data.failureSummaries[key2];
+            var sum = axe3._audit.data.failureSummaries[key2];
             if (sum && typeof sum.failureMessage === "function") {
               return sum.failureMessage(failingChecks[key2].map(function(check) {
                 return check.message || "";
@@ -23523,7 +23523,7 @@ var require_axe = __commonJS({
         }
         var failure_summary_default = failureSummary;
         function incompleteFallbackMessage() {
-          var message = axe2._audit.data.incompleteFallbackMessage;
+          var message = axe3._audit.data.incompleteFallbackMessage;
           if (typeof message === "function") {
             message = message();
           }
@@ -23534,7 +23534,7 @@ var require_axe = __commonJS({
         }
         var resultKeys = constants_default.resultGroups;
         function processAggregate(results, options) {
-          var resultObject = axe2.utils.aggregateResult(results);
+          var resultObject = axe3.utils.aggregateResult(results);
           resultKeys.forEach(function(key2) {
             if (options.resultTypes && !options.resultTypes.includes(key2)) {
               (resultObject[key2] || []).forEach(function(ruleResult) {
@@ -23586,7 +23586,7 @@ var require_axe = __commonJS({
           var runOptions = arguments.length > 1 ? arguments[1] : void 0;
           elmSpec = node_serializer_default.dqElmToSpec(elmSpec, runOptions);
           var serialElm = {};
-          if (axe2._audit.noHtml) {
+          if (axe3._audit.noHtml) {
             serialElm.html = null;
           } else {
             var _elmSpec$source;
@@ -23659,7 +23659,7 @@ var require_axe = __commonJS({
         }
         var process_message_default = processMessage;
         function getCheckMessage(checkId, type2, data) {
-          var check = axe2._audit.data.checks[checkId];
+          var check = axe3._audit.data.checks[checkId];
           if (!check) {
             throw new Error("Cannot get message for unknown check: ".concat(checkId, "."));
           }
@@ -23709,10 +23709,10 @@ var require_axe = __commonJS({
           return {
             testEngine: {
               name: "axe-core",
-              version: axe2.version
+              version: axe3.version
             },
             testRunner: {
-              name: axe2._audit.brand
+              name: axe3._audit.brand
             },
             testEnvironment: getTestEnvironment(win),
             timestamp: (/* @__PURE__ */ new Date()).toISOString(),
@@ -23993,14 +23993,14 @@ var require_axe = __commonJS({
           });
         }
         function _getRule(ruleId) {
-          var rule = axe2._audit.rules.find(function(_ref96) {
+          var rule2 = axe3._audit.rules.find(function(_ref96) {
             var id2 = _ref96.id;
             return id2 === ruleId;
           });
-          if (!rule) {
+          if (!rule2) {
             throw new Error("Cannot find rule by id: ".concat(ruleId));
           }
-          return rule;
+          return rule2;
         }
         function _getScroll(elm, buffer) {
           buffer !== null && buffer !== void 0 ? buffer : buffer = 0;
@@ -24305,11 +24305,11 @@ var require_axe = __commonJS({
         }
         function parseSameOriginStylesheet(sheet, options, priority, importedUrls) {
           var isCrossOrigin = arguments.length > 4 && arguments[4] !== void 0 ? arguments[4] : false;
-          var rules = Array.from(sheet.cssRules);
-          if (!rules) {
+          var rules2 = Array.from(sheet.cssRules);
+          if (!rules2) {
             return Promise.resolve();
           }
-          var cssImportRules = rules.filter(function(r) {
+          var cssImportRules = rules2.filter(function(r) {
             return r.type === 3;
           });
           if (!cssImportRules.length) {
@@ -24321,10 +24321,10 @@ var require_axe = __commonJS({
               sheet
             });
           }
-          var cssImportUrlsNotAlreadyImported = cssImportRules.filter(function(rule) {
-            return rule.href;
-          }).map(function(rule) {
-            return resolveImportUrl(rule.href, sheet);
+          var cssImportUrlsNotAlreadyImported = cssImportRules.filter(function(rule2) {
+            return rule2.href;
+          }).map(function(rule2) {
+            return resolveImportUrl(rule2.href, sheet);
           }).filter(function(url) {
             return !importedUrls.includes(url);
           });
@@ -24333,15 +24333,15 @@ var require_axe = __commonJS({
             var isCrossOriginRequest = isCrossOriginUrl(importUrl);
             return parse_crossorigin_stylesheet_default(importUrl, options, newPriority, importedUrls, isCrossOriginRequest);
           });
-          var nonImportCSSRules = rules.filter(function(r) {
+          var nonImportCSSRules = rules2.filter(function(r) {
             return r.type !== 3;
           });
           if (!nonImportCSSRules.length) {
             return Promise.all(promises);
           }
           promises.push(Promise.resolve(options.convertDataToStylesheet({
-            data: nonImportCSSRules.map(function(rule) {
-              return rule.cssText;
+            data: nonImportCSSRules.map(function(rule2) {
+              return rule2.cssText;
             }).join(),
             isCrossOrigin,
             priority,
@@ -24376,8 +24376,8 @@ var require_axe = __commonJS({
         }
         function isSameOriginStylesheet(sheet) {
           try {
-            var rules = sheet.cssRules;
-            if (!rules && sheet.href) {
+            var rules2 = sheet.cssRules;
+            if (!rules2 && sheet.href) {
               return false;
             }
             return true;
@@ -24656,7 +24656,7 @@ var require_axe = __commonJS({
         }
         var query_selector_all_filter_default = querySelectorAllFilter;
         function preloadCssom(_ref98) {
-          var _ref98$treeRoot = _ref98.treeRoot, treeRoot = _ref98$treeRoot === void 0 ? axe2._tree[0] : _ref98$treeRoot;
+          var _ref98$treeRoot = _ref98.treeRoot, treeRoot = _ref98$treeRoot === void 0 ? axe3._tree[0] : _ref98$treeRoot;
           var rootNodes = getAllRootNodesInTree(treeRoot);
           if (!rootNodes.length) {
             return Promise.resolve();
@@ -24774,7 +24774,7 @@ var require_axe = __commonJS({
           });
         }
         function preloadMedia(_ref100) {
-          var _ref100$treeRoot = _ref100.treeRoot, treeRoot = _ref100$treeRoot === void 0 ? axe2._tree[0] : _ref100$treeRoot;
+          var _ref100$treeRoot = _ref100.treeRoot, treeRoot = _ref100$treeRoot === void 0 ? axe3._tree[0] : _ref100$treeRoot;
           var mediaVirtualNodes = query_selector_all_filter_default(treeRoot, "video[autoplay], audio[autoplay]", function(_ref101) {
             var actualNode = _ref101.actualNode;
             if (actualNode.preload === "none" && actualNode.readyState === 0 && actualNode.networkState !== actualNode.NETWORK_LOADING) {
@@ -24880,12 +24880,12 @@ var require_axe = __commonJS({
           return config;
         }
         function _publishMetaData(ruleResult) {
-          var checksData = axe2._audit.data.checks || {};
-          var rulesData = axe2._audit.data.rules || {};
-          var rule = find_by_default(axe2._audit.rules, "id", ruleResult.id) || {};
-          ruleResult.tags = clone2(rule.tags || []);
-          var shouldBeTrue = extender(checksData, true, rule);
-          var shouldBeFalse = extender(checksData, false, rule);
+          var checksData = axe3._audit.data.checks || {};
+          var rulesData = axe3._audit.data.rules || {};
+          var rule2 = find_by_default(axe3._audit.rules, "id", ruleResult.id) || {};
+          ruleResult.tags = clone2(rule2.tags || []);
+          var shouldBeTrue = extender(checksData, true, rule2);
+          var shouldBeFalse = extender(checksData, false, rule2);
           ruleResult.nodes.forEach(function(detail) {
             detail.any.forEach(shouldBeTrue);
             detail.all.forEach(shouldBeTrue);
@@ -24921,13 +24921,13 @@ var require_axe = __commonJS({
             return getDefaultMsg(messages);
           }
         }
-        function extender(checksData, shouldBeTrue, rule) {
+        function extender(checksData, shouldBeTrue, rule2) {
           return function(check) {
             var sourceData = checksData[check.id] || {};
             var messages = sourceData.messages || {};
             var data = Object.assign({}, sourceData);
             delete data.messages;
-            if (!rule.reviewOnFail && check.result === void 0) {
+            if (!rule2.reviewOnFail && check.result === void 0) {
               if (_typeof(messages.incomplete) === "object" && !Array.isArray(check.data)) {
                 data.message = getIncompleteReason(check.data, messages);
               }
@@ -24947,9 +24947,9 @@ var require_axe = __commonJS({
           return query_selector_all_filter_default(domTree, selector);
         }
         var query_selector_all_default = querySelectorAll;
-        function matchTags(rule, runOnly) {
+        function matchTags(rule2, runOnly) {
           var include, exclude;
-          var defaultExclude = axe2._audit && axe2._audit.tagExclude ? axe2._audit.tagExclude : [];
+          var defaultExclude = axe3._audit && axe3._audit.tagExclude ? axe3._audit.tagExclude : [];
           if (runOnly.hasOwnProperty("include") || runOnly.hasOwnProperty("exclude")) {
             include = runOnly.include || [];
             include = Array.isArray(include) ? include : [include];
@@ -24965,29 +24965,29 @@ var require_axe = __commonJS({
             });
           }
           var matching = include.some(function(tag) {
-            return rule.tags.indexOf(tag) !== -1;
+            return rule2.tags.indexOf(tag) !== -1;
           });
-          if (matching || include.length === 0 && rule.enabled !== false) {
+          if (matching || include.length === 0 && rule2.enabled !== false) {
             return exclude.every(function(tag) {
-              return rule.tags.indexOf(tag) === -1;
+              return rule2.tags.indexOf(tag) === -1;
             });
           } else {
             return false;
           }
         }
-        function ruleShouldRun(rule, context, options) {
+        function ruleShouldRun(rule2, context, options) {
           var runOnly = options.runOnly || {};
-          var ruleOptions = (options.rules || {})[rule.id];
-          if (rule.pageLevel && !context.page) {
+          var ruleOptions = (options.rules || {})[rule2.id];
+          if (rule2.pageLevel && !context.page) {
             return false;
           } else if (runOnly.type === "rule") {
-            return runOnly.values.indexOf(rule.id) !== -1;
+            return runOnly.values.indexOf(rule2.id) !== -1;
           } else if (ruleOptions && typeof ruleOptions.enabled === "boolean") {
             return ruleOptions.enabled;
           } else if (runOnly.type === "tag" && runOnly.values) {
-            return matchTags(rule, runOnly.values);
+            return matchTags(rule2, runOnly.values);
           } else {
-            return matchTags(rule, []);
+            return matchTags(rule2, []);
           }
         }
         var rule_should_run_default = ruleShouldRun;
@@ -25034,9 +25034,9 @@ var require_axe = __commonJS({
         function _select(selector, context) {
           var result = [];
           var candidate;
-          if (axe2._selectCache) {
-            for (var j = 0, l = axe2._selectCache.length; j < l; j++) {
-              var item = axe2._selectCache[j];
+          if (axe3._selectCache) {
+            for (var j = 0, l = axe3._selectCache.length; j < l; j++) {
+              var item = axe3._selectCache[j];
               if (item.selector === selector) {
                 return item.result;
               }
@@ -25049,8 +25049,8 @@ var require_axe = __commonJS({
             var nodes = query_selector_all_filter_default(candidate, selector, isInContext);
             result = mergeArrayUniques(result, nodes);
           }
-          if (axe2._selectCache) {
-            axe2._selectCache.push({
+          if (axe3._selectCache) {
+            axe3._selectCache.push({
               selector,
               result
             });
@@ -25247,9 +25247,9 @@ var require_axe = __commonJS({
           var options = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : {};
           var tags = [];
           var ruleIds = [];
-          axe2._audit.rules.forEach(function(rule) {
-            ruleIds.push(rule.id);
-            rule.tags.forEach(function(tag) {
+          axe3._audit.rules.forEach(function(rule2) {
+            ruleIds.push(rule2.id);
+            rule2.tags.forEach(function(tag) {
               if (!tags.includes(tag)) {
                 tags.push(tag);
               }
@@ -25302,7 +25302,7 @@ var require_axe = __commonJS({
                 return !tags.includes(tag) && !/wcag2[1-3]a{1,3}/.test(tag);
               });
               if (unmatchedTags.length !== 0) {
-                axe2.log("Could not find tags `" + unmatchedTags.join("`, `") + "`");
+                axe3.log("Could not find tags `" + unmatchedTags.join("`, `") + "`");
               }
             } else {
               throw new Error("Unknown runOnly type '".concat(only.type, "'"));
@@ -25406,29 +25406,29 @@ var require_axe = __commonJS({
         function cleanup(resolve10, reject) {
           resolve10 = resolve10 || function res() {
           };
-          reject = reject || axe2.log;
-          if (!axe2._audit) {
+          reject = reject || axe3.log;
+          if (!axe3._audit) {
             throw new Error("No audit configured");
           }
-          var q2 = axe2.utils.queue();
+          var q2 = axe3.utils.queue();
           var cleanupErrors = [];
-          Object.keys(axe2.plugins).forEach(function(key2) {
+          Object.keys(axe3.plugins).forEach(function(key2) {
             q2.defer(function(res) {
               var rej = function rej2(err2) {
                 cleanupErrors.push(err2);
                 res();
               };
               try {
-                axe2.plugins[key2].cleanup(res, rej);
+                axe3.plugins[key2].cleanup(res, rej);
               } catch (err2) {
                 rej(err2);
               }
             });
           });
-          var flattenedTree = axe2.utils.getFlattenedTree(document2.body);
-          axe2.utils.querySelectorAll(flattenedTree, "iframe, frame").forEach(function(node) {
+          var flattenedTree = axe3.utils.getFlattenedTree(document2.body);
+          axe3.utils.querySelectorAll(flattenedTree, "iframe, frame").forEach(function(node) {
             q2.defer(function(res, rej) {
-              return axe2.utils.sendCommandToFrame(node.actualNode, {
+              return axe3.utils.sendCommandToFrame(node.actualNode, {
                 command: "cleanup-plugin"
               }, res, rej);
             });
@@ -25464,7 +25464,7 @@ var require_axe = __commonJS({
           }
         }
         function configure(spec) {
-          var audit2 = axe2._audit;
+          var audit2 = axe3._audit;
           if (!audit2) {
             throw new Error("No audit configured");
           }
@@ -25475,10 +25475,10 @@ var require_axe = __commonJS({
             }
             var _specVersion$split = specVersion.split("-"), _specVersion$split2 = _slicedToArray(_specVersion$split, 2), version = _specVersion$split2[0], canary = _specVersion$split2[1];
             var _version$split$map = version.split(".").map(Number), _version$split$map2 = _slicedToArray(_version$split$map, 3), major = _version$split$map2[0], minor = _version$split$map2[1], patch = _version$split$map2[2];
-            var _axe$version$split = axe2.version.split("-"), _axe$version$split2 = _slicedToArray(_axe$version$split, 2), axeVersion = _axe$version$split2[0], axeCanary = _axe$version$split2[1];
+            var _axe$version$split = axe3.version.split("-"), _axe$version$split2 = _slicedToArray(_axe$version$split, 2), axeVersion = _axe$version$split2[0], axeCanary = _axe$version$split2[1];
             var _axeVersion$split$map = axeVersion.split(".").map(Number), _axeVersion$split$map2 = _slicedToArray(_axeVersion$split$map, 3), axeMajor = _axeVersion$split$map2[0], axeMinor = _axeVersion$split$map2[1], axePatch = _axeVersion$split$map2[2];
             if (major !== axeMajor || axeMinor < minor || axeMinor === minor && axePatch < patch || major === axeMajor && minor === axeMinor && patch === axePatch && canary && canary !== axeCanary) {
-              throw new Error("Configured version ".concat(specVersion, " is not compatible with current axe version ").concat(axe2.version));
+              throw new Error("Configured version ".concat(specVersion, " is not compatible with current axe version ").concat(axe3.version));
             }
           }
           if (spec.reporter && (typeof spec.reporter === "function" || hasReporter(spec.reporter))) {
@@ -25500,18 +25500,18 @@ var require_axe = __commonJS({
             if (!Array.isArray(spec.rules)) {
               throw new TypeError("Rules property must be an array");
             }
-            spec.rules.forEach(function(rule) {
-              if (!rule.id) {
-                throw new TypeError("Configured rule ".concat(JSON.stringify(rule), " is invalid. Rules must be an object with at least an id property"));
+            spec.rules.forEach(function(rule2) {
+              if (!rule2.id) {
+                throw new TypeError("Configured rule ".concat(JSON.stringify(rule2), " is invalid. Rules must be an object with at least an id property"));
               }
-              modifiedRules.push(rule.id);
-              audit2.addRule(rule);
+              modifiedRules.push(rule2.id);
+              audit2.addRule(rule2);
             });
           }
           if (spec.disableOtherRules) {
-            audit2.rules.forEach(function(rule) {
-              if (modifiedRules.includes(rule.id) === false) {
-                rule.enabled = false;
+            audit2.rules.forEach(function(rule2) {
+              if (modifiedRules.includes(rule2.id) === false) {
+                rule2.enabled = false;
               }
             });
           }
@@ -25745,8 +25745,8 @@ var require_axe = __commonJS({
         }
         function getRules(tags) {
           tags = tags || [];
-          var _axe$_audit = axe2._audit, rules = _axe$_audit.rules, data = _axe$_audit.data, tagExclude = _axe$_audit.tagExclude;
-          var matchingRules = !tags.length ? rules : rules.filter(function(item) {
+          var _axe$_audit = axe3._audit, rules2 = _axe$_audit.rules, data = _axe$_audit.data, tagExclude = _axe$_audit.tagExclude;
+          var matchingRules = !tags.length ? rules2 : rules2.filter(function(item) {
             return !!tags.filter(function(tag) {
               return item.tags.indexOf(tag) !== -1;
             }).length;
@@ -25855,7 +25855,7 @@ var require_axe = __commonJS({
               if (!cell) {
                 continue;
               }
-              var vNode = axe2.utils.getNodeFromTree(cell);
+              var vNode = axe3.utils.getNodeFromTree(cell);
               if (vNode[property]) {
                 headers = vNode[property];
                 break;
@@ -25865,7 +25865,7 @@ var require_axe = __commonJS({
           }
           headers = (headers || []).concat(cells.filter(predicate));
           cells.forEach(function(tableCell) {
-            var vNode2 = axe2.utils.getNodeFromTree(tableCell);
+            var vNode2 = axe3.utils.getNodeFromTree(tableCell);
             vNode2[property] = headers;
           });
           return headers;
@@ -28039,8 +28039,8 @@ var require_axe = __commonJS({
         }, {
           nodeName: "select",
           condition: function condition2(vNode) {
-            if (!(vNode instanceof axe2.AbstractVirtualNode)) {
-              vNode = axe2.utils.getNodeFromTree(vNode);
+            if (!(vNode instanceof axe3.AbstractVirtualNode)) {
+              vNode = axe3.utils.getNodeFromTree(vNode);
             }
             return Number(vNode.attr("size")) > 1;
           },
@@ -28123,7 +28123,7 @@ var require_axe = __commonJS({
           },
           LI: function LI(_ref116) {
             var node = _ref116.node, out = _ref116.out;
-            var hasImplicitListitemRole = axe2.utils.matchesSelector(node, "ol li, ul li");
+            var hasImplicitListitemRole = axe3.utils.matchesSelector(node, "ol li, ul li");
             if (hasImplicitListitemRole) {
               return out;
             }
@@ -28138,7 +28138,7 @@ var require_axe = __commonJS({
           },
           OPTION: function OPTION(_ref118) {
             var node = _ref118.node;
-            var withinOptionList = axe2.utils.matchesSelector(node, "select > option, datalist > option, optgroup > option");
+            var withinOptionList = axe3.utils.matchesSelector(node, "select > option, datalist > option, optgroup > option");
             return !withinOptionList;
           },
           SELECT: function SELECT(_ref119) {
@@ -28780,7 +28780,7 @@ var require_axe = __commonJS({
           return !regionlessNodes.includes(virtualNode);
         }
         function getRegionlessNodes(options) {
-          var regionlessNodes = findRegionlessElms(axe2._tree[0], options).map(function(vNode) {
+          var regionlessNodes = findRegionlessElms(axe3._tree[0], options).map(function(vNode) {
             while (vNode.parent && !vNode.parent._hasRegionDescendant && vNode.parent.actualNode !== document2.body) {
               vNode = vNode.parent;
             }
@@ -30014,7 +30014,7 @@ var require_axe = __commonJS({
             return true;
           }
           var selector = "h1, h2, h3, h4, h5, h6, [role=heading], iframe, frame";
-          var vNodes = query_selector_all_filter_default(axe2._tree[0], selector, _isVisibleToScreenReaders);
+          var vNodes = query_selector_all_filter_default(axe3._tree[0], selector, _isVisibleToScreenReaders);
           headingOrder = vNodes.map(function(vNode) {
             return {
               ancestry: [_getAncestry(vNode.actualNode)],
@@ -30394,8 +30394,8 @@ var require_axe = __commonJS({
           var rulesGroupByDocumentFragment = groupCssomByDocument(cssom);
           var _loop8 = function _loop82() {
             var key2 = _Object$keys3[_i34];
-            var _rulesGroupByDocument = rulesGroupByDocumentFragment[key2], root = _rulesGroupByDocument.root, rules = _rulesGroupByDocument.rules;
-            var orientationRules = rules.filter(isMediaRuleWithOrientation);
+            var _rulesGroupByDocument = rulesGroupByDocumentFragment[key2], root = _rulesGroupByDocument.root, rules2 = _rulesGroupByDocument.rules;
+            var orientationRules = rules2.filter(isMediaRuleWithOrientation);
             if (!orientationRules.length) {
               return 1;
             }
@@ -30436,8 +30436,8 @@ var require_axe = __commonJS({
               if (!sheet || !sheet.cssRules) {
                 return out;
               }
-              var rules = Array.from(sheet.cssRules);
-              out[key2].rules = out[key2].rules.concat(rules);
+              var rules2 = Array.from(sheet.cssRules);
+              out[key2].rules = out[key2].rules.concat(rules2);
               return out;
             }, {});
           }
@@ -31431,7 +31431,7 @@ var require_axe = __commonJS({
             return;
           }
           cache_default.set(key2, true);
-          var elms = query_selector_all_filter_default(axe2._tree[0], options.selector, function(elm) {
+          var elms = query_selector_all_filter_default(axe3._tree[0], options.selector, function(elm) {
             return _isVisibleToScreenReaders(elm);
           });
           if (typeof options.nativeScopeFilter === "string") {
@@ -32075,14 +32075,14 @@ var require_axe = __commonJS({
             "aria-describedby": function ariaDescribedby(validValue) {
               if (!validValue) {
                 needsReview = 'aria-describedby="'.concat(_getAriaValue(virtualNode, "aria-describedby").value, '"');
-                messageKey = axe2._tree && axe2._tree[0]._hasShadowRoot ? "noIdShadow" : "noId";
+                messageKey = axe3._tree && axe3._tree[0]._hasShadowRoot ? "noIdShadow" : "noId";
               }
               return;
             },
             "aria-labelledby": function ariaLabelledby(validValue) {
               if (!validValue) {
                 needsReview = 'aria-labelledby="'.concat(_getAriaValue(virtualNode, "aria-labelledby").value, '"');
-                messageKey = axe2._tree && axe2._tree[0]._hasShadowRoot ? "noIdShadow" : "noId";
+                messageKey = axe3._tree && axe3._tree[0]._hasShadowRoot ? "noIdShadow" : "noId";
               }
             }
           };
@@ -33714,10 +33714,10 @@ var require_axe = __commonJS({
           }
         };
         var check_default = Check;
-        function RuleResult(rule) {
-          this.id = rule.id;
+        function RuleResult(rule2) {
+          this.id = rule2.id;
           this.result = constants_default.NA;
-          this.pageLevel = rule.pageLevel;
+          this.pageLevel = rule2.pageLevel;
           this.impact = null;
           this.nodes = [];
         }
@@ -33988,9 +33988,9 @@ var require_axe = __commonJS({
           }
           return nodes;
         };
-        function findAfterChecks(rule) {
-          return get_all_checks_default(rule).map(function(c4) {
-            var check = rule._audit.checks[c4.id || c4];
+        function findAfterChecks(rule2) {
+          return get_all_checks_default(rule2).map(function(c4) {
+            var check = rule2._audit.checks[c4.id || c4];
             return check && typeof check.after === "function" ? check : null;
           }).filter(Boolean);
         }
@@ -34147,8 +34147,8 @@ var require_axe = __commonJS({
               var ruleIDs = Object.keys(this.data.rules);
               for (var _i41 = 0; _i41 < ruleIDs.length; _i41++) {
                 var _id9 = ruleIDs[_i41];
-                var rule = this.data.rules[_id9];
-                var description = rule.description, help = rule.help;
+                var rule2 = this.data.rules[_id9];
+                var description = rule2.description, help = rule2.help;
                 locale.rules[_id9] = {
                   description,
                   help
@@ -34189,14 +34189,14 @@ var require_axe = __commonJS({
             }
           }, {
             key: "_applyRuleLocale",
-            value: function _applyRuleLocale(rules) {
-              var keys = Object.keys(rules);
+            value: function _applyRuleLocale(rules2) {
+              var keys = Object.keys(rules2);
               for (var _i44 = 0; _i44 < keys.length; _i44++) {
                 var _id1 = keys[_i44];
                 if (!this.data.rules[_id1]) {
                   throw new Error('Locale provided for unknown rule: "'.concat(_id1, '"'));
                 }
-                this.data.rules[_id1] = mergeRuleLocale(this.data.rules[_id1], rules[_id1]);
+                this.data.rules[_id1] = mergeRuleLocale(this.data.rules[_id1], rules2[_id1]);
               }
             }
           }, {
@@ -34289,9 +34289,9 @@ var require_axe = __commonJS({
               if (spec.metadata) {
                 this.data.rules[spec.id] = spec.metadata;
               }
-              var rule = this.getRule(spec.id);
-              if (rule) {
-                rule.configure(spec);
+              var rule2 = this.getRule(spec.id);
+              if (rule2) {
+                rule2.configure(spec);
               } else {
                 this.rules.push(new Rule(spec, this));
               }
@@ -34327,13 +34327,13 @@ var require_axe = __commonJS({
               var internalsQueue = queue_default();
               internalsQueue.defer(external.loadElementInternals());
               internalsQueue.then(function() {
-                axe2._selectCache = [];
+                axe3._selectCache = [];
                 var allRulesToRun = getRulesToRun(_this20.rules, context, options);
                 var runNowRules = allRulesToRun.now;
                 var runLaterRules = allRulesToRun.later;
                 var nowRulesQueue = queue_default();
-                runNowRules.forEach(function(rule) {
-                  nowRulesQueue.defer(getDefferedRule(rule, context, options));
+                runNowRules.forEach(function(rule2) {
+                  nowRulesQueue.defer(getDefferedRule(rule2, context, options));
                 });
                 var preloaderQueue = queue_default();
                 if (runLaterRules.length) {
@@ -34359,19 +34359,19 @@ var require_axe = __commonJS({
                   }
                   var nowRulesResults = nowRulesAndPreloaderResults[0];
                   if (!runLaterRules.length) {
-                    axe2._selectCache = void 0;
+                    axe3._selectCache = void 0;
                     resolve10(nowRulesResults.filter(function(result) {
                       return !!result;
                     }));
                     return;
                   }
                   var laterRulesQueue = queue_default();
-                  runLaterRules.forEach(function(rule) {
-                    var deferredRule = getDefferedRule(rule, context, options);
+                  runLaterRules.forEach(function(rule2) {
+                    var deferredRule = getDefferedRule(rule2, context, options);
                     laterRulesQueue.defer(deferredRule);
                   });
                   laterRulesQueue.then(function(laterRuleResults) {
-                    axe2._selectCache = void 0;
+                    axe3._selectCache = void 0;
                     resolve10(nowRulesResults.concat(laterRuleResults).filter(function(result) {
                       return !!result;
                     }));
@@ -34382,30 +34382,30 @@ var require_axe = __commonJS({
           }, {
             key: "after",
             value: function after(results, options) {
-              var rules = this.rules;
+              var rules2 = this.rules;
               return results.map(function(ruleResult) {
                 if (ruleResult.error) {
                   return ruleResult;
                 }
-                var rule = find_by_default(rules, "id", ruleResult.id);
-                if (!rule) {
+                var rule2 = find_by_default(rules2, "id", ruleResult.id);
+                if (!rule2) {
                   throw new Error("Result for unknown rule. You may be running mismatch axe-core versions");
                 }
                 try {
-                  return rule.after(ruleResult, options);
+                  return rule2.after(ruleResult, options);
                 } catch (err2) {
                   if (options.debug) {
                     throw err2;
                   }
-                  return createIncompleteErrorResult(rule, err2);
+                  return createIncompleteErrorResult(rule2, err2);
                 }
               });
             }
           }, {
             key: "getRule",
             value: function getRule(ruleId) {
-              return this.rules.find(function(rule) {
-                return rule.id === ruleId;
+              return this.rules.find(function(rule2) {
+                return rule2.id === ruleId;
               });
             }
           }, {
@@ -34426,14 +34426,14 @@ var require_axe = __commonJS({
             value: function _constructHelpUrls() {
               var _this21 = this;
               var previous = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : null;
-              var version = (axe2.version.match(/^[1-9][0-9]*\.[0-9]+/) || ["x.y"])[0];
-              this.rules.forEach(function(rule) {
-                if (!_this21.data.rules[rule.id]) {
-                  _this21.data.rules[rule.id] = {};
+              var version = (axe3.version.match(/^[1-9][0-9]*\.[0-9]+/) || ["x.y"])[0];
+              this.rules.forEach(function(rule2) {
+                if (!_this21.data.rules[rule2.id]) {
+                  _this21.data.rules[rule2.id] = {};
                 }
-                var metaData = _this21.data.rules[rule.id];
-                if (typeof metaData.helpUrl !== "string" || previous && metaData.helpUrl === getHelpUrl(previous, rule.id, version)) {
-                  metaData.helpUrl = getHelpUrl(_this21, rule.id, version);
+                var metaData = _this21.data.rules[rule2.id];
+                if (typeof metaData.helpUrl !== "string" || previous && metaData.helpUrl === getHelpUrl(previous, rule2.id, version)) {
+                  metaData.helpUrl = getHelpUrl(_this21, rule2.id, version);
                 }
               });
             }
@@ -34526,41 +34526,41 @@ var require_axe = __commonJS({
           }
           return b3 || a2;
         };
-        function getRulesToRun(rules, context, options) {
+        function getRulesToRun(rules2, context, options) {
           var base2 = {
             now: [],
             later: []
           };
-          var splitRules = rules.reduce(function(out, rule) {
-            if (!rule_should_run_default(rule, context, options)) {
+          var splitRules = rules2.reduce(function(out, rule2) {
+            if (!rule_should_run_default(rule2, context, options)) {
               return out;
             }
-            if (rule.preload) {
-              out.later.push(rule);
+            if (rule2.preload) {
+              out.later.push(rule2);
               return out;
             }
-            out.now.push(rule);
+            out.now.push(rule2);
             return out;
           }, base2);
           return splitRules;
         }
-        function getDefferedRule(rule, context, options) {
+        function getDefferedRule(rule2, context, options) {
           if (options.performanceTimer) {
-            performance_timer_default.mark("mark_rule_start_" + rule.id);
+            performance_timer_default.mark("mark_rule_start_" + rule2.id);
           }
           return function(resolve10, reject) {
-            rule.run(context, options, function(ruleResult) {
+            rule2.run(context, options, function(ruleResult) {
               return resolve10(ruleResult);
             }, function(err2) {
               if (options.debug) {
                 reject(err2);
               } else {
-                resolve10(createIncompleteErrorResult(rule, err2));
+                resolve10(createIncompleteErrorResult(rule2, err2));
               }
             });
           };
         }
-        function createIncompleteErrorResult(rule, error) {
+        function createIncompleteErrorResult(rule2, error) {
           var errorNode = error.errorNode;
           var serialError = _serializeError(error);
           var none = [{
@@ -34570,7 +34570,7 @@ var require_axe = __commonJS({
             relatedNodes: []
           }];
           var node = errorNode || new dq_element_default(document2.documentElement);
-          return Object.assign(new rule_result_default(rule), {
+          return Object.assign(new rule_result_default(rule2), {
             error: serialError,
             result: constants_default.CANTTELL,
             nodes: [{
@@ -34583,7 +34583,7 @@ var require_axe = __commonJS({
         }
         function getHelpUrl(_ref172, ruleId, version) {
           var brand = _ref172.brand, application = _ref172.application, lang = _ref172.lang;
-          return constants_default.helpUrlBase + brand + "/" + (version || axe2.version.substring(0, axe2.version.lastIndexOf("."))) + "/" + ruleId + "?application=" + encodeURIComponent(application) + (lang && lang !== "en" ? "&lang=" + encodeURIComponent(lang) : "");
+          return constants_default.helpUrlBase + brand + "/" + (version || axe3.version.substring(0, axe3.version.lastIndexOf("."))) + "/" + ruleId + "?application=" + encodeURIComponent(application) + (lang && lang !== "en" ? "&lang=" + encodeURIComponent(lang) : "");
         }
         function setupGlobals(context) {
           var hasWindow = window2 && "Node" in window2 && "NodeList" in window2;
@@ -34615,26 +34615,26 @@ var require_axe = __commonJS({
         }
         function teardown() {
           resetGlobals();
-          axe2._memoizedFns.forEach(function(fn) {
+          axe3._memoizedFns.forEach(function(fn) {
             return fn.clear();
           });
           cache_default.clear();
-          axe2._tree = void 0;
-          axe2._selectorData = void 0;
-          axe2._selectCache = void 0;
+          axe3._tree = void 0;
+          axe3._selectorData = void 0;
+          axe3._selectCache = void 0;
         }
         var teardown_default = teardown;
         function runRules(context, options, resolve10, reject) {
           try {
             context = new Context(context);
-            axe2._tree = context.flatTree;
-            axe2._selectorData = _getSelectorData(context.flatTree);
+            axe3._tree = context.flatTree;
+            axe3._selectorData = _getSelectorData(context.flatTree);
           } catch (e) {
             teardown_default();
             return reject(e);
           }
           var q2 = queue_default();
-          var audit2 = axe2._audit;
+          var audit2 = axe3._audit;
           if (options.performanceTimer) {
             performance_timer_default.auditStart();
           }
@@ -34685,7 +34685,7 @@ var require_axe = __commonJS({
           });
         }
         function load(audit2) {
-          axe2._audit = new audit_default(audit2);
+          axe3._audit = new audit_default(audit2);
         }
         function runCommand(data, keepalive, callback) {
           var resolve10 = callback;
@@ -34710,8 +34710,8 @@ var require_axe = __commonJS({
             case "cleanup-plugin":
               return cleanup_default(resolve10, reject);
             default:
-              if (axe2._audit && axe2._audit.commands && axe2._audit.commands[data.command]) {
-                return axe2._audit.commands[data.command](data, callback);
+              if (axe3._audit && axe3._audit.commands && axe3._audit.commands[data.command]) {
+                return axe3._audit.commands[data.command](data, callback);
               }
           }
         }
@@ -34728,7 +34728,7 @@ var require_axe = __commonJS({
           this._collect = spec.collect;
           this._registry = {};
           spec.commands.forEach(function(command) {
-            axe2._audit.registerCommand(command);
+            axe3._audit.registerCommand(command);
           });
         }
         Plugin.prototype.run = function run3() {
@@ -34738,7 +34738,7 @@ var require_axe = __commonJS({
           return this._collect.apply(this, arguments);
         };
         Plugin.prototype.cleanup = function cleanup2(done) {
-          var q2 = axe2.utils.queue();
+          var q2 = axe3.utils.queue();
           var that = this;
           Object.keys(this._registry).forEach(function(key2) {
             q2.defer(function(_done) {
@@ -34751,11 +34751,11 @@ var require_axe = __commonJS({
           this._registry[impl.id] = impl;
         };
         function registerPlugin(plugin) {
-          axe2.plugins[plugin.id] = new Plugin(plugin);
+          axe3.plugins[plugin.id] = new Plugin(plugin);
         }
         var plugins_default = registerPlugin;
         function reset() {
-          var audit2 = axe2._audit;
+          var audit2 = axe3._audit;
           if (!audit2) {
             throw new Error("No audit configured");
           }
@@ -34764,7 +34764,7 @@ var require_axe = __commonJS({
         }
         var reset_default = reset;
         function resetLocale() {
-          var audit2 = axe2._audit;
+          var audit2 = axe3._audit;
           if (!audit2) {
             throw new Error("No audit configured");
           }
@@ -34773,16 +34773,16 @@ var require_axe = __commonJS({
         var reset_locale_default = resetLocale;
         function runVirtualRule(ruleId, vNode) {
           var options = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : {};
-          options.reporter = options.reporter || axe2._audit.reporter || "v1";
-          axe2._selectorData = {};
+          options.reporter = options.reporter || axe3._audit.reporter || "v1";
+          axe3._selectorData = {};
           if (!(vNode instanceof abstract_virtual_node_default)) {
             vNode = new serial_virtual_node_default(vNode);
           }
-          var rule = _getRule(ruleId);
-          if (!rule) {
+          var rule2 = _getRule(ruleId);
+          if (!rule2) {
             throw new Error("unknown rule `" + ruleId + "`");
           }
-          rule = Object.create(rule, {
+          rule2 = Object.create(rule2, {
             excludeHidden: {
               value: false
             }
@@ -34797,7 +34797,7 @@ var require_axe = __commonJS({
             size: {},
             flatTree: []
           };
-          var rawResults = rule.runSync(context, options);
+          var rawResults = rule2.runSync(context, options);
           _publishMetaData(rawResults);
           _finalizeRuleResult(rawResults);
           var results = aggregate_result_default([rawResults]);
@@ -34833,7 +34833,7 @@ var require_axe = __commonJS({
             throw typeErr;
           }
           options = clone2(options);
-          options.reporter = (_ref175 = (_options$reporter = options.reporter) !== null && _options$reporter !== void 0 ? _options$reporter : (_axe$_audit2 = axe2._audit) === null || _axe$_audit2 === void 0 ? void 0 : _axe$_audit2.reporter) !== null && _ref175 !== void 0 ? _ref175 : "v1";
+          options.reporter = (_ref175 = (_options$reporter = options.reporter) !== null && _options$reporter !== void 0 ? _options$reporter : (_axe$_audit2 = axe3._audit) === null || _axe$_audit2 === void 0 ? void 0 : _axe$_audit2.reporter) !== null && _ref175 !== void 0 ? _ref175 : "v1";
           return {
             context,
             options,
@@ -34850,12 +34850,12 @@ var require_axe = __commonJS({
           var _normalizeRunParams = normalizeRunParams(args), context = _normalizeRunParams.context, options = _normalizeRunParams.options, _normalizeRunParams$c = _normalizeRunParams.callback, callback = _normalizeRunParams$c === void 0 ? noop2 : _normalizeRunParams$c;
           var _getPromiseHandlers = getPromiseHandlers(callback), thenable = _getPromiseHandlers.thenable, resolve10 = _getPromiseHandlers.resolve, reject = _getPromiseHandlers.reject;
           try {
-            assert_default(axe2._audit, "No audit configured");
-            assert_default(!axe2._running, "Axe is already running. Use `await axe.run()` to wait for the previous run to finish before starting a new run.");
+            assert_default(axe3._audit, "No audit configured");
+            assert_default(!axe3._running, "Axe is already running. Use `await axe.run()` to wait for the previous run to finish before starting a new run.");
           } catch (e) {
             return handleError(e, callback);
           }
-          axe2._running = true;
+          axe3._running = true;
           if (options.performanceTimer) {
             performance_timer_default.start();
           }
@@ -34867,21 +34867,21 @@ var require_axe = __commonJS({
                 performance_timer_default.logMeasures("reporter");
                 performance_timer_default.end();
               }
-              axe2._running = false;
+              axe3._running = false;
               teardown2();
               try {
                 resolve10(results);
               } catch (e) {
-                axe2.log(e);
+                axe3.log(e);
               }
             };
             var wrappedReject = function wrappedReject2(err2) {
-              axe2._running = false;
+              axe3._running = false;
               teardown2();
               try {
                 reject(err2);
               } catch (e) {
-                axe2.log(e);
+                axe3.log(e);
               }
             };
             try {
@@ -34897,11 +34897,11 @@ var require_axe = __commonJS({
             if (options.performanceTimer) {
               performance_timer_default.end();
             }
-            axe2._running = false;
+            axe3._running = false;
             callback(err2);
             reject(err2);
           }
-          axe2._runRules(context, options, handleRunRules, errorRunRules);
+          axe3._runRules(context, options, handleRunRules, errorRunRules);
           return thenable;
         }
         function getPromiseHandlers(callback) {
@@ -34944,18 +34944,18 @@ var require_axe = __commonJS({
             args[_key13] = arguments[_key13];
           }
           var _normalizeRunParams2 = normalizeRunParams(args), options = _normalizeRunParams2.options, context = _normalizeRunParams2.context;
-          assert_default(axe2._audit, "Axe is not configured. Audit is missing.");
-          assert_default(!axe2._running, "Axe is already running. Use `await axe.run()` to wait for the previous run to finish before starting a new run.");
-          var contextObj = new Context(context, axe2._tree);
-          axe2._tree = contextObj.flatTree;
-          axe2._selectorData = _getSelectorData(contextObj.flatTree);
-          axe2._running = true;
+          assert_default(axe3._audit, "Axe is not configured. Audit is missing.");
+          assert_default(!axe3._running, "Axe is already running. Use `await axe.run()` to wait for the previous run to finish before starting a new run.");
+          var contextObj = new Context(context, axe3._tree);
+          axe3._tree = contextObj.flatTree;
+          axe3._selectorData = _getSelectorData(contextObj.flatTree);
+          axe3._running = true;
           options.elementRef = false;
           return new Promise(function(res, rej) {
             if (options.performanceTimer) {
               performance_timer_default.auditStart();
             }
-            axe2._audit.run(contextObj, options, res, rej);
+            axe3._audit.run(contextObj, options, res, rej);
           }).then(function(results) {
             if (options.performanceTimer) {
               performance_timer_default.auditEnd();
@@ -34969,7 +34969,7 @@ var require_axe = __commonJS({
             if (contextObj.initiator) {
               environmentData = _getEnvironmentData();
             }
-            axe2._running = false;
+            axe3._running = false;
             teardown_default();
             return {
               results,
@@ -34977,7 +34977,7 @@ var require_axe = __commonJS({
               environmentData
             };
           })["catch"](function(err2) {
-            axe2._running = false;
+            axe3._running = false;
             teardown_default();
             return Promise.reject(err2);
           });
@@ -34990,10 +34990,10 @@ var require_axe = __commonJS({
             return r.environmentData;
           }) || {}, environmentData = _ref177.environmentData;
           _normalizeRunOptions(options);
-          options.reporter = (_ref178 = (_options$reporter2 = options.reporter) !== null && _options$reporter2 !== void 0 ? _options$reporter2 : (_axe$_audit3 = axe2._audit) === null || _axe$_audit3 === void 0 ? void 0 : _axe$_audit3.reporter) !== null && _ref178 !== void 0 ? _ref178 : "v1";
+          options.reporter = (_ref178 = (_options$reporter2 = options.reporter) !== null && _options$reporter2 !== void 0 ? _options$reporter2 : (_axe$_audit3 = axe3._audit) === null || _axe$_audit3 === void 0 ? void 0 : _axe$_audit3.reporter) !== null && _ref178 !== void 0 ? _ref178 : "v1";
           setFrameSpec(partialResults);
           var results = merge_results_default(partialResults);
-          results = axe2._audit.after(results, options);
+          results = axe3._audit.after(results, options);
           results.forEach(_publishMetaData);
           results = results.map(_finalizeRuleResult);
           return createReport2(results, _extends({
@@ -35036,16 +35036,16 @@ var require_axe = __commonJS({
           });
         }
         function setup2(node) {
-          if (axe2._tree) {
+          if (axe3._tree) {
             throw new Error("Axe is already setup. Call `axe.teardown()` before calling `axe.setup` again.");
           }
           if (node && _typeof(node.documentElement) === "object" && _typeof(node.defaultView) === "object") {
             node = node.documentElement;
           }
           setupGlobals(node);
-          axe2._tree = _getFlattenedTree(node);
-          axe2._selectorData = _getSelectorData(axe2._tree);
-          return axe2._tree[0];
+          axe3._tree = _getFlattenedTree(node);
+          axe3._selectorData = _getSelectorData(axe3._tree);
+          return axe3._tree[0];
         }
         var setup_default = setup2;
         var naReporter = function naReporter2(results, options, callback) {
@@ -35182,46 +35182,46 @@ var require_axe = __commonJS({
           }
         };
         var exposed_for_testing_default = _thisWillBeDeletedDoNotUse;
-        axe2._thisWillBeDeletedDoNotUse = exposed_for_testing_default;
-        axe2.constants = constants_default;
-        axe2.log = log;
-        axe2._setLogger = setLogger;
-        axe2.AbstractVirtualNode = abstract_virtual_node_default;
-        axe2.SerialVirtualNode = serial_virtual_node_default;
-        axe2.VirtualNode = virtual_node_default;
-        axe2._cache = cache_default;
-        axe2.imports = imports_exports;
-        axe2.cleanup = cleanup_default;
-        axe2.configure = configure_default;
-        axe2.externalAPIs = externalAPIs;
-        axe2.frameMessenger = frameMessenger2;
-        axe2.getRules = get_rules_default;
-        axe2._load = load;
-        axe2.plugins = {};
-        axe2.registerPlugin = plugins_default;
-        axe2.hasReporter = hasReporter;
-        axe2.getReporter = getReporter;
-        axe2.addReporter = addReporter;
-        axe2.reset = reset_default;
-        axe2.resetLocale = reset_locale_default;
-        axe2._runRules = runRules;
-        axe2.runVirtualRule = runVirtualRule;
-        axe2.run = run4;
-        axe2.setup = setup_default;
-        axe2.teardown = teardown_default;
-        axe2.runPartial = runPartial;
-        axe2.finishRun = finishRun;
-        axe2.commons = commons_exports;
-        axe2.utils = utils_exports;
-        axe2.addReporter("na", na_default);
-        axe2.addReporter("no-passes", no_passes_default);
-        axe2.addReporter("rawEnv", raw_env_default);
-        axe2.addReporter("raw", raw_default);
-        axe2.addReporter("v1", v1_default);
-        axe2.addReporter("v2", v2_default);
+        axe3._thisWillBeDeletedDoNotUse = exposed_for_testing_default;
+        axe3.constants = constants_default;
+        axe3.log = log;
+        axe3._setLogger = setLogger;
+        axe3.AbstractVirtualNode = abstract_virtual_node_default;
+        axe3.SerialVirtualNode = serial_virtual_node_default;
+        axe3.VirtualNode = virtual_node_default;
+        axe3._cache = cache_default;
+        axe3.imports = imports_exports;
+        axe3.cleanup = cleanup_default;
+        axe3.configure = configure_default;
+        axe3.externalAPIs = externalAPIs;
+        axe3.frameMessenger = frameMessenger2;
+        axe3.getRules = get_rules_default;
+        axe3._load = load;
+        axe3.plugins = {};
+        axe3.registerPlugin = plugins_default;
+        axe3.hasReporter = hasReporter;
+        axe3.getReporter = getReporter;
+        axe3.addReporter = addReporter;
+        axe3.reset = reset_default;
+        axe3.resetLocale = reset_locale_default;
+        axe3._runRules = runRules;
+        axe3.runVirtualRule = runVirtualRule;
+        axe3.run = run4;
+        axe3.setup = setup_default;
+        axe3.teardown = teardown_default;
+        axe3.runPartial = runPartial;
+        axe3.finishRun = finishRun;
+        axe3.commons = commons_exports;
+        axe3.utils = utils_exports;
+        axe3.addReporter("na", na_default);
+        axe3.addReporter("no-passes", no_passes_default);
+        axe3.addReporter("rawEnv", raw_env_default);
+        axe3.addReporter("raw", raw_default);
+        axe3.addReporter("v1", v1_default);
+        axe3.addReporter("v2", v2_default);
       })();
       "use strict";
-      axe2._load({
+      axe3._load({
         lang: "en",
         data: {
           rules: {
@@ -43682,11 +43682,11 @@ function robotsOverrideLimitation(url) {
 }
 async function explicitRobotsOverrides(urls, policy, timeoutMs = 8e3) {
   const out = [];
-  const rules = /* @__PURE__ */ new Map();
+  const rules2 = /* @__PURE__ */ new Map();
   for (const raw of urls) {
     const u = new URL(raw);
-    if (!rules.has(u.origin)) rules.set(u.origin, await loadRobots(u.origin, policy, timeoutMs));
-    const r = rules.get(u.origin);
+    if (!rules2.has(u.origin)) rules2.set(u.origin, await loadRobots(u.origin, policy, timeoutMs));
+    const r = rules2.get(u.origin);
     if (r && !isAllowed(r, `${u.pathname}${u.search}`)) out.push(redactUrl(u.toString()));
   }
   return out;
@@ -46331,9 +46331,9 @@ async function runAudit(ws, opts) {
     }
     let findings = [...formFindings];
     for (const obs of opts.inventoryOnly ? [] : observations) {
-      const rules = obs.status !== null && obs.status >= 400 ? [PAGE_RULES.reliability] : Object.values(PAGE_RULES);
-      for (const rule of rules) findings.push(...rule(obs));
-      if (opts.context?.brand && rules.length > 1) findings.push(...designFindings(obs, opts.context.brand));
+      const rules2 = obs.status !== null && obs.status >= 400 ? [PAGE_RULES.reliability] : Object.values(PAGE_RULES);
+      for (const rule2 of rules2) findings.push(...rule2(obs));
+      if (opts.context?.brand && rules2.length > 1) findings.push(...designFindings(obs, opts.context.brand));
       for (const e of obs.errors)
         if (!e.startsWith("navigation:")) limitations.push(`${obs.url} (${obs.viewport.name}): ${e}`);
     }
@@ -48333,14 +48333,14 @@ var focusVisible = (f, _root, read3) => {
   const sels = selectorText.split(",").map((s) => s.trim()).filter((s) => /:focus\b/.test(s) && !/:focus-visible/.test(s)).map((s) => s.replace(/:focus\b/, ":focus-visible"));
   if (!sels.length) return null;
   if (sels.some((sel) => text.includes(sel))) return null;
-  const rule = `
+  const rule2 = `
 /* Keyboard focus indicator (WCAG 2.4.7). Mouse focus keeps the original look. */
 ${sels.join(",\n")} {
   outline: 2px solid currentColor;
   outline-offset: 2px;
 }
 `;
-  const after = `${text.replace(/\n*$/, "\n")}${rule}`;
+  const after = `${text.replace(/\n*$/, "\n")}${rule2}`;
   return {
     ...base(
       f,
@@ -49215,8 +49215,8 @@ function renderMarkdown(run, cmp, limit = 25) {
   return lines.join("\n");
 }
 function renderSarif(run) {
-  const rules = /* @__PURE__ */ new Map();
-  for (const f of run.findings) if (!rules.has(f.ruleId)) rules.set(f.ruleId, f);
+  const rules2 = /* @__PURE__ */ new Map();
+  for (const f of run.findings) if (!rules2.has(f.ruleId)) rules2.set(f.ruleId, f);
   const level = (f) => f.kind !== "defect" ? "note" : f.severity === "critical" || f.severity === "serious" ? "error" : f.severity === "moderate" ? "warning" : "note";
   return {
     $schema: "https://json.schemastore.org/sarif-2.1.0.json",
@@ -49228,7 +49228,7 @@ function renderSarif(run) {
             name: "Jourilo",
             version: VERSION,
             informationUri: "https://github.com/cihantopac/jourilo",
-            rules: [...rules.values()].map((f) => ({
+            rules: [...rules2.values()].map((f) => ({
               id: f.ruleId,
               name: f.ruleId.replace(/[^A-Za-z0-9]/g, "_"),
               shortDescription: { text: f.title },
@@ -52447,10 +52447,10 @@ Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
     const repo = resolve9(str(ctx, "repo") ?? run.settings.repo ?? ".");
     if (!existsSync19(repo)) throw new JouriloError("NOT_FOUND", `Repository not found: ${repo}`);
     if (run.findings.every((f) => !f.sources)) locateFindings(run, repo);
-    const rules = list(ctx, "rule");
+    const rules2 = list(ctx, "rule");
     const only = list(ctx, "finding");
     const selected = run.findings.filter(
-      (f) => (!rules.length || rules.includes(f.ruleId)) && (!only.length || only.includes(f.fingerprint))
+      (f) => (!rules2.length || rules2.includes(f.ruleId)) && (!only.length || only.includes(f.fingerprint))
     );
     const plans = planFixes(selected, repo);
     const manual = selected.filter(
@@ -52812,6 +52812,418 @@ The current versions are kept and the rollback can be undone. Re-run with --yes 
   }
 };
 
+// src/cli/commands/rules.ts
+var import_axe_core2 = __toESM(require_axe(), 1);
+
+// src/audit/rules/registry.ts
+function rule(id, category, kind, severity, title, standards) {
+  return { id, category, severity, kind, title, standards };
+}
+var RULES = [
+  rule(
+    "jourilo/contrast-over-image",
+    "accessibility",
+    "defect",
+    "serious",
+    "Text over an image or gradient has too little contrast",
+    ["WCAG 2.2 1.4.3"]
+  ),
+  rule("jourilo/focus-visible", "accessibility", "defect", "serious", "Keyboard focus is not visible", [
+    "WCAG 2.2 2.4.7"
+  ]),
+  rule(
+    "jourilo/focus-obscured",
+    "accessibility",
+    "defect",
+    "serious",
+    "Focused element is hidden behind other content",
+    ["WCAG 2.2 2.4.11"]
+  ),
+  rule(
+    "jourilo/keyboard-trap",
+    "accessibility",
+    "defect",
+    "varies",
+    "Keyboard focus is trapped (needs-review when the page explains a way out)",
+    ["WCAG 2.2 2.1.2"]
+  ),
+  rule(
+    "jourilo/target-size",
+    "accessibility",
+    "defect",
+    "serious",
+    "Touch/pointer targets smaller than 24\xD724 px",
+    ["WCAG 2.2 2.5.8"]
+  ),
+  rule(
+    "jourilo/pointer-only-control",
+    "accessibility",
+    "defect",
+    "serious",
+    "Clickable elements that keyboard users cannot reach",
+    ["WCAG 2.2 2.1.1", "WCAG 2.2 4.1.2"]
+  ),
+  rule(
+    "jourilo/paste-blocked",
+    "accessibility",
+    "defect",
+    "serious",
+    "Pasting into password or code fields is blocked",
+    ["WCAG 2.2 3.3.8"]
+  ),
+  rule(
+    "jourilo/input-purpose",
+    "accessibility",
+    "defect",
+    "moderate",
+    "Personal-data fields without autocomplete",
+    ["WCAG 2.2 1.3.5"]
+  ),
+  rule(
+    "jourilo/placeholder-label",
+    "usability",
+    "defect",
+    "moderate",
+    "Form fields rely on placeholder text instead of a label",
+    ["WCAG 2.2 3.3.2"]
+  ),
+  rule(
+    "jourilo/dialog-focus",
+    "accessibility",
+    "defect",
+    "serious",
+    "Opening a dialog does not move keyboard focus into it",
+    ["WCAG 2.2 2.4.3", "WAI-ARIA APG dialog-modal"]
+  ),
+  rule(
+    "jourilo/composite-keyboard",
+    "accessibility",
+    "defect",
+    "serious",
+    "Items of a tab list, radio group, list box or menu bar cannot be reached with the keyboard",
+    ["WAI-ARIA APG keyboard-interface"]
+  ),
+  rule("jourilo/dialog-escape", "accessibility", "defect", "moderate", "Escape does not close the dialog", [
+    "WAI-ARIA APG dialog-modal"
+  ]),
+  rule(
+    "jourilo/dialog-focus-return",
+    "accessibility",
+    "defect",
+    "moderate",
+    "Focus is lost when the dialog closes",
+    ["WCAG 2.2 2.4.3"]
+  ),
+  rule(
+    "jourilo/dialog-focus-containment",
+    "accessibility",
+    "defect",
+    "serious",
+    "Keyboard focus leaves an open dialog",
+    ["WAI-ARIA APG dialog-modal"]
+  ),
+  rule("jourilo/dialog-role", "accessibility", "defect", "serious", "Overlay opens without a dialog role", [
+    "WCAG 2.2 4.1.2"
+  ]),
+  rule(
+    "jourilo/expanded-state",
+    "accessibility",
+    "defect",
+    "serious",
+    "aria-expanded does not match what is shown",
+    ["WCAG 2.2 4.1.2"]
+  ),
+  rule("jourilo/fieldset-legend", "accessibility", "defect", "moderate", "Fieldset without a legend", [
+    "WCAG 2.2 1.3.1",
+    "WCAG 2.2 3.3.2"
+  ]),
+  rule(
+    "jourilo/radio-group",
+    "accessibility",
+    "defect",
+    "moderate",
+    "Radio buttons are not grouped with a name",
+    ["WCAG 2.2 1.3.1"]
+  ),
+  rule("jourilo/table-headers", "accessibility", "defect", "moderate", "Data table without header cells", [
+    "WCAG 2.2 1.3.1"
+  ]),
+  rule(
+    "jourilo/empty-alt-with-title",
+    "accessibility",
+    "defect",
+    "minor",
+    "Image marked decorative but described in its title",
+    ["WCAG 2.2 1.1.1"]
+  ),
+  rule(
+    "a11y/errors-not-associated",
+    "accessibility",
+    "defect",
+    "serious",
+    "Error messages are visible but not exposed to assistive technology",
+    ["WCAG 2.2 3.3.1", "WCAG 2.2 4.1.3", "WCAG 2.2 1.3.1"]
+  ),
+  rule(
+    "jourilo/horizontal-overflow",
+    "responsive",
+    "defect",
+    "varies",
+    "Page scrolls sideways (needs-review when no element is located)",
+    ["WCAG 2.2 1.4.10", "Nielsen heuristic #8"]
+  ),
+  rule(
+    "jourilo/missing-viewport-meta",
+    "responsive",
+    "defect",
+    "serious",
+    "No responsive viewport meta tag",
+    ["WCAG 2.2 1.4.10"]
+  ),
+  rule("jourilo/small-text", "usability", "defect", "varies", "Body text below 12 px on mobile", [
+    "Nielsen heuristic #8"
+  ]),
+  rule("ux/required-fields-unmarked", "usability", "defect", "minor", "Required fields are not indicated", [
+    "Nielsen heuristic #5"
+  ]),
+  rule(
+    "ux/no-validation-feedback",
+    "usability",
+    "defect",
+    "serious",
+    "Invalid or empty form input gets no validation feedback",
+    ["WCAG 2.2 3.3.1", "WCAG 2.2 3.3.3", "Nielsen heuristic #9"]
+  ),
+  rule("ux/error-focus", "usability", "defect", "minor", "Focus does not move to the first error", [
+    "Nielsen heuristic #9"
+  ]),
+  rule("journey/failed", "usability", "defect", "serious", "A journey does not reach its goal", []),
+  rule(
+    "journey/blocked-by-policy",
+    "usability",
+    "needs-review",
+    "info",
+    "A journey stopped by the safety policy",
+    []
+  ),
+  rule("journey/page-errors", "reliability", "defect", "serious", "Uncaught exceptions during a journey", []),
+  rule(
+    "journey/flaky",
+    "reliability",
+    "needs-review",
+    "moderate",
+    "A journey passed only some of its attempts",
+    []
+  ),
+  rule(
+    "jourilo/page-unreachable",
+    "reliability",
+    "defect",
+    "critical",
+    "Page failed to load or redirects to itself in a loop",
+    []
+  ),
+  rule(
+    "jourilo/http-error-page",
+    "reliability",
+    "defect",
+    "varies",
+    "Page responds with an HTTP error status",
+    ["Nielsen heuristic #9"]
+  ),
+  rule(
+    "jourilo/console-errors",
+    "reliability",
+    "defect",
+    "varies",
+    "Errors logged to the browser console, or uncaught exceptions",
+    []
+  ),
+  rule("jourilo/failed-requests", "reliability", "defect", "varies", "First-party requests failed", []),
+  rule("jourilo/failed-third-party", "reliability", "defect", "minor", "Third-party requests failed", []),
+  rule(
+    "jourilo/redirect-chain",
+    "performance",
+    "defect",
+    "minor",
+    "Page is reached through several redirects",
+    ["Lighthouse redirects", "Web Vitals TTFB"]
+  ),
+  rule(
+    "jourilo/unsized-images",
+    "performance",
+    "defect",
+    "minor",
+    "Images without reserved space contribute to layout shift",
+    ["Core Web Vitals CLS"]
+  ),
+  rule(
+    "perf/lcp",
+    "performance",
+    "defect",
+    "varies",
+    "Largest Contentful Paint is poor or needs improvement (lab)",
+    ["Core Web Vitals LCP"]
+  ),
+  rule(
+    "perf/cls",
+    "performance",
+    "defect",
+    "varies",
+    "Cumulative Layout Shift is poor or needs improvement (lab)",
+    ["Core Web Vitals CLS"]
+  ),
+  rule(
+    "perf/fcp",
+    "performance",
+    "defect",
+    "varies",
+    "First Contentful Paint is poor or needs improvement (lab)",
+    ["Web Vitals FCP"]
+  ),
+  rule(
+    "perf/ttfb",
+    "performance",
+    "defect",
+    "varies",
+    "Time to First Byte is poor or needs improvement (lab)",
+    ["Web Vitals TTFB"]
+  ),
+  rule(
+    "perf/tbt",
+    "performance",
+    "defect",
+    "varies",
+    "Total Blocking Time is poor or needs improvement (lab)",
+    ["Lighthouse TBT"]
+  ),
+  rule("perf/inp", "performance", "defect", "varies", "Slow response to interaction during a journey (lab)", [
+    "Core Web Vitals INP"
+  ]),
+  rule(
+    "conv/no-primary-cta-above-fold",
+    "conversion",
+    "hypothesis",
+    "varies",
+    "No prominent call to action in the first screen",
+    []
+  ),
+  rule(
+    "conv/competing-ctas",
+    "conversion",
+    "hypothesis",
+    "minor",
+    "Several competing primary actions in the first screen",
+    []
+  ),
+  rule(
+    "conv/unclear-value-proposition",
+    "conversion",
+    "hypothesis",
+    "minor",
+    "Main headline does not state a value proposition",
+    []
+  ),
+  rule("conv/vague-cta-label", "conversion", "hypothesis", "minor", "Vague call-to-action label", []),
+  rule(
+    "conv/no-trust-signals",
+    "conversion",
+    "hypothesis",
+    "varies",
+    "No trust signals near a form that asks for personal or payment data",
+    []
+  ),
+  rule(
+    "conv/pricing-period-unclear",
+    "conversion",
+    "hypothesis",
+    "minor",
+    "Prices shown without a billing period",
+    []
+  ),
+  rule(
+    "conv/signup-friction",
+    "conversion",
+    "hypothesis",
+    "varies",
+    "Signup form asks for more than it needs",
+    []
+  ),
+  rule(
+    "conv/forced-account-checkout",
+    "conversion",
+    "hypothesis",
+    "varies",
+    "Checkout appears to require creating an account",
+    []
+  ),
+  rule(
+    "design/off-brand-cta-color",
+    "design-system",
+    "defect",
+    "minor",
+    "Primary buttons use colors outside the brand palette",
+    []
+  ),
+  rule(
+    "design/off-brand-font",
+    "design-system",
+    "defect",
+    "minor",
+    "Text uses fonts that are not in the brand typography",
+    []
+  )
+];
+
+// src/cli/commands/rules.ts
+init_errors();
+function allRules() {
+  const out = [...RULES];
+  for (const r of import_axe_core2.default.getRules(AXE_TAGS)) {
+    const standards = wcagFromAxeTags(r.tags).map((s) => `${s.standard} ${s.id}`);
+    out.push({
+      id: `axe/${r.ruleId}`,
+      category: "accessibility",
+      severity: "varies",
+      kind: "defect",
+      title: r.help,
+      standards
+    });
+    if (standards.length)
+      out.push({
+        id: `axe-review/${r.ruleId}`,
+        category: "accessibility",
+        severity: "minor",
+        kind: "needs-review",
+        title: `Needs manual review: ${r.help}`,
+        standards
+      });
+  }
+  return out;
+}
+var rules = {
+  name: "rules",
+  summary: "List every rule Jourilo can report, with category, severity and kind (machine-readable with --json).",
+  usage: "jourilo rules list [--json]",
+  details: `Subcommand:
+  list   Native rules (jourilo/\u2026, perf/\u2026, conv/\u2026, ux/\u2026, a11y/\u2026, journey/\u2026, design/\u2026) and the axe/<id> and
+         axe-review/<id> rules a run enables from axe-core ${import_axe_core2.default.version}. Severity is "varies" when it depends on
+         what was measured. With --json: one array of {id, category, severity, kind, title, standards}.`,
+  async run(ctx) {
+    if (ctx.positionals[0] !== "list")
+      throw new JouriloError("USAGE", "Unknown or missing subcommand.", "Usage: jourilo rules list [--json]");
+    const list2 = allRules();
+    const w = (k) => Math.max(...list2.map((r) => r[k].length));
+    const [wi, wc, ws, wk] = [w("id"), w("category"), w("severity"), w("kind")];
+    const text = list2.map(
+      (r) => `${r.id.padEnd(wi)}  ${r.category.padEnd(wc)}  ${r.severity.padEnd(ws)}  ${r.kind.padEnd(wk)}  ${r.title}`
+    ).join("\n");
+    return { data: list2, text: `${list2.length} rules
+
+${text}` };
+  }
+};
+
 // src/cli/commands/runs.ts
 init_errors();
 var runs = {
@@ -52956,8 +53368,8 @@ var doctor = {
         }
       }
     }
-    const axe2 = await Promise.resolve().then(() => __toESM(require_axe(), 1));
-    checks.push({ name: "axe-core", ok: true, detail: axe2.default.version });
+    const axe3 = await Promise.resolve().then(() => __toESM(require_axe(), 1));
+    checks.push({ name: "axe-core", ok: true, detail: axe3.default.version });
     const ok = checks.every((c) => c.ok);
     return {
       data: { version: VERSION, ok, checks },
@@ -53003,6 +53415,7 @@ var COMMANDS = [
   runs,
   bench,
   agent,
+  rules,
   serve,
   setup,
   doctor
@@ -53014,7 +53427,7 @@ var GROUPS = [
   ["Experiment", ["experiment"]],
   ["Improve", ["optimize", "verify", "checkpoint", "rollback"]],
   ["Results", ["report", "compare", "runs", "finding"]],
-  ["System", ["agent", "bench", "serve", "setup", "doctor"]]
+  ["System", ["agent", "bench", "rules", "serve", "setup", "doctor"]]
 ];
 function cliMarkdown() {
   const out = [
