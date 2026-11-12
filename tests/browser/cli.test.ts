@@ -69,8 +69,8 @@ describe('cli', () => {
     const j = jourilo('journeys', 'run', 'home', '--base', 'http://localhost:1/', '--deny-local', '--json');
     expect(j.status).toBe(3);
   });
-  it('JOURILO_DENY_LOCAL=0 or false leaves local targets allowed; a bad value warns on stderr only', () => {
-    for (const value of ['0', 'false', 'maybe']) {
+  it('JOURILO_DENY_LOCAL: off values allow local targets; on, yes and unrecognised values enable it (fail closed)', () => {
+    for (const value of ['0', 'false', 'OFF', ' no ', 'on', 'yes', 'maybe']) {
       const r = spawnSync(
         process.execPath,
         [
@@ -87,11 +87,38 @@ describe('cli', () => {
         ],
         { encoding: 'utf8', cwd: root, env: { ...process.env, JOURILO_DENY_LOCAL: value } },
       );
-      expect(r.status, value).not.toBe(3);
-      expect(r.stderr.includes('JOURILO_DENY_LOCAL'), value).toBe(value === 'maybe');
+      const enabled = ['on', 'yes', 'maybe'].includes(value);
+      if (enabled) expect(r.status, value).toBe(3);
+      else expect(r.status, value).not.toBe(3);
+      expect(r.stderr.includes('not recognised'), value).toBe(value === 'maybe');
+      if (value === 'maybe') {
+        // Under --json every stderr line stays JSON.
+        for (const line of r.stderr.split('\n').filter(Boolean))
+          expect(() => JSON.parse(line), line).not.toThrow();
+      }
       expect(r.stdout).not.toContain('JOURILO_DENY_LOCAL');
     }
   }, 180_000);
+  it('--deny-local with --browser webkit is refused up front (exit 3), before any browser starts', () => {
+    const r = spawnSync(
+      process.execPath,
+      [
+        cli,
+        'audit',
+        'https://example.com/',
+        '--deny-local',
+        '--browser',
+        'webkit',
+        '--workspace',
+        ws,
+        '--json',
+      ],
+      { encoding: 'utf8', cwd: root },
+    );
+    expect(r.status).toBe(3);
+    expect(r.stderr).toContain('chromium or firefox');
+    expect(r.stderr).not.toContain('Starting ');
+  }, 60_000);
   it('--deny-local keeps confining a served directory: another loopback port is blocked, the page loads', async () => {
     const other = http.createServer((_req, res) => res.end('secret'));
     await new Promise<void>((r) => other.listen(0, '127.0.0.1', r));
@@ -527,7 +554,12 @@ async function timedAudit(
     const parts = buffered.split('\n');
     buffered = parts.pop() ?? '';
     for (const part of parts) {
-      const msg = JSON.parse(part) as TimedAudit['lines'][number];
+      let msg: TimedAudit['lines'][number];
+      try {
+        msg = JSON.parse(part) as TimedAudit['lines'][number];
+      } catch {
+        msg = { type: 'raw', message: part };
+      }
       lines.push(msg);
       if (msg.type !== 'progress') continue;
       if (starting && !launchMs) launchMs = Date.now() - t0;

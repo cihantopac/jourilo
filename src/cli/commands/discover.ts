@@ -78,7 +78,7 @@ export const discover: Command = {
   --pages N         Pages to read when mapping a website (default 10)
   --ignore-robots   Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private   Allow private-network hosts (10.x, 192.168.x, ...)
-  --deny-local      Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
+  --deny-local      Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                     JOURILO_DENY_LOCAL=1 does the same`,
   async run(ctx) {
     const target = requirePositional(ctx, 0, 'path|url', discover.usage);

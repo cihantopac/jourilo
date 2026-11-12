@@ -328,6 +328,30 @@ describe('experience rules', () => {
       ['jourilo/failed-third-party', 'minor'],
     ]);
   });
+  it('redacts secrets in the redirect hops of an unreachable page', () => {
+    const f = reliabilityFindings(
+      obs({
+        errors: ['navigation: net::ERR_TOO_MANY_REDIRECTS at https://example.test/a?token=secret'],
+        redirects: [
+          {
+            status: 302,
+            from: 'https://example.test/a?token=secret',
+            to: 'https://example.test/b?token=secret',
+          },
+          {
+            status: 302,
+            from: 'https://example.test/b?token=secret',
+            to: 'https://example.test/a?token=secret',
+          },
+        ],
+      }),
+    );
+    const unreachable = f.find((x) => x.ruleId === 'jourilo/page-unreachable')!;
+    expect(unreachable).toBeDefined();
+    expect(JSON.stringify([unreachable.title, unreachable.description, unreachable.evidence])).not.toContain(
+      'secret',
+    );
+  });
   it('labels lab metrics and ignores good values', () => {
     const vitals = {
       lcp: 4300,

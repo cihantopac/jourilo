@@ -56,9 +56,8 @@ Stated so nobody mistakes silence for a pass.
   in its own context, so the audited page can differ from the page the journey left. Check the first screenshot.
 - `--clock` freezes only `Date`; `performance.now()`, timers, animations and CSS keep real time. A page that reads
   the time from a timer or a server still shows the real one. `--timezone` changes the zone only.
-- With `journeys run --repeat N`, the step screenshots and other step files are named by step, so the attempts share
-  them: a kept file can show a later attempt than the representative one. The attempt index is not in the file name yet
-  (see the roadmap).
+- With `journeys run --repeat N`, the step screenshots and other step files carry the attempt index in their names
+  (`-a1`, `-a2`, …), so a kept file always belongs to its own attempt.
 - The keyboard walk steps past the first trap it finds; a second trap on the same page ends the walk.
 - Form validation is probed on local hosts by simulating an empty submission: requests that would send data are
   intercepted, so validation that only the server performs is reported as not tested. `--allow-submit` sends the

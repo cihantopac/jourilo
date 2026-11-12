@@ -1,6 +1,7 @@
 // Responsive layout, reliability (errors, failed requests) and lab performance rules.
 import type { PageObservation } from '../../browser/capture.js';
 import { toMetrics } from '../../browser/vitals.js';
+import { redactText, redactUrl } from '../../core/redact.js';
 import type { Finding, Severity } from '../../core/types.js';
 import { makeFinding } from '../finding.js';
 import { CWV, nielsen, wcag } from '../standards.js';
@@ -120,17 +121,19 @@ export function reliabilityFindings(obs: PageObservation): Finding[] {
   const out: Finding[] = [];
   const vp = obs.viewport.name;
 
-  const navError = obs.errors.find((e) => e.startsWith('navigation:'));
+  const rawNavError = obs.errors.find((e) => e.startsWith('navigation:'));
+  const navError = rawNavError === undefined ? undefined : redactText(rawNavError);
   if (navError) {
     const hops = obs.redirects ?? [];
     const froms = hops.map((h) => h.from);
     const loop = /ERR_TOO_MANY_REDIRECTS/i.test(navError) || new Set(froms).size < froms.length;
+    // Hops are redacted at capture; redact again here so a rule never depends on that.
     const short = (u: string): string => {
       try {
-        const a = new URL(u);
-        return a.origin === new URL(obs.url).origin ? `${a.pathname}${a.search}` : u;
+        const a = new URL(redactUrl(u));
+        return a.origin === new URL(obs.url).origin ? `${a.pathname}${a.search}` : a.toString();
       } catch {
-        return u;
+        return redactText(u);
       }
     };
     const chain = hops.slice(0, 5).map((h) => `${h.status} ${short(h.from)} → ${short(h.to)}`);

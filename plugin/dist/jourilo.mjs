@@ -38939,18 +38939,27 @@ function flag(ctx, key) {
 }
 function denyLocalFrom(ctx) {
   if (flag(ctx, "deny-local")) return true;
-  const v = (process.env.JOURILO_DENY_LOCAL ?? "").trim().toLowerCase();
-  if (["1", "true", "yes"].includes(v)) return true;
-  if (v && !["0", "false", "no", "off"].includes(v) && !warnedDenyLocal) {
+  const raw = process.env.JOURILO_DENY_LOCAL ?? "";
+  const v = raw.trim().toLowerCase();
+  if (!v || ["0", "false", "no", "off"].includes(v)) return false;
+  if (["1", "true", "yes", "on"].includes(v)) return true;
+  if (!warnedDenyLocal) {
     warnedDenyLocal = true;
-    process.stderr.write(
-      `jourilo: JOURILO_DENY_LOCAL=${process.env.JOURILO_DENY_LOCAL} is not recognised (use 1, true or yes); local targets stay allowed.
-`
+    ctx.log(
+      `JOURILO_DENY_LOCAL=${raw} is not recognised (use 1, true, yes or on to enable, 0, false, no or off to disable); --deny-local is on.`
     );
   }
-  return false;
+  return true;
 }
 var warnedDenyLocal = false;
+function refuseDenyLocalWebkit(denyLocal, browser) {
+  if (denyLocal && browser === "webkit")
+    throw new JouriloError(
+      "UNSAFE_URL",
+      "--deny-local cannot be combined with --browser webkit: WebKit sends HTTPS redirects outside the network guard, so a redirect to a local address could not be blocked.",
+      "Use --browser chromium or firefox."
+    );
+}
 function requirePositional(ctx, index, name, usage2) {
   const v = ctx.positionals[index];
   if (!v) throw new JouriloError("USAGE", `Missing <${name}>.`, `Usage: ${usage2}`);
@@ -39979,7 +39988,7 @@ function loopbackRedirectVerdict(location, from, policy) {
     const h = to.hostname.replace(/^\[|\]$/g, "").toLowerCase().replace(/\.$/, "");
     const local = isLocalHostname(h) || isIP2(h) !== 0 && classifyIp(h) === "loopback";
     const port = Number(to.port || (to.protocol === "https:" ? 443 : 80));
-    const own = policy.allowLoopbackPorts?.includes(port) && (h === "127.0.0.1" || h === "localhost");
+    const own = policy.allowLoopbackPorts?.includes(port) && h === "127.0.0.1";
     if (local && !own)
       return `redirect from ${from.host} to ${to.host} (a local address) refused: --deny-local is set.`;
   }
@@ -44945,17 +44954,18 @@ function responsiveFindings(obs) {
 function reliabilityFindings(obs) {
   const out = [];
   const vp = obs.viewport.name;
-  const navError = obs.errors.find((e) => e.startsWith("navigation:"));
+  const rawNavError = obs.errors.find((e) => e.startsWith("navigation:"));
+  const navError = rawNavError === void 0 ? void 0 : redactText(rawNavError);
   if (navError) {
     const hops = obs.redirects ?? [];
     const froms = hops.map((h) => h.from);
     const loop = /ERR_TOO_MANY_REDIRECTS/i.test(navError) || new Set(froms).size < froms.length;
     const short = (u) => {
       try {
-        const a = new URL(u);
-        return a.origin === new URL(obs.url).origin ? `${a.pathname}${a.search}` : u;
+        const a = new URL(redactUrl(u));
+        return a.origin === new URL(obs.url).origin ? `${a.pathname}${a.search}` : a.toString();
       } catch {
-        return u;
+        return redactText(u);
       }
     };
     const chain = hops.slice(0, 5).map((h) => `${h.status} ${short(h.from)} \u2192 ${short(h.to)}`);
@@ -45291,7 +45301,7 @@ async function runAudit(ws, opts) {
   };
   let urls;
   if (opts.urls?.length) {
-    urls = opts.urls.map((u) => ({ url: new URL(u, target).toString() }));
+    urls = [...new Set(opts.urls.map((u) => new URL(u, target).toString()))].map((url) => ({ url }));
     for (const u of urls) {
       if (new URL(u.url).origin !== target.origin)
         throw new JouriloError("UNSAFE_URL", `--url ${u.url} is not on the target origin ${target.origin}.`);
@@ -45409,8 +45419,7 @@ async function runAudit(ws, opts) {
         for (const u of await untilStopped(
           explicitRobotsOverrides(
             urls.map((x) => x.url),
-            session.guard.policy,
-            opts.timeoutMs
+            session.guard.policy
           ),
           signal
         ))
@@ -49170,6 +49179,7 @@ async function runCmd(ctx) {
   try {
     const base2 = parseTargetUrl(server?.url ?? baseArg);
     const denyLocal = denyLocalFrom(ctx);
+    refuseDenyLocalWebkit(denyLocal, str(ctx, "browser") ?? "chromium");
     const hostClass = await checkTarget(base2, {
       allowPrivate: flag(ctx, "allow-private"),
       denyLocal: denyLocal && !server
@@ -49367,7 +49377,7 @@ Suggest options:
   --pages N              Pages to read when deriving journeys from a site (default 8)
   --force                Overwrite journey files that already exist (by default existing files are kept)
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
-  --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
+  --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                          JOURILO_DENY_LOCAL=1 does the same
 
 Run options:
@@ -49389,8 +49399,8 @@ Run options:
   --evidence MODE        full (default) or minimal: keep only the screenshots of the failed step, the step before it and the last step
   --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
-  --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
-                         JOURILO_DENY_LOCAL=1 does the same
+  --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
+                         JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3)
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission
@@ -49460,7 +49470,10 @@ function stopController(ctx, maxDurationS) {
   let signals = 0;
   const onSignal = () => {
     if (++signals > 1) {
-      writeSync2(2, stoppedTwiceLine(ctx.json));
+      try {
+        writeSync2(2, stoppedTwiceLine(ctx.json));
+      } catch {
+      }
       process.exit(130);
     }
     ctx.log(
@@ -49490,6 +49503,7 @@ async function auditCommand(ctx, usage2, categories) {
   const browser = str(ctx, "browser") ?? "chromium";
   if (!BROWSERS.includes(browser))
     throw new JouriloError("USAGE", `--browser must be one of ${BROWSERS.join(", ")}.`);
+  refuseDenyLocalWebkit(denyLocalFrom(ctx), browser);
   const failOn = str(ctx, "fail-on");
   if (failOn && !SEVERITIES.includes(failOn))
     throw new JouriloError("USAGE", `--fail-on must be one of ${SEVERITIES.join(", ")}.`);
@@ -49647,8 +49661,8 @@ var audit = {
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
-  --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
-                       JOURILO_DENY_LOCAL=1 does the same. For hosted integrations; a directory target is still served
+  --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
+                       JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3). For hosted integrations; a directory target is still served
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -50718,7 +50732,7 @@ var discover = {
   --pages N         Pages to read when mapping a website (default 10)
   --ignore-robots   Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private   Allow private-network hosts (10.x, 192.168.x, ...)
-  --deny-local      Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
+  --deny-local      Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                     JOURILO_DENY_LOCAL=1 does the same`,
   async run(ctx) {
     const target = requirePositional(ctx, 0, "path|url", discover.usage);
@@ -51694,14 +51708,15 @@ var verify = {
   details: `Options:
   --target URL|DIR       Where to repeat the audit (default: the baseline run's target)
   --repo PATH            Repository for source mapping (default: the baseline run's repo)
-  --deny-local           Refuse a local target (localhost, 127.0.0.1, [::1], *.localhost, *.test) with exit 3;
-                         JOURILO_DENY_LOCAL=1 does the same
+  --deny-local           Refuse a local target (localhost, 127.0.0.1, [::1], *.localhost, *.test) with exit 3; a redirect to one is blocked by the network guard and listed in the limitations;
+                         JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3)
   --fail-on-regression   Exit 1 when new serious or critical defects appear`,
   async run(ctx) {
     const target = str(ctx, "target");
     const targetDir = target !== void 0 && isDirectoryTarget(target);
     const targetUrl = target !== void 0 && !targetDir ? verifyTargetUrl(target) : void 0;
     const base2 = ctx.ws.loadRun(ctx.positionals[0] ?? "latest").run;
+    refuseDenyLocalWebkit(denyLocalFrom(ctx), String(base2.browser.name ?? "chromium"));
     const scope = base2.settings.scope;
     if (!scope)
       throw new JouriloError(

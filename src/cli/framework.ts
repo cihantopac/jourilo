@@ -164,20 +164,36 @@ export function flag(ctx: Context, key: string): boolean {
   return ctx.values[key] === true;
 }
 
-/** `--deny-local`, or `JOURILO_DENY_LOCAL` set to 1, true or yes: refuse loopback / `*.test` / `*.localhost` targets. */
+/**
+ * `--deny-local`, or `JOURILO_DENY_LOCAL`: refuse loopback / `*.test` / `*.localhost` targets.
+ * Unset, empty, 0, false, no or off disable it; 1, true, yes or on enable it; any other value fails closed
+ * (enabled) with a warning through the context logger (a JSON progress line under --json).
+ */
 export function denyLocalFrom(ctx: Context): boolean {
   if (flag(ctx, 'deny-local')) return true;
-  const v = (process.env.JOURILO_DENY_LOCAL ?? '').trim().toLowerCase();
-  if (['1', 'true', 'yes'].includes(v)) return true;
-  if (v && !['0', 'false', 'no', 'off'].includes(v) && !warnedDenyLocal) {
+  const raw = process.env.JOURILO_DENY_LOCAL ?? '';
+  const v = raw.trim().toLowerCase();
+  if (!v || ['0', 'false', 'no', 'off'].includes(v)) return false;
+  if (['1', 'true', 'yes', 'on'].includes(v)) return true;
+  if (!warnedDenyLocal) {
     warnedDenyLocal = true;
-    process.stderr.write(
-      `jourilo: JOURILO_DENY_LOCAL=${process.env.JOURILO_DENY_LOCAL} is not recognised (use 1, true or yes); local targets stay allowed.\n`,
+    ctx.log(
+      `JOURILO_DENY_LOCAL=${raw} is not recognised (use 1, true, yes or on to enable, 0, false, no or off to disable); --deny-local is on.`,
     );
   }
-  return false;
+  return true;
 }
 let warnedDenyLocal = false;
+
+/** WebKit sends HTTPS redirects outside the proxy, so the redirect protection of --deny-local cannot hold there. */
+export function refuseDenyLocalWebkit(denyLocal: boolean, browser: string): void {
+  if (denyLocal && browser === 'webkit')
+    throw new JouriloError(
+      'UNSAFE_URL',
+      '--deny-local cannot be combined with --browser webkit: WebKit sends HTTPS redirects outside the network guard, so a redirect to a local address could not be blocked.',
+      'Use --browser chromium or firefox.',
+    );
+}
 
 export function requirePositional(ctx: Context, index: number, name: string, usage: string): string {
   const v = ctx.positionals[index];

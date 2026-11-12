@@ -75,6 +75,7 @@ describe('safety policy: signals beyond the visible name', () => {
     ['Continue', '', '/subscriptions/7/cancel', 'destructive'],
     ['Weiter', 'js-konto-loeschen', '', 'destructive'],
     ['Sil', '', '', 'destructive'],
+    ['SİL', '', '', 'destructive'],
     ['Hesabımı sil', '', '', 'destructive'],
     ['Löschen', '', '', 'destructive'],
     ['Supprimer le compte', '', '', 'destructive'],

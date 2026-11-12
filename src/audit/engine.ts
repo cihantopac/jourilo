@@ -274,7 +274,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
   // Pages known up front (--url, or only the target) need no discovery.
   let urls: { url: string; role?: string }[] | undefined;
   if (opts.urls?.length) {
-    urls = opts.urls.map((u) => ({ url: new URL(u, target).toString() }));
+    urls = [...new Set(opts.urls.map((u) => new URL(u, target).toString()))].map((url) => ({ url }));
     for (const u of urls) {
       if (new URL(u.url).origin !== target.origin)
         throw new JouriloError('UNSAFE_URL', `--url ${u.url} is not on the target origin ${target.origin}.`);
@@ -408,7 +408,6 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
           explicitRobotsOverrides(
             urls.map((x) => x.url),
             session.guard.policy,
-            opts.timeoutMs,
           ),
           signal,
         ))

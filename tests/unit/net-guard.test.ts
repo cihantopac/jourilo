@@ -62,6 +62,16 @@ describe('redirect checks', () => {
     expect(
       loopbackRedirectVerdict('http://localhost:3000/', from, { target: 'local', allowPrivate: false }),
     ).toBeNull();
+    const served = {
+      target: 'local' as const,
+      allowPrivate: false,
+      denyLocal: true,
+      allowLoopbackPorts: [4321],
+    };
+    const page = new URL('http://127.0.0.1:4321/');
+    expect(loopbackRedirectVerdict('http://127.0.0.1:4321/b', page, served)).toBeNull();
+    expect(loopbackRedirectVerdict('http://localhost:4321/b', page, served)).toMatch(/refused/);
+    expect(loopbackRedirectVerdict('http://127.0.0.1:9999/b', page, served)).toMatch(/refused/);
     expect(redirectEscape('http://127.0.0.1/', null, pub)).toBeNull();
     expect(redirectEscape('http://127.0.0.1/', 'https://shop.example/', pub)).toMatch(/refused/);
   });

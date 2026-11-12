@@ -27,7 +27,7 @@ import {
 } from '../../repair/transaction.js';
 import { compareRuns, type MetricDelta } from '../../report/compare.js';
 import { writeReports } from '../../report/index.js';
-import { type Command, denyLocalFrom, flag, list, str } from '../framework.js';
+import { type Command, denyLocalFrom, flag, list, refuseDenyLocalWebkit, str } from '../framework.js';
 import { loadJourneys } from './journeys.js';
 
 export const optimize: Command = {
@@ -185,8 +185,8 @@ export const verify: Command = {
   details: `Options:
   --target URL|DIR       Where to repeat the audit (default: the baseline run's target)
   --repo PATH            Repository for source mapping (default: the baseline run's repo)
-  --deny-local           Refuse a local target (localhost, 127.0.0.1, [::1], *.localhost, *.test) with exit 3;
-                         JOURILO_DENY_LOCAL=1 does the same
+  --deny-local           Refuse a local target (localhost, 127.0.0.1, [::1], *.localhost, *.test) with exit 3; a redirect to one is blocked by the network guard and listed in the limitations;
+                         JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3)
   --fail-on-regression   Exit 1 when new serious or critical defects appear`,
   async run(ctx) {
     // An explicit --target replaces the baseline's served directory, so a URL target is not ignored.
@@ -194,6 +194,7 @@ export const verify: Command = {
     const targetDir = target !== undefined && isDirectoryTarget(target);
     const targetUrl = target !== undefined && !targetDir ? verifyTargetUrl(target) : undefined;
     const base = ctx.ws.loadRun(ctx.positionals[0] ?? 'latest').run;
+    refuseDenyLocalWebkit(denyLocalFrom(ctx), String(base.browser.name ?? 'chromium'));
     const scope = base.settings.scope as { urls: string[]; viewports: string[] } | undefined;
     if (!scope)
       throw new JouriloError(

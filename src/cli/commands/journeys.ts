@@ -33,6 +33,7 @@ import {
   pagesOption,
   parseEvidence,
   parseStateOptions,
+  refuseDenyLocalWebkit,
   str,
 } from '../framework.js';
 
@@ -213,6 +214,7 @@ async function runCmd(ctx: Context) {
   try {
     const base = parseTargetUrl(server?.url ?? baseArg);
     const denyLocal = denyLocalFrom(ctx);
+    refuseDenyLocalWebkit(denyLocal, (str(ctx, 'browser') ?? 'chromium') as string);
     const hostClass = await checkTarget(base, {
       allowPrivate: flag(ctx, 'allow-private'),
       denyLocal: denyLocal && !server,
@@ -427,7 +429,7 @@ Suggest options:
   --pages N              Pages to read when deriving journeys from a site (default 8)
   --force                Overwrite journey files that already exist (by default existing files are kept)
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
-  --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
+  --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                          JOURILO_DENY_LOCAL=1 does the same
 
 Run options:
@@ -449,8 +451,8 @@ Run options:
   --evidence MODE        full (default) or minimal: keep only the screenshots of the failed step, the step before it and the last step
   --repeat N             Run each journey N times (max 10); mixed outcomes are reported as flaky
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
-  --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
-                         JOURILO_DENY_LOCAL=1 does the same
+  --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
+                         JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3)
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission

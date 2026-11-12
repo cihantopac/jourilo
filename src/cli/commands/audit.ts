@@ -25,6 +25,7 @@ import {
   pagesOption,
   parseEvidence,
   parseStateOptions,
+  refuseDenyLocalWebkit,
   requirePositional,
   str,
 } from '../framework.js';
@@ -85,7 +86,11 @@ function stopController(ctx: Context, maxDurationS: number | undefined) {
   const onSignal = () => {
     if (++signals > 1) {
       // Synchronous: the line must be on stderr before the process ends.
-      writeSync(2, stoppedTwiceLine(ctx.json));
+      try {
+        writeSync(2, stoppedTwiceLine(ctx.json));
+      } catch {
+        // stderr may be closed; quitting matters more than the line.
+      }
       process.exit(130);
     }
     ctx.log(
@@ -122,6 +127,7 @@ export async function auditCommand(
   const browser = (str(ctx, 'browser') ?? 'chromium') as BrowserName;
   if (!BROWSERS.includes(browser))
     throw new JouriloError('USAGE', `--browser must be one of ${BROWSERS.join(', ')}.`);
+  refuseDenyLocalWebkit(denyLocalFrom(ctx), browser);
   const failOn = str(ctx, 'fail-on') as Severity | undefined;
   if (failOn && !SEVERITIES.includes(failOn))
     throw new JouriloError('USAGE', `--fail-on must be one of ${SEVERITIES.join(', ')}.`);
@@ -296,8 +302,8 @@ export const audit: Command = {
   --brand SLUG         Markilo brand to check design consistency against (default: master brand)
   --ignore-robots      Ignore robots.txt (only for sites you own or are authorized to test)
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
-  --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test), also as a redirect (exit 3);
-                       JOURILO_DENY_LOCAL=1 does the same. For hosted integrations; a directory target is still served
+  --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
+                       JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3). For hosted integrations; a directory target is still served
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)

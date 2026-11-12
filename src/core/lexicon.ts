@@ -483,6 +483,7 @@ export function turkishFold(text: string): string {
  * maps I to i (right for English "LIGHT") but cannot match "KARANLIK" to "karanlık" or "DİL" to "dil", so both the
  * original text and its Turkish fold are tested.
  */
+/** The Turkish fold applies only through `.test()`; `exec`, `match` and `replace` see the plain case-insensitive match. */
 class LexiconRegExp extends RegExp {
   override test(text: string): boolean {
     return super.test(text) || super.test(turkishFold(text));

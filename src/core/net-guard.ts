@@ -142,7 +142,7 @@ export function loopbackRedirectVerdict(location: string, from: URL, policy: Add
       .replace(/\.$/, '');
     const local = isLocalHostname(h) || (isIP(h) !== 0 && classifyIp(h) === 'loopback');
     const port = Number(to.port || (to.protocol === 'https:' ? 443 : 80));
-    const own = policy.allowLoopbackPorts?.includes(port) && (h === '127.0.0.1' || h === 'localhost');
+    const own = policy.allowLoopbackPorts?.includes(port) && h === '127.0.0.1';
     if (local && !own)
       return `redirect from ${from.host} to ${to.host} (a local address) refused: --deny-local is set.`;
   }
