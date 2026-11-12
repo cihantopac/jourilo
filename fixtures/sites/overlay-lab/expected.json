@@ -39,6 +39,11 @@
       "rule": "jourilo/keyboard-trap",
       "path": "/single-button",
       "why": "one button; the next Tab leaves the page and focus comes back"
+    },
+    {
+      "rule": "jourilo/keyboard-trap",
+      "path": "/cookie-wall",
+      "why": "a role=\"dialog\" cookie wall without aria-modal holds focus among its four controls and ignores Escape: a modal dialog, not a trap"
     }
   ],
   "maxDefects": [

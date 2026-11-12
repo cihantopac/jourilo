@@ -137,7 +137,7 @@ const FOCUS_INFO = `(el) => {
     rect: { x: Math.round(r.left + sx), y: Math.round(r.top + sy), width: Math.round(r.width), height: Math.round(r.height) },
     obscured: !selfHidden && inViewport > 0 && visiblePts === 0 && !!cover,
     coverSelector: cover ? sel(cover) : undefined,
-    inModal: !!el.closest('[aria-modal="true"], dialog[open]'),
+    inModal: !!el.closest('[aria-modal="true"], dialog[open], [role="dialog"], [role="alertdialog"]'),
     boxless,
   };
 }`;
@@ -229,7 +229,8 @@ async function settleFocus(page: Page): Promise<void> {
 /**
  * Is focus held among `selectors` wherever it starts (F23)? From the first of them, HELD_PRESSES presses of Tab, then
  * of Shift+Tab, then of Tab after Escape must never take focus to the page itself or out of the document, and only the
- * Tab round may add elements (up to HELD_MAX). A modal dialog that keeps focus inside is not a trap. Returns the held
+ * Tab round may add elements (up to HELD_MAX). A dialog that keeps focus inside (aria-modal, an open <dialog>, or
+ * role="dialog" / "alertdialog", which cookie walls often use without aria-modal) is not a trap. Returns the held
  * set, or null when focus got out.
  */
 async function heldFocus(page: Page, tabKey: string, selectors: string[]): Promise<string[] | null> {
@@ -263,7 +264,7 @@ async function heldFocus(page: Page, tabKey: string, selectors: string[]): Promi
   if (!(await stays(tabKey, false))) return null;
   const inModal = (await page
     .evaluate(
-      `((sels) => sels.some((s) => { const el = document.querySelector(s); return !!el && !!el.closest('[aria-modal="true"], dialog[open]'); }))(${JSON.stringify([...set])})`,
+      `((sels) => sels.some((s) => { const el = document.querySelector(s); return !!el && !!el.closest('[aria-modal="true"], dialog[open], [role="dialog"], [role="alertdialog"]'); }))(${JSON.stringify([...set])})`,
     )
     .catch(() => true)) as boolean;
   return inModal ? null : [...set];

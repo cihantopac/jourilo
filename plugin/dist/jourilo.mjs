@@ -41988,7 +41988,7 @@ var FOCUS_INFO = `(el) => {
     rect: { x: Math.round(r.left + sx), y: Math.round(r.top + sy), width: Math.round(r.width), height: Math.round(r.height) },
     obscured: !selfHidden && inViewport > 0 && visiblePts === 0 && !!cover,
     coverSelector: cover ? sel(cover) : undefined,
-    inModal: !!el.closest('[aria-modal="true"], dialog[open]'),
+    inModal: !!el.closest('[aria-modal="true"], dialog[open], [role="dialog"], [role="alertdialog"]'),
     boxless,
   };
 }`;
@@ -42082,7 +42082,7 @@ async function heldFocus(page, tabKey, selectors) {
   await settleFocus(page);
   if (!await stays(tabKey, false)) return null;
   const inModal = await page.evaluate(
-    `((sels) => sels.some((s) => { const el = document.querySelector(s); return !!el && !!el.closest('[aria-modal="true"], dialog[open]'); }))(${JSON.stringify([...set])})`
+    `((sels) => sels.some((s) => { const el = document.querySelector(s); return !!el && !!el.closest('[aria-modal="true"], dialog[open], [role="dialog"], [role="alertdialog"]'); }))(${JSON.stringify([...set])})`
   ).catch(() => true);
   return inModal ? null : [...set];
 }
