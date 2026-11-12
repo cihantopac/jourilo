@@ -86,6 +86,10 @@
           "type": "boolean",
           "description": "--ignore-https-errors: the browser accepted invalid certificates; the network guard still checked every destination."
         },
+        "waitFor": {
+          "type": "string",
+          "description": "--wait-for: each page was captured once this selector was visible (or --timeout passed; see limitations)."
+        },
         "chromiumSandbox": {
           "type": "boolean",
           "description": "--chromium-sandbox: Chromium ran with its process sandbox on (Playwright disables it by default)."
@@ -395,6 +399,16 @@
         "metrics": { "type": "array", "items": { "$ref": "#/$defs/metric" } },
         "consoleErrors": { "type": "integer" },
         "failedRequests": { "type": "integer" },
+        "load": {
+          "type": "object",
+          "description": "How the page was captured. `waitedFor` and `found` are present with --wait-for; `found` false means the element never became visible within --timeout.",
+          "required": ["networkIdle"],
+          "properties": {
+            "networkIdle": { "type": "boolean" },
+            "waitedFor": { "type": "string" },
+            "found": { "type": "boolean" }
+          }
+        },
         "inventory": { "$ref": "#/$defs/inventory" }
       }
     },

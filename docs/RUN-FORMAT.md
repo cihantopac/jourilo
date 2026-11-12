@@ -23,6 +23,10 @@ manifest is described there as `#/$defs/manifest`. The TypeScript source of trut
 - `sample` is present when discovery found more pages than were audited: `{ discovered, audited, leftOut }`, where
   `leftOut` lists at most 20 of the discovered URLs that were not audited (redacted like other URLs). The same fact is
   stated in `limitations`. It is absent for `--url` lists and when every discovered page was audited.
+- `pages[].load` records how a capture was taken: `networkIdle` (the network went idle within the settle window) and,
+  with `--wait-for <selector>`, `waitedFor` and `found`. `found: false` means the element was not visible within
+  `--timeout`; the page was still audited in the state it was in, and `limitations` says so. `settings.waitFor` holds
+  the selector, and `jourilo verify` replays it. The field is absent in runs made before 1.3.0.
 
 ## Budgets
 

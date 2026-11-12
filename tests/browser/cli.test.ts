@@ -1294,3 +1294,75 @@ describe('cli --evidence minimal', () => {
     for (const a of manifest.files) expect(existsSync(join(min.runDir, a.path))).toBe(true);
   }, 240_000);
 });
+
+describe('cli --wait-for (F31)', () => {
+  /** A client-rendered page: its only heading appears after a fixed delay in the page script. */
+  async function lateHeadingSite() {
+    const srv = http.createServer((_req, res) => {
+      res
+        .writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store' })
+        .end(`<!doctype html><html lang="en"><head><title>Late</title></head><body><main id="app"><p>Loading…</p></main>
+<script>setTimeout(() => { document.getElementById('app').innerHTML = '<h1 id="ready">Ready</h1><p>Content</p>'; }, 1500);</script></body></html>`);
+    });
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+    return {
+      url: `http://127.0.0.1:${(srv.address() as AddressInfo).port}/`,
+      close: () =>
+        new Promise((r) => {
+          srv.closeAllConnections();
+          srv.close(r);
+        }),
+    };
+  }
+  const base = ['--pages', '1', '--viewports', 'desktop', '--no-keyboard', '--no-forms'];
+  const loadRun = (stdout: string): Run => {
+    const out = JSON.parse(stdout);
+    return JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8')) as Run;
+  };
+
+  it('captures after the element appears', async () => {
+    const site = await lateHeadingSite();
+    try {
+      const withFlag = await auditAsync([site.url, ...base, '--wait-for', '#ready']);
+      expect(withFlag.code, withFlag.stderr).toBe(0);
+      const run = loadRun(withFlag.stdout);
+      expect(run.findings.some((f) => f.ruleId === 'axe/page-has-heading-one')).toBe(false);
+      expect(run.pages[0]!.load).toMatchObject({ waitedFor: '#ready', found: true });
+      expect(run.settings.waitFor).toBe('#ready');
+
+      const without = await auditAsync([site.url, ...base]);
+      const plain = loadRun(without.stdout);
+      expect(plain.findings.some((f) => f.ruleId === 'axe/page-has-heading-one')).toBe(true);
+      expect(plain.pages[0]!.load?.waitedFor).toBeUndefined();
+      expect(typeof plain.pages[0]!.load?.networkIdle).toBe('boolean');
+    } finally {
+      await site.close();
+    }
+  }, 240_000);
+
+  it('a selector that never appears still audits the page with a limitation', async () => {
+    const site = await lateHeadingSite();
+    try {
+      const r = await auditAsync([site.url, ...base, '--wait-for', '#never-there', '--timeout', '4']);
+      expect(r.code, r.stderr).toBe(0);
+      const run = loadRun(r.stdout);
+      expect(run.pages[0]!.load).toMatchObject({ waitedFor: '#never-there', found: false });
+      expect(run.pages[0]!.status).toBe(200);
+      expect(run.outcome).toBe('complete');
+      expect(run.limitations.join('\n')).toContain('#never-there');
+    } finally {
+      await site.close();
+    }
+  }, 240_000);
+
+  it('rejects an invalid selector as a usage error', async () => {
+    const site = await lateHeadingSite();
+    try {
+      const r = await auditAsync([site.url, ...base, '--wait-for', 'div[[']);
+      expect(r.code).toBe(2);
+      expect(r.stderr).toContain('not a valid selector');
+    } finally {
+      await site.close();
+    }
+  }, 120_000);
+});

@@ -139,6 +139,8 @@ export interface PageObservation {
   widgets?: WidgetCheck | null;
   /** Requests the read-only guard aborted while keys were pressed and widgets operated. */
   blockedActions?: BlockedRequest[];
+  /** How the page was captured: whether the network went idle, and the `--wait-for` element if one was given. */
+  load?: { networkIdle: boolean; waitedFor?: string; found?: boolean };
   /** Main-frame redirect hops of the navigation to the page, whether it loaded or failed (at most 10; internal). */
   redirects?: { status: number; from: string; to: string }[];
   /** Steps that could not run, with the reason; becomes run limitations. */
@@ -170,6 +172,8 @@ export interface CaptureOptions {
   extraHeaders?: TargetHeaders;
   /** `--ignore-https-errors`: the browser accepts invalid certificates; the network guard still checks destinations. */
   ignoreHttpsErrors?: boolean;
+  /** `--wait-for`: capture only once this selector's first match is visible (or `timeoutMs` has passed). */
+  waitFor?: string;
 }
 
 export async function newContext(
@@ -267,11 +271,26 @@ export function observe(
   };
 }
 
-async function settle(page: Page, timeoutMs: number): Promise<void> {
-  await page.waitForLoadState('networkidle', { timeout: Math.min(timeoutMs, 5000) }).catch(() => undefined);
+/** Returns whether the network went idle within the settle window. */
+async function settle(page: Page, timeoutMs: number): Promise<boolean> {
+  const networkIdle = await page
+    .waitForLoadState('networkidle', { timeout: Math.min(timeoutMs, 5000) })
+    .then(() => true)
+    .catch(() => false);
   // Fonts and late layout: give the page a short, fixed moment so repeat runs see the same state.
   await page.evaluate('document.fonts ? document.fonts.ready.then(() => true) : true').catch(() => undefined);
   await page.waitForTimeout(300);
+  return networkIdle;
+}
+
+/** `--wait-for`: true when the selector's first match became visible within `timeoutMs`. */
+async function waitForElement(page: Page, selector: string, timeoutMs: number): Promise<boolean> {
+  try {
+    await page.locator(selector).first().waitFor({ state: 'visible', timeout: timeoutMs });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
@@ -504,7 +523,14 @@ export async function capturePage(
     obs.loadMs = Date.now() - t0;
     obs.status = response?.status() ?? null;
     obs.finalUrl = redactUrl(page.url());
-    await settle(page, timeoutMs);
+    const networkIdle = await settle(page, timeoutMs);
+    obs.load = { networkIdle };
+    if (opts.waitFor) {
+      const found = await waitForElement(page, opts.waitFor, timeoutMs);
+      obs.load = { networkIdle, waitedFor: opts.waitFor, found };
+      // Late content may bring late layout: let it settle the same way before anything is measured.
+      if (found) await settle(page, timeoutMs);
+    }
     obs.title = excerpt(await page.title(), 160);
 
     obs.vitals = (await page.evaluate(READ_VITALS_SCRIPT).catch((e: Error) => {
@@ -620,6 +646,7 @@ export async function measureVitals(
     if (opts.throttle) await applyThrottle(page);
     await page.goto(url, { waitUntil: 'load', timeout: opts.timeoutMs ?? 30_000 });
     await settle(page, opts.timeoutMs ?? 30_000);
+    if (opts.waitFor) await waitForElement(page, opts.waitFor, opts.timeoutMs ?? 30_000);
     return (await page.evaluate(READ_VITALS_SCRIPT)) as RawVitals;
   } catch {
     return null;

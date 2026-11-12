@@ -42790,9 +42790,18 @@ function observe(page, origin) {
   };
 }
 async function settle(page, timeoutMs) {
-  await page.waitForLoadState("networkidle", { timeout: Math.min(timeoutMs, 5e3) }).catch(() => void 0);
+  const networkIdle = await page.waitForLoadState("networkidle", { timeout: Math.min(timeoutMs, 5e3) }).then(() => true).catch(() => false);
   await page.evaluate("document.fonts ? document.fonts.ready.then(() => true) : true").catch(() => void 0);
   await page.waitForTimeout(300);
+  return networkIdle;
+}
+async function waitForElement(page, selector, timeoutMs) {
+  try {
+    await page.locator(selector).first().waitFor({ state: "visible", timeout: timeoutMs });
+    return true;
+  } catch {
+    return false;
+  }
 }
 var AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"];
 var HIDDEN_SKIP_RULES = /* @__PURE__ */ new Set(["color-contrast", "color-contrast-enhanced"]);
@@ -42981,7 +42990,13 @@ async function capturePage(ctx, url, vp, opts) {
     obs.loadMs = Date.now() - t0;
     obs.status = response?.status() ?? null;
     obs.finalUrl = redactUrl(page.url());
-    await settle(page, timeoutMs);
+    const networkIdle = await settle(page, timeoutMs);
+    obs.load = { networkIdle };
+    if (opts.waitFor) {
+      const found = await waitForElement(page, opts.waitFor, timeoutMs);
+      obs.load = { networkIdle, waitedFor: opts.waitFor, found };
+      if (found) await settle(page, timeoutMs);
+    }
     obs.title = excerpt(await page.title(), 160);
     obs.vitals = await page.evaluate(READ_VITALS_SCRIPT).catch((e) => {
       obs.errors.push(`vitals: ${e.message.split("\n")[0]}`);
@@ -43077,6 +43092,7 @@ async function measureVitals(browser, url, vp, opts) {
     if (opts.throttle) await applyThrottle(page);
     await page.goto(url, { waitUntil: "load", timeout: opts.timeoutMs ?? 3e4 });
     await settle(page, opts.timeoutMs ?? 3e4);
+    if (opts.waitFor) await waitForElement(page, opts.waitFor, opts.timeoutMs ?? 3e4);
     return await page.evaluate(READ_VITALS_SCRIPT);
   } catch {
     return null;
@@ -46064,6 +46080,20 @@ function contextOptions(opts, headers) {
     ...opts.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}
   };
 }
+async function checkSelector(browser, selector) {
+  const page = await browser.newPage();
+  try {
+    await page.locator(selector).count();
+  } catch (err) {
+    throw new JouriloError(
+      "USAGE",
+      `--wait-for is not a valid selector: ${err.message.split("\n")[0]}`,
+      'Example: --wait-for "main h1" or --wait-for "[data-ready]"'
+    );
+  } finally {
+    await page.close().catch(() => void 0);
+  }
+}
 var RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 function resolveRunId(ws, requested) {
   if (requested === void 0) return newRunId();
@@ -46156,6 +46186,7 @@ async function runAudit(ws, opts) {
       );
       const browser = session.browser;
       browserVersion = browser.version();
+      if (opts.waitFor) await checkSelector(browser, opts.waitFor);
       if (headers) headers.guardToken = session.guard.token;
       halt();
       if (opts.setupJourney) {
@@ -46270,7 +46301,8 @@ async function runAudit(ws, opts) {
               keyboard: !opts.inventoryOnly && opts.keyboard && (!vp.hasTouch || opts.viewports.every((v) => v.hasTouch)),
               axe: !opts.inventoryOnly,
               throttle: opts.throttle,
-              ...opts.evidence ? { evidence: opts.evidence } : {}
+              ...opts.evidence ? { evidence: opts.evidence } : {},
+              ...opts.waitFor ? { waitFor: opts.waitFor } : {}
             });
             const obs = await withinGrace(capture, signal, async () => {
               await ctx.close();
@@ -46296,6 +46328,7 @@ async function runAudit(ws, opts) {
                 runDir,
                 timeoutMs: opts.timeoutMs,
                 throttle: opts.throttle,
+                ...opts.waitFor ? { waitFor: opts.waitFor } : {},
                 ...storageState ? { storageState } : {},
                 ...browsing
               }),
@@ -46429,6 +46462,13 @@ async function runAudit(ws, opts) {
         ...headers ? { headers } : {}
       })
     );
+    if (opts.waitFor) {
+      const missed = observations.filter((o) => o.load?.found === false);
+      if (missed.length)
+        limitations.push(
+          `--wait-for ${JSON.stringify(opts.waitFor)}: the element was not visible within ${Math.round(opts.timeoutMs / 1e3)} s on ${missed.length} of ${observations.length} capture(s); those pages were audited in the state they were in then.`
+        );
+    }
     const stopped = observations.flatMap((o) => o.blockedActions ?? []);
     if (stopped.length)
       limitations.push(
@@ -46446,7 +46486,8 @@ async function runAudit(ws, opts) {
       metrics: o.vitals ? toMetrics(o.vitals, o.vitalsSpread, o.vitalsRuns) : [],
       consoleErrors: o.console.filter((c) => c.type !== "warning").length,
       failedRequests: o.network.length,
-      inventory: o.probe?.inventory ?? emptyInventory()
+      inventory: o.probe?.inventory ?? emptyInventory(),
+      ...o.load ? { load: o.load } : {}
     }));
     if (opts.evidence === "minimal") {
       const { pruned } = pruneFullPageScreenshots(
@@ -46486,6 +46527,7 @@ async function runAudit(ws, opts) {
         ...opts.userAgent ? { userAgent: opts.userAgent } : {},
         ...opts.extraHeaders ? { extraHeaders: Object.keys(opts.extraHeaders) } : {},
         ...opts.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {},
+        ...opts.waitFor ? { waitFor: opts.waitFor } : {},
         ...opts.chromiumSandbox ? { chromiumSandbox: true } : {},
         axe: observations.find((o) => o.axe)?.axe?.version ?? null,
         hostClass,
@@ -47565,6 +47607,10 @@ var EN = {
   "j.stoppedHere": "Stopped here",
   "j.noShot": "No screenshot",
   "pages.noShot": "No screenshot kept",
+  "pages.loadIdle": "Captured after: load, network idle (yes)",
+  "pages.loadBusy": "Captured after: load, network idle (no)",
+  "pages.found": "found",
+  "pages.notFound": "not found",
   "j.lastStep": "Last step",
   "j.goal": "Goal",
   "th.page": "Page",
@@ -47777,6 +47823,10 @@ var TR = {
   "j.stoppedHere": "Burada durdu",
   "j.noShot": "Ekran g\xF6r\xFCnt\xFCs\xFC yok",
   "pages.noShot": "Ekran g\xF6r\xFCnt\xFCs\xFC saklanmad\u0131",
+  "pages.loadIdle": "\u015Eundan sonra yakaland\u0131: y\xFCkleme, a\u011F bo\u015Fta (evet)",
+  "pages.loadBusy": "\u015Eundan sonra yakaland\u0131: y\xFCkleme, a\u011F bo\u015Fta (hay\u0131r)",
+  "pages.found": "bulundu",
+  "pages.notFound": "bulunamad\u0131",
   "j.lastStep": "Son ad\u0131m",
   "j.goal": "Hedef",
   "th.page": "Sayfa",
@@ -48928,10 +48978,15 @@ function metricCell(p, name) {
   const v = m.unit === "ms" ? `${(m.value / 1e3).toFixed(2)} s` : m.unit === "bytes" ? `${(m.value / 1024).toFixed(0)} KB` : String(m.value);
   return `<td class="${m.rating ?? ""}">${esc(v)}</td>`;
 }
+function loadLine(p) {
+  if (!p.load) return "";
+  const wait = p.load.waitedFor ? `, <code lang="en">${esc(p.load.waitedFor)}</code> (${T(p.load.found ? "pages.found" : "pages.notFound")})` : "";
+  return `<div class="muted">${T(p.load.networkIdle ? "pages.loadIdle" : "pages.loadBusy")}${wait}</div>`;
+}
 function pagesHtml(run) {
   const rows = run.pages.map(
     (p) => `<tr><td>${p.screenshot ? `<a href="${runFile(p.screenshot)}" target="_blank" rel="noopener"${attrs({ "aria-label": "shot.open" })}><img class="mini" loading="lazy" alt="" src="${runFile(p.screenshot)}"></a>` : `<span class="muted">${T("pages.noShot")}</span>`}</td>
-<td><a href="${safeHref(p.url)}" target="_blank" rel="noopener">${esc(pathname(p.url))}</a><div class="muted" lang="en">${esc(p.title)}</div></td><td>${esc(p.viewport)}</td><td>${p.status ?? "\u2013"}</td>
+<td><a href="${safeHref(p.url)}" target="_blank" rel="noopener">${esc(pathname(p.url))}</a><div class="muted" lang="en">${esc(p.title)}</div>${loadLine(p)}</td><td>${esc(p.viewport)}</td><td>${p.status ?? "\u2013"}</td>
 ${metricCell(p, "LCP")}${metricCell(p, "CLS")}${metricCell(p, "TBT")}${metricCell(p, "Transfer")}<td>${p.consoleErrors}</td><td>${p.failedRequests}</td></tr>`
   ).join("");
   return `<div class="tablewrap" tabindex="0" role="region"${attrs({ "aria-label": "pages.table" })}><table class="pages"><thead><tr><th><span class="sr">Screenshot</span></th><th>${T("th.page")}</th><th>${T("th.viewport")}</th><th>${T("th.http")}</th><th>LCP</th><th>CLS</th><th>TBT</th><th>Transfer</th><th>${T("th.jserr")}</th><th>${T("th.failedReq")}</th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -49197,6 +49252,15 @@ function renderMarkdown(run, cmp, limit = 25) {
         ""
       );
     }
+  }
+  const loads = run.pages.filter((p) => p.load && (p.load.waitedFor || !p.load.networkIdle));
+  if (loads.length) {
+    lines.push("## Captured after", "");
+    for (const p of loads)
+      lines.push(
+        `- \`${md(path(p.url))}\` (${p.viewport}): load, network idle (${p.load.networkIdle ? "yes" : "no"})${p.load.waitedFor ? `, \`${md(p.load.waitedFor)}\` (${p.load.found ? "found" : "not found"})` : ""}`
+      );
+    lines.push("");
   }
   const sorted = [...run.findings].sort(
     (a, b) => severityRank(a.severity) - severityRank(b.severity) || b.occurrences - a.occurrences
@@ -50351,6 +50415,7 @@ var AUDIT_OPTIONS = {
   clock: { type: "string" },
   "setup-journey": { type: "string" },
   timeout: { type: "string" },
+  "wait-for": { type: "string" },
   repo: { type: "string" },
   sarif: { type: "boolean" },
   "no-forms": { type: "boolean" },
@@ -50421,6 +50486,9 @@ async function auditCommand(ctx, usage2, categories) {
   if (auth && !existsSync12(auth)) throw new JouriloError("NOT_FOUND", `Auth state file not found: ${auth}`);
   const maxDuration = maxDurationOption(ctx);
   const maxPages = pagesOption(ctx, 6);
+  const waitFor = str(ctx, "wait-for")?.trim();
+  if (str(ctx, "wait-for") !== void 0 && !waitFor)
+    throw new JouriloError("USAGE", "--wait-for is empty.", 'Example: --wait-for "main h1"');
   const evidence = parseEvidence(ctx);
   const setupRef = str(ctx, "setup-journey");
   const setupJourney = setupRef ? loadJourneys(ctx.ws, [setupRef])[0] : void 0;
@@ -50448,6 +50516,7 @@ async function auditCommand(ctx, usage2, categories) {
       runs: num(ctx, "runs", 1),
       timeoutMs: num(ctx, "timeout", 30) * 1e3,
       mask: list(ctx, "mask"),
+      ...waitFor ? { waitFor } : {},
       urls: list(ctx, "url"),
       include: list(ctx, "include"),
       ...auth ? { storageState: auth } : {},
@@ -50566,6 +50635,8 @@ var audit = {
   --headed             Show the browser window instead of running headless
   --locale TAG         Browser locale for every page (e.g. tr-TR); sets Accept-Language and navigator.language
   --timeout SECS       Per-page navigation timeout in seconds (default 30)
+  --wait-for SELECTOR  Capture each page only once this element is visible (client-rendered pages); if it never appears within
+                       --timeout the page is still audited, with a limitation. Each capture records how it loaded
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
@@ -52715,6 +52786,7 @@ ${networkOptionsHelp(25)}
         mask: [],
         mode: base2.mode,
         ...typeof base2.settings.timezoneId === "string" ? { timezoneId: base2.settings.timezoneId } : {},
+        ...typeof base2.settings.waitFor === "string" ? { waitFor: base2.settings.waitFor } : {},
         ...typeof base2.settings.clock === "string" ? { clock: base2.settings.clock } : {},
         ...base2.settings.evidence === "minimal" ? { evidence: "minimal" } : {},
         ...setupJourney ? { setupJourney } : {},

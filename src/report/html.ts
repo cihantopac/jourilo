@@ -464,13 +464,22 @@ function metricCell(p: Run['pages'][number], name: string): string {
   return `<td class="${m.rating ?? ''}">${esc(v)}</td>`;
 }
 
+/** "Captured after: load, network idle (yes/no), <selector> (found / not found)" for one capture. */
+function loadLine(p: Run['pages'][number]): string {
+  if (!p.load) return '';
+  const wait = p.load.waitedFor
+    ? `, <code lang="en">${esc(p.load.waitedFor)}</code> (${T(p.load.found ? 'pages.found' : 'pages.notFound')})`
+    : '';
+  return `<div class="muted">${T(p.load.networkIdle ? 'pages.loadIdle' : 'pages.loadBusy')}${wait}</div>`;
+}
+
 function pagesHtml(run: Run): string {
   const rows = run.pages
     .map(
       (
         p,
       ) => `<tr><td>${p.screenshot ? `<a href="${runFile(p.screenshot)}" target="_blank" rel="noopener"${attrs({ 'aria-label': 'shot.open' })}><img class="mini" loading="lazy" alt="" src="${runFile(p.screenshot)}"></a>` : `<span class="muted">${T('pages.noShot')}</span>`}</td>
-<td><a href="${safeHref(p.url)}" target="_blank" rel="noopener">${esc(pathname(p.url))}</a><div class="muted" lang="en">${esc(p.title)}</div></td><td>${esc(p.viewport)}</td><td>${p.status ?? '–'}</td>
+<td><a href="${safeHref(p.url)}" target="_blank" rel="noopener">${esc(pathname(p.url))}</a><div class="muted" lang="en">${esc(p.title)}</div>${loadLine(p)}</td><td>${esc(p.viewport)}</td><td>${p.status ?? '–'}</td>
 ${metricCell(p, 'LCP')}${metricCell(p, 'CLS')}${metricCell(p, 'TBT')}${metricCell(p, 'Transfer')}<td>${p.consoleErrors}</td><td>${p.failedRequests}</td></tr>`,
     )
     .join('');

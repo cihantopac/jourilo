@@ -149,6 +149,8 @@ export interface PageCapture {
   metrics: MetricValue[];
   consoleErrors: number;
   failedRequests: number;
+  /** How the page was captured (`--wait-for`): `found` is false when the element never appeared within `--timeout`. */
+  load?: { networkIdle: boolean; waitedFor?: string; found?: boolean };
   /** Product-facing inventory used by the conversion and journey engines. */
   inventory: PageInventory;
 }

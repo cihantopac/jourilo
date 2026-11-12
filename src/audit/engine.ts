@@ -107,6 +107,8 @@ export interface AuditOptions {
   extraHeaders?: Record<string, string>;
   /** `--ignore-https-errors`: the browser accepts invalid certificates; the guard still checks destinations. */
   ignoreHttpsErrors?: boolean;
+  /** `--wait-for`: capture each page once this selector is visible; checked for syntax before any page loads. */
+  waitFor?: string;
   /** `--chromium-sandbox`: keep Chromium's process sandbox (Playwright disables it by default). */
   chromiumSandbox?: boolean;
   keyboard: boolean;
@@ -262,6 +264,22 @@ function contextOptions(
   };
 }
 
+/** A selector Playwright cannot parse is a usage error, found on a blank page before any target page loads. */
+async function checkSelector(browser: Browser, selector: string): Promise<void> {
+  const page = await browser.newPage();
+  try {
+    await page.locator(selector).count();
+  } catch (err) {
+    throw new JouriloError(
+      'USAGE',
+      `--wait-for is not a valid selector: ${(err as Error).message.split('\n')[0]}`,
+      'Example: --wait-for "main h1" or --wait-for "[data-ready]"',
+    );
+  } finally {
+    await page.close().catch(() => undefined);
+  }
+}
+
 const RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
 /**
@@ -369,6 +387,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       );
       const browser: Browser = session.browser;
       browserVersion = browser.version();
+      if (opts.waitFor) await checkSelector(browser, opts.waitFor);
       // The header route tells the guard's own CONNECT failures from pages by this token.
       if (headers) headers.guardToken = session.guard.token;
       halt();
@@ -499,6 +518,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
               axe: !opts.inventoryOnly,
               throttle: opts.throttle,
               ...(opts.evidence ? { evidence: opts.evidence } : {}),
+              ...(opts.waitFor ? { waitFor: opts.waitFor } : {}),
             });
             const obs = await withinGrace(capture, signal, async () => {
               await ctx.close();
@@ -527,6 +547,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
                 runDir,
                 timeoutMs: opts.timeoutMs,
                 throttle: opts.throttle,
+                ...(opts.waitFor ? { waitFor: opts.waitFor } : {}),
                 ...(storageState ? { storageState } : {}),
                 ...browsing,
               }),
@@ -676,6 +697,13 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         ...(headers ? { headers } : {}),
       }),
     );
+    if (opts.waitFor) {
+      const missed = observations.filter((o) => o.load?.found === false);
+      if (missed.length)
+        limitations.push(
+          `--wait-for ${JSON.stringify(opts.waitFor)}: the element was not visible within ${Math.round(opts.timeoutMs / 1000)} s on ${missed.length} of ${observations.length} capture(s); those pages were audited in the state they were in then.`,
+        );
+    }
     const stopped = observations.flatMap((o) => o.blockedActions ?? []);
     if (stopped.length)
       limitations.push(
@@ -696,6 +724,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       consoleErrors: o.console.filter((c) => c.type !== 'warning').length,
       failedRequests: o.network.length,
       inventory: o.probe?.inventory ?? emptyInventory(),
+      ...(o.load ? { load: o.load } : {}),
     }));
     if (opts.evidence === 'minimal') {
       const { pruned } = pruneFullPageScreenshots(
@@ -736,6 +765,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         ...(opts.userAgent ? { userAgent: opts.userAgent } : {}),
         ...(opts.extraHeaders ? { extraHeaders: Object.keys(opts.extraHeaders) } : {}),
         ...(opts.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}),
+        ...(opts.waitFor ? { waitFor: opts.waitFor } : {}),
         ...(opts.chromiumSandbox ? { chromiumSandbox: true } : {}),
         axe: observations.find((o) => o.axe)?.axe?.version ?? null,
         hostClass,

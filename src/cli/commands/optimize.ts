@@ -294,6 +294,7 @@ ${networkOptionsHelp(25)}
         mask: [],
         mode: base.mode,
         ...(typeof base.settings.timezoneId === 'string' ? { timezoneId: base.settings.timezoneId } : {}),
+        ...(typeof base.settings.waitFor === 'string' ? { waitFor: base.settings.waitFor } : {}),
         ...(typeof base.settings.clock === 'string' ? { clock: base.settings.clock } : {}),
         ...(base.settings.evidence === 'minimal' ? { evidence: 'minimal' as const } : {}),
         ...(setupJourney ? { setupJourney } : {}),

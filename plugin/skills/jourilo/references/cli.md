@@ -69,6 +69,8 @@ Options:
   --headed             Show the browser window instead of running headless
   --locale TAG         Browser locale for every page (e.g. tr-TR); sets Accept-Language and navigator.language
   --timeout SECS       Per-page navigation timeout in seconds (default 30)
+  --wait-for SELECTOR  Capture each page only once this element is visible (client-rendered pages); if it never appears within
+                       --timeout the page is still audited, with a limitation. Each capture records how it loaded
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
@@ -140,6 +142,8 @@ Options:
   --headed             Show the browser window instead of running headless
   --locale TAG         Browser locale for every page (e.g. tr-TR); sets Accept-Language and navigator.language
   --timeout SECS       Per-page navigation timeout in seconds (default 30)
+  --wait-for SELECTOR  Capture each page only once this element is visible (client-rendered pages); if it never appears within
+                       --timeout the page is still audited, with a limitation. Each capture records how it loaded
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
@@ -211,6 +215,8 @@ Options:
   --headed             Show the browser window instead of running headless
   --locale TAG         Browser locale for every page (e.g. tr-TR); sets Accept-Language and navigator.language
   --timeout SECS       Per-page navigation timeout in seconds (default 30)
+  --wait-for SELECTOR  Capture each page only once this element is visible (client-rendered pages); if it never appears within
+                       --timeout the page is still audited, with a limitation. Each capture records how it loaded
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk

@@ -53,6 +53,16 @@ export function renderMarkdown(run: Run, cmp?: RunComparison, limit = 25): strin
       );
     }
   }
+  // Only captures that waited for an element or never reached network idle: the rest loaded the ordinary way.
+  const loads = run.pages.filter((p) => p.load && (p.load.waitedFor || !p.load.networkIdle));
+  if (loads.length) {
+    lines.push('## Captured after', '');
+    for (const p of loads)
+      lines.push(
+        `- \`${md(path(p.url))}\` (${p.viewport}): load, network idle (${p.load!.networkIdle ? 'yes' : 'no'})${p.load!.waitedFor ? `, \`${md(p.load!.waitedFor)}\` (${p.load!.found ? 'found' : 'not found'})` : ''}`,
+      );
+    lines.push('');
+  }
   const sorted = [...run.findings].sort(
     (a, b) => severityRank(a.severity) - severityRank(b.severity) || b.occurrences - a.occurrences,
   );

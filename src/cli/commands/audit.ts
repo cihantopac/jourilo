@@ -62,6 +62,7 @@ export const AUDIT_OPTIONS: OptionSpec = {
   clock: { type: 'string' },
   'setup-journey': { type: 'string' },
   timeout: { type: 'string' },
+  'wait-for': { type: 'string' },
   repo: { type: 'string' },
   sarif: { type: 'boolean' },
   'no-forms': { type: 'boolean' },
@@ -152,6 +153,9 @@ export async function auditCommand(
   const maxDuration = maxDurationOption(ctx);
   const maxPages = pagesOption(ctx, 6);
 
+  const waitFor = str(ctx, 'wait-for')?.trim();
+  if (str(ctx, 'wait-for') !== undefined && !waitFor)
+    throw new JouriloError('USAGE', '--wait-for is empty.', 'Example: --wait-for "main h1"');
   const evidence = parseEvidence(ctx);
   const setupRef = str(ctx, 'setup-journey');
   const setupJourney = setupRef ? loadJourneys(ctx.ws, [setupRef])[0] : undefined;
@@ -182,6 +186,7 @@ export async function auditCommand(
       runs: num(ctx, 'runs', 1),
       timeoutMs: num(ctx, 'timeout', 30) * 1000,
       mask: list(ctx, 'mask'),
+      ...(waitFor ? { waitFor } : {}),
       urls: list(ctx, 'url'),
       include: list(ctx, 'include'),
       ...(auth ? { storageState: auth } : {}),
@@ -312,6 +317,8 @@ export const audit: Command = {
   --headed             Show the browser window instead of running headless
   --locale TAG         Browser locale for every page (e.g. tr-TR); sets Accept-Language and navigator.language
   --timeout SECS       Per-page navigation timeout in seconds (default 30)
+  --wait-for SELECTOR  Capture each page only once this element is visible (client-rendered pages); if it never appears within
+                       --timeout the page is still audited, with a limitation. Each capture records how it loaded
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
