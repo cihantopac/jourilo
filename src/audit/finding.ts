@@ -85,13 +85,18 @@ export function mergeFindings(findings: Finding[]): Finding[] {
       prev.recommendation = f.recommendation;
     }
     prev.occurrences = Math.max(prev.occurrences, f.occurrences);
+    // Items that name their viewport (metric values, CLS shifts) are one per capture and always kept; the cap of 12
+    // applies to the rest. Element items dedupe by selector, network items by snippet.
+    const perViewport = (e: Finding['evidence'][number]) => typeof e.data?.viewport === 'string';
     for (const e of f.evidence) {
-      if (prev.evidence.length >= 12) break;
-      if (
-        e.type === 'screenshot' ||
-        !prev.evidence.some((p) => p.selector && p.selector === e.selector && p.type === e.type)
-      )
-        prev.evidence.push(e);
+      if (!perViewport(e) && prev.evidence.filter((p) => !perViewport(p)).length >= 12) continue;
+      const dup = prev.evidence.some(
+        (p) =>
+          p.type === e.type &&
+          ((p.selector && p.selector === e.selector) ||
+            (e.type === 'network' && p.snippet !== undefined && p.snippet === e.snippet)),
+      );
+      if (e.type === 'screenshot' || !dup) prev.evidence.push(e);
     }
   }
   return [...byFp.values()].sort(

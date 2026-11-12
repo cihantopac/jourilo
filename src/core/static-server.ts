@@ -73,6 +73,12 @@ export async function serveStatic(
       })
     : {};
   const spa = opts.spa ?? cfg.spa ?? looksLikeSpa(root);
+  // Only same-origin paths are honoured ("/new", never "//host", "/\\host", a URL or a value with control
+  // characters, which would also break the Location header); anything else is ignored.
+  const redirects = new Map<string, string>();
+  for (const [from, to] of Object.entries(cfg.redirects ?? {}))
+    if (typeof to === 'string' && /^\/(?![/\\])/.test(to) && !/[\u0000-\u001f\u007f]/.test(to))
+      redirects.set(from, to);
   const server: Server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     let pathname: string;
@@ -114,7 +120,7 @@ export async function serveStatic(
       }
     };
     pathname = pathname.replace(/\/+$/, '') || '/';
-    const redirect = cfg.redirects?.[pathname];
+    const redirect = redirects.get(pathname);
     if (redirect) {
       res.writeHead(301, { location: redirect, 'cache-control': 'no-store' }).end();
       return;

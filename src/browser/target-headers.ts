@@ -81,7 +81,12 @@ export async function sendTargetHeaders(
 }
 
 /** Limitation lines of a run that ignored certificate errors or sent extra headers. */
-export function requestLimitations(opts: { ignoreHttpsErrors?: boolean; headers?: TargetHeaders }): string[] {
+export function requestLimitations(opts: {
+  ignoreHttpsErrors?: boolean;
+  headers?: TargetHeaders;
+  /** The run used --throttle. */
+  throttled?: boolean;
+}): string[] {
   const out: string[] = [];
   if (opts.ignoreHttpsErrors)
     out.push(
@@ -92,6 +97,10 @@ export function requestLimitations(opts: { ignoreHttpsErrors?: boolean; headers?
     out.push(
       `Extra headers (${Object.keys(h.headers).join(', ')}) were sent only with requests to ${h.origin}, never to other origins. Jourilo made those requests itself, so the headers could not follow a redirect elsewhere; their lab timings include that step.`,
     );
+    if (opts.throttled)
+      out.push(
+        `With --throttle and --extra-header, responses from ${h.origin} that Jourilo fetched itself and handed to the browser were not throttled (the CPU slowdown still applied): their lab timings are faster than a throttled network would give.`,
+      );
     const hops = [...h.redirects];
     if (hops.length)
       out.push(

@@ -550,6 +550,59 @@ describe('performance evidence for snapshot consumers', () => {
     const cls = performanceFindings(obs({ vitals: vit(100, 0.31449) })).find((x) => x.ruleId === 'perf/cls')!;
     expect(cls.evidence[0]!.data?.value).toBe(0.314);
   });
+  it('three viewports keep every metric and CLS shift item, each with its viewport', () => {
+    // A real run.json: five CLS entries per capture (the cap), so three viewports hold 18 items.
+    const shifts = [0.1, 0.05, 0.04, 0.03, 0.02].map((value, i) => ({
+      value,
+      t: 300 + i * 100,
+      sources: ['img#hero'],
+    }));
+    const merged = mergeFindings(
+      ['desktop', 'tablet', 'mobile'].flatMap((v) =>
+        performanceFindings(
+          obs({ vitals: { ...vit(100, 0.24), clsEntries: shifts }, viewport: VIEWPORTS[v]! }),
+        ),
+      ),
+    ).find((x) => x.ruleId === 'perf/cls')!;
+    const byViewport = (v: string) => merged.evidence.filter((e) => e.data?.viewport === v);
+    for (const v of ['desktop', 'tablet', 'mobile']) {
+      expect(
+        byViewport(v).filter((e) => e.data?.name === 'CLS'),
+        v,
+      ).toHaveLength(1);
+      expect(
+        byViewport(v).filter((e) => 'shift' in (e.data ?? {})),
+        v,
+      ).toHaveLength(5);
+    }
+    expect(merged.evidence).toHaveLength(18);
+  });
+  it('merging dedupes network evidence by snippet', () => {
+    const chain = {
+      type: 'network' as const,
+      snippet: 'GET http://a.test/ → 301\nGET https://a.test/ → 200',
+    };
+    const f = (viewport: string) =>
+      makeFinding({
+        ruleId: 'jourilo/redirect-chain',
+        title: 't',
+        category: 'performance',
+        kind: 'defect',
+        severity: 'minor',
+        confidence: 'high',
+        provenance: 'observed',
+        url: 'https://a.test/',
+        viewport,
+        description: 'd',
+        impact: 'i',
+        recommendation: 'r',
+        standards: [],
+        evidence: [chain],
+      });
+    const merged = mergeFindings([f('desktop'), f('tablet'), f('mobile')]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]!.evidence).toEqual([chain]);
+  });
 });
 
 describe('conversion rules', () => {

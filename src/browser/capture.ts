@@ -542,13 +542,14 @@ export async function capturePage(
     obs.loadMs = Date.now() - t0;
     obs.status = response?.status() ?? null;
     obs.finalUrl = redactUrl(page.url());
-    const networkIdle = await settle(page, timeoutMs);
+    let networkIdle = await settle(page, timeoutMs);
     obs.load = { networkIdle };
     if (opts.waitFor) {
       const found = await waitForElement(page, opts.waitFor, timeoutMs);
+      // Late content may bring late layout: let it settle the same way before anything is measured. The page is
+      // audited in the state of this last settle, so that is the one recorded.
+      if (found) networkIdle = await settle(page, timeoutMs);
       obs.load = { networkIdle, waitedFor: opts.waitFor, found };
-      // Late content may bring late layout: let it settle the same way before anything is measured.
-      if (found) await settle(page, timeoutMs);
     }
     obs.title = excerpt(await page.title(), 160);
 

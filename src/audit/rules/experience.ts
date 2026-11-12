@@ -341,7 +341,7 @@ export function performanceFindings(obs: PageObservation): Finding[] {
       for (const e of obs.vitals.clsEntries.slice(0, 5))
         evidence.push({
           type: 'metric',
-          data: { shift: Math.round(e.value * 1000) / 1000, at: Math.round(e.t / 10) * 10 },
+          data: { shift: Math.round(e.value * 1000) / 1000, at: Math.round(e.t / 10) * 10, viewport: vp },
           note: e.sources.join(', '),
         });
     out.push(

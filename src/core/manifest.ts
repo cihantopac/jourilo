@@ -37,7 +37,8 @@ function listFiles(dir: string, prefix = ''): string[] {
 
 /**
  * The scope as `jourilo verify` would repeat it (`settings.scope`); runs without one (journeys, older runs) list their
- * captured pages. Every URL is redacted again: `settings.scope` keeps the URLs as requested.
+ * captured pages. Every URL is redacted again, so a run written by another version or edited by hand cannot put a
+ * token into the manifest (the audit engine already redacts `settings.scope`).
  */
 function scopeOf(run: ManifestRun): Manifest['scope'] {
   const recorded = run.settings.scope as { urls?: unknown; viewports?: unknown } | undefined;

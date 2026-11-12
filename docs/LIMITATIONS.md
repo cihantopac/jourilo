@@ -41,7 +41,15 @@ Stated so nobody mistakes silence for a pass.
   and stays among at most 10 elements through 12 presses each of Tab, Shift+Tab and Tab after Escape. A set that lets
   focus go only after more presses, or a larger set, is not reported. Firefox keeps focus on the last element of the
   tab order while it moves to the browser's own interface, so there a single element that holds focus at the end of
-  the order cannot be told from a normal end and is not reported.
+  the order cannot be told from a normal end and is not reported. Focus held inside a dialog (`aria-modal="true"`, an
+  open `<dialog>`, or `role="dialog"` / `role="alertdialog"`, which cookie walls often use without `aria-modal`) is
+  not a trap, so a non-modal widget that wrongly declares a dialog role and holds focus is not reported.
+- Contrast over an image, a gradient or an overlapping element (left to manual review by axe-core) is decided from
+  the rendered pixels: the text's line boxes are cut into tiles of about one font size, and in each tile that holds
+  the text color the 20 % of pixels farthest from it count as its background. The worst tile decides, so text over a
+  busy photo that fails somewhere is not passed. At most 30 such nodes are sampled per capture; the rest stay
+  manual-review items. A decided pass removes the review item. A light and dark pattern finer than one tile can be
+  averaged into a pass, and text not rendered in its computed color (under a tint) stays for review.
 
 ## Performance
 
@@ -54,6 +62,10 @@ Stated so nobody mistakes silence for a pass.
 - INP is approximated from scripted journey interactions; it is not field INP.
 - A redirect chain is counted from the HTTP redirects (3xx) of the navigation to the page, at most 10 of them. A
   redirect made by a script or a `<meta http-equiv="refresh">` is not counted.
+- `--wait-for SELECTOR` costs time: a capture whose element never appears waits up to `--timeout` before it is
+  audited as it is, and the extra lab visits of `--runs N` wait for the element only where the capture found it.
+- With `--throttle` and `--extra-header`, the target-origin responses Jourilo fetches itself and hands to the browser
+  are not network-throttled (the CPU slowdown still applies); the run says so in its limitations.
 
 ## Journeys and forms
 
@@ -131,11 +143,13 @@ Stated so nobody mistakes silence for a pass.
   out of the history, though not out of `ps` while the run lasts.
 - `--allow-hosts` and `--block-hosts` refuse hosts by name (`*.example.com` matches its subdomains, not
   `example.com`); the target's own host is always allowed. Refused requests are listed in the run's limitations.
+  Only the host given as the target is added to `--allow-hosts`, not the hosts it redirects to: a target that
+  redirects to `www.` (or another host) needs that host in the list too, or is best given at its final URL.
 - Lab timings include one local proxy hop per connection.
 - Layout shift (CLS) includes shifts caused by font swaps, so it varies with font caching and font loading. That is
   real layout shift for a visitor, so it stays in the metric. Performance evidence in findings has one item per metric
-  and viewport, with milliseconds rounded to the nearest 10 and CLS to 3 decimals, so snapshots stay stable; the raw
-  values are in `run.pages[].metrics`, which `--budget` reads.
+  and viewport, with milliseconds rounded to the nearest 10 and CLS to 3 decimals, so snapshots stay stable, and up to
+  five layout-shift items per viewport; the raw values are in `run.pages[].metrics`, which `--budget` reads.
 - `--extra-header "Name: value"` is sent only with requests to the target's origin (scheme, host and port), never to
   another origin. Playwright would carry an overridden header along every hop of a redirect chain, so Jourilo makes
   each request to the target's origin itself (through the guard) without following redirects and hands the response
@@ -146,7 +160,10 @@ Stated so nobody mistakes silence for a pass.
   `run.json`, reports, progress lines or the manifest (only the names are kept), and `journeys run --trace` is refused
   with `--extra-header` because a trace records header values. `Cookie`, `Host`, `Content-Length` and hop-by-hop
   headers (`Connection`, `Keep-Alive`, `Proxy-*`, `TE`, `Trailer`, `Transfer-Encoding`, `Upgrade`) are refused; use
-  `--auth` for cookies. `jourilo verify` cannot replay headers it never stored: give them again.
+  `--auth` for cookies. `jourilo verify` cannot replay headers it never stored: give them again. Because Jourilo
+  fetches those responses whole before handing them to the browser, a streaming response from the target's origin
+  (server-sent events, long polling) reaches the page only when it ends, and fails once `--timeout` passes; a large
+  response is held in memory. A header value must be Latin-1 text (a usage error otherwise).
 - `--ignore-https-errors` changes certificate checking in the browser only. The guard still checks every destination
   (it sees each CONNECT before any TLS), and the run lists the setting in its limitations. `robots.txt` and sitemaps
   are still fetched with certificate checking, so on a self-signed site they are treated as missing.

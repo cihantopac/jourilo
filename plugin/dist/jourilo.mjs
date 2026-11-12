@@ -39127,8 +39127,10 @@ function extraHeadersFrom(ctx) {
     if (!HEADER_NAME.test(name))
       throw usage2(`header ${i + 1} has an invalid name (letters, digits and !#$%&'*+.^_\`|~- only).`);
     const value = raw.slice(colon + 1).trim();
-    if (!value || /[\u0000-\u0008\u000a-\u001f\u007f]/.test(value))
-      throw usage2(`${name} has an empty value or one with control characters (the value is not shown).`);
+    if (!value || /[^\t\x20-\x7e\x80-\xff]/.test(value))
+      throw usage2(
+        `${name} has an empty value, or one with control characters or characters outside Latin-1 (the value is not shown).`
+      );
     const key = name.toLowerCase();
     if (REFUSED_HEADERS.has(key))
       throw usage2(
@@ -42511,6 +42513,10 @@ function requestLimitations(opts) {
     out.push(
       `Extra headers (${Object.keys(h.headers).join(", ")}) were sent only with requests to ${h.origin}, never to other origins. Jourilo made those requests itself, so the headers could not follow a redirect elsewhere; their lab timings include that step.`
     );
+    if (opts.throttled)
+      out.push(
+        `With --throttle and --extra-header, responses from ${h.origin} that Jourilo fetched itself and handed to the browser were not throttled (the CPU slowdown still applied): their lab timings are faster than a throttled network would give.`
+      );
     const hops = [...h.redirects];
     if (hops.length)
       out.push(
@@ -43083,12 +43089,12 @@ async function capturePage(ctx, url, vp, opts) {
     obs.loadMs = Date.now() - t0;
     obs.status = response?.status() ?? null;
     obs.finalUrl = redactUrl(page.url());
-    const networkIdle = await settle(page, timeoutMs);
+    let networkIdle = await settle(page, timeoutMs);
     obs.load = { networkIdle };
     if (opts.waitFor) {
       const found = await waitForElement(page, opts.waitFor, timeoutMs);
+      if (found) networkIdle = await settle(page, timeoutMs);
       obs.load = { networkIdle, waitedFor: opts.waitFor, found };
-      if (found) await settle(page, timeoutMs);
     }
     obs.title = excerpt(await page.title(), 160);
     obs.vitals = await page.evaluate(READ_VITALS_SCRIPT).catch((e) => {
@@ -43299,10 +43305,13 @@ function mergeFindings(findings) {
       prev.recommendation = f.recommendation;
     }
     prev.occurrences = Math.max(prev.occurrences, f.occurrences);
+    const perViewport = (e) => typeof e.data?.viewport === "string";
     for (const e of f.evidence) {
-      if (prev.evidence.length >= 12) break;
-      if (e.type === "screenshot" || !prev.evidence.some((p) => p.selector && p.selector === e.selector && p.type === e.type))
-        prev.evidence.push(e);
+      if (!perViewport(e) && prev.evidence.filter((p) => !perViewport(p)).length >= 12) continue;
+      const dup = prev.evidence.some(
+        (p) => p.type === e.type && (p.selector && p.selector === e.selector || e.type === "network" && p.snippet !== void 0 && p.snippet === e.snippet)
+      );
+      if (e.type === "screenshot" || !dup) prev.evidence.push(e);
     }
   }
   return [...byFp.values()].sort(
@@ -46039,7 +46048,7 @@ function performanceFindings(obs) {
       for (const e of obs.vitals.clsEntries.slice(0, 5))
         evidence.push({
           type: "metric",
-          data: { shift: Math.round(e.value * 1e3) / 1e3, at: Math.round(e.t / 10) * 10 },
+          data: { shift: Math.round(e.value * 1e3) / 1e3, at: Math.round(e.t / 10) * 10, viewport: vp },
           note: e.sources.join(", ")
         });
     out.push(
@@ -46469,7 +46478,8 @@ async function runAudit(ws, opts) {
                 runDir,
                 timeoutMs: opts.timeoutMs,
                 throttle: opts.throttle,
-                ...opts.waitFor ? { waitFor: opts.waitFor } : {},
+                // Only when the capture found it: a selector that never appears would cost --timeout per visit.
+                ...opts.waitFor && obs.load?.found ? { waitFor: opts.waitFor } : {},
                 ...storageState ? { storageState } : {},
                 ...browsing
               }),
@@ -46616,14 +46626,15 @@ async function runAudit(ws, opts) {
       ...networkLimitations(network),
       ...requestLimitations({
         ...opts.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {},
-        ...headers ? { headers } : {}
+        ...headers ? { headers } : {},
+        ...opts.throttle ? { throttled: true } : {}
       })
     );
     if (opts.waitFor) {
       const missed = observations.filter((o) => o.load?.found === false);
       if (missed.length)
         limitations.push(
-          `--wait-for ${JSON.stringify(opts.waitFor)}: the element was not visible within ${Math.round(opts.timeoutMs / 1e3)} s on ${missed.length} of ${observations.length} capture(s); those pages were audited in the state they were in then.`
+          `--wait-for ${JSON.stringify(opts.waitFor)}: the element was not visible within ${Math.round(opts.timeoutMs / 1e3)} s on ${missed.length} of ${observations.length} capture(s); those pages were audited in the state they were in then. Each such capture spent up to --timeout (${Math.round(opts.timeoutMs / 1e3)} s) waiting, and their lab metric visits did not wait again.`
         );
     }
     const stopped = observations.flatMap((o) => o.blockedActions ?? []);
@@ -46820,6 +46831,10 @@ async function serveStatic(root, port = 0, opts = {}) {
   const cfgFile = join12(root, "jourilo-fixture.json");
   const cfg = existsSync7(cfgFile) ? JSON.parse(readFileSync5(cfgFile, "utf8")) : {};
   const spa = opts.spa ?? cfg.spa ?? looksLikeSpa(root);
+  const redirects = /* @__PURE__ */ new Map();
+  for (const [from, to] of Object.entries(cfg.redirects ?? {}))
+    if (typeof to === "string" && /^\/(?![/\\])/.test(to) && !/[\u0000-\u001f\u007f]/.test(to))
+      redirects.set(from, to);
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     let pathname2;
@@ -46860,7 +46875,7 @@ async function serveStatic(root, port = 0, opts = {}) {
       }
     };
     pathname2 = pathname2.replace(/\/+$/, "") || "/";
-    const redirect = cfg.redirects?.[pathname2];
+    const redirect = redirects.get(pathname2);
     if (redirect) {
       res.writeHead(301, { location: redirect, "cache-control": "no-store" }).end();
       return;

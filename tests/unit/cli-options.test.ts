@@ -87,6 +87,9 @@ describe('request options', () => {
       'X-Empty:',
       `X-Ctl: a\r\nInjected: ${secret}`,
       `X-Nul: a\u0000${secret}`,
+      // Outside Latin-1: a browser cannot send it, and Node refuses it as a header value.
+      `X-Token: ${secret}\u2014`,
+      `X-Emoji: ${secret}\u{1F600}`,
       // Hop-by-hop headers, and headers the browser's network stack owns.
       `Connection: ${secret}`,
       `Keep-Alive: ${secret}`,
@@ -107,6 +110,10 @@ describe('request options', () => {
       // A header value may be a credential: it is never repeated.
       expect(`${err.message} ${err.hint ?? ''}`, raw).not.toContain(secret);
     }
+    // Latin-1 letters and a tab are valid header bytes.
+    expect(extraHeadersFrom(ctxWith({ 'extra-header': ['X-Name: Jos\u00e9\tM\u00fcller'] }))).toEqual({
+      'X-Name': 'Jos\u00e9\tM\u00fcller',
+    });
     const dup = thrown(() => extraHeadersFrom(ctxWith({ 'extra-header': ['X-A: 1', 'x-a: 2'] })));
     expect(dup.code).toBe('USAGE');
   });

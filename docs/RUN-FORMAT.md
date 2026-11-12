@@ -22,7 +22,8 @@ manifest is described there as `#/$defs/manifest`. The TypeScript source of trut
   3 URLs in 2 viewports has `urls` 3, `captures` 6 and `pages` 6.
 - `sample` is present when discovery found more pages than were audited: `{ discovered, audited, leftOut }`, where
   `leftOut` lists at most 20 of the discovered URLs that were not audited (redacted like other URLs). The same fact is
-  stated in `limitations`. It is absent for `--url` lists and when every discovered page was audited.
+  stated in `limitations`. It is absent for `--url` lists, with `--pages 1` (no discovery runs), and when every
+  discovered page was audited.
 - `pages[].load` records how a capture was taken: `networkIdle` (the network went idle within the settle window) and,
   with `--wait-for <selector>`, `waitedFor` and `found`. `found: false` means the element was not visible within
   `--timeout`; the page was still audited in the state it was in, and `limitations` says so. `settings.waitFor` holds
@@ -57,7 +58,7 @@ No secret (proxy credentials, `--extra-header` values) is ever written to it.
 With `--json`, every progress line on stderr is one JSON object:
 `{"type":"progress","phase":…,"message":…,"done"?,"total"?,"url"?,"viewport"?,"at":"<ISO time>"}`. `message` is the
 text of the plain line (trimmed). Lines from the audit pipeline carry `phase`; other lines (stop notices, warnings,
-`journeys run` steps) carry only `message`.
+`journeys run` steps) may carry only `message`.
 
 - `phase` is one of `launch`, `discover`, `setup`, `capture`, `metrics`, `forms` or `report`. `rules` is reserved:
   no line uses it yet.

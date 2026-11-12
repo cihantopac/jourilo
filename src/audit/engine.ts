@@ -584,7 +584,8 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
                 runDir,
                 timeoutMs: opts.timeoutMs,
                 throttle: opts.throttle,
-                ...(opts.waitFor ? { waitFor: opts.waitFor } : {}),
+                // Only when the capture found it: a selector that never appears would cost --timeout per visit.
+                ...(opts.waitFor && obs.load?.found ? { waitFor: opts.waitFor } : {}),
                 ...(storageState ? { storageState } : {}),
                 ...browsing,
               }),
@@ -753,13 +754,14 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       ...requestLimitations({
         ...(opts.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}),
         ...(headers ? { headers } : {}),
+        ...(opts.throttle ? { throttled: true } : {}),
       }),
     );
     if (opts.waitFor) {
       const missed = observations.filter((o) => o.load?.found === false);
       if (missed.length)
         limitations.push(
-          `--wait-for ${JSON.stringify(opts.waitFor)}: the element was not visible within ${Math.round(opts.timeoutMs / 1000)} s on ${missed.length} of ${observations.length} capture(s); those pages were audited in the state they were in then.`,
+          `--wait-for ${JSON.stringify(opts.waitFor)}: the element was not visible within ${Math.round(opts.timeoutMs / 1000)} s on ${missed.length} of ${observations.length} capture(s); those pages were audited in the state they were in then. Each such capture spent up to --timeout (${Math.round(opts.timeoutMs / 1000)} s) waiting, and their lab metric visits did not wait again.`,
         );
     }
     const stopped = observations.flatMap((o) => o.blockedActions ?? []);

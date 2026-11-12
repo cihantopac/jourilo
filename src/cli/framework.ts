@@ -326,9 +326,12 @@ export function extraHeadersFrom(ctx: Context): Record<string, string> | undefin
     if (!HEADER_NAME.test(name))
       throw usage(`header ${i + 1} has an invalid name (letters, digits and !#$%&'*+.^_\`|~- only).`);
     const value = raw.slice(colon + 1).trim();
-    // Control characters (CR/LF above all) could split one header into several.
-    if (!value || /[\u0000-\u0008\u000a-\u001f\u007f]/.test(value))
-      throw usage(`${name} has an empty value or one with control characters (the value is not shown).`);
+    // Control characters (CR/LF above all) could split one header into several; a header value is Latin-1 bytes,
+    // so anything outside it cannot be sent (Node refuses it later, mid-run).
+    if (!value || /[^\t\x20-\x7e\x80-\xff]/.test(value))
+      throw usage(
+        `${name} has an empty value, or one with control characters or characters outside Latin-1 (the value is not shown).`,
+      );
     const key = name.toLowerCase();
     if (REFUSED_HEADERS.has(key))
       throw usage(
