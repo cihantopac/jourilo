@@ -704,7 +704,7 @@ ${cmp ? `<button type="button" role="tab" id="tab-compare" aria-controls="compar
 <div class="hero"><p class="eyebrow"><span class="diamond" aria-hidden="true"></span>${T(!run.pages.length && run.journeys.length ? 'mode.journeys' : (`mode.${run.mode}` as MsgKey))} · <time datetime="${esc(run.startedAt)}" data-date="${esc(run.startedAt)}">${esc(new Date(run.startedAt).toUTCString())}</time></p>
 <h1 class="serif">${esc(run.target)}</h1>
 <p class="lede">${lede}</p>
-<p class="scope">${uniquePages ? `<span>${T('scope.pages', { n: uniquePages })}</span>` : ''}<span>${T('scope.viewports', { n: run.viewports.length })} · ${run.viewports.map((v) => `${esc(v.name)} ${v.width}×${v.height}`).join(', ')}</span>${run.journeys.length ? `<span>${T('scope.journeys', { n: run.journeys.length })}</span>` : ''}<span>${esc(run.browser.name)} ${esc(run.browser.version)}</span><span>Jourilo ${esc(run.tool.version)}</span></p></div>
+<p class="scope">${uniquePages ? `<span>${T('scope.pages', { n: uniquePages })}, ${T('scope.captures', { n: run.pages.length })}</span>` : ''}<span>${T('scope.viewports', { n: run.viewports.length })} · ${run.viewports.map((v) => `${esc(v.name)} ${v.width}×${v.height}`).join(', ')}</span>${run.journeys.length ? `<span>${T('scope.journeys', { n: run.journeys.length })}</span>` : ''}<span>${esc(run.browser.name)} ${esc(run.browser.version)}</span><span>Jourilo ${esc(run.tool.version)}</span></p></div>
 <div class="kpis">${kpis}</div>
 <p class="noscore"><span class="diamond" aria-hidden="true"></span>${T('noscore')}</p>
 ${blockedHtml(run, groups)}

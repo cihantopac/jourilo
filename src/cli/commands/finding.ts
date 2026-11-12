@@ -151,7 +151,7 @@ undismiss options:
     });
     run.findings = run.findings.filter((x) => x.fingerprint !== f.fingerprint);
     run.findings.push(f);
-    run.summary = summarize(run.findings, run.summary.pages, run.summary.journeys);
+    run.summary = { ...run.summary, ...summarize(run.findings, run.summary.pages, run.summary.journeys) };
     ctx.ws.saveRun(run);
     writeReports(dir, run, undefined, { history: ctx.ws.listRuns() });
     return {
@@ -166,7 +166,7 @@ function refreshRun(ctx: Context, runRef: string, change: (run: Run) => void): s
   const { run, dir } = ctx.ws.loadRun(runRef);
   change(run);
   if (run.dismissed && !run.dismissed.length) delete run.dismissed;
-  run.summary = summarize(run.findings, run.summary.pages, run.summary.journeys);
+  run.summary = { ...run.summary, ...summarize(run.findings, run.summary.pages, run.summary.journeys) };
   ctx.ws.saveRun(run);
   writeReports(dir, run, undefined, { history: ctx.ws.listRuns() });
   return run.id;

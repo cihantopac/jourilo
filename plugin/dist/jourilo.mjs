@@ -43737,6 +43737,8 @@ async function crawl(ctx, start, opts) {
     robotsOverridden: auditedOverrides,
     robots,
     sitemapUrls: fromSitemap.urls.length,
+    discovered: ranked.length,
+    leftOut: ranked.filter((p) => !picked.includes(p)).map((p) => redactUrl(p.url)),
     sitemapRebasedFrom: fromSitemap.rebasedFrom
   };
 }
@@ -45955,6 +45957,7 @@ async function runAudit(ws, opts) {
     if (signal?.aborted) throw new AuditStopped();
   };
   let urls;
+  let sample;
   if (opts.urls?.length) {
     urls = [...new Set(opts.urls.map((u) => new URL(u, target).toString()))].map((url) => ({ url }));
     for (const u of urls) {
@@ -46074,6 +46077,14 @@ async function runAudit(ws, opts) {
         if (!found.robots && opts.respectRobots && hostClass === "public")
           limitations.push("No robots.txt was found; crawling stayed on the target origin.");
         urls = discovered.length ? discovered : [{ url: target.toString() }];
+        if (found.leftOut.length) {
+          sample = {
+            discovered: found.discovered,
+            audited: found.pages.length,
+            leftOut: found.leftOut.slice(0, 20)
+          };
+          limitations.push(sampleLimitation(sample));
+        }
       } else if (opts.respectRobots) {
         halt();
         for (const u of await untilStopped(
@@ -46340,7 +46351,8 @@ async function runAudit(ws, opts) {
       findings,
       ...dismissed.length ? { dismissed } : {},
       ...stoppedBy ? { stoppedBy } : {},
-      summary: summarize(findings, pages.length, journeys2.length),
+      summary: summarize(findings, pages.length, journeys2.length, new Set(pages.map((p) => p.url)).size),
+      ...sample ? { sample } : {},
       limitations: [...new Set(limitations)],
       ...opts.context && (opts.context.brand || opts.context.search) ? { context: opts.context } : {},
       ...network.blocked.length || network.escaped.length ? { network } : {}
@@ -46358,7 +46370,11 @@ async function closeBrowsing(session, setupState) {
     rmSync3(setupState, { force: true });
   }
 }
-function summarize(findings, pages, journeys2) {
+function sampleLimitation(sample) {
+  if (sample.discovered <= sample.audited) return void 0;
+  return `${sample.audited} of ${sample.discovered} discovered pages were audited; ${sample.discovered - sample.audited} were left out (raise --pages to include more). Findings describe the audited pages only.`;
+}
+function summarize(findings, pages, journeys2, urls) {
   const sev = { critical: 0, serious: 0, moderate: 0, minor: 0, info: 0 };
   const kind = { defect: 0, hypothesis: 0, "needs-review": 0 };
   const cat = {};
@@ -46367,7 +46383,14 @@ function summarize(findings, pages, journeys2) {
     kind[f.kind]++;
     cat[f.category] = (cat[f.category] ?? 0) + 1;
   }
-  return { pages, journeys: journeys2, findings: sev, byCategory: cat, byKind: kind };
+  return {
+    pages,
+    ...urls === void 0 ? {} : { urls, captures: pages },
+    journeys: journeys2,
+    findings: sev,
+    byCategory: cat,
+    byKind: kind
+  };
 }
 function emptyInventory() {
   return {
@@ -47245,6 +47268,7 @@ var EN = {
   "mode.repository": "Repository audit",
   "mode.journeys": "Journey run",
   "scope.pages": "{n} page{n:s}",
+  "scope.captures": "{n} capture{n:s}",
   "scope.viewports": "{n} viewport{n:s}",
   "scope.journeys": "{n} journey{n:s}",
   "lede.found": "Jourilo used this product in a real browser and found {d} verified defect{d:s} with {r} root cause{r:s}.",
@@ -47456,6 +47480,7 @@ var TR = {
   "mode.repository": "Depo denetimi",
   "mode.journeys": "Yolculuk \xE7al\u0131\u015Ft\u0131rmas\u0131",
   "scope.pages": "{n} sayfa",
+  "scope.captures": "{n} yakalama",
   "scope.viewports": "{n} g\xF6r\xFCn\xFCm alan\u0131",
   "scope.journeys": "{n} yolculuk",
   "lede.found": "Jourilo bu \xFCr\xFCn\xFC ger\xE7ek bir taray\u0131c\u0131da kulland\u0131 ve {r} k\xF6k nedene dayanan {d} do\u011Frulanm\u0131\u015F kusur buldu.",
@@ -48931,7 +48956,7 @@ ${cmp ? `<button type="button" role="tab" id="tab-compare" aria-controls="compar
 <div class="hero"><p class="eyebrow"><span class="diamond" aria-hidden="true"></span>${T(!run.pages.length && run.journeys.length ? "mode.journeys" : `mode.${run.mode}`)} \xB7 <time datetime="${esc(run.startedAt)}" data-date="${esc(run.startedAt)}">${esc(new Date(run.startedAt).toUTCString())}</time></p>
 <h1 class="serif">${esc(run.target)}</h1>
 <p class="lede">${lede}</p>
-<p class="scope">${uniquePages ? `<span>${T("scope.pages", { n: uniquePages })}</span>` : ""}<span>${T("scope.viewports", { n: run.viewports.length })} \xB7 ${run.viewports.map((v) => `${esc(v.name)} ${v.width}\xD7${v.height}`).join(", ")}</span>${run.journeys.length ? `<span>${T("scope.journeys", { n: run.journeys.length })}</span>` : ""}<span>${esc(run.browser.name)} ${esc(run.browser.version)}</span><span>Jourilo ${esc(run.tool.version)}</span></p></div>
+<p class="scope">${uniquePages ? `<span>${T("scope.pages", { n: uniquePages })}, ${T("scope.captures", { n: run.pages.length })}</span>` : ""}<span>${T("scope.viewports", { n: run.viewports.length })} \xB7 ${run.viewports.map((v) => `${esc(v.name)} ${v.width}\xD7${v.height}`).join(", ")}</span>${run.journeys.length ? `<span>${T("scope.journeys", { n: run.journeys.length })}</span>` : ""}<span>${esc(run.browser.name)} ${esc(run.browser.version)}</span><span>Jourilo ${esc(run.tool.version)}</span></p></div>
 <div class="kpis">${kpis}</div>
 <p class="noscore"><span class="diamond" aria-hidden="true"></span>${T("noscore")}</p>
 ${blockedHtml(run, groups)}
@@ -48988,7 +49013,7 @@ function renderMarkdown(run, cmp, limit = 25) {
   const lines = [
     `# Jourilo report \u2014 ${run.target}`,
     "",
-    `Run \`${run.id}\` \xB7 ${run.mode} mode \xB7 ${run.browser.name} ${run.browser.version} \xB7 viewports: ${run.viewports.map((v) => v.name).join(", ")} \xB7 ${s.pages} page capture(s), ${s.journeys} journey(s)`,
+    `Run \`${run.id}\` \xB7 ${run.mode} mode \xB7 ${run.browser.name} ${run.browser.version} \xB7 viewports: ${run.viewports.map((v) => v.name).join(", ")} \xB7 ${s.urls === void 0 ? `${s.pages} page capture(s)` : `${s.urls} page${s.urls === 1 ? "" : "s"}, ${s.pages} capture${s.pages === 1 ? "" : "s"}`}, ${s.journeys} journey(s)`,
     "",
     `**${s.byKind.defect} defects** (critical ${s.findings.critical}, serious ${s.findings.serious}, moderate ${s.findings.moderate}, minor ${s.findings.minor}) \xB7 **${s.byKind.hypothesis} conversion hypotheses** \xB7 **${s.byKind["needs-review"]} need manual review**`,
     ""
@@ -52091,7 +52116,7 @@ undismiss options:
     });
     run.findings = run.findings.filter((x) => x.fingerprint !== f.fingerprint);
     run.findings.push(f);
-    run.summary = summarize(run.findings, run.summary.pages, run.summary.journeys);
+    run.summary = { ...run.summary, ...summarize(run.findings, run.summary.pages, run.summary.journeys) };
     ctx.ws.saveRun(run);
     writeReports(dir, run, void 0, { history: ctx.ws.listRuns() });
     return {
@@ -52104,7 +52129,7 @@ function refreshRun(ctx, runRef, change) {
   const { run, dir } = ctx.ws.loadRun(runRef);
   change(run);
   if (run.dismissed && !run.dismissed.length) delete run.dismissed;
-  run.summary = summarize(run.findings, run.summary.pages, run.summary.journeys);
+  run.summary = { ...run.summary, ...summarize(run.findings, run.summary.pages, run.summary.journeys) };
   ctx.ws.saveRun(run);
   writeReports(dir, run, void 0, { history: ctx.ws.listRuns() });
   return run.id;

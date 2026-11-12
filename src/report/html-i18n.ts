@@ -25,6 +25,7 @@ const EN = {
   'mode.repository': 'Repository audit',
   'mode.journeys': 'Journey run',
   'scope.pages': '{n} page{n:s}',
+  'scope.captures': '{n} capture{n:s}',
   'scope.viewports': '{n} viewport{n:s}',
   'scope.journeys': '{n} journey{n:s}',
   'lede.found':
@@ -266,6 +267,7 @@ const TR: Record<MsgKey, string> = {
   'mode.repository': 'Depo denetimi',
   'mode.journeys': 'Yolculuk çalıştırması',
   'scope.pages': '{n} sayfa',
+  'scope.captures': '{n} yakalama',
   'scope.viewports': '{n} görünüm alanı',
   'scope.journeys': '{n} yolculuk',
   'lede.found':

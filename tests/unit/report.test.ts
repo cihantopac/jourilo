@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyInventory } from '../../src/audit/engine.js';
+import { emptyInventory, sampleLimitation, summarize } from '../../src/audit/engine.js';
 import { makeFinding } from '../../src/audit/finding.js';
 import type { Finding } from '../../src/core/types.js';
 import { compareRuns } from '../../src/report/compare.js';
@@ -292,5 +292,54 @@ describe('dismissed findings in the report', () => {
     expect(html).not.toMatch(/<img[^>]*src="screenshots\//);
     expect(html).toContain('No screenshot kept');
     expect(renderMarkdown(run([shotless]))).toBeTruthy();
+  });
+});
+
+describe('pages, captures and samples', () => {
+  it('summary reports urls and captures', () => {
+    // 3 URLs x 2 viewports
+    const sm = summarize([], 6, 0, 3);
+    expect(sm.urls).toBe(3);
+    expect(sm.captures).toBe(6);
+    expect(sm.pages).toBe(6);
+  });
+
+  it('summary without a URL count keeps the old shape', () => {
+    expect(summarize([], 0, 2)).not.toHaveProperty('urls');
+  });
+
+  it('words the sample limitation, and stays silent when nothing was left out', () => {
+    const left = Array.from({ length: 6 }, (_, i) => `https://example.test/p${i}`);
+    expect(sampleLimitation({ discovered: 10, audited: 4, leftOut: left })).toMatch(
+      /4 of 10 discovered pages were audited/,
+    );
+    expect(sampleLimitation({ discovered: 4, audited: 4, leftOut: [] })).toBeUndefined();
+  });
+
+  it('shows pages and captures in the text and HTML headers, in both languages', () => {
+    const page = (url: string, viewport: string) => ({
+      url,
+      finalUrl: url,
+      status: 200,
+      title: 't',
+      viewport,
+      loadMs: 1,
+      metrics: [],
+      consoleErrors: 0,
+      failedRequests: 0,
+      inventory: emptyInventory(),
+    });
+    const r = run([], {
+      pages: [
+        page('https://example.test/', 'desktop'),
+        page('https://example.test/', 'mobile'),
+        page('https://example.test/a', 'desktop'),
+        page('https://example.test/a', 'mobile'),
+      ],
+      summary: { ...run([]).summary, pages: 4, urls: 2, captures: 4 },
+    });
+    expect(renderMarkdown(r)).toContain('2 pages, 4 captures');
+    expect(renderHtml(r)).toContain('4 captures');
+    expect(I18N.tr['scope.captures']).toBeDefined();
   });
 });

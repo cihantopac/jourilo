@@ -313,6 +313,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
 
   // Pages known up front (--url, or only the target) need no discovery.
   let urls: { url: string; role?: string }[] | undefined;
+  let sample: Run['sample'];
   if (opts.urls?.length) {
     urls = [...new Set(opts.urls.map((u) => new URL(u, target).toString()))].map((url) => ({ url }));
     for (const u of urls) {
@@ -446,6 +447,14 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         if (!found.robots && opts.respectRobots && hostClass === 'public')
           limitations.push('No robots.txt was found; crawling stayed on the target origin.');
         urls = discovered.length ? discovered : [{ url: target.toString() }];
+        if (found.leftOut.length) {
+          sample = {
+            discovered: found.discovered,
+            audited: found.pages.length,
+            leftOut: found.leftOut.slice(0, 20),
+          };
+          limitations.push(sampleLimitation(sample)!);
+        }
       } else if (opts.respectRobots) {
         // Pages known up front skip discovery, but robots.txt is still read: a disallowed page is audited because
         // it was requested, and the run says so.
@@ -741,7 +750,8 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       findings,
       ...(dismissed.length ? { dismissed } : {}),
       ...(stoppedBy ? { stoppedBy } : {}),
-      summary: summarize(findings, pages.length, journeys.length),
+      summary: summarize(findings, pages.length, journeys.length, new Set(pages.map((p) => p.url)).size),
+      ...(sample ? { sample } : {}),
       limitations: [...new Set(limitations)],
       ...(opts.context && (opts.context.brand || opts.context.search) ? { context: opts.context } : {}),
       ...(network.blocked.length || network.escaped.length ? { network } : {}),
@@ -765,7 +775,14 @@ export async function closeBrowsing(
   }
 }
 
-export function summarize(findings: Finding[], pages: number, journeys: number): RunSummary {
+/** Says how much of the discovered site a sampled run covered; undefined when nothing was left out. */
+export function sampleLimitation(sample: NonNullable<Run['sample']>): string | undefined {
+  if (sample.discovered <= sample.audited) return undefined;
+  return `${sample.audited} of ${sample.discovered} discovered pages were audited; ${sample.discovered - sample.audited} were left out (raise --pages to include more). Findings describe the audited pages only.`;
+}
+
+/** `urls` is the number of distinct audited URLs; `pages` counts captures (URL × viewport). */
+export function summarize(findings: Finding[], pages: number, journeys: number, urls?: number): RunSummary {
   const sev: Record<Severity, number> = { critical: 0, serious: 0, moderate: 0, minor: 0, info: 0 };
   const kind: Record<FindingKind, number> = { defect: 0, hypothesis: 0, 'needs-review': 0 };
   const cat: Partial<Record<Category, number>> = {};
@@ -775,7 +792,14 @@ export function summarize(findings: Finding[], pages: number, journeys: number):
     kind[f.kind]++;
     cat[f.category] = (cat[f.category] ?? 0) + 1;
   }
-  return { pages, journeys, findings: sev, byCategory: cat, byKind: kind };
+  return {
+    pages,
+    ...(urls === undefined ? {} : { urls, captures: pages }),
+    journeys,
+    findings: sev,
+    byCategory: cat,
+    byKind: kind,
+  };
 }
 
 export function emptyInventory(): PageCapture['inventory'] {

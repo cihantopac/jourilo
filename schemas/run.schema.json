@@ -154,6 +154,20 @@
       "description": "Why a partial run stopped.",
       "enum": ["signal", "max-duration"]
     },
+    "sample": {
+      "description": "Present when discovery found more pages than were audited.",
+      "type": "object",
+      "required": ["discovered", "audited", "leftOut"],
+      "properties": {
+        "discovered": { "type": "integer" },
+        "audited": { "type": "integer" },
+        "leftOut": {
+          "description": "At most 20 URLs (redacted) that were discovered but not audited.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
     "dismissed": {
       "description": "Findings a person or agent dismissed. Not counted in summary.",
       "type": "array",
@@ -211,7 +225,9 @@
       "type": "object",
       "required": ["pages", "journeys", "findings", "byCategory", "byKind"],
       "properties": {
-        "pages": { "type": "integer" },
+        "pages": { "type": "integer", "description": "Page captures (URL x viewport), not distinct URLs." },
+        "urls": { "type": "integer", "description": "Distinct page URLs that were audited." },
+        "captures": { "type": "integer", "description": "Page captures; equal to `pages`." },
         "journeys": { "type": "integer" },
         "findings": { "type": "object", "additionalProperties": { "type": "integer" } },
         "byCategory": { "type": "object", "additionalProperties": { "type": "integer" } },
