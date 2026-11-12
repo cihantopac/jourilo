@@ -38881,6 +38881,19 @@ function redactUrlsIn(input) {
   });
   return redactText(out);
 }
+function redactedQueryPaths(urls) {
+  const paths = /* @__PURE__ */ new Set();
+  for (const raw of urls) {
+    try {
+      const u = new URL(raw);
+      for (const [k, v] of u.searchParams) {
+        if (v === "redacted" && SENSITIVE_PARAM.test(k)) paths.add(u.pathname);
+      }
+    } catch {
+    }
+  }
+  return [...paths];
+}
 function excerpt(input, max = 240) {
   if (!input) return "";
   const clean = redactText(input.replace(/\s+/g, " ").trim());
@@ -52852,6 +52865,12 @@ ${networkOptionsHelp(25)}
       throw new JouriloError(
         "INVALID_INPUT",
         `Run ${base2.id} has no recorded scope (created by an older version or by journeys).`
+      );
+    const unreplayable = redactedQueryPaths(scope.urls);
+    if (unreplayable.length)
+      throw new JouriloError(
+        "USAGE",
+        `The baseline run's scope contains URLs whose query values were redacted (${unreplayable.map((p) => `${p}?\u2026`).join(", ")}); they cannot be replayed. Run a new audit of those pages and verify against it.`
       );
     const servedDir = target !== void 0 ? targetDir ? resolve9(target) : void 0 : base2.settings.servedDir;
     const server = servedDir ? await serveStatic(servedDir) : void 0;

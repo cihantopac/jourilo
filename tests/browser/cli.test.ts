@@ -371,6 +371,45 @@ describe('cli verify against an unreachable target', () => {
     expect(text.stdout).toMatch(/no comparison was possible/i);
     expect(text.stdout).not.toMatch(/fixed \d/);
   });
+  it('verify refuses a baseline scope whose query values were redacted, naming the path only (exit 2)', () => {
+    const vws = join(root, 'tests', '.tmp', 'cli-verify-redacted-ws');
+    rmSync(vws, { recursive: true, force: true });
+    mkdirSync(join(vws, 'runs', 'base-2'), { recursive: true });
+    writeFileSync(
+      join(vws, 'runs', 'base-2', 'run.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        id: 'base-2',
+        mode: 'website',
+        target: 'http://127.0.0.1:1/',
+        startedAt: '2026-11-12T00:00:00.000Z',
+        browser: { name: 'chromium', version: 'x' },
+        viewports: [],
+        settings: {
+          scope: {
+            urls: ['http://127.0.0.1:1/', 'http://127.0.0.1:1/x?access_token=redacted&lang=de'],
+            viewports: ['desktop'],
+          },
+        },
+        pages: [],
+        journeys: [],
+        findings: [],
+        limitations: [],
+      }),
+    );
+    const r = spawnSync(process.execPath, [cli, 'verify', 'base-2', '--json', '--workspace', vws], {
+      encoding: 'utf8',
+      cwd: root,
+    });
+    expect(r.status, r.stderr).toBe(2);
+    const err = JSON.parse(r.stderr.trim().split('\n').pop()!).error;
+    expect(err.code).toBe('USAGE');
+    expect(err.message).toContain('/x');
+    expect(err.message).toContain('cannot be replayed');
+    expect(err.message).not.toContain('lang=de');
+    expect(existsSync(join(vws, 'runs', 'base-2', 'report.html'))).toBe(false);
+    expect(readdirSync(join(vws, 'runs'))).toEqual(['base-2']);
+  });
   it('verify --target that is neither a path nor an http(s) URL is INVALID_INPUT', () => {
     const vws = join(root, 'tests', '.tmp', 'cli-verify-ws');
     rmSync(vws, { recursive: true, force: true });

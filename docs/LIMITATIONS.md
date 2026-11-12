@@ -177,3 +177,4 @@ Stated so nobody mistakes silence for a pass.
 - History in the report lists earlier runs of the same target with defect counts; it does not normalize for different
   page sets or viewports (use `verify` for like-for-like comparisons).
 - Screenshots are capped at 12 000 px height.
+- `jourilo verify` cannot replay a baseline whose scope URLs had query values redacted (`?access_token=…`, `?code=…`): it refuses with exit 2; audit those pages again and verify against the new run.

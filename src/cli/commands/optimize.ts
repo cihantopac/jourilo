@@ -5,6 +5,7 @@ import { exitCodeForOutcome, runOutcome } from '../../audit/outcome.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { JouriloError } from '../../core/errors.js';
 import { displayPath } from '../../core/fs-safety.js';
+import { redactedQueryPaths } from '../../core/redact.js';
 import { isDirectoryTarget, servedPort, serveStatic } from '../../core/static-server.js';
 import { loadContext } from '../../integrations/context.js';
 import type { JourneySpec } from '../../journeys/schema.js';
@@ -216,6 +217,12 @@ ${networkOptionsHelp(25)}
       throw new JouriloError(
         'INVALID_INPUT',
         `Run ${base.id} has no recorded scope (created by an older version or by journeys).`,
+      );
+    const unreplayable = redactedQueryPaths(scope.urls);
+    if (unreplayable.length)
+      throw new JouriloError(
+        'USAGE',
+        `The baseline run's scope contains URLs whose query values were redacted (${unreplayable.map((p) => `${p}?…`).join(', ')}); they cannot be replayed. Run a new audit of those pages and verify against it.`,
       );
     const servedDir =
       target !== undefined

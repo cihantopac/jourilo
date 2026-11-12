@@ -63,6 +63,22 @@ export function redactUrlsIn(input: string): string {
   return redactText(out);
 }
 
+/** Paths of URLs whose query holds a value that `redactUrl` replaced (a sensitive key set to "redacted"). */
+export function redactedQueryPaths(urls: string[]): string[] {
+  const paths = new Set<string>();
+  for (const raw of urls) {
+    try {
+      const u = new URL(raw);
+      for (const [k, v] of u.searchParams) {
+        if (v === 'redacted' && SENSITIVE_PARAM.test(k)) paths.add(u.pathname);
+      }
+    } catch {
+      // not a URL: nothing to replay either
+    }
+  }
+  return [...paths];
+}
+
 /** Short excerpt of untrusted page content, redacted and length-limited. */
 export function excerpt(input: string | null | undefined, max = 240): string {
   if (!input) return '';
