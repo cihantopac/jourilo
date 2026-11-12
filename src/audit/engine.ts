@@ -511,6 +511,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       });
 
       // 2. Capture every page in every viewport. A stop gives the page in progress STOP_GRACE_MS to finish.
+      const primaryOrigin = new URL(urls?.[0]?.url ?? target).origin;
       for (const vp of opts.viewports) {
         halt();
         const ctx = await newContext(browser, vp, {
@@ -533,6 +534,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
             });
             const capture = capturePage(ctx, url, vp, {
               runDir,
+              primaryOrigin,
               guardToken: session.guard.token,
               timeoutMs: opts.timeoutMs,
               mask: opts.mask,
@@ -549,7 +551,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
             const obs = await withinGrace(capture, signal, async () => {
               await ctx.close();
               await settled(capture, 1000);
-              const { full, fold } = captureScreenshotFiles(url, vp);
+              const { full, fold } = captureScreenshotFiles(url, vp, primaryOrigin);
               for (const f of [full, fold]) rmSync(join(runDir, f), { force: true });
             });
             observations.push(obs);
@@ -643,12 +645,15 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
               {
                 ...(opts.waitFor && o.load?.found !== false ? { waitFor: opts.waitFor } : {}),
                 timeoutMs: opts.timeoutMs,
+                primaryOrigin,
               },
             );
             const r = await withinGrace(probe, signal, async () => {
               await ctx.close();
               await settled(probe, 1000);
-              rmSync(join(runDir, formScreenshotFile(o.finalUrl, form.selector, vp)), { force: true });
+              rmSync(join(runDir, formScreenshotFile(o.finalUrl, form.selector, vp, primaryOrigin)), {
+                force: true,
+              });
             });
             formFindings.push(...r.findings);
             if (r.result.outcome === 'blocked')

@@ -8,7 +8,7 @@
 import type { BrowserContext } from 'playwright-core';
 import { makeFinding } from '../audit/finding.js';
 import { nielsen, wcag } from '../audit/standards.js';
-import { DEFAULT_MASK, waitForElement } from '../browser/capture.js';
+import { DEFAULT_MASK, originFreeName, waitForElement } from '../browser/capture.js';
 import { toPosix } from '../core/fs-safety.js';
 import { shortHash } from '../core/hash.js';
 import { lexiconSource } from '../core/lexicon.js';
@@ -67,8 +67,14 @@ export interface FormProbeResult {
 }
 
 /** The screenshot a form probe writes, relative to the run directory. */
-export function formScreenshotFile(url: string, selector: string, vp: Viewport): string {
-  return toPosix(`screenshots/form-${shortHash(url, selector).slice(0, 8)}-${vp.name}.jpg`);
+export function formScreenshotFile(
+  url: string,
+  selector: string,
+  vp: Viewport,
+  primaryOrigin?: string,
+): string {
+  const hash = shortHash(originFreeName(url, primaryOrigin), selector);
+  return toPosix(`screenshots/form-${hash.slice(0, 8)}-${vp.name}.jpg`);
 }
 
 export async function probeFormValidation(
@@ -78,7 +84,7 @@ export async function probeFormValidation(
   vp: Viewport,
   policy: SafetyPolicy,
   runDir: string,
-  wait?: { waitFor?: string; timeoutMs?: number },
+  wait?: { waitFor?: string; timeoutMs?: number; primaryOrigin?: string },
 ): Promise<{ result: FormProbeResult; findings: Finding[] }> {
   const page = await ctx.newPage();
   // Simulated by default (nothing that sends data leaves the browser); a real submission only with --allow-submit,
@@ -151,7 +157,7 @@ export async function probeFormValidation(
     await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => undefined);
     await page.waitForTimeout(600);
     const intercepted = guard.since(submittedAt);
-    const shotFile = formScreenshotFile(url, form.selector, vp);
+    const shotFile = formScreenshotFile(url, form.selector, vp, wait?.primaryOrigin);
     await page
       .screenshot({
         path: `${runDir}/${shotFile}`,

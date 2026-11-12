@@ -149,6 +149,8 @@ export interface PageObservation {
 
 export interface CaptureOptions {
   runDir: string;
+  /** Origin of the run's first page; pages on another origin get an origin tag in their screenshot names. */
+  primaryOrigin?: string;
   /** Token of the network guard in front of the browser; only its own upstream-error signal is trusted. */
   guardToken?: string;
   timeoutMs?: number;
@@ -454,9 +456,24 @@ async function applyThrottle(page: Page): Promise<boolean> {
   }
 }
 
+/**
+ * The name part that identifies a location without its origin: the same site served on another host or port keeps its
+ * file names. A URL on a different origin than `primaryOrigin` (the run's first page) adds a short origin tag, so two
+ * origins that serve the same path in one run never share a file.
+ */
+export function originFreeName(url: string, primaryOrigin?: string): string {
+  const u = new URL(url);
+  const tag = primaryOrigin && u.origin !== primaryOrigin ? `\u0000${u.origin}` : '';
+  return shortHash(`${u.pathname}${u.search}${tag}`);
+}
+
 /** The screenshots a capture of `url` in `vp` writes, relative to the run directory. */
-export function captureScreenshotFiles(url: string, vp: Viewport): { full: string; fold: string } {
-  const base = `${slug(new URL(url).pathname.replace(/^\/$/, 'home'), 40)}-${shortHash(url).slice(0, 6)}-${vp.name}`;
+export function captureScreenshotFiles(
+  url: string,
+  vp: Viewport,
+  primaryOrigin?: string,
+): { full: string; fold: string } {
+  const base = `${slug(new URL(url).pathname.replace(/^\/$/, 'home'), 40)}-${originFreeName(url, primaryOrigin).slice(0, 6)}-${vp.name}`;
   return { full: join('screenshots', `${base}.jpg`), fold: join('screenshots', `${base}-fold.jpg`) };
 }
 
@@ -558,7 +575,7 @@ export async function capturePage(
     if (opts.screenshots !== false) {
       const mask = [...DEFAULT_MASK, ...(opts.mask ?? [])].map((s) => page.locator(s));
       const mode = opts.evidence ?? 'full';
-      const { full, fold } = captureScreenshotFiles(url, vp);
+      const { full, fold } = captureScreenshotFiles(url, vp, opts.primaryOrigin);
       try {
         const height = Math.min(obs.probe?.scroll.height ?? vp.height, FULL_PAGE_MAX_HEIGHT[mode]);
         if (mode === 'minimal' && height <= vp.height) {

@@ -1613,3 +1613,36 @@ describe('cli structured progress (F35)', () => {
     }
   }, 240_000);
 });
+
+describe('screenshot file names', () => {
+  it('the same fixture served on two ports gives the same screenshot file names', async () => {
+    const html = `<!doctype html><html lang="en"><title>Names</title><main><h1>Names</h1><p>Same page, any origin.</p></main>`;
+    const names: string[][] = [];
+    for (let i = 0; i < 2; i++) {
+      const server = http.createServer((_req, res) => {
+        res.writeHead(200, { 'content-type': 'text/html' }).end(html);
+      });
+      await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+      try {
+        const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/pricing?plan=pro`;
+        const { code, stdout } = await auditAsync([
+          url,
+          '--pages',
+          '1',
+          '--viewports',
+          'desktop',
+          '--no-keyboard',
+          '--no-forms',
+        ]);
+        expect(code).toBe(0);
+        const out = JSON.parse(stdout) as { runDir: string };
+        names.push(readdirSync(join(out.runDir, 'screenshots')).sort());
+      } finally {
+        server.closeAllConnections();
+        await new Promise((r) => server.close(r));
+      }
+    }
+    expect(names[0]?.length).toBeGreaterThan(0);
+    expect(names[1]).toEqual(names[0]);
+  }, 240_000);
+});

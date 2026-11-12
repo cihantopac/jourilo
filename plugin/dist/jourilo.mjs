@@ -42946,8 +42946,13 @@ async function applyThrottle(page) {
     return false;
   }
 }
-function captureScreenshotFiles(url, vp) {
-  const base2 = `${slug(new URL(url).pathname.replace(/^\/$/, "home"), 40)}-${shortHash(url).slice(0, 6)}-${vp.name}`;
+function originFreeName(url, primaryOrigin) {
+  const u = new URL(url);
+  const tag = primaryOrigin && u.origin !== primaryOrigin ? `\0${u.origin}` : "";
+  return shortHash(`${u.pathname}${u.search}${tag}`);
+}
+function captureScreenshotFiles(url, vp, primaryOrigin) {
+  const base2 = `${slug(new URL(url).pathname.replace(/^\/$/, "home"), 40)}-${originFreeName(url, primaryOrigin).slice(0, 6)}-${vp.name}`;
   return { full: join7("screenshots", `${base2}.jpg`), fold: join7("screenshots", `${base2}-fold.jpg`) };
 }
 async function capturePage(ctx, url, vp, opts) {
@@ -43033,7 +43038,7 @@ async function capturePage(ctx, url, vp, opts) {
     if (opts.screenshots !== false) {
       const mask = [...DEFAULT_MASK, ...opts.mask ?? []].map((s) => page.locator(s));
       const mode = opts.evidence ?? "full";
-      const { full, fold } = captureScreenshotFiles(url, vp);
+      const { full, fold } = captureScreenshotFiles(url, vp, opts.primaryOrigin);
       try {
         const height = Math.min(obs.probe?.scroll.height ?? vp.height, FULL_PAGE_MAX_HEIGHT[mode]);
         if (mode === "minimal" && height <= vp.height) {
@@ -44159,8 +44164,9 @@ var AFTER = `([sel, beforeText]) => {
   const focusOnProblem = !!ae && ae !== document.body && (fields.includes(ae) || /error|alert/i.test((ae.getAttribute('role') || '') + ' ' + (ae.className || '') + ' ' + (ae.id || '')));
   return { errorish, freshCount: fresh.length, ariaInvalid, described, live, focusOnProblem, fieldCount: fields.length };
 }`;
-function formScreenshotFile(url, selector, vp) {
-  return toPosix(`screenshots/form-${shortHash(url, selector).slice(0, 8)}-${vp.name}.jpg`);
+function formScreenshotFile(url, selector, vp, primaryOrigin) {
+  const hash = shortHash(originFreeName(url, primaryOrigin), selector);
+  return toPosix(`screenshots/form-${hash.slice(0, 8)}-${vp.name}.jpg`);
 }
 async function probeFormValidation(ctx, url, form, vp, policy, runDir, wait) {
   const page = await ctx.newPage();
@@ -44221,7 +44227,7 @@ async function probeFormValidation(ctx, url, form, vp, policy, runDir, wait) {
     await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
     await page.waitForTimeout(600);
     const intercepted = guard.since(submittedAt);
-    const shotFile = formScreenshotFile(url, form.selector, vp);
+    const shotFile = formScreenshotFile(url, form.selector, vp, wait?.primaryOrigin);
     await page.screenshot({
       path: `${runDir}/${shotFile}`,
       type: "jpeg",
@@ -46323,6 +46329,7 @@ async function runAudit(ws, opts) {
         done: 0,
         total: captures
       });
+      const primaryOrigin = new URL(urls?.[0]?.url ?? target).origin;
       for (const vp of opts.viewports) {
         halt();
         const ctx = await newContext(browser, vp, {
@@ -46345,6 +46352,7 @@ async function runAudit(ws, opts) {
             });
             const capture = capturePage(ctx, url, vp, {
               runDir,
+              primaryOrigin,
               guardToken: session.guard.token,
               timeoutMs: opts.timeoutMs,
               mask: opts.mask,
@@ -46358,7 +46366,7 @@ async function runAudit(ws, opts) {
             const obs = await withinGrace(capture, signal, async () => {
               await ctx.close();
               await settled(capture, 1e3);
-              const { full, fold } = captureScreenshotFiles(url, vp);
+              const { full, fold } = captureScreenshotFiles(url, vp, primaryOrigin);
               for (const f of [full, fold]) rmSync3(join11(runDir, f), { force: true });
             });
             observations.push(obs);
@@ -46439,13 +46447,16 @@ async function runAudit(ws, opts) {
               // as it was, which a plain fresh load reproduces.
               {
                 ...opts.waitFor && o.load?.found !== false ? { waitFor: opts.waitFor } : {},
-                timeoutMs: opts.timeoutMs
+                timeoutMs: opts.timeoutMs,
+                primaryOrigin
               }
             );
             const r = await withinGrace(probe, signal, async () => {
               await ctx.close();
               await settled(probe, 1e3);
-              rmSync3(join11(runDir, formScreenshotFile(o.finalUrl, form.selector, vp)), { force: true });
+              rmSync3(join11(runDir, formScreenshotFile(o.finalUrl, form.selector, vp, primaryOrigin)), {
+                force: true
+              });
             });
             formFindings.push(...r.findings);
             if (r.result.outcome === "blocked")
