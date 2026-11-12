@@ -3,6 +3,7 @@ import { RULES, type RuleInfo } from '../../audit/rules/registry.js';
 import { wcagFromAxeTags } from '../../audit/standards.js';
 import { AXE_TAGS } from '../../browser/capture.js';
 import { JouriloError } from '../../core/errors.js';
+import { VERSION } from '../../core/version.js';
 import type { Command } from '../framework.js';
 
 /** Native rules, then the `axe/<id>` and `axe-review/<id>` rules a run enables (axe-core answers without a DOM). */
@@ -40,7 +41,9 @@ export const rules: Command = {
   details: `Subcommand:
   list   Native rules (jourilo/…, perf/…, conv/…, ux/…, a11y/…, journey/…, design/…) and the axe/<id> and
          axe-review/<id> rules a run enables from axe-core ${axe.version}. Severity is "varies" when it depends on
-         what was measured. With --json: one array of {id, category, severity, kind, title, standards}.`,
+         what was measured; kind is "varies" for a rule that reports a defect or, when unsure, a needs-review
+         item. With --json: {"jourilo": <version>, "axe": <axe-core version>, "rules": [{id, category,
+         severity, kind, title, standards}, …]}.`,
   async run(ctx) {
     if (ctx.positionals[0] !== 'list')
       throw new JouriloError('USAGE', 'Unknown or missing subcommand.', 'Usage: jourilo rules list [--json]');
@@ -53,6 +56,9 @@ export const rules: Command = {
           `${r.id.padEnd(wi)}  ${r.category.padEnd(wc)}  ${r.severity.padEnd(ws)}  ${r.kind.padEnd(wk)}  ${r.title}`,
       )
       .join('\n');
-    return { data: list, text: `${list.length} rules\n\n${text}` };
+    return {
+      data: { jourilo: VERSION, axe: axe.version, rules: list },
+      text: `${list.length} rules (Jourilo ${VERSION}, axe-core ${axe.version})\n\n${text}`,
+    };
   },
 };

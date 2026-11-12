@@ -9,7 +9,8 @@ export interface RuleInfo {
   category: Category;
   /** The severity the rule reports, or 'varies' when it depends on what was measured. */
   severity: Severity | 'varies';
-  kind: FindingKind;
+  /** The kind the rule reports, or 'varies' when it is a defect or, when unsure, a needs-review item. */
+  kind: FindingKind | 'varies';
   title: string;
   /** Standards the rule cites, e.g. "WCAG 2.2 2.4.7". Empty for rules that cite none. */
   standards: string[];
@@ -18,7 +19,7 @@ export interface RuleInfo {
 function rule(
   id: string,
   category: Category,
-  kind: FindingKind,
+  kind: FindingKind | 'varies',
   severity: Severity | 'varies',
   title: string,
   standards: string[],
@@ -49,7 +50,7 @@ export const RULES: RuleInfo[] = [
   rule(
     'jourilo/keyboard-trap',
     'accessibility',
-    'defect',
+    'varies',
     'varies',
     'Keyboard focus is trapped (needs-review when the page explains a way out)',
     ['WCAG 2.2 2.1.2'],
@@ -112,6 +113,7 @@ export const RULES: RuleInfo[] = [
   ),
   rule('jourilo/dialog-escape', 'accessibility', 'defect', 'moderate', 'Escape does not close the dialog', [
     'WAI-ARIA APG dialog-modal',
+    'Nielsen heuristic #3',
   ]),
   rule(
     'jourilo/dialog-focus-return',
@@ -174,7 +176,7 @@ export const RULES: RuleInfo[] = [
   rule(
     'jourilo/horizontal-overflow',
     'responsive',
-    'defect',
+    'varies',
     'varies',
     'Page scrolls sideways (needs-review when no element is located)',
     ['WCAG 2.2 1.4.10', 'Nielsen heuristic #8'],

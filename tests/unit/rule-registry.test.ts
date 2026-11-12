@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import axe from 'axe-core';
 import { describe, expect, it } from 'vitest';
 import { RULES } from '../../src/audit/rules/registry.js';
 import { rules } from '../../src/cli/commands/rules.js';
@@ -58,8 +59,20 @@ describe('rule registry', () => {
 
   it('rules list --json prints native, perf, axe and axe-review rules with category, severity and kind', async () => {
     const out = await rules.run(ctx({ json: true }, ['list']));
-    const list = out.data as { id: string; category: string; severity: string; kind: string }[];
+    const data = out.data as {
+      jourilo: string;
+      axe: string;
+      rules: { id: string; category: string; severity: string; kind: string; standards: string[] }[];
+    };
+    // The versions say which rule set the list describes (axe rules change with axe-core).
+    expect(data.jourilo).toMatch(/^\d+\.\d+\.\d+/);
+    expect(data.axe).toBe(axe.version);
+    const list = data.rules;
     const byId = new Map(list.map((r) => [r.id, r]));
+    // Rules that report a defect or, when unsure, a review item.
+    expect(byId.get('jourilo/keyboard-trap')?.kind).toBe('varies');
+    expect(byId.get('jourilo/horizontal-overflow')?.kind).toBe('varies');
+    expect(byId.get('jourilo/dialog-escape')?.standards).toContain('Nielsen heuristic #3');
     expect(byId.get('jourilo/contrast-over-image')).toMatchObject({
       category: 'accessibility',
       kind: 'defect',

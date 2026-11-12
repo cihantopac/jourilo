@@ -53168,7 +53168,7 @@ var RULES = [
   rule(
     "jourilo/keyboard-trap",
     "accessibility",
-    "defect",
+    "varies",
     "varies",
     "Keyboard focus is trapped (needs-review when the page explains a way out)",
     ["WCAG 2.2 2.1.2"]
@@ -53230,7 +53230,8 @@ var RULES = [
     ["WAI-ARIA APG keyboard-interface"]
   ),
   rule("jourilo/dialog-escape", "accessibility", "defect", "moderate", "Escape does not close the dialog", [
-    "WAI-ARIA APG dialog-modal"
+    "WAI-ARIA APG dialog-modal",
+    "Nielsen heuristic #3"
   ]),
   rule(
     "jourilo/dialog-focus-return",
@@ -53293,7 +53294,7 @@ var RULES = [
   rule(
     "jourilo/horizontal-overflow",
     "responsive",
-    "defect",
+    "varies",
     "varies",
     "Page scrolls sideways (needs-review when no element is located)",
     ["WCAG 2.2 1.4.10", "Nielsen heuristic #8"]
@@ -53534,7 +53535,9 @@ var rules = {
   details: `Subcommand:
   list   Native rules (jourilo/\u2026, perf/\u2026, conv/\u2026, ux/\u2026, a11y/\u2026, journey/\u2026, design/\u2026) and the axe/<id> and
          axe-review/<id> rules a run enables from axe-core ${import_axe_core3.default.version}. Severity is "varies" when it depends on
-         what was measured. With --json: one array of {id, category, severity, kind, title, standards}.`,
+         what was measured; kind is "varies" for a rule that reports a defect or, when unsure, a needs-review
+         item. With --json: {"jourilo": <version>, "axe": <axe-core version>, "rules": [{id, category,
+         severity, kind, title, standards}, \u2026]}.`,
   async run(ctx) {
     if (ctx.positionals[0] !== "list")
       throw new JouriloError("USAGE", "Unknown or missing subcommand.", "Usage: jourilo rules list [--json]");
@@ -53544,9 +53547,12 @@ var rules = {
     const text = list2.map(
       (r) => `${r.id.padEnd(wi)}  ${r.category.padEnd(wc)}  ${r.severity.padEnd(ws)}  ${r.kind.padEnd(wk)}  ${r.title}`
     ).join("\n");
-    return { data: list2, text: `${list2.length} rules
+    return {
+      data: { jourilo: VERSION, axe: import_axe_core3.default.version, rules: list2 },
+      text: `${list2.length} rules (Jourilo ${VERSION}, axe-core ${import_axe_core3.default.version})
 
-${text}` };
+${text}`
+    };
   }
 };
 

@@ -591,7 +591,9 @@ jourilo rules list [--json]
 Subcommand:
   list   Native rules (jourilo/…, perf/…, conv/…, ux/…, a11y/…, journey/…, design/…) and the axe/<id> and
          axe-review/<id> rules a run enables from axe-core 4.14.0. Severity is "varies" when it depends on
-         what was measured. With --json: one array of {id, category, severity, kind, title, standards}.
+         what was measured; kind is "varies" for a rule that reports a defect or, when unsure, a needs-review
+         item. With --json: {"jourilo": <version>, "axe": <axe-core version>, "rules": [{id, category,
+         severity, kind, title, standards}, …]}.
 ```
 
 ### `jourilo serve`
