@@ -151,6 +151,26 @@ function metricSummary(metrics: MetricDelta[]): string[] {
   return lines;
 }
 
+/** A `verify --target` that is not a directory must be an http(s) URL; anything else is a typo, not a crash. */
+function verifyTargetUrl(target: string): URL {
+  const hint = 'Give a directory to serve, or a URL that starts with http:// or https://.';
+  if (existsSync(target))
+    throw new JouriloError('INVALID_INPUT', `--target ${target} is a file, not a directory or a URL.`, hint);
+  let url: URL | undefined;
+  try {
+    url = new URL(target);
+  } catch {
+    url = undefined;
+  }
+  if (!url || (url.protocol !== 'http:' && url.protocol !== 'https:') || !url.hostname)
+    throw new JouriloError(
+      'INVALID_INPUT',
+      `--target ${target} is neither an existing directory nor an http(s) URL.`,
+      hint,
+    );
+  return url;
+}
+
 export const verify: Command = {
   name: 'verify',
   summary:
@@ -169,6 +189,10 @@ export const verify: Command = {
                          JOURILO_DENY_LOCAL=1 does the same
   --fail-on-regression   Exit 1 when new serious or critical defects appear`,
   async run(ctx) {
+    // An explicit --target replaces the baseline's served directory, so a URL target is not ignored.
+    const target = str(ctx, 'target');
+    const targetDir = target !== undefined && isDirectoryTarget(target);
+    const targetUrl = target !== undefined && !targetDir ? verifyTargetUrl(target) : undefined;
     const base = ctx.ws.loadRun(ctx.positionals[0] ?? 'latest').run;
     const scope = base.settings.scope as { urls: string[]; viewports: string[] } | undefined;
     if (!scope)
@@ -176,16 +200,15 @@ export const verify: Command = {
         'INVALID_INPUT',
         `Run ${base.id} has no recorded scope (created by an older version or by journeys).`,
       );
-    // An explicit --target replaces the baseline's served directory, so a URL target is not ignored.
-    const target = str(ctx, 'target');
-    const servedDir = target
-      ? isDirectoryTarget(target)
-        ? resolve(target)
-        : undefined
-      : (base.settings.servedDir as string | undefined);
+    const servedDir =
+      target !== undefined
+        ? targetDir
+          ? resolve(target)
+          : undefined
+        : (base.settings.servedDir as string | undefined);
     const server = servedDir ? await serveStatic(servedDir) : undefined;
     try {
-      const origin = server?.url ?? new URL(target ?? scope.urls[0]!).origin;
+      const origin = server?.url ?? (targetUrl ?? new URL(scope.urls[0]!)).origin;
       const urls = scope.urls.map((u) => {
         const x = new URL(u);
         return `${x.pathname}${x.search}`;

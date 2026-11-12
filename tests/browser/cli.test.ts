@@ -1,5 +1,14 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
@@ -238,6 +247,67 @@ describe('cli verify against an unreachable target', () => {
     expect(text.stdout).toMatch(/no comparison was possible/i);
     expect(text.stdout).not.toMatch(/fixed \d/);
   });
+  it('verify --target that is neither a path nor an http(s) URL is INVALID_INPUT', () => {
+    const vws = join(root, 'tests', '.tmp', 'cli-verify-ws');
+    rmSync(vws, { recursive: true, force: true });
+    mkdirSync(join(vws, 'runs', 'base-1'), { recursive: true });
+    writeFileSync(
+      join(vws, 'runs', 'base-1', 'run.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        id: 'base-1',
+        mode: 'website',
+        target: 'http://127.0.0.1:1/',
+        startedAt: '2026-11-12T00:00:00.000Z',
+        browser: { name: 'chromium', version: 'x' },
+        viewports: [],
+        settings: { scope: { urls: ['http://127.0.0.1:1/'], viewports: ['desktop'] } },
+        pages: [],
+        journeys: [],
+        findings: [],
+        limitations: [],
+      }),
+    );
+    for (const t of ['package.json', 'no-such-dir', 'localhost:3000', 'htp://localhost:3000', 'ftp://x/']) {
+      const r = spawnSync(
+        process.execPath,
+        [cli, 'verify', 'base-1', '--target', t, '--json', '--workspace', vws],
+        { encoding: 'utf8', cwd: root },
+      );
+      expect(r.status, `${t}: ${r.stderr}`).toBe(2);
+      const err = JSON.parse(r.stderr.trim().split('\n').pop()!).error;
+      expect(err.code, t).toBe('INVALID_INPUT');
+      expect(err.message, t).toContain(t);
+    }
+  });
+});
+
+describe('cli --run-id', () => {
+  it('--run-id is refused when its directory exists', () => {
+    const dir = join(ws, 'runs', 'left-by-a-crash');
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(join(dir, 'screenshots'), { recursive: true });
+    writeFileSync(join(dir, 'screenshots', 'x.jpg'), 'old');
+    const r = jourilo(
+      'audit',
+      'fixtures/sites/acme-saas',
+      '--pages',
+      '1',
+      '--viewports',
+      'desktop',
+      '--run-id',
+      'left-by-a-crash',
+      '--json',
+    );
+    expect(r.status, r.stderr).toBe(2);
+    const err = JSON.parse(r.stderr.trim().split('\n').pop()!).error;
+    expect(err.code).toBe('INVALID_INPUT');
+    expect(err.message).toContain('left-by-a-crash');
+    // Untouched: no run.json, no report, no new screenshot.
+    expect(readdirSync(dir)).toEqual(['screenshots']);
+    expect(readdirSync(join(dir, 'screenshots'))).toEqual(['x.jpg']);
+    expect(readFileSync(join(dir, 'screenshots', 'x.jpg'), 'utf8')).toBe('old');
+  });
 });
 
 describe('cli forged guard signal', () => {
@@ -413,6 +483,113 @@ async function auditUntil(
   return { code, out, run, afterSignalMs: signalledAt ? Date.now() - signalledAt : 0 };
 }
 
+interface TimedAudit {
+  code: number | null;
+  stdout: string;
+  /** Every stderr line, parsed (all are JSON with --json). */
+  lines: { type: string; message?: string; error?: { code: string; message: string } }[];
+  wallMs: number;
+  /** From spawn until the browser is up (the first progress line after "Starting …"). */
+  launchMs: number;
+  /** From the first signal until the process ended (0 without a signal). */
+  afterSignalMs: number;
+  /** Browser profiles left in the run's own temp directory and processes still using it. */
+  leftovers: string[];
+}
+
+/**
+ * Spawns an audit with --json and its own temp directory, so the browser profile Playwright creates there (and
+ * every process started with it) belongs to this run alone. `signalWhen` decides, per progress line, whether to send
+ * SIGTERM; it may fire more than once.
+ */
+async function timedAudit(
+  args: string[],
+  signalWhen?: (msg: string, signalsSent: number) => boolean,
+): Promise<TimedAudit> {
+  const tmp = mkdtempSync(join(root, 'tests', '.tmp', 'stop-tmp-'));
+  const t0 = Date.now();
+  const child = spawn(process.execPath, [cli, 'audit', ...args, '--json', '--workspace', ws], {
+    cwd: root,
+    env: { ...process.env, TMPDIR: tmp, TEMP: tmp, TMP: tmp },
+  });
+  let stdout = '';
+  let buffered = '';
+  let starting = false;
+  let launchMs = 0;
+  let signals = 0;
+  let signalledAt = 0;
+  const lines: TimedAudit['lines'] = [];
+  child.stdout.on('data', (d) => {
+    stdout += d;
+  });
+  child.stderr.on('data', (d) => {
+    buffered += d;
+    const parts = buffered.split('\n');
+    buffered = parts.pop() ?? '';
+    for (const part of parts) {
+      const msg = JSON.parse(part) as TimedAudit['lines'][number];
+      lines.push(msg);
+      if (msg.type !== 'progress') continue;
+      if (starting && !launchMs) launchMs = Date.now() - t0;
+      if (msg.message?.startsWith('Starting ')) starting = true;
+      if (signalWhen?.(msg.message ?? '', signals)) {
+        signals++;
+        signalledAt ||= Date.now();
+        child.kill('SIGTERM');
+      }
+    }
+  });
+  const code = await new Promise<number | null>((r) => child.on('close', r));
+  const end = Date.now();
+  if (buffered.trim()) lines.push(JSON.parse(buffered));
+  const leftovers = readdirSync(tmp).filter((n) => n.startsWith('playwright'));
+  if (process.platform !== 'win32') {
+    const p = spawnSync('pgrep', ['-f', tmp], { encoding: 'utf8' });
+    if (p.stdout?.trim()) leftovers.push(`processes ${p.stdout.trim().split('\n').join(', ')}`);
+  }
+  rmSync(tmp, { recursive: true, force: true });
+  return {
+    code,
+    stdout,
+    lines,
+    wallMs: end - t0,
+    launchMs,
+    afterSignalMs: signalledAt ? end - signalledAt : 0,
+    leftovers,
+  };
+}
+
+/** A local site whose `/` page holds a required-field form and an image; `hang` decides which image requests never end. */
+async function slowSite(hang: (n: number) => boolean) {
+  let images = 0;
+  const srv = http.createServer((req, res) => {
+    if (req.url === '/') {
+      res.writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store' }).end(
+        `<!doctype html><html lang="en"><title>Sign in</title><main><h1>Sign in</h1>
+<img src="/pixel.svg" width="10" height="10" alt="">
+<form action="/login" method="post"><label>Email <input type="email" name="email" autocomplete="email" required></label>
+<label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+<button type="submit">Sign in</button></form></main></html>`,
+      );
+    } else if (req.url === '/pixel.svg') {
+      // Never answered: the page's load event waits for it.
+      if (hang(++images)) return;
+      res
+        .writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': 'no-store' })
+        .end('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>');
+    } else res.writeHead(404).end();
+  });
+  await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+  return {
+    url: `http://127.0.0.1:${(srv.address() as AddressInfo).port}/`,
+    close: () =>
+      new Promise((r) => {
+        srv.closeAllConnections();
+        srv.close(r);
+      }),
+  };
+}
+
 describe('cli stop early', () => {
   const site = ['fixtures/sites/acme-saas', '--pages', '6', '--viewports', 'desktop', '--no-forms'];
 
@@ -442,6 +619,88 @@ describe('cli stop early', () => {
     expect(r.run.outcome).toBe('partial');
     expect(r.run.stoppedBy).toBe('max-duration');
   }, 120_000);
+
+  it('--max-duration stops within 5 s of the limit', async () => {
+    // acme-saas with forms on: slow assets (up to 4.3 s) and form probes are in progress when the limit is reached.
+    const r = await timedAudit([
+      'fixtures/sites/acme-saas',
+      '--pages',
+      '6',
+      '--viewports',
+      'desktop',
+      '--max-duration',
+      '3',
+    ]);
+    console.log(`--max-duration 3: wall ${r.wallMs} ms, launch ${r.launchMs} ms`);
+    expect(r.code).toBe(6);
+    expect(JSON.parse(r.stdout).stoppedBy).toBe('max-duration');
+    expect(r.launchMs).toBeGreaterThan(0);
+    expect(r.wallMs).toBeLessThan((3 + 5) * 1000 + r.launchMs);
+    expect(r.leftovers).toEqual([]);
+  }, 120_000);
+
+  it('--max-duration abandons a page that does not finish loading', async () => {
+    const site = await slowSite(() => true);
+    try {
+      const r = await timedAudit([site.url, '--url', '/', '--viewports', 'desktop', '--max-duration', '3']);
+      console.log(`--max-duration 3 on a hanging page: wall ${r.wallMs} ms, launch ${r.launchMs} ms`);
+      expect(r.code).toBe(6);
+      expect(r.wallMs).toBeLessThan((3 + 5) * 1000 + r.launchMs);
+      expect(r.leftovers).toEqual([]);
+      const out = JSON.parse(r.stdout) as { runDir: string };
+      const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8')) as Run;
+      expect(run.stoppedBy).toBe('max-duration');
+      // The abandoned page is left out, and the limitation counts it as not audited.
+      expect(run.pages).toEqual([]);
+      expect(run.limitations.some((l) => l.includes('1 of 1 planned page captures'))).toBe(true);
+      expect(readdirSync(join(out.runDir, 'screenshots'))).toEqual([]);
+    } finally {
+      await site.close();
+    }
+  }, 120_000);
+
+  it.skipIf(process.platform === 'win32')(
+    'a stop during a form probe ends within 5 s',
+    async () => {
+      // The capture loads the image; the form probe's own visit waits for it forever.
+      const site = await slowSite((n) => n > 1);
+      try {
+        const r = await timedAudit(
+          [site.url, '--url', '/', '--viewports', 'desktop', '--no-keyboard'],
+          (m, sent) => sent === 0 && m.startsWith('form'),
+        );
+        console.log(`stop during a form probe: ${r.afterSignalMs} ms after the signal`);
+        expect(r.code).toBe(6);
+        expect(r.afterSignalMs).toBeGreaterThan(0);
+        expect(r.afterSignalMs).toBeLessThan(5000);
+        expect(r.leftovers).toEqual([]);
+        const run = JSON.parse(readFileSync(join(JSON.parse(r.stdout).runDir, 'run.json'), 'utf8')) as Run;
+        expect(run.stoppedBy).toBe('signal');
+        expect(run.pages).toHaveLength(1);
+      } finally {
+        await site.close();
+      }
+    },
+    120_000,
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'a second signal prints a line before exiting 130',
+    async () => {
+      const r = await timedAudit(
+        ['fixtures/sites/acme-saas', '--pages', '6', '--viewports', 'desktop', '--no-forms'],
+        (m, sent) => (sent === 0 && m.startsWith('desktop')) || (sent === 1 && m.startsWith('Stopping')),
+      );
+      expect(r.code).toBe(130);
+      expect(r.stdout).toBe('');
+      const last = r.lines.at(-1)!;
+      expect(last.type).toBe('error');
+      expect(last.error?.code).toBe('STOPPED_TWICE');
+      expect(last.error?.message).toMatch(/second stop signal/i);
+      expect(r.leftovers).toEqual([]);
+    },
+    120_000,
+  );
 
   it.skipIf(process.platform === 'win32')(
     'stop before the first page',

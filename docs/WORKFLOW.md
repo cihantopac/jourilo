@@ -54,8 +54,10 @@ jourilo audit https://example.com --max-duration 600 --run-id nightly-2026-11-03
   `journeys run`, and the audit starts from the cookies and `localStorage` it leaves. In-memory state does not carry
   over ([LIMITATIONS.md](LIMITATIONS.md)). `verify` replays it, so the comparison stays like for like.
 - `--evidence minimal` keeps the first screen of every page plus the screenshots that findings and failed steps need.
-- `--max-duration SECS` stops after a time budget and writes a partial run; `--run-id ID` names the run so a retried
-  job does not create a second one.
+- `--max-duration SECS` (1 to 86400) stops after a time budget and writes a partial run; the page in progress gets up
+  to 3 s to finish, then it is left out, so the run ends within a few seconds of the limit. `--run-id ID` names the run
+  so a retried job does not create a second one; an id whose directory already exists is refused (exit 2), also when
+  a crashed run left it without a `run.json`.
 
 When an automated job runs Jourilo, read the exit code: 0 ok, 1 failed gate or error, 2 usage, 3 refused for safety,
 4 browser unavailable, **5 no page could be loaded** (a run is written, with outcome `no-page-loaded`), **6 stopped

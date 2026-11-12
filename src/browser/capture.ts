@@ -402,6 +402,12 @@ async function applyThrottle(page: Page): Promise<boolean> {
   }
 }
 
+/** The screenshots a capture of `url` in `vp` writes, relative to the run directory. */
+export function captureScreenshotFiles(url: string, vp: Viewport): { full: string; fold: string } {
+  const base = `${slug(new URL(url).pathname.replace(/^\/$/, 'home'), 40)}-${shortHash(url).slice(0, 6)}-${vp.name}`;
+  return { full: join('screenshots', `${base}.jpg`), fold: join('screenshots', `${base}-fold.jpg`) };
+}
+
 export async function capturePage(
   ctx: BrowserContext,
   url: string,
@@ -489,11 +495,9 @@ export async function capturePage(
     }
 
     if (opts.screenshots !== false) {
-      const base = `${slug(new URL(url).pathname.replace(/^\/$/, 'home'), 40)}-${shortHash(url).slice(0, 6)}-${vp.name}`;
       const mask = [...DEFAULT_MASK, ...(opts.mask ?? [])].map((s) => page.locator(s));
       const mode = opts.evidence ?? 'full';
-      const full = join('screenshots', `${base}.jpg`);
-      const fold = join('screenshots', `${base}-fold.jpg`);
+      const { full, fold } = captureScreenshotFiles(url, vp);
       try {
         const height = Math.min(obs.probe?.scroll.height ?? vp.height, FULL_PAGE_MAX_HEIGHT[mode]);
         if (mode === 'minimal' && height <= vp.height) {

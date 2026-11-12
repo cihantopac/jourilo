@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import type { Browser } from 'playwright-core';
 import {
   capturePage,
+  captureScreenshotFiles,
   measureVitals,
   medianVitals,
   newContext,
@@ -42,7 +43,7 @@ import type { Workspace } from '../core/workspace.js';
 import { crawl, explicitRobotsOverrides, robotsOverrideLimitation } from '../discovery/crawl.js';
 import type { ExperienceContext } from '../integrations/context.js';
 import { designFindings, respectLockedBrand } from '../integrations/design-rules.js';
-import { probeFormValidation } from '../journeys/forms.js';
+import { formScreenshotFile, probeFormValidation } from '../journeys/forms.js';
 import { runJourney } from '../journeys/runner.js';
 import { testData } from '../journeys/safety.js';
 import type { JourneySpec } from '../journeys/schema.js';
@@ -118,9 +119,9 @@ export interface AuditOptions {
   context?: ExperienceContext;
   onProgress?: (msg: string) => void;
   /**
-   * Stops the run early: the page in progress finishes, nothing new starts, and the run is built from what was
-   * collected (`stoppedBy` set). Abort with the reason `'max-duration'` when a time budget ran out; any other
-   * reason counts as a signal. The caller then owns SIGINT/SIGTERM: Playwright's own handlers, which would close
+   * Stops the run early: the page in progress gets STOP_GRACE_MS to finish (then it is abandoned and left out),
+   * nothing new starts, and the run is built from what was collected (`stoppedBy` set). Abort with the reason
+   * `'max-duration'` when a time budget ran out; any other reason counts as a signal. The caller then owns SIGINT/SIGTERM: Playwright's own handlers, which would close
    * the browser at once, are turned off.
    */
   signal?: AbortSignal;
@@ -152,6 +153,58 @@ function untilStopped<T>(p: Promise<T>, signal: AbortSignal | undefined): Promis
   });
 }
 
+/** How long the page (or form probe, or metrics visit) in progress may still take once a stop is requested. */
+export const STOP_GRACE_MS = 3000;
+const ABANDONED = Symbol('abandoned');
+
+/**
+ * Settles with `work` when it finishes, also after a stop, but waits no longer than STOP_GRACE_MS once `signal`
+ * aborts: then `abandon` runs (it closes the context the work runs in) and AuditStopped is thrown, so the
+ * unfinished work is left out of the run. Keeps a stop within a few seconds of the --max-duration limit even
+ * while a slow page loads (F32).
+ */
+async function withinGrace<T>(
+  work: Promise<T>,
+  signal: AbortSignal | undefined,
+  abandon: () => Promise<unknown>,
+): Promise<T> {
+  if (!signal) return work;
+  work.catch(() => undefined);
+  let timer: NodeJS.Timeout | undefined;
+  let onAbort: () => void = () => undefined;
+  const expired = new Promise<typeof ABANDONED>((resolve) => {
+    onAbort = () => {
+      timer = setTimeout(() => resolve(ABANDONED), STOP_GRACE_MS);
+    };
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    const first = await Promise.race([work, expired]);
+    if (first !== ABANDONED) return first as T;
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener('abort', onAbort);
+  }
+  await abandon().catch(() => undefined);
+  throw new AuditStopped();
+}
+
+/** Waits (at most `ms`) for abandoned work to settle, so it writes nothing after its files are removed. */
+async function settled(work: Promise<unknown>, ms: number): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  await Promise.race([
+    work.then(
+      () => undefined,
+      () => undefined,
+    ),
+    new Promise((r) => {
+      timer = setTimeout(r, ms);
+    }),
+  ]);
+  clearTimeout(timer);
+}
+
 function stopLimitation(
   stoppedBy: NonNullable<Run['stoppedBy']>,
   urls: { url: string }[] | undefined,
@@ -174,7 +227,10 @@ function stateOptions(opts: AuditOptions): { timezoneId?: string; clock?: string
 
 const RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
-/** Checked before any browser work; a run that exists is never overwritten. */
+/**
+ * Checked before any browser work. A run that exists is never overwritten, and neither is a directory without
+ * run.json (left by a crashed run): its leftovers would enter the new run's manifest (F33).
+ */
 function resolveRunId(ws: Workspace, requested: string | undefined): string {
   if (requested === undefined) return newRunId();
   if (!RUN_ID_PATTERN.test(requested))
@@ -183,8 +239,15 @@ function resolveRunId(ws: Workspace, requested: string | undefined): string {
       `Invalid run id "${requested}".`,
       'Use 1-64 letters, digits, "_" or "-", starting with a letter or digit.',
     );
-  if (existsSync(join(ws.runDir(requested), 'run.json')))
+  const dir = ws.runDir(requested);
+  if (existsSync(join(dir, 'run.json')))
     throw new JouriloError('INVALID_INPUT', `Run ${requested} already exists.`, 'Pick another --run-id.');
+  if (existsSync(dir))
+    throw new JouriloError(
+      'INVALID_INPUT',
+      `The directory of run ${requested} already exists (${dir}) without a finished run, probably left by a run that did not finish.`,
+      'Pick another --run-id, or remove that directory first.',
+    );
   return requested;
 }
 
@@ -355,7 +418,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         `Auditing ${urls.length} page(s) × ${opts.viewports.length} viewport(s) in ${opts.browser} ${browserVersion}`,
       );
 
-      // 2. Capture every page in every viewport. A stop lets the page in progress finish.
+      // 2. Capture every page in every viewport. A stop gives the page in progress STOP_GRACE_MS to finish.
       for (const vp of opts.viewports) {
         halt();
         const ctx = await newContext(browser, vp, {
@@ -368,7 +431,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
           for (const { url } of urls) {
             halt();
             log(`  ${vp.name.padEnd(8)} ${redactUrl(url)}`);
-            const obs = await capturePage(ctx, url, vp, {
+            const capture = capturePage(ctx, url, vp, {
               runDir,
               guardToken: session.guard.token,
               timeoutMs: opts.timeoutMs,
@@ -381,6 +444,12 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
               axe: !opts.inventoryOnly,
               throttle: opts.throttle,
               ...(opts.evidence ? { evidence: opts.evidence } : {}),
+            });
+            const obs = await withinGrace(capture, signal, async () => {
+              await ctx.close();
+              await settled(capture, 1000);
+              const { full, fold } = captureScreenshotFiles(url, vp);
+              for (const f of [full, fold]) rmSync(join(runDir, f), { force: true });
             });
             observations.push(obs);
           }
@@ -397,13 +466,18 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
           for (let k = 1; k < runs; k++) {
             halt();
             log(`  metrics  ${obs.viewport.name.padEnd(8)} ${obs.url} (run ${k + 1}/${runs})`);
-            const v = await measureVitals(browser, obs.finalUrl, obs.viewport, {
-              runDir,
-              timeoutMs: opts.timeoutMs,
-              throttle: opts.throttle,
-              ...(storageState ? { storageState } : {}),
-              ...stateOptions(opts),
-            });
+            // An abandoned visit ends when the browser closes; the first sample stands.
+            const v = await withinGrace(
+              measureVitals(browser, obs.finalUrl, obs.viewport, {
+                runDir,
+                timeoutMs: opts.timeoutMs,
+                throttle: opts.throttle,
+                ...(storageState ? { storageState } : {}),
+                ...stateOptions(opts),
+              }),
+              signal,
+              async () => undefined,
+            );
             if (v) samples.push(v);
           }
           const m = medianVitals(samples);
@@ -434,7 +508,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
             for (const form of probeable.slice(0, 3)) {
               halt();
               log(`  form     ${o.url} ${form.selector}`);
-              const r = await probeFormValidation(
+              const probe = probeFormValidation(
                 ctx,
                 o.finalUrl,
                 form,
@@ -442,6 +516,11 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
                 { hostClass, allowSubmit: opts.allowSubmit ?? false, allowDestructive: false },
                 runDir,
               );
+              const r = await withinGrace(probe, signal, async () => {
+                await ctx.close();
+                await settled(probe, 1000);
+                rmSync(join(runDir, formScreenshotFile(o.finalUrl, form.selector, vp)), { force: true });
+              });
               formFindings.push(...r.findings);
               if (r.result.outcome === 'blocked')
                 limitations.push(`Form ${form.selector} on ${o.url} was not submitted: ${r.result.detail}`);

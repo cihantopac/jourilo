@@ -30,6 +30,7 @@ import {
   flag,
   list,
   num,
+  pagesOption,
   parseEvidence,
   parseStateOptions,
   str,
@@ -94,7 +95,7 @@ async function suggest(ctx: Context) {
         await runAudit(ctx.ws, {
           target: server?.url ?? target,
           viewports: parseViewports('desktop'),
-          maxPages: num(ctx, 'pages', 8),
+          maxPages: pagesOption(ctx, 8),
           maxDepth: 3,
           browser: 'chromium',
           headed: false,

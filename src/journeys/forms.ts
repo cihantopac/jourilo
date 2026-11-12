@@ -58,6 +58,11 @@ export interface FormProbeResult {
   detail: string;
 }
 
+/** The screenshot a form probe writes, relative to the run directory. */
+export function formScreenshotFile(url: string, selector: string, vp: Viewport): string {
+  return toPosix(`screenshots/form-${shortHash(url, selector).slice(0, 8)}-${vp.name}.jpg`);
+}
+
 export async function probeFormValidation(
   ctx: BrowserContext,
   url: string,
@@ -122,7 +127,7 @@ export async function probeFormValidation(
     await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => undefined);
     await page.waitForTimeout(600);
     const intercepted = guard.since(submittedAt);
-    const shotFile = toPosix(`screenshots/form-${shortHash(url, form.selector).slice(0, 8)}-${vp.name}.jpg`);
+    const shotFile = formScreenshotFile(url, form.selector, vp);
     await page
       .screenshot({
         path: `${runDir}/${shotFile}`,

@@ -1096,23 +1096,23 @@ var require_axe = __commonJS({
             }
             function publish(promise) {
               var subscribers = promise._subscribers;
-              var settled = promise._state;
+              var settled2 = promise._state;
               if (subscribers.length === 0) {
                 return;
               }
               var child = void 0, callback = void 0, detail = promise._result;
               for (var i2 = 0; i2 < subscribers.length; i2 += 3) {
                 child = subscribers[i2];
-                callback = subscribers[i2 + settled];
+                callback = subscribers[i2 + settled2];
                 if (child) {
-                  invokeCallback(settled, child, callback, detail);
+                  invokeCallback(settled2, child, callback, detail);
                 } else {
                   callback(detail);
                 }
               }
               promise._subscribers.length = 0;
             }
-            function invokeCallback(settled, promise, callback, detail) {
+            function invokeCallback(settled2, promise, callback, detail) {
               var hasCallback = isFunction(callback), value = void 0, error = void 0, succeeded = true;
               if (hasCallback) {
                 try {
@@ -1133,9 +1133,9 @@ var require_axe = __commonJS({
                 resolve10(promise, value);
               } else if (succeeded === false) {
                 reject(promise, error);
-              } else if (settled === FULFILLED) {
+              } else if (settled2 === FULFILLED) {
                 fulfill(promise, value);
-              } else if (settled === REJECTED) {
+              } else if (settled2 === REJECTED) {
                 reject(promise, value);
               }
             }
@@ -38877,6 +38877,26 @@ function num(ctx, key, fallback) {
     throw new JouriloError("USAGE", `--${key} must be a non-negative number.`);
   return n;
 }
+function pagesOption(ctx, fallback) {
+  const v = str(ctx, "pages");
+  if (v === void 0) return fallback;
+  const n = Number(v);
+  if (v.trim() === "" || !Number.isInteger(n) || n < 1)
+    throw new JouriloError("USAGE", `--pages must be a whole number of 1 or more (got "${v}").`);
+  return n;
+}
+var MAX_DURATION_LIMIT_S = 86400;
+function maxDurationOption(ctx) {
+  const v = str(ctx, "max-duration");
+  if (v === void 0) return void 0;
+  const n = Number(v);
+  if (v.trim() === "" || !Number.isFinite(n) || n < 1 || n > MAX_DURATION_LIMIT_S)
+    throw new JouriloError(
+      "USAGE",
+      `--max-duration must be from 1 to ${MAX_DURATION_LIMIT_S} seconds (got "${v}").`
+    );
+  return n;
+}
 function list(ctx, key) {
   const v = ctx.values[key];
   if (Array.isArray(v))
@@ -39087,7 +39107,7 @@ Re-run with --write to install.`
 };
 
 // src/cli/commands/audit.ts
-import { existsSync as existsSync12 } from "node:fs";
+import { existsSync as existsSync12, writeSync as writeSync2 } from "node:fs";
 import { resolve as resolve6 } from "node:path";
 
 // src/audit/engine.ts
@@ -39988,8 +40008,9 @@ async function startNetGuard(policy, deps = {}) {
   };
   const sockets = /* @__PURE__ */ new Set();
   const track = (s) => {
+    if (sockets.has(s)) return s;
     sockets.add(s);
-    s.on("close", () => sockets.delete(s));
+    s.once("close", () => sockets.delete(s));
     return s;
   };
   const connectUpstream = (host, port2, onReady, onFail) => {
@@ -40066,7 +40087,13 @@ async function startNetGuard(policy, deps = {}) {
           res.writeHead(up.statusCode ?? 502, up.statusMessage, out);
           up.pipe(res);
         });
-        upstream.on("error", (err) => fail(502, err.message));
+        upstream.on("socket", (s) => track(s));
+        res.on("close", () => {
+          if (!res.writableFinished) upstream.destroy();
+        });
+        upstream.on("error", (err) => {
+          if (!res.destroyed) fail(502, err.message);
+        });
         req.pipe(upstream);
       },
       (err) => fail(502, err.message)
@@ -42171,6 +42198,10 @@ async function applyThrottle(page) {
     return false;
   }
 }
+function captureScreenshotFiles(url, vp) {
+  const base2 = `${slug(new URL(url).pathname.replace(/^\/$/, "home"), 40)}-${shortHash(url).slice(0, 6)}-${vp.name}`;
+  return { full: join6("screenshots", `${base2}.jpg`), fold: join6("screenshots", `${base2}-fold.jpg`) };
+}
 async function capturePage(ctx, url, vp, opts) {
   const timeoutMs = opts.timeoutMs ?? 3e4;
   const page = await ctx.newPage();
@@ -42245,11 +42276,9 @@ async function capturePage(ctx, url, vp, opts) {
       });
     }
     if (opts.screenshots !== false) {
-      const base2 = `${slug(new URL(url).pathname.replace(/^\/$/, "home"), 40)}-${shortHash(url).slice(0, 6)}-${vp.name}`;
       const mask = [...DEFAULT_MASK, ...opts.mask ?? []].map((s) => page.locator(s));
       const mode = opts.evidence ?? "full";
-      const full = join6("screenshots", `${base2}.jpg`);
-      const fold = join6("screenshots", `${base2}-fold.jpg`);
+      const { full, fold } = captureScreenshotFiles(url, vp);
       try {
         const height = Math.min(obs.probe?.scroll.height ?? vp.height, FULL_PAGE_MAX_HEIGHT[mode]);
         if (mode === "minimal" && height <= vp.height) {
@@ -43364,6 +43393,9 @@ var AFTER = `([sel, beforeText]) => {
   const focusOnProblem = !!ae && ae !== document.body && (fields.includes(ae) || /error|alert/i.test((ae.getAttribute('role') || '') + ' ' + (ae.className || '') + ' ' + (ae.id || '')));
   return { errorish, freshCount: fresh.length, ariaInvalid, described, live, focusOnProblem, fieldCount: fields.length };
 }`;
+function formScreenshotFile(url, selector, vp) {
+  return toPosix(`screenshots/form-${shortHash(url, selector).slice(0, 8)}-${vp.name}.jpg`);
+}
 async function probeFormValidation(ctx, url, form, vp, policy, runDir) {
   const page = await ctx.newPage();
   const guard = await installRequestGuard(page, {
@@ -43410,7 +43442,7 @@ async function probeFormValidation(ctx, url, form, vp, policy, runDir) {
     await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
     await page.waitForTimeout(600);
     const intercepted = guard.since(submittedAt);
-    const shotFile = toPosix(`screenshots/form-${shortHash(url, form.selector).slice(0, 8)}-${vp.name}.jpg`);
+    const shotFile = formScreenshotFile(url, form.selector, vp);
     await page.screenshot({
       path: `${runDir}/${shotFile}`,
       type: "jpeg",
@@ -45159,6 +45191,43 @@ function untilStopped(p, signal) {
     p.then(resolve10, reject).finally(() => signal.removeEventListener("abort", onAbort));
   });
 }
+var STOP_GRACE_MS = 3e3;
+var ABANDONED = /* @__PURE__ */ Symbol("abandoned");
+async function withinGrace(work, signal, abandon) {
+  if (!signal) return work;
+  work.catch(() => void 0);
+  let timer;
+  let onAbort = () => void 0;
+  const expired = new Promise((resolve10) => {
+    onAbort = () => {
+      timer = setTimeout(() => resolve10(ABANDONED), STOP_GRACE_MS);
+    };
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    const first = await Promise.race([work, expired]);
+    if (first !== ABANDONED) return first;
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", onAbort);
+  }
+  await abandon().catch(() => void 0);
+  throw new AuditStopped();
+}
+async function settled(work, ms) {
+  let timer;
+  await Promise.race([
+    work.then(
+      () => void 0,
+      () => void 0
+    ),
+    new Promise((r) => {
+      timer = setTimeout(r, ms);
+    })
+  ]);
+  clearTimeout(timer);
+}
 function stopLimitation(stoppedBy, urls, viewports, captured) {
   const by = stoppedBy === "signal" ? "by a stop signal" : "when the --max-duration budget ran out";
   if (!urls) return `The run was stopped early ${by}, before pages were discovered, so no page was audited.`;
@@ -45180,8 +45249,15 @@ function resolveRunId(ws, requested) {
       `Invalid run id "${requested}".`,
       'Use 1-64 letters, digits, "_" or "-", starting with a letter or digit.'
     );
-  if (existsSync6(join10(ws.runDir(requested), "run.json")))
+  const dir = ws.runDir(requested);
+  if (existsSync6(join10(dir, "run.json")))
     throw new JouriloError("INVALID_INPUT", `Run ${requested} already exists.`, "Pick another --run-id.");
+  if (existsSync6(dir))
+    throw new JouriloError(
+      "INVALID_INPUT",
+      `The directory of run ${requested} already exists (${dir}) without a finished run, probably left by a run that did not finish.`,
+      "Pick another --run-id, or remove that directory first."
+    );
   return requested;
 }
 async function runAudit(ws, opts) {
@@ -45344,7 +45420,7 @@ async function runAudit(ws, opts) {
           for (const { url } of urls) {
             halt();
             log(`  ${vp.name.padEnd(8)} ${redactUrl(url)}`);
-            const obs = await capturePage(ctx, url, vp, {
+            const capture = capturePage(ctx, url, vp, {
               runDir,
               guardToken: session.guard.token,
               timeoutMs: opts.timeoutMs,
@@ -45354,6 +45430,12 @@ async function runAudit(ws, opts) {
               axe: !opts.inventoryOnly,
               throttle: opts.throttle,
               ...opts.evidence ? { evidence: opts.evidence } : {}
+            });
+            const obs = await withinGrace(capture, signal, async () => {
+              await ctx.close();
+              await settled(capture, 1e3);
+              const { full, fold } = captureScreenshotFiles(url, vp);
+              for (const f of [full, fold]) rmSync2(join10(runDir, f), { force: true });
             });
             observations.push(obs);
           }
@@ -45368,13 +45450,17 @@ async function runAudit(ws, opts) {
           for (let k = 1; k < runs2; k++) {
             halt();
             log(`  metrics  ${obs.viewport.name.padEnd(8)} ${obs.url} (run ${k + 1}/${runs2})`);
-            const v = await measureVitals(browser, obs.finalUrl, obs.viewport, {
-              runDir,
-              timeoutMs: opts.timeoutMs,
-              throttle: opts.throttle,
-              ...storageState ? { storageState } : {},
-              ...stateOptions(opts)
-            });
+            const v = await withinGrace(
+              measureVitals(browser, obs.finalUrl, obs.viewport, {
+                runDir,
+                timeoutMs: opts.timeoutMs,
+                throttle: opts.throttle,
+                ...storageState ? { storageState } : {},
+                ...stateOptions(opts)
+              }),
+              signal,
+              async () => void 0
+            );
             if (v) samples.push(v);
           }
           const m = medianVitals(samples);
@@ -45401,7 +45487,7 @@ async function runAudit(ws, opts) {
             for (const form of probeable.slice(0, 3)) {
               halt();
               log(`  form     ${o.url} ${form.selector}`);
-              const r = await probeFormValidation(
+              const probe = probeFormValidation(
                 ctx,
                 o.finalUrl,
                 form,
@@ -45409,6 +45495,11 @@ async function runAudit(ws, opts) {
                 { hostClass, allowSubmit: opts.allowSubmit ?? false, allowDestructive: false },
                 runDir
               );
+              const r = await withinGrace(probe, signal, async () => {
+                await ctx.close();
+                await settled(probe, 1e3);
+                rmSync2(join10(runDir, formScreenshotFile(o.finalUrl, form.selector, vp)), { force: true });
+              });
               formFindings.push(...r.findings);
               if (r.result.outcome === "blocked")
                 limitations.push(`Form ${form.selector} on ${o.url} was not submitted: ${r.result.detail}`);
@@ -48959,7 +49050,7 @@ async function suggest(ctx) {
       run = (await runAudit(ctx.ws, {
         target: server?.url ?? target,
         viewports: parseViewports("desktop"),
-        maxPages: num(ctx, "pages", 8),
+        maxPages: pagesOption(ctx, 8),
         maxDepth: 3,
         browser: "chromium",
         headed: false,
@@ -49337,20 +49428,32 @@ var AUDIT_OPTIONS = {
 };
 var SEVERITIES = ["critical", "serious", "moderate", "minor"];
 var BROWSERS = ["chromium", "firefox", "webkit", "chrome", "msedge"];
+function stoppedTwiceLine(json) {
+  const message = "A second stop signal: quitting at once (exit 130). No run was written for this audit.";
+  return json ? `${JSON.stringify({ type: "error", error: { code: "STOPPED_TWICE", message } })}
+` : `jourilo: ${message}
+`;
+}
 function stopController(ctx, maxDurationS) {
   const controller = new AbortController();
+  const grace = `${STOP_GRACE_MS / 1e3} s`;
   let signals = 0;
   const onSignal = () => {
-    if (++signals > 1) process.exit(130);
+    if (++signals > 1) {
+      writeSync2(2, stoppedTwiceLine(ctx.json));
+      process.exit(130);
+    }
     ctx.log(
-      "Stopping: the current page finishes, then a partial run is written (signal again to quit now) \u2026"
+      `Stopping: the page in progress gets up to ${grace} to finish, then a partial run is written (signal again to quit now) \u2026`
     );
     controller.abort("signal");
   };
   process.on("SIGINT", onSignal);
   process.on("SIGTERM", onSignal);
   const timer = maxDurationS ? setTimeout(() => {
-    ctx.log(`--max-duration ${maxDurationS}s reached: stopping after the current page \u2026`);
+    ctx.log(
+      `--max-duration ${maxDurationS}s reached: the page in progress gets up to ${grace} to finish, then a partial run is written \u2026`
+    );
     controller.abort("max-duration");
   }, maxDurationS * 1e3) : void 0;
   return {
@@ -49373,8 +49476,8 @@ async function auditCommand(ctx, usage2, categories) {
   const state = parseStateOptions(ctx);
   const auth = str(ctx, "auth");
   if (auth && !existsSync12(auth)) throw new JouriloError("NOT_FOUND", `Auth state file not found: ${auth}`);
-  const maxDuration = str(ctx, "max-duration") === void 0 ? void 0 : num(ctx, "max-duration", 0);
-  if (maxDuration === 0) throw new JouriloError("USAGE", "--max-duration must be more than 0 seconds.");
+  const maxDuration = maxDurationOption(ctx);
+  const maxPages = pagesOption(ctx, 6);
   const evidence = parseEvidence(ctx);
   const setupRef = str(ctx, "setup-journey");
   const setupJourney = setupRef ? loadJourneys(ctx.ws, [setupRef])[0] : void 0;
@@ -49387,7 +49490,7 @@ async function auditCommand(ctx, usage2, categories) {
     const opts = {
       target: server ? server.url : targetArg,
       viewports: parseViewports(str(ctx, "viewports")),
-      maxPages: num(ctx, "pages", 6),
+      maxPages,
       maxDepth: num(ctx, "depth", 3),
       browser,
       headed: flag(ctx, "headed"),
@@ -49502,7 +49605,7 @@ var audit = {
   usage: "jourilo audit <url|dir> [--pages 6] [--viewports desktop,mobile] [--url /path ...] [--repo .] [--fail-on serious]",
   options: AUDIT_OPTIONS,
   details: `Options:
-  --pages N            Pages to audit after discovery (default 6; 1 = only the target)
+  --pages N            Pages to audit after discovery (default 6; 1 = only the target; 0 is a usage error)
   --depth N            Link depth for discovery (default 3)
   --url PATH           Audit exactly these paths/URLs on the target origin (repeatable; skips discovery)
   --include PATH       Add pages to discovery (repeatable)
@@ -49535,9 +49638,11 @@ var audit = {
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
-  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused if the run exists
-  --max-duration SECS  Stop after this many seconds and write a partial run (exit 6), as SIGINT/SIGTERM do;
-                       a second signal quits at once (exit 130)`,
+  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused (exit 2) if its
+                       directory exists, even without a run.json (left by a crashed run)
+  --max-duration SECS  Stop after this many seconds (1 to 86400) and write a partial run (exit 6), as SIGINT/SIGTERM do;
+                       the page in progress gets up to 3 s to finish, then it is left out; a second signal quits at
+                       once (exit 130) after one line on stderr (STOPPED_TWICE with --json)`,
   run: (ctx) => auditCommand(ctx, audit.usage)
 };
 var accessibility = {
@@ -50610,7 +50715,7 @@ var discover = {
     const { run, observations } = await runAudit(ctx.ws, {
       target,
       viewports: parseViewports("desktop"),
-      maxPages: num(ctx, "pages", 10),
+      maxPages: pagesOption(ctx, 10),
       maxDepth: 3,
       browser: "chromium",
       headed: false,
@@ -51538,6 +51643,24 @@ function metricSummary(metrics) {
     );
   return lines;
 }
+function verifyTargetUrl(target) {
+  const hint = "Give a directory to serve, or a URL that starts with http:// or https://.";
+  if (existsSync19(target))
+    throw new JouriloError("INVALID_INPUT", `--target ${target} is a file, not a directory or a URL.`, hint);
+  let url;
+  try {
+    url = new URL(target);
+  } catch {
+    url = void 0;
+  }
+  if (!url || url.protocol !== "http:" && url.protocol !== "https:" || !url.hostname)
+    throw new JouriloError(
+      "INVALID_INPUT",
+      `--target ${target} is neither an existing directory nor an http(s) URL.`,
+      hint
+    );
+  return url;
+}
 var verify = {
   name: "verify",
   summary: "Repeat a run with the same scope (pages, viewports) after a change and compare: fixed, new, persisting, metric deltas.",
@@ -51555,6 +51678,9 @@ var verify = {
                          JOURILO_DENY_LOCAL=1 does the same
   --fail-on-regression   Exit 1 when new serious or critical defects appear`,
   async run(ctx) {
+    const target = str(ctx, "target");
+    const targetDir = target !== void 0 && isDirectoryTarget(target);
+    const targetUrl = target !== void 0 && !targetDir ? verifyTargetUrl(target) : void 0;
     const base2 = ctx.ws.loadRun(ctx.positionals[0] ?? "latest").run;
     const scope = base2.settings.scope;
     if (!scope)
@@ -51562,11 +51688,10 @@ var verify = {
         "INVALID_INPUT",
         `Run ${base2.id} has no recorded scope (created by an older version or by journeys).`
       );
-    const target = str(ctx, "target");
-    const servedDir = target ? isDirectoryTarget(target) ? resolve9(target) : void 0 : base2.settings.servedDir;
+    const servedDir = target !== void 0 ? targetDir ? resolve9(target) : void 0 : base2.settings.servedDir;
     const server = servedDir ? await serveStatic(servedDir) : void 0;
     try {
-      const origin = server?.url ?? new URL(target ?? scope.urls[0]).origin;
+      const origin = server?.url ?? (targetUrl ?? new URL(scope.urls[0])).origin;
       const urls = scope.urls.map((u) => {
         const x = new URL(u);
         return `${x.pathname}${x.search}`;

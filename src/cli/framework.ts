@@ -86,6 +86,32 @@ export function num(ctx: Context, key: string, fallback: number): number {
   return n;
 }
 
+/** `--pages N`: a whole number from 1 (`0` used to become 1 silently). */
+export function pagesOption(ctx: Context, fallback: number): number {
+  const v = str(ctx, 'pages');
+  if (v === undefined) return fallback;
+  const n = Number(v);
+  if (v.trim() === '' || !Number.isInteger(n) || n < 1)
+    throw new JouriloError('USAGE', `--pages must be a whole number of 1 or more (got "${v}").`);
+  return n;
+}
+
+/** The longest `--max-duration`: one day, far below the timer limit (about 24.8 days) where Node fires at once. */
+export const MAX_DURATION_LIMIT_S = 86_400;
+
+/** `--max-duration SECS`: undefined when absent, otherwise 1 to 86 400 seconds. */
+export function maxDurationOption(ctx: Context): number | undefined {
+  const v = str(ctx, 'max-duration');
+  if (v === undefined) return undefined;
+  const n = Number(v);
+  if (v.trim() === '' || !Number.isFinite(n) || n < 1 || n > MAX_DURATION_LIMIT_S)
+    throw new JouriloError(
+      'USAGE',
+      `--max-duration must be from 1 to ${MAX_DURATION_LIMIT_S} seconds (got "${v}").`,
+    );
+  return n;
+}
+
 export function list(ctx: Context, key: string): string[] {
   const v = ctx.values[key];
   if (Array.isArray(v))

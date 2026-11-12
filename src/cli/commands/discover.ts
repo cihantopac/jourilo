@@ -4,7 +4,7 @@ import { runAudit } from '../../audit/engine.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { discoverRepository, type ProductProfile } from '../../discovery/repo.js';
 import { buildSiteProfile, type SiteProfile } from '../../discovery/site.js';
-import { type Command, denyLocalFrom, flag, num, requirePositional } from '../framework.js';
+import { type Command, denyLocalFrom, flag, pagesOption, requirePositional } from '../framework.js';
 
 function repoText(p: ProductProfile): string {
   const v = (xs: { value: string }[]) => (xs.length ? xs.map((x) => x.value).join(', ') : '—');
@@ -92,7 +92,7 @@ export const discover: Command = {
     const { run, observations } = await runAudit(ctx.ws, {
       target,
       viewports: parseViewports('desktop'),
-      maxPages: num(ctx, 'pages', 10),
+      maxPages: pagesOption(ctx, 10),
       maxDepth: 3,
       browser: 'chromium',
       headed: false,

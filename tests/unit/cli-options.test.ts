@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { type Command, type Context, parse, parseStateOptions } from '../../src/cli/framework.js';
+import {
+  type Command,
+  type Context,
+  maxDurationOption,
+  pagesOption,
+  parse,
+  parseStateOptions,
+} from '../../src/cli/framework.js';
 import type { JouriloError } from '../../src/core/errors.js';
 
 function ctxWith(values: Context['values']): Context {
@@ -25,6 +32,38 @@ describe('parseStateOptions', () => {
     expect(
       parseStateOptions(ctxWith({ timezone: 'Europe/Istanbul', clock: '2026-11-03T22:30:00+03:00' })),
     ).toEqual({ timezoneId: 'Europe/Istanbul', clock: '2026-11-03T22:30:00+03:00' });
+  });
+});
+
+function thrown(fn: () => unknown): JouriloError {
+  try {
+    fn();
+  } catch (err) {
+    return err as JouriloError;
+  }
+  throw new Error('expected a usage error');
+}
+
+describe('limits', () => {
+  it('--max-duration outside 1..86400 is a usage error', () => {
+    for (const v of ['0', '-1', 'abc', '86401', '', 'Infinity']) {
+      const err = thrown(() => maxDurationOption(ctxWith({ 'max-duration': v })));
+      expect(err.code, v).toBe('USAGE');
+      expect(err.message, v).toContain('--max-duration');
+    }
+    expect(maxDurationOption(ctxWith({}))).toBeUndefined();
+    expect(maxDurationOption(ctxWith({ 'max-duration': '1' }))).toBe(1);
+    expect(maxDurationOption(ctxWith({ 'max-duration': '86400' }))).toBe(86_400);
+  });
+  it('--pages 0 is a usage error', () => {
+    for (const v of ['0', '-1', '1.5', 'abc', '']) {
+      const err = thrown(() => pagesOption(ctxWith({ pages: v }), 6));
+      expect(err.code, v).toBe('USAGE');
+      expect(err.message, v).toContain('--pages');
+    }
+    expect(pagesOption(ctxWith({}), 6)).toBe(6);
+    expect(pagesOption(ctxWith({ pages: '1' }), 6)).toBe(1);
+    expect(pagesOption(ctxWith({ pages: '40' }), 6)).toBe(40);
   });
 });
 

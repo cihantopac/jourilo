@@ -204,9 +204,11 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
     blocked.push({ host, port, reason });
   };
   const sockets = new Set<Duplex>();
+  // Idempotent: a kept-alive upstream socket is reported again for every request it carries.
   const track = <T extends Duplex>(s: T): T => {
+    if (sockets.has(s)) return s;
     sockets.add(s);
-    s.on('close', () => sockets.delete(s));
+    s.once('close', () => sockets.delete(s));
     return s;
   };
 
@@ -304,7 +306,15 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
           res.writeHead(up.statusCode ?? 502, up.statusMessage, out);
           up.pipe(res);
         });
-        upstream.on('error', (err) => fail(502, err.message));
+        upstream.on('socket', (s) => track(s));
+        // A request the browser gave up on (its page closed, an abandoned page) ends upstream too: a server that never
+        // answers would otherwise keep the connection, and so Jourilo's process, alive after the audit.
+        res.on('close', () => {
+          if (!res.writableFinished) upstream.destroy();
+        });
+        upstream.on('error', (err) => {
+          if (!res.destroyed) fail(502, err.message);
+        });
         req.pipe(upstream);
       },
       (err: Error) => fail(502, err.message),

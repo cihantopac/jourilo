@@ -41,7 +41,7 @@ jourilo audit <url|dir> [--pages 6] [--viewports desktop,mobile] [--url /path ..
 
 ```
 Options:
-  --pages N            Pages to audit after discovery (default 6; 1 = only the target)
+  --pages N            Pages to audit after discovery (default 6; 1 = only the target; 0 is a usage error)
   --depth N            Link depth for discovery (default 3)
   --url PATH           Audit exactly these paths/URLs on the target origin (repeatable; skips discovery)
   --include PATH       Add pages to discovery (repeatable)
@@ -74,9 +74,11 @@ Options:
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
-  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused if the run exists
-  --max-duration SECS  Stop after this many seconds and write a partial run (exit 6), as SIGINT/SIGTERM do;
-                       a second signal quits at once (exit 130)
+  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused (exit 2) if its
+                       directory exists, even without a run.json (left by a crashed run)
+  --max-duration SECS  Stop after this many seconds (1 to 86400) and write a partial run (exit 6), as SIGINT/SIGTERM do;
+                       the page in progress gets up to 3 s to finish, then it is left out; a second signal quits at
+                       once (exit 130) after one line on stderr (STOPPED_TWICE with --json)
 ```
 
 ### `jourilo accessibility`
@@ -89,7 +91,7 @@ jourilo accessibility <url|dir> [audit options]
 
 ```
 Options:
-  --pages N            Pages to audit after discovery (default 6; 1 = only the target)
+  --pages N            Pages to audit after discovery (default 6; 1 = only the target; 0 is a usage error)
   --depth N            Link depth for discovery (default 3)
   --url PATH           Audit exactly these paths/URLs on the target origin (repeatable; skips discovery)
   --include PATH       Add pages to discovery (repeatable)
@@ -122,9 +124,11 @@ Options:
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
-  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused if the run exists
-  --max-duration SECS  Stop after this many seconds and write a partial run (exit 6), as SIGINT/SIGTERM do;
-                       a second signal quits at once (exit 130)
+  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused (exit 2) if its
+                       directory exists, even without a run.json (left by a crashed run)
+  --max-duration SECS  Stop after this many seconds (1 to 86400) and write a partial run (exit 6), as SIGINT/SIGTERM do;
+                       the page in progress gets up to 3 s to finish, then it is left out; a second signal quits at
+                       once (exit 130) after one line on stderr (STOPPED_TWICE with --json)
 ```
 
 ### `jourilo conversion`
@@ -137,7 +141,7 @@ jourilo conversion <url|dir> [audit options]
 
 ```
 Options:
-  --pages N            Pages to audit after discovery (default 6; 1 = only the target)
+  --pages N            Pages to audit after discovery (default 6; 1 = only the target; 0 is a usage error)
   --depth N            Link depth for discovery (default 3)
   --url PATH           Audit exactly these paths/URLs on the target origin (repeatable; skips discovery)
   --include PATH       Add pages to discovery (repeatable)
@@ -170,9 +174,11 @@ Options:
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
-  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused if the run exists
-  --max-duration SECS  Stop after this many seconds and write a partial run (exit 6), as SIGINT/SIGTERM do;
-                       a second signal quits at once (exit 130)
+  --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused (exit 2) if its
+                       directory exists, even without a run.json (left by a crashed run)
+  --max-duration SECS  Stop after this many seconds (1 to 86400) and write a partial run (exit 6), as SIGINT/SIGTERM do;
+                       the page in progress gets up to 3 s to finish, then it is left out; a second signal quits at
+                       once (exit 130) after one line on stderr (STOPPED_TWICE with --json)
 ```
 
 ## Journeys
