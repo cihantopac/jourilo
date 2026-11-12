@@ -629,7 +629,13 @@ describe('cli stop early', () => {
   it.skipIf(process.platform === 'win32')(
     'SIGTERM during an audit writes a partial run and exits 6',
     async () => {
-      const r = await auditUntil(site, (m) => m.startsWith('desktop') && m.includes('http'));
+      // Stop when the second page starts, so the first one is complete: the page in progress gets only
+      // STOP_GRACE_MS, and acme-saas's slow assets can take longer than that on a slow runner.
+      let started = 0;
+      const r = await auditUntil(
+        site,
+        (m) => m.startsWith('desktop') && m.includes('http') && ++started === 2,
+      );
       expect(r.code).toBe(6);
       expect(r.out.outcome).toBe('partial');
       expect(r.run.outcome).toBe('partial');
