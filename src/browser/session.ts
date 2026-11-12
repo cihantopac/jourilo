@@ -140,6 +140,6 @@ export function networkLimitations(r: NetworkReport): string[] {
 export function proxyLimitation(up: Upstream | undefined): string[] {
   if (!up) return [];
   return [
-    `Requests went through the upstream proxy ${upstreamLabel(up)}: the network guard checked every destination first and tunnelled to the checked address; loopback addresses were reached directly. Timings include the proxy hop.`,
+    `Requests went through the upstream proxy ${upstreamLabel(up)}: the network guard resolved and checked every destination first and asked the proxy only for the checked address (a CONNECT tunnel, or an absolute-URI request for plain HTTP); loopback addresses${up.noProxy ? ' and hosts NO_PROXY matches' : ''} were reached directly. Timings include the proxy hop.`,
   ];
 }

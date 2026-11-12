@@ -122,12 +122,12 @@ describe('proxyFrom', () => {
     expect(proxyFrom(ctxWith({ proxy: 'http://cli.corp:1' }), https)).toEqual({ host: 'cli.corp', port: 1 });
   });
 
-  it('NO_PROXY=example.com goes direct', () => {
+  it('NO_PROXY is carried with the proxy and decided per destination; NO_PROXY=* means no proxy', () => {
     vi.stubEnv('HTTPS_PROXY', 'http://proxy.corp:3128');
     vi.stubEnv('NO_PROXY', 'example.com');
-    expect(proxyFrom(ctxWith({}), https)).toBeUndefined();
-    expect(proxyFrom(ctxWith({}), new URL('https://www.example.com/'))).toBeUndefined();
-    expect(proxyFrom(ctxWith({}), new URL('https://shop.test/'))).toEqual({ host: 'proxy.corp', port: 3128 });
+    const carried = { host: 'proxy.corp', port: 3128, noProxy: 'example.com' };
+    expect(proxyFrom(ctxWith({}), https)).toEqual(carried);
+    expect(proxyFrom(ctxWith({}), new URL('https://shop.test/'))).toEqual(carried);
     vi.stubEnv('NO_PROXY', undefined);
     vi.stubEnv('no_proxy', '*');
     expect(proxyFrom(ctxWith({ proxy: 'http://proxy.corp:3128' }), https)).toBeUndefined();
@@ -149,5 +149,8 @@ describe('proxyFrom', () => {
     expect(err.code).toBe('USAGE');
     expect(err.message).toContain('HTTPS_PROXY');
     expect(err.message).not.toContain('hunter2');
+    // A proxy from the environment names the way out: go direct.
+    expect(err.hint).toMatch(/NO_PROXY=\*/);
+    expect(err.hint).toMatch(/unset HTTPS_PROXY/);
   });
 });

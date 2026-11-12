@@ -38887,7 +38887,7 @@ function redactedQueryPaths(urls) {
     try {
       const u = new URL(raw);
       for (const [k, v] of u.searchParams) {
-        if (v === "redacted" && SENSITIVE_PARAM.test(k)) paths.add(u.pathname);
+        if (/^\[?redacted\]?$/.test(v) && SENSITIVE_PARAM.test(k)) paths.add(u.pathname);
       }
     } catch {
     }
@@ -38898,305 +38898,6 @@ function excerpt(input, max = 240) {
   if (!input) return "";
   const clean = redactText(input.replace(/\s+/g, " ").trim());
   return clean.length > max ? `${clean.slice(0, max - 1)}\u2026` : clean;
-}
-
-// src/core/url-safety.ts
-init_errors();
-import { execFile } from "node:child_process";
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
-var LOCAL_SUFFIXES = [".localhost", ".test"];
-function isLocalHostname(host) {
-  const h = host.replace(/^\[|\]$/g, "").toLowerCase().replace(/\.$/, "");
-  return h === "localhost" || h === "::1" || /^127\.\d+\.\d+\.\d+$/.test(h) || h === "0.0.0.0" || LOCAL_SUFFIXES.some((s) => h.endsWith(s));
-}
-var METADATA_V4 = /* @__PURE__ */ new Set(["169.254.169.254", "169.254.170.2", "169.254.169.123", "100.100.100.200"]);
-function classifyV4(v) {
-  const [a, b, c, d] = v.split(".").map(Number);
-  if (METADATA_V4.has(`${a}.${b}.${c}.${d}`)) return "metadata";
-  if (a === 0) return b === 0 && c === 0 && d === 0 ? "loopback" : "reserved";
-  if (a === 127) return "loopback";
-  if (a === 10 || a === 172 && b >= 16 && b <= 31 || a === 192 && b === 168) return "private";
-  if (a === 100 && b >= 64 && b <= 127) return "private";
-  if (a === 169 && b === 254) return "link-local";
-  if (a === 192 && b === 0 && (c === 0 || c === 2)) return "reserved";
-  if (a === 192 && b === 88 && c === 99) return "reserved";
-  if (a === 198 && (b === 18 || b === 19)) return "reserved";
-  if (a === 198 && b === 51 && c === 100) return "reserved";
-  if (a === 203 && b === 0 && c === 113) return "reserved";
-  if (a >= 224) return "reserved";
-  return "public";
-}
-function v6Groups(v) {
-  let s = v.split("%")[0];
-  const tail = s.match(/(\d+\.\d+\.\d+\.\d+)$/);
-  if (tail) {
-    const p = tail[1].split(".").map(Number);
-    s = `${s.slice(0, -tail[1].length)}${(p[0] << 8 | p[1]).toString(16)}:${(p[2] << 8 | p[3]).toString(16)}`;
-  }
-  const halves = s.split("::");
-  if (halves.length > 2) return null;
-  const parse2 = (h) => h ? h.split(":").map((g) => Number.parseInt(g, 16)) : [];
-  const head = parse2(halves[0]);
-  const rest = halves.length === 2 ? parse2(halves[1]) : [];
-  const fill2 = 8 - head.length - rest.length;
-  if (fill2 < 0 || halves.length === 1 && fill2 !== 0) return null;
-  const groups = [...head, ...Array(fill2).fill(0), ...rest];
-  return groups.every((g) => Number.isInteger(g) && g >= 0 && g <= 65535) ? groups : null;
-}
-var v4From = (hi, lo) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
-function classifyV6(v) {
-  const g = v6Groups(v);
-  if (!g) return "reserved";
-  const [g0, g1, g2, g3, g4, g5, g6, g7] = g;
-  const zeroTo = (n) => g.slice(0, n).every((x) => x === 0);
-  if (zeroTo(8)) return "loopback";
-  if (zeroTo(7) && g7 === 1) return "loopback";
-  if (zeroTo(5) && g5 === 65535) return classifyV4(v4From(g6, g7));
-  if (zeroTo(6)) return classifyV4(v4From(g6, g7));
-  if (g0 === 100 && g1 === 65435 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0)
-    return classifyV4(v4From(g6, g7));
-  if (g0 === 100 && g1 === 65435 && g2 === 1) return "private";
-  if (g0 === 8194) return classifyV4(v4From(g1, g2));
-  if (g0 === 8193 && g1 === 0) return "reserved";
-  if (g0 === 8193 && g1 === 3512) return "reserved";
-  if (g0 === 256 && g1 === 0 && g2 === 0 && g3 === 0) return "reserved";
-  if (g0 === 64768 && g1 === 3778 && g2 + g3 + g4 + g5 + g6 === 0 && g7 === 596) return "metadata";
-  if ((g0 & 65024) === 64512) return "private";
-  if ((g0 & 65472) === 65152) return "link-local";
-  if ((g0 & 65472) === 65216) return "private";
-  if ((g0 & 65280) === 65280) return "reserved";
-  return "public";
-}
-function classifyIp(ip) {
-  const v = ip.replace(/^\[|\]$/g, "").toLowerCase();
-  const family = isIP(v.split("%")[0]);
-  if (family === 4) return classifyV4(v);
-  if (family === 6) return classifyV6(v);
-  return "reserved";
-}
-function upstreamLabel(up) {
-  return `http://${isIP(up.host) === 6 ? `[${up.host}]` : up.host}:${up.port}`;
-}
-var normalizeHost = (h) => h.replace(/^\[|\]$/g, "").toLowerCase().replace(/\.$/, "");
-function hostMatches(host, pattern) {
-  const h = normalizeHost(host);
-  const p = normalizeHost(pattern);
-  if (p.startsWith("*.")) return h.endsWith(p.slice(1)) && h.length > p.length - 1;
-  return h === p;
-}
-function hostVerdict(host, policy) {
-  const h = normalizeHost(host);
-  const blocked = policy.blockHosts?.find((p) => hostMatches(h, p));
-  if (blocked) return { ok: false, reason: `${h} is blocked by --block-hosts (${blocked}).` };
-  if (policy.allowHosts?.length && !policy.allowHosts.some((p) => hostMatches(h, p)))
-    return { ok: false, reason: `${h} is not in --allow-hosts.` };
-  return { ok: true };
-}
-function hostListsFor(target, allowHosts, blockHosts) {
-  const own = normalizeHost(target.hostname);
-  const hit = blockHosts.find((p) => hostMatches(own, p));
-  if (hit)
-    throw new JouriloError(
-      "USAGE",
-      `--block-hosts ${hit} blocks the target itself (${own}).`,
-      "Remove that pattern, or audit another target."
-    );
-  return {
-    ...allowHosts.length ? { allowHosts: [.../* @__PURE__ */ new Set([...allowHosts, own])] } : {},
-    ...blockHosts.length ? { blockHosts } : {}
-  };
-}
-function noProxyMatches(host, port, noProxy) {
-  const h = normalizeHost(host);
-  for (const raw of noProxy.split(/[\s,]+/)) {
-    const entry = raw.trim().toLowerCase();
-    if (!entry) continue;
-    if (entry === "*") return true;
-    if (isIP(entry)) {
-      if (h === entry) return true;
-      continue;
-    }
-    const m = entry.match(/^(\[[^\]]+\]|[^:]+)(?::(\d+))?$/);
-    if (!m) continue;
-    if (m[2] && Number(m[2]) !== port) continue;
-    const name = normalizeHost(m[1]).replace(/^\*?\./, "");
-    if (h === name || h.endsWith(`.${name}`)) return true;
-  }
-  return false;
-}
-function addressVerdict(ip, policy, port) {
-  const cls = classifyIp(ip);
-  switch (cls) {
-    case "public":
-      return { ok: true };
-    case "metadata":
-      return {
-        ok: false,
-        reason: `${ip} is a cloud instance-metadata endpoint; Jourilo never connects to it.`
-      };
-    case "reserved":
-      return { ok: false, reason: `${ip} is a reserved or special-purpose address.` };
-    case "loopback":
-      if (policy.denyLocal && !(port !== void 0 && policy.allowLoopbackPorts?.includes(port) && ip === "127.0.0.1"))
-        return { ok: false, reason: `${ip} is this machine (loopback) and --deny-local is set.` };
-      return policy.target === "local" || policy.allowPrivate ? { ok: true } : { ok: false, reason: `${ip} is this machine (loopback); a public target may not reach it.` };
-    default:
-      return policy.allowPrivate ? { ok: true } : {
-        ok: false,
-        reason: `${ip} is a ${cls} network address; pass --allow-private if you are authorized.`
-      };
-  }
-}
-function parseTargetUrl(raw) {
-  let url;
-  try {
-    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
-  } catch {
-    throw new JouriloError("INVALID_INPUT", `Not a valid URL: ${raw}`);
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new JouriloError("UNSAFE_URL", `Only http and https URLs are supported (got ${url.protocol}).`);
-  }
-  url.hash = "";
-  return url;
-}
-var systemResolver = (host) => lookup(host, { all: true, verbatim: true });
-var RESOLVE_TIMEOUT_MS = 5e3;
-function withTimeout(work, ms, message) {
-  let timer;
-  const limit = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(message)), ms);
-    timer.unref();
-  });
-  return Promise.race([work, limit]).finally(() => clearTimeout(timer));
-}
-var LookupFailed = class extends Error {
-};
-function resolveInChild(host, ms, exec = execFile) {
-  const script = "require('node:dns').lookup(process.env.JOURILO_RESOLVE_HOST,{all:true,verbatim:true},(e,a)=>{if(e)process.exit(2);process.stdout.write(JSON.stringify(a),()=>process.exit(0))})";
-  const env = { ...process.env, NODE_OPTIONS: "", JOURILO_RESOLVE_HOST: host };
-  return new Promise((resolve10, reject) => {
-    try {
-      exec(process.execPath, ["-e", script], { timeout: ms, encoding: "utf8", env }, (err, stdout) => {
-        if (err) {
-          if (err.killed || err.code === 2) return reject(new LookupFailed(`DNS lookup failed for ${host}`));
-          return resolve10([]);
-        }
-        try {
-          resolve10(JSON.parse(stdout));
-        } catch {
-          resolve10([]);
-        }
-      });
-    } catch {
-      resolve10([]);
-    }
-  });
-}
-var DENY_LOCAL_HINT = "Unset --deny-local / JOURILO_DENY_LOCAL to audit a local development server, or pass a public URL.";
-var PRIVATE_HINT = "Pass --allow-private if you are authorized to test this host.";
-async function checkTarget(url, opts = {}) {
-  return (await checkTargetDetailed(url, { ...opts, resolveLocalNames: false })).hostClass;
-}
-async function checkTargetDetailed(url, opts = {}) {
-  const host = url.hostname.replace(/^\[|\]$/g, "");
-  const literal = isIP(host) !== 0;
-  if (opts.denyLocal && (isLocalHostname(host) || literal && classifyIp(host) === "loopback"))
-    throw new JouriloError(
-      "UNSAFE_URL",
-      `${host} is a local address and --deny-local is set.`,
-      DENY_LOCAL_HINT
-    );
-  if (literal) {
-    const cls = classifyIp(host);
-    if (cls === "metadata" || cls === "reserved" && host !== "0.0.0.0")
-      throw new JouriloError("UNSAFE_URL", `${host} is a ${cls} address; Jourilo does not audit it.`);
-    if (cls === "loopback") return { hostClass: "local" };
-    if (cls === "public") return { hostClass: "public" };
-    if (!opts.allowPrivate)
-      throw new JouriloError("UNSAFE_URL", `${host} is a private network address.`, PRIVATE_HINT);
-    return { hostClass: "private" };
-  }
-  if (isLocalHostname(host)) {
-    const h = host.toLowerCase();
-    const needsLookup = LOCAL_SUFFIXES.some((x) => x !== ".localhost" && h.endsWith(x));
-    if (opts.resolveDns === false || opts.resolveLocalNames === false || !needsLookup)
-      return { hostClass: "local" };
-    try {
-      const limit = opts.resolveTimeoutMs ?? RESOLVE_TIMEOUT_MS;
-      await withTimeout(
-        opts.resolver ? opts.resolver(host) : resolveInChild(host, limit),
-        limit,
-        `DNS lookup failed for ${host} (timed out)`
-      );
-    } catch {
-      return { hostClass: "local", unresolved: true };
-    }
-    return { hostClass: "local" };
-  }
-  if (opts.resolveDns === false) return { hostClass: "public" };
-  let addrs;
-  try {
-    addrs = await (opts.resolver ?? systemResolver)(host);
-  } catch {
-    return { hostClass: "public" };
-  }
-  const classes = addrs.map((a) => ({ address: a.address, cls: classifyIp(a.address) }));
-  const forbidden = classes.find((c) => c.cls === "metadata" || c.cls === "reserved");
-  if (forbidden)
-    throw new JouriloError(
-      "UNSAFE_URL",
-      `${host} resolves to ${forbidden.address}, a ${forbidden.cls} address; Jourilo does not audit it.`
-    );
-  if (opts.denyLocal) {
-    const loop = classes.find((c) => c.cls === "loopback");
-    if (loop)
-      throw new JouriloError(
-        "UNSAFE_URL",
-        `${host} resolves to ${loop.address}, a local address, and --deny-local is set.`,
-        DENY_LOCAL_HINT
-      );
-  }
-  const nonPublic = classes.filter((c) => c.cls !== "public");
-  if (!nonPublic.length) return { hostClass: "public" };
-  if (!opts.allowPrivate) {
-    const mixed = nonPublic.length < classes.length;
-    throw new JouriloError(
-      "UNSAFE_URL",
-      mixed ? `${host} resolves to both public and private addresses (${nonPublic.map((c) => c.address).join(", ")}); this is refused because the browser could connect to either (DNS rebinding).` : `${host} resolves to a private network address (${nonPublic[0].address}).`,
-      PRIVATE_HINT
-    );
-  }
-  return { hostClass: "private" };
-}
-function isCrawlable(candidate, origin) {
-  let u;
-  try {
-    u = new URL(candidate);
-  } catch {
-    return false;
-  }
-  if (u.origin !== origin) return false;
-  if (/\/(log-?out|sign-?out|logoff|delete|destroy|remove|unsubscribe|cancel)(\/|$|\?)/i.test(u.pathname))
-    return false;
-  if (/\.(pdf|zip|gz|dmg|exe|msi|png|jpe?g|gif|webp|svg|mp4|mp3|woff2?|ttf|ico|xml|json|txt|csv)$/i.test(
-    u.pathname
-  ))
-    return false;
-  return true;
-}
-function normalizeForCrawl(raw) {
-  const u = new URL(raw);
-  u.hash = "";
-  for (const k of [...u.searchParams.keys()])
-    if (/^utm_|^(fbclid|gclid|ref)$/i.test(k)) u.searchParams.delete(k);
-  return u.toString();
-}
-function crawlKey(url) {
-  const u = new URL(normalizeForCrawl(url));
-  if (u.pathname !== "/" && u.pathname.endsWith("/")) u.pathname = u.pathname.replace(/\/+$/, "");
-  return u.toString();
 }
 
 // src/cli/framework.ts
@@ -39376,9 +39077,11 @@ function networkOptionsHelp(column) {
   const cont = " ".repeat(column);
   return [
     `${pad("--proxy URL")}Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;`,
-    `${cont}default HTTPS_PROXY / HTTP_PROXY (either case), skipped for a target that NO_PROXY matches.`,
-    `${cont}The guard still checks every destination, then tunnels to the checked address (CONNECT ip:port);`,
-    `${cont}loopback connects directly. The run records the proxy without its credentials`,
+    `${cont}default HTTPS_PROXY / HTTP_PROXY (either case; prefer the variable for credentials, argv shows`,
+    `${cont}in ps). NO_PROXY is decided per destination host (NO_PROXY=* = no proxy). The guard resolves and`,
+    `${cont}checks every destination itself, then asks the proxy only for the checked address (CONNECT ip:port;`,
+    `${cont}plain HTTP as GET http://ip:port/path); loopback connects directly. The run records the proxy`,
+    `${cont}without its credentials`,
     `${pad("--allow-hosts LIST")}Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);`,
     `${cont}the target's own host is always allowed. Other hosts are refused and listed in the limitations`,
     `${pad("--block-hosts LIST")}Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations`,
@@ -39486,13 +39189,13 @@ function proxyFrom(ctx, target) {
   const env = https2 ? envValue("https_proxy", "HTTPS_PROXY", "http_proxy", "HTTP_PROXY") : envValue("http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY");
   const source = flagValue !== void 0 ? { name: "--proxy", value: flagValue } : env;
   if (!source) return void 0;
-  const noProxy = envValue("no_proxy", "NO_PROXY")?.value ?? "";
-  const port = Number(target.port || (https2 ? 443 : 80));
-  if (noProxy && noProxyMatches(target.hostname, port, noProxy)) return void 0;
+  const noProxy = envValue("no_proxy", "NO_PROXY")?.value.trim() ?? "";
+  if (noProxy.split(/[\s,]+/).includes("*")) return void 0;
+  const expected = "Expected http://host:port or http://user:password@host:port (the value is not shown, it may hold credentials).";
   const usage2 = (why) => new JouriloError(
     "USAGE",
     `${source.name}: ${why}`,
-    "Expected http://host:port or http://user:password@host:port (the value is not shown, it may hold credentials)."
+    source.name === "--proxy" ? expected : `${expected} To go direct instead, set NO_PROXY=* or unset ${source.name}.`
   );
   let url;
   try {
@@ -39510,7 +39213,7 @@ function proxyFrom(ctx, target) {
     throw usage2("the credentials in the proxy URL are not valid percent-encoding.");
   }
   const up = { host: url.hostname.replace(/^\[|\]$/g, ""), port: Number(url.port || 80) };
-  return auth ? { ...up, auth } : up;
+  return { ...up, ...auth ? { auth } : {}, ...noProxy ? { noProxy } : {} };
 }
 function networkFrom(ctx, target) {
   const { allowHosts, blockHosts } = hostListsFrom(ctx);
@@ -40417,6 +40120,307 @@ import http from "node:http";
 import https from "node:https";
 import net, { isIP as isIP2 } from "node:net";
 import tls from "node:tls";
+
+// src/core/url-safety.ts
+init_errors();
+import { execFile } from "node:child_process";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
+var LOCAL_SUFFIXES = [".localhost", ".test"];
+function isLocalHostname(host) {
+  const h = host.replace(/^\[|\]$/g, "").toLowerCase().replace(/\.$/, "");
+  return h === "localhost" || h === "::1" || /^127\.\d+\.\d+\.\d+$/.test(h) || h === "0.0.0.0" || LOCAL_SUFFIXES.some((s) => h.endsWith(s));
+}
+var METADATA_V4 = /* @__PURE__ */ new Set(["169.254.169.254", "169.254.170.2", "169.254.169.123", "100.100.100.200"]);
+function classifyV4(v) {
+  const [a, b, c, d] = v.split(".").map(Number);
+  if (METADATA_V4.has(`${a}.${b}.${c}.${d}`)) return "metadata";
+  if (a === 0) return b === 0 && c === 0 && d === 0 ? "loopback" : "reserved";
+  if (a === 127) return "loopback";
+  if (a === 10 || a === 172 && b >= 16 && b <= 31 || a === 192 && b === 168) return "private";
+  if (a === 100 && b >= 64 && b <= 127) return "private";
+  if (a === 169 && b === 254) return "link-local";
+  if (a === 192 && b === 0 && (c === 0 || c === 2)) return "reserved";
+  if (a === 192 && b === 88 && c === 99) return "reserved";
+  if (a === 198 && (b === 18 || b === 19)) return "reserved";
+  if (a === 198 && b === 51 && c === 100) return "reserved";
+  if (a === 203 && b === 0 && c === 113) return "reserved";
+  if (a >= 224) return "reserved";
+  return "public";
+}
+function v6Groups(v) {
+  let s = v.split("%")[0];
+  const tail = s.match(/(\d+\.\d+\.\d+\.\d+)$/);
+  if (tail) {
+    const p = tail[1].split(".").map(Number);
+    s = `${s.slice(0, -tail[1].length)}${(p[0] << 8 | p[1]).toString(16)}:${(p[2] << 8 | p[3]).toString(16)}`;
+  }
+  const halves = s.split("::");
+  if (halves.length > 2) return null;
+  const parse2 = (h) => h ? h.split(":").map((g) => Number.parseInt(g, 16)) : [];
+  const head = parse2(halves[0]);
+  const rest = halves.length === 2 ? parse2(halves[1]) : [];
+  const fill2 = 8 - head.length - rest.length;
+  if (fill2 < 0 || halves.length === 1 && fill2 !== 0) return null;
+  const groups = [...head, ...Array(fill2).fill(0), ...rest];
+  return groups.every((g) => Number.isInteger(g) && g >= 0 && g <= 65535) ? groups : null;
+}
+var v4From = (hi, lo) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
+function classifyV6(v) {
+  const g = v6Groups(v);
+  if (!g) return "reserved";
+  const [g0, g1, g2, g3, g4, g5, g6, g7] = g;
+  const zeroTo = (n) => g.slice(0, n).every((x) => x === 0);
+  if (zeroTo(8)) return "loopback";
+  if (zeroTo(7) && g7 === 1) return "loopback";
+  if (zeroTo(5) && g5 === 65535) return classifyV4(v4From(g6, g7));
+  if (zeroTo(6)) return classifyV4(v4From(g6, g7));
+  if (g0 === 100 && g1 === 65435 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0)
+    return classifyV4(v4From(g6, g7));
+  if (g0 === 100 && g1 === 65435 && g2 === 1) return "private";
+  if (g0 === 8194) return classifyV4(v4From(g1, g2));
+  if (g0 === 8193 && g1 === 0) return "reserved";
+  if (g0 === 8193 && g1 === 3512) return "reserved";
+  if (g0 === 256 && g1 === 0 && g2 === 0 && g3 === 0) return "reserved";
+  if (g0 === 64768 && g1 === 3778 && g2 + g3 + g4 + g5 + g6 === 0 && g7 === 596) return "metadata";
+  if ((g0 & 65024) === 64512) return "private";
+  if ((g0 & 65472) === 65152) return "link-local";
+  if ((g0 & 65472) === 65216) return "private";
+  if ((g0 & 65280) === 65280) return "reserved";
+  return "public";
+}
+function classifyIp(ip) {
+  const v = ip.replace(/^\[|\]$/g, "").toLowerCase();
+  const family = isIP(v.split("%")[0]);
+  if (family === 4) return classifyV4(v);
+  if (family === 6) return classifyV6(v);
+  return "reserved";
+}
+function upstreamLabel(up) {
+  return `http://${isIP(up.host) === 6 ? `[${up.host}]` : up.host}:${up.port}`;
+}
+var normalizeHost = (h) => h.replace(/^\[|\]$/g, "").toLowerCase().replace(/\.$/, "");
+function hostMatches(host, pattern) {
+  const h = normalizeHost(host);
+  const p = normalizeHost(pattern);
+  if (p.startsWith("*.")) return h.endsWith(p.slice(1)) && h.length > p.length - 1;
+  return h === p;
+}
+function hostVerdict(host, policy) {
+  const h = normalizeHost(host);
+  const blocked = policy.blockHosts?.find((p) => hostMatches(h, p));
+  if (blocked) return { ok: false, reason: `${h} is blocked by --block-hosts (${blocked}).` };
+  if (policy.allowHosts?.length && !policy.allowHosts.some((p) => hostMatches(h, p)))
+    return { ok: false, reason: `${h} is not in --allow-hosts.` };
+  return { ok: true };
+}
+function hostListsFor(target, allowHosts, blockHosts) {
+  const own = normalizeHost(target.hostname);
+  const hit = blockHosts.find((p) => hostMatches(own, p));
+  if (hit)
+    throw new JouriloError(
+      "USAGE",
+      `--block-hosts ${hit} blocks the target itself (${own}).`,
+      "Remove that pattern, or audit another target."
+    );
+  return {
+    ...allowHosts.length ? { allowHosts: [.../* @__PURE__ */ new Set([...allowHosts, own])] } : {},
+    ...blockHosts.length ? { blockHosts } : {}
+  };
+}
+function noProxyMatches(host, port, noProxy) {
+  const h = normalizeHost(host);
+  for (const raw of noProxy.split(/[\s,]+/)) {
+    const entry = raw.trim().toLowerCase();
+    if (!entry) continue;
+    if (entry === "*") return true;
+    if (isIP(entry)) {
+      if (h === entry) return true;
+      continue;
+    }
+    const m = entry.match(/^(\[[^\]]+\]|[^:]+)(?::(\d+))?$/);
+    if (!m) continue;
+    if (m[2] && Number(m[2]) !== port) continue;
+    const name = normalizeHost(m[1]).replace(/^\*?\./, "");
+    if (h === name || h.endsWith(`.${name}`)) return true;
+  }
+  return false;
+}
+function addressVerdict(ip, policy, port) {
+  const cls = classifyIp(ip);
+  switch (cls) {
+    case "public":
+      return { ok: true };
+    case "metadata":
+      return {
+        ok: false,
+        reason: `${ip} is a cloud instance-metadata endpoint; Jourilo never connects to it.`
+      };
+    case "reserved":
+      return { ok: false, reason: `${ip} is a reserved or special-purpose address.` };
+    case "loopback":
+      if (policy.denyLocal && !(port !== void 0 && policy.allowLoopbackPorts?.includes(port) && ip === "127.0.0.1"))
+        return { ok: false, reason: `${ip} is this machine (loopback) and --deny-local is set.` };
+      return policy.target === "local" || policy.allowPrivate ? { ok: true } : { ok: false, reason: `${ip} is this machine (loopback); a public target may not reach it.` };
+    default:
+      return policy.allowPrivate ? { ok: true } : {
+        ok: false,
+        reason: `${ip} is a ${cls} network address; pass --allow-private if you are authorized.`
+      };
+  }
+}
+function parseTargetUrl(raw) {
+  let url;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
+  } catch {
+    throw new JouriloError("INVALID_INPUT", `Not a valid URL: ${raw}`);
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new JouriloError("UNSAFE_URL", `Only http and https URLs are supported (got ${url.protocol}).`);
+  }
+  url.hash = "";
+  return url;
+}
+var systemResolver = (host) => lookup(host, { all: true, verbatim: true });
+var RESOLVE_TIMEOUT_MS = 5e3;
+function withTimeout(work, ms, message) {
+  let timer;
+  const limit = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+    timer.unref();
+  });
+  return Promise.race([work, limit]).finally(() => clearTimeout(timer));
+}
+var LookupFailed = class extends Error {
+};
+function resolveInChild(host, ms, exec = execFile) {
+  const script = "require('node:dns').lookup(process.env.JOURILO_RESOLVE_HOST,{all:true,verbatim:true},(e,a)=>{if(e)process.exit(2);process.stdout.write(JSON.stringify(a),()=>process.exit(0))})";
+  const env = { ...process.env, NODE_OPTIONS: "", JOURILO_RESOLVE_HOST: host };
+  return new Promise((resolve10, reject) => {
+    try {
+      exec(process.execPath, ["-e", script], { timeout: ms, encoding: "utf8", env }, (err, stdout) => {
+        if (err) {
+          if (err.killed || err.code === 2) return reject(new LookupFailed(`DNS lookup failed for ${host}`));
+          return resolve10([]);
+        }
+        try {
+          resolve10(JSON.parse(stdout));
+        } catch {
+          resolve10([]);
+        }
+      });
+    } catch {
+      resolve10([]);
+    }
+  });
+}
+var DENY_LOCAL_HINT = "Unset --deny-local / JOURILO_DENY_LOCAL to audit a local development server, or pass a public URL.";
+var PRIVATE_HINT = "Pass --allow-private if you are authorized to test this host.";
+async function checkTarget(url, opts = {}) {
+  return (await checkTargetDetailed(url, { ...opts, resolveLocalNames: false })).hostClass;
+}
+async function checkTargetDetailed(url, opts = {}) {
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  const literal = isIP(host) !== 0;
+  if (opts.denyLocal && (isLocalHostname(host) || literal && classifyIp(host) === "loopback"))
+    throw new JouriloError(
+      "UNSAFE_URL",
+      `${host} is a local address and --deny-local is set.`,
+      DENY_LOCAL_HINT
+    );
+  if (literal) {
+    const cls = classifyIp(host);
+    if (cls === "metadata" || cls === "reserved" && host !== "0.0.0.0")
+      throw new JouriloError("UNSAFE_URL", `${host} is a ${cls} address; Jourilo does not audit it.`);
+    if (cls === "loopback") return { hostClass: "local" };
+    if (cls === "public") return { hostClass: "public" };
+    if (!opts.allowPrivate)
+      throw new JouriloError("UNSAFE_URL", `${host} is a private network address.`, PRIVATE_HINT);
+    return { hostClass: "private" };
+  }
+  if (isLocalHostname(host)) {
+    const h = host.toLowerCase();
+    const needsLookup = LOCAL_SUFFIXES.some((x) => x !== ".localhost" && h.endsWith(x));
+    if (opts.resolveDns === false || opts.resolveLocalNames === false || !needsLookup)
+      return { hostClass: "local" };
+    try {
+      const limit = opts.resolveTimeoutMs ?? RESOLVE_TIMEOUT_MS;
+      await withTimeout(
+        opts.resolver ? opts.resolver(host) : resolveInChild(host, limit),
+        limit,
+        `DNS lookup failed for ${host} (timed out)`
+      );
+    } catch {
+      return { hostClass: "local", unresolved: true };
+    }
+    return { hostClass: "local" };
+  }
+  if (opts.resolveDns === false) return { hostClass: "public" };
+  let addrs;
+  try {
+    addrs = await (opts.resolver ?? systemResolver)(host);
+  } catch {
+    return { hostClass: "public" };
+  }
+  const classes = addrs.map((a) => ({ address: a.address, cls: classifyIp(a.address) }));
+  const forbidden = classes.find((c) => c.cls === "metadata" || c.cls === "reserved");
+  if (forbidden)
+    throw new JouriloError(
+      "UNSAFE_URL",
+      `${host} resolves to ${forbidden.address}, a ${forbidden.cls} address; Jourilo does not audit it.`
+    );
+  if (opts.denyLocal) {
+    const loop = classes.find((c) => c.cls === "loopback");
+    if (loop)
+      throw new JouriloError(
+        "UNSAFE_URL",
+        `${host} resolves to ${loop.address}, a local address, and --deny-local is set.`,
+        DENY_LOCAL_HINT
+      );
+  }
+  const nonPublic = classes.filter((c) => c.cls !== "public");
+  if (!nonPublic.length) return { hostClass: "public" };
+  if (!opts.allowPrivate) {
+    const mixed = nonPublic.length < classes.length;
+    throw new JouriloError(
+      "UNSAFE_URL",
+      mixed ? `${host} resolves to both public and private addresses (${nonPublic.map((c) => c.address).join(", ")}); this is refused because the browser could connect to either (DNS rebinding).` : `${host} resolves to a private network address (${nonPublic[0].address}).`,
+      PRIVATE_HINT
+    );
+  }
+  return { hostClass: "private" };
+}
+function isCrawlable(candidate, origin) {
+  let u;
+  try {
+    u = new URL(candidate);
+  } catch {
+    return false;
+  }
+  if (u.origin !== origin) return false;
+  if (/\/(log-?out|sign-?out|logoff|delete|destroy|remove|unsubscribe|cancel)(\/|$|\?)/i.test(u.pathname))
+    return false;
+  if (/\.(pdf|zip|gz|dmg|exe|msi|png|jpe?g|gif|webp|svg|mp4|mp3|woff2?|ttf|ico|xml|json|txt|csv)$/i.test(
+    u.pathname
+  ))
+    return false;
+  return true;
+}
+function normalizeForCrawl(raw) {
+  const u = new URL(raw);
+  u.hash = "";
+  for (const k of [...u.searchParams.keys()])
+    if (/^utm_|^(fbclid|gclid|ref)$/i.test(k)) u.searchParams.delete(k);
+  return u.toString();
+}
+function crawlKey(url) {
+  const u = new URL(normalizeForCrawl(url));
+  if (u.pathname !== "/" && u.pathname.endsWith("/")) u.pathname = u.pathname.replace(/\/+$/, "");
+  return u.toString();
+}
+
+// src/core/net-guard.ts
 var GuardBlockedError = class extends Error {
   code = "EJOURILOBLOCKED";
 };
@@ -40463,12 +40467,17 @@ function guardedLookup(policy, port, deps = {}) {
   };
 }
 var TUNNEL_TIMEOUT_MS = 3e4;
-function viaUpstream(policy, address) {
-  return policy.upstream && classifyIp(address) !== "loopback" ? policy.upstream : void 0;
+function viaUpstream(policy, host, address, port) {
+  const up = policy.upstream;
+  if (!up || classifyIp(address) === "loopback") return void 0;
+  if (up.noProxy && noProxyMatches(host, port, up.noProxy)) return void 0;
+  return up;
 }
-function openTunnel(upstream, address, port, timeoutMs = TUNNEL_TIMEOUT_MS) {
+var authorityOf = (address, port) => `${isIP2(address) === 6 ? `[${address}]` : address}:${port}`;
+var proxyAuthorization = (up) => up.auth ? { "proxy-authorization": `Basic ${Buffer.from(up.auth).toString("base64")}` } : {};
+function openTunnel(upstream, address, port, timeoutMs = TUNNEL_TIMEOUT_MS, onSocket) {
   return new Promise((resolve10, reject) => {
-    const authority = `${isIP2(address) === 6 ? `[${address}]` : address}:${port}`;
+    const authority = authorityOf(address, port);
     const sock = net.connect({ host: upstream.host, port: upstream.port });
     let settled2 = false;
     const fail = (message) => {
@@ -40482,8 +40491,7 @@ function openTunnel(upstream, address, port, timeoutMs = TUNNEL_TIMEOUT_MS) {
     sock.once("close", () => fail("closed the connection"));
     sock.once("connect", () => {
       const lines = [`CONNECT ${authority} HTTP/1.1`, `Host: ${authority}`];
-      if (upstream.auth)
-        lines.push(`Proxy-Authorization: Basic ${Buffer.from(upstream.auth).toString("base64")}`);
+      for (const [k, v] of Object.entries(proxyAuthorization(upstream))) lines.push(`${k}: ${v}`);
       sock.write(`${lines.join("\r\n")}\r
 \r
 `);
@@ -40510,6 +40518,7 @@ function openTunnel(upstream, address, port, timeoutMs = TUNNEL_TIMEOUT_MS) {
       resolve10(sock);
     };
     sock.on("data", onData);
+    onSocket?.(sock);
   });
 }
 function splitHostPort(authority, defaultPort) {
@@ -40584,32 +40593,46 @@ async function startNetGuard(policy, deps = {}) {
     blocked.push({ host, port: port2, reason });
   };
   const sockets = /* @__PURE__ */ new Set();
+  let closed = false;
   const track = (s) => {
+    if (closed) {
+      s.destroy();
+      return s;
+    }
     if (sockets.has(s)) return s;
     sockets.add(s);
     s.once("close", () => sockets.delete(s));
     return s;
   };
-  const connectUpstream = (host, port2, onReady, onFail) => {
+  const checkDestination = (host, port2, onAllowed, onFail) => {
     resolveAllowed(host, port2, policy, deps).then(
       (r) => {
         if ("blocked" in r) {
           record(host, port2, r.blocked);
           return onFail(403, r.blocked);
         }
-        const proxy = viaUpstream(policy, r.address);
+        onAllowed(r.address, viaUpstream(policy, host, r.address, port2));
+      },
+      (err) => onFail(502, err.message)
+    );
+  };
+  const connectUpstream = (host, port2, onReady, onFail) => {
+    checkDestination(
+      host,
+      port2,
+      (address, proxy) => {
         if (proxy) {
-          openTunnel(proxy, r.address, port2).then(
+          openTunnel(proxy, address, port2, TUNNEL_TIMEOUT_MS, track).then(
             (tunnel) => onReady(track(tunnel)),
             (err) => onFail(502, err.message)
           );
           return;
         }
-        const upstream = track(net.connect({ host: r.address, port: port2 }));
+        const upstream = track(net.connect({ host: address, port: port2 }));
         upstream.once("connect", () => onReady(upstream));
         upstream.once("error", (err) => onFail(502, err.message));
       },
-      (err) => onFail(502, err.message)
+      onFail
     );
   };
   const pipeBoth = (client, upstream, head) => {
@@ -40634,7 +40657,7 @@ async function startNetGuard(policy, deps = {}) {
     const port2 = Number(target.port || 80);
     const headers = {};
     for (const [k, v] of Object.entries(req.headers))
-      if (v !== void 0 && !HOP_BY_HOP.has(k.toLowerCase())) headers[k] = v;
+      if (v !== void 0 && !HOP_BY_HOP.has(k.toLowerCase()) && !/^proxy-/i.test(k)) headers[k] = v;
     const fail = (status, reason) => {
       if (res.headersSent) return void res.destroy();
       res.writeHead(status, {
@@ -40642,19 +40665,26 @@ async function startNetGuard(policy, deps = {}) {
         ...status === 403 ? {} : { [GUARD_UPSTREAM_ERROR_HEADER]: `${token} ${upstreamFailureWording(reason)}` }
       }).end(status === 403 ? `Blocked by Jourilo network guard: ${reason}` : "Bad gateway");
     };
-    connectUpstream(
+    checkDestination(
       host,
       port2,
-      (socket) => {
+      (address, proxy) => {
+        const socket = track(
+          proxy ? net.connect({ host: proxy.host, port: proxy.port }) : net.connect({ host: address, port: port2 })
+        );
+        const path2 = `${target.pathname}${target.search}`;
         const upstream = http.request({
           method: req.method,
-          path: `${target.pathname}${target.search}`,
-          headers,
+          path: proxy ? `http://${authorityOf(address, port2)}${path2}` : path2,
+          headers: proxy ? { ...headers, ...proxyAuthorization(proxy) } : headers,
           setHost: false,
           createConnection: () => socket
         });
-        socket.resume();
         upstream.on("response", (up) => {
+          if (proxy && up.statusCode === 407) {
+            up.resume();
+            return fail(502, "upstream proxy: answered 407");
+          }
           const loc = (up.statusCode ?? 0) >= 300 && (up.statusCode ?? 0) < 400 ? up.headers.location : void 0;
           const refused = loc ? loopbackRedirectVerdict(loc, target, policy) : null;
           if (refused) {
@@ -40673,7 +40703,8 @@ async function startNetGuard(policy, deps = {}) {
           if (!res.writableFinished) upstream.destroy();
         });
         upstream.on("error", (err) => {
-          if (!res.destroyed) fail(502, err.message);
+          if (!res.destroyed)
+            fail(502, proxy ? `upstream proxy: ${err.code ?? "connection failed"}` : err.message);
         });
         req.pipe(upstream);
       },
@@ -40752,6 +40783,7 @@ ${status === 403 ? `Blocked by Jourilo network guard: ${reason}` : ""}`
     token,
     blocked,
     close: () => new Promise((resolve10) => {
+      closed = true;
       for (const s of sockets) s.destroy();
       server.close(() => resolve10());
     })
@@ -40765,25 +40797,35 @@ async function guardedFetchText(url, policy, opts) {
     const port = Number(current.port || (current.protocol === "https:" ? 443 : 80));
     const pre = await resolveAllowed(current.hostname, port, policy, opts.deps).catch(() => null);
     if (!pre || "blocked" in pre) return null;
-    const proxy = viaUpstream(policy, pre.address);
+    const servername = current.hostname.replace(/^\[|\]$/g, "");
+    const proxy = viaUpstream(policy, servername, pre.address, port);
+    const secure = current.protocol === "https:";
     let tunnel;
-    if (proxy) {
+    if (proxy && secure) {
       tunnel = await openTunnel(proxy, pre.address, port, opts.timeoutMs).catch(() => void 0);
       if (!tunnel) return null;
     }
-    const servername = current.hostname.replace(/^\[|\]$/g, "");
+    const headers = { "user-agent": opts.userAgent, accept: "text/plain, application/xml, text/xml, */*" };
     const res = await new Promise((resolve10) => {
-      const mod = current.protocol === "https:" ? https : http;
+      const mod = secure ? https : http;
       const req = mod.get(
         current,
         {
-          headers: { "user-agent": opts.userAgent, accept: "text/plain, application/xml, text/xml, */*" },
+          headers,
           timeout: opts.timeoutMs,
           ...tunnel ? {
             createConnection: () => {
               tunnel.resume();
-              return current.protocol === "https:" ? tls.connect({ socket: tunnel, ...isIP2(servername) ? {} : { servername } }) : tunnel;
+              return tls.connect({
+                socket: tunnel,
+                host: servername,
+                ...isIP2(servername) ? {} : { servername }
+              });
             }
+          } : proxy ? {
+            path: `http://${authorityOf(pre.address, port)}${current.pathname}${current.search}`,
+            headers: { ...headers, host: current.host, ...proxyAuthorization(proxy) },
+            createConnection: () => net.connect({ host: proxy.host, port: proxy.port })
           } : { lookup: guardedLookup(policy, port, opts.deps), agent: false }
         },
         (r) => {
@@ -42416,7 +42458,7 @@ function networkLimitations(r) {
 function proxyLimitation(up) {
   if (!up) return [];
   return [
-    `Requests went through the upstream proxy ${upstreamLabel(up)}: the network guard checked every destination first and tunnelled to the checked address; loopback addresses were reached directly. Timings include the proxy hop.`
+    `Requests went through the upstream proxy ${upstreamLabel(up)}: the network guard resolved and checked every destination first and asked the proxy only for the checked address (a CONNECT tunnel, or an absolute-URI request for plain HTTP); loopback addresses${up.noProxy ? " and hosts NO_PROXY matches" : ""} were reached directly. Timings include the proxy hop.`
   ];
 }
 

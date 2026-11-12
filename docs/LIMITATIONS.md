@@ -116,12 +116,19 @@ Stated so nobody mistakes silence for a pass.
   reach only its own port. It does not cover other private ranges (use the default guard for public targets), and it
   is refused with `--browser webkit` because WebKit's HTTPS redirects bypass the proxy. A blocked request appears in
   the run's limitations and can show as an error page for that URL.
-- `--proxy` (or `HTTPS_PROXY` / `HTTP_PROXY`, skipped when `NO_PROXY` matches the target) chains to an upstream HTTP
-  proxy behind the guard. The guard still resolves and checks every destination, then asks the proxy for a tunnel to
-  the checked address (`CONNECT 93.184.216.34:443`), never to the name: a proxy that allows destinations by host name
-  sees only addresses. Only `http://` proxies are supported; loopback addresses are reached directly. The run records
-  the proxy as `http://host:port` without its credentials. `NO_PROXY` is matched against the target only, not each
-  request.
+- `--proxy` (or `HTTPS_PROXY` / `HTTP_PROXY`) chains to an upstream HTTP proxy behind the guard. The guard still
+  resolves and checks every destination, then asks the proxy only for the checked address, never for the name: a
+  tunnel for HTTPS and WebSockets (`CONNECT 93.184.216.34:443`), and an absolute-URI request for plain HTTP
+  (`GET http://93.184.216.34:80/path`, with the original `Host` header), since many proxies refuse `CONNECT` to port
+  80. A proxy that allows destinations by host name therefore sees only addresses. A proxy's `407` or an unreachable
+  proxy is reported as a failed request, not as a page. Only `http://` proxies are supported; loopback addresses are
+  reached directly. `NO_PROXY` is decided per destination host, as curl and browsers do (`NO_PROXY=*` means no proxy;
+  CIDR ranges are not supported). The run records the proxy as `http://host:port` without its credentials.
+- Because the guard resolves every name itself (so that it can check the address), a network where only the proxy can
+  resolve external names cannot be audited through the proxy. Command-line arguments show in `ps` and in shell
+  history: give proxy credentials through `HTTPS_PROXY` / `HTTP_PROXY` rather than `--proxy`, and keep an
+  `--extra-header` value in a variable the shell expands (`--extra-header "Authorization: $TOKEN"`), which keeps it
+  out of the history, though not out of `ps` while the run lasts.
 - `--allow-hosts` and `--block-hosts` refuse hosts by name (`*.example.com` matches its subdomains, not
   `example.com`); the target's own host is always allowed. Refused requests are listed in the run's limitations.
 - Lab timings include one local proxy hop per connection.

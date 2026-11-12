@@ -2,7 +2,7 @@ import { type ParseArgsConfig, parseArgs } from 'node:util';
 import { JouriloError } from '../core/errors.js';
 import type { ProgressEvent } from '../core/progress.js';
 import { redactUrl } from '../core/redact.js';
-import { type AddressPolicy, noProxyMatches, type Upstream } from '../core/url-safety.js';
+import type { AddressPolicy, Upstream } from '../core/url-safety.js';
 import { Workspace } from '../core/workspace.js';
 
 export type OptionSpec = NonNullable<ParseArgsConfig['options']>;
@@ -262,9 +262,11 @@ export function networkOptionsHelp(column: number): string {
   const cont = ' '.repeat(column);
   return [
     `${pad('--proxy URL')}Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;`,
-    `${cont}default HTTPS_PROXY / HTTP_PROXY (either case), skipped for a target that NO_PROXY matches.`,
-    `${cont}The guard still checks every destination, then tunnels to the checked address (CONNECT ip:port);`,
-    `${cont}loopback connects directly. The run records the proxy without its credentials`,
+    `${cont}default HTTPS_PROXY / HTTP_PROXY (either case; prefer the variable for credentials, argv shows`,
+    `${cont}in ps). NO_PROXY is decided per destination host (NO_PROXY=* = no proxy). The guard resolves and`,
+    `${cont}checks every destination itself, then asks the proxy only for the checked address (CONNECT ip:port;`,
+    `${cont}plain HTTP as GET http://ip:port/path); loopback connects directly. The run records the proxy`,
+    `${cont}without its credentials`,
     `${pad('--allow-hosts LIST')}Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);`,
     `${cont}the target's own host is always allowed. Other hosts are refused and listed in the limitations`,
     `${pad('--block-hosts LIST')}Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations`,
@@ -399,9 +401,10 @@ function envValue(...names: string[]): { name: string; value: string } | undefin
 
 /**
  * The upstream proxy for a run against `target`: `--proxy URL`, else HTTPS_PROXY / HTTP_PROXY (lower case first,
- * the variable for the target's scheme first). NO_PROXY (either case) is honoured for the target: when it matches,
- * the run goes direct. Only plain `http://` proxies are supported (a scheme-less value means http). An invalid value
- * is a usage error that never repeats the value, since it may hold credentials.
+ * the variable for the target's scheme first). NO_PROXY (either case) travels with the proxy and is decided per
+ * destination by the guard, as curl and browsers do; `NO_PROXY=*` means no proxy at all. Only plain `http://` proxies
+ * are supported (a scheme-less value means http). An invalid value is a usage error that never repeats the value,
+ * since it may hold credentials.
  */
 export function proxyFrom(ctx: Context, target: URL): AddressPolicy['upstream'] {
   const flagValue = str(ctx, 'proxy');
@@ -411,14 +414,18 @@ export function proxyFrom(ctx: Context, target: URL): AddressPolicy['upstream'] 
     : envValue('http_proxy', 'HTTP_PROXY', 'https_proxy', 'HTTPS_PROXY');
   const source = flagValue !== undefined ? { name: '--proxy', value: flagValue } : env;
   if (!source) return undefined;
-  const noProxy = envValue('no_proxy', 'NO_PROXY')?.value ?? '';
-  const port = Number(target.port || (https ? 443 : 80));
-  if (noProxy && noProxyMatches(target.hostname, port, noProxy)) return undefined;
+  const noProxy = envValue('no_proxy', 'NO_PROXY')?.value.trim() ?? '';
+  // `*` matches every host, whatever the port: no proxy at all.
+  if (noProxy.split(/[\s,]+/).includes('*')) return undefined;
+  const expected =
+    'Expected http://host:port or http://user:password@host:port (the value is not shown, it may hold credentials).';
   const usage = (why: string) =>
     new JouriloError(
       'USAGE',
       `${source.name}: ${why}`,
-      'Expected http://host:port or http://user:password@host:port (the value is not shown, it may hold credentials).',
+      source.name === '--proxy'
+        ? expected
+        : `${expected} To go direct instead, set NO_PROXY=* or unset ${source.name}.`,
     );
   let url: URL;
   try {
@@ -439,7 +446,7 @@ export function proxyFrom(ctx: Context, target: URL): AddressPolicy['upstream'] 
     throw usage('the credentials in the proxy URL are not valid percent-encoding.');
   }
   const up: Upstream = { host: url.hostname.replace(/^\[|\]$/g, ''), port: Number(url.port || 80) };
-  return auth ? { ...up, auth } : up;
+  return { ...up, ...(auth ? { auth } : {}), ...(noProxy ? { noProxy } : {}) };
 }
 
 /**
