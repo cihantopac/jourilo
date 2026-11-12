@@ -1,5 +1,5 @@
 {
-  "description": "Focus hidden behind opaque content, and the controls that only look like it.",
+  "description": "Focus hidden behind opaque content and focus held where nothing else can be reached, and the controls that only look like it.",
   "mustFind": [
     {
       "rule": "jourilo/focus-obscured",
@@ -16,6 +16,12 @@
         "class=\"srlab\"",
         "Control without indicator"
       ]
+    },
+    {
+      "rule": "jourilo/keyboard-trap",
+      "path": "/trap-alone",
+      "kind": "defect",
+      "why": "two fields hold focus with Tab and Shift+Tab and nothing else is focusable, so focus never returns to the page (Frameva, field item F23)"
     }
   ],
   "mustNotFind": [
@@ -28,6 +34,11 @@
       "rule": "jourilo/focus-obscured",
       "path": "/dev-overlay",
       "why": "zero-size overlay, 0x0 span and an off-screen skip link are not covered content"
+    },
+    {
+      "rule": "jourilo/keyboard-trap",
+      "path": "/single-button",
+      "why": "one button; the next Tab leaves the page and focus comes back"
     }
   ],
   "maxDefects": [
@@ -36,7 +47,8 @@
       "count": 0,
       "paths": [
         "/controls",
-        "/"
+        "/",
+        "/single-button"
       ]
     },
     {

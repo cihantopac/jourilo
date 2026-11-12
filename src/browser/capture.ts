@@ -139,7 +139,7 @@ export interface PageObservation {
   widgets?: WidgetCheck | null;
   /** Requests the read-only guard aborted while keys were pressed and widgets operated. */
   blockedActions?: BlockedRequest[];
-  /** Main-frame redirect hops seen before a navigation error (at most 10; internal). */
+  /** Main-frame redirect hops of the navigation to the page, whether it loaded or failed (at most 10; internal). */
   redirects?: { status: number; from: string; to: string }[];
   /** Steps that could not run, with the reason; becomes run limitations. */
   errors: string[];
@@ -499,6 +499,8 @@ export async function capturePage(
       obs.errors.push(`navigation: could not connect: ${signal.slice(opts.guardToken.length + 1)}`);
       return obs;
     }
+    // A copy: the listener keeps recording navigations that happen later (keys pressed, widgets operated).
+    if (redirects.length) obs.redirects = [...redirects];
     obs.loadMs = Date.now() - t0;
     obs.status = response?.status() ?? null;
     obs.finalUrl = redactUrl(page.url());

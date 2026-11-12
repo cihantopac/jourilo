@@ -41645,11 +41645,7 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
 
 // src/browser/keyboard.ts
 var DEV_OVERLAY = "nextjs-portal, vite-error-overlay, astro-dev-toolbar, #webpack-dev-server-client-overlay";
-var FOCUS_INFO = `(el) => {
-  if (!el || el === document.body || el === document.documentElement) return null;
-  const sx = window.scrollX, sy = window.scrollY;
-  const r = el.getBoundingClientRect();
-  const sel = (e) => {
+var SELECTOR_OF = `(e) => {
     if (e.id && document.querySelectorAll('#' + CSS.escape(e.id)).length === 1) return '#' + CSS.escape(e.id);
     const parts = []; let c = e;
     while (c && c.nodeType === 1 && c !== document.documentElement && parts.length < 6) {
@@ -41660,7 +41656,17 @@ var FOCUS_INFO = `(el) => {
       parts.unshift(p); c = c.parentElement;
     }
     return parts.join(' > ');
-  };
+  }`;
+var ACTIVE_SELECTOR = `(() => {
+  const el = document.activeElement;
+  if (!el || el === document.body || el === document.documentElement) return null;
+  return (${SELECTOR_OF})(el);
+})()`;
+var FOCUS_INFO = `(el) => {
+  if (!el || el === document.body || el === document.documentElement) return null;
+  const sx = window.scrollX, sy = window.scrollY;
+  const r = el.getBoundingClientRect();
+  const sel = ${SELECTOR_OF};
   // Is the element entirely hidden by other content (a sticky header, a half-closed shutter, a panel)? Content
   // counts as a cover when it paints (background colour, image, media) and is not the element's own label or
   // ancestor; transparent click-catchers do not.
@@ -41785,6 +41791,45 @@ var TRAP_ADVICE = `(selectors) => {
   }
   return null;
 }`;
+var HELD_PRESSES = 12;
+var HELD_MAX = 10;
+async function settleFocus(page) {
+  await page.evaluate(
+    "new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 20))))"
+  ).catch(() => void 0);
+}
+async function heldFocus(page, tabKey, selectors) {
+  const set = new Set(selectors);
+  const start = async () => {
+    await page.evaluate(
+      `((s) => { const el = document.querySelector(s); if (el) el.focus(); })(${JSON.stringify(selectors[0])})`
+    ).catch(() => void 0);
+    await settleFocus(page);
+  };
+  const stays = async (key, grow) => {
+    for (let i = 0; i < HELD_PRESSES; i++) {
+      await page.keyboard.press(key);
+      await settleFocus(page);
+      const sel = await page.evaluate(ACTIVE_SELECTOR).catch(() => null);
+      if (!sel || !grow && !set.has(sel)) return false;
+      set.add(sel);
+      if (set.size > HELD_MAX) return false;
+    }
+    return true;
+  };
+  await start();
+  if (!await stays(tabKey, true)) return null;
+  await start();
+  if (!await stays(`Shift+${tabKey}`, false)) return null;
+  await start();
+  await page.keyboard.press("Escape");
+  await settleFocus(page);
+  if (!await stays(tabKey, false)) return null;
+  const inModal = await page.evaluate(
+    `((sels) => sels.some((s) => { const el = document.querySelector(s); return !!el && !!el.closest('[aria-modal="true"], dialog[open]'); }))(${JSON.stringify([...set])})`
+  ).catch(() => true);
+  return inModal ? null : [...set];
+}
 async function shotAround(page, r) {
   const pad = 24;
   const clip = {
@@ -41837,19 +41882,20 @@ async function keyboardWalk(page, maxTabs = 60) {
       process.stderr.write(`[keyboard] webkit key probe ${probes.join(" ")} -> ${tabKey}
 `);
   }
+  const endsOnPage = page.context().browser()?.browserType().name() !== "firefox";
   let escaped = false;
-  for (let i = 0; i < limit; i++) {
+  let i = 0;
+  for (; i < limit; i++) {
     await page.keyboard.press(tabKey);
     walk2.pressed++;
-    await page.evaluate(
-      "new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 20))))"
-    ).catch(() => void 0);
+    await settleFocus(page);
     const handle = await page.evaluateHandle("document.activeElement");
     const data = await handle.evaluate(inPage(FOCUS_INFO));
     const prevSelector = sequence[sequence.length - 1];
     const noMove = !!data && prevSelector === data.selector;
+    let isLast = false;
     if (noMove) {
-      const isLast = await handle.evaluate(inPage(IS_LAST_TABBABLE)).catch(() => false);
+      isLast = await handle.evaluate(inPage(IS_LAST_TABBABLE)).catch(() => false);
       if (isLast) {
         await handle.evaluate(inPage("(el) => el.blur()")).catch(() => void 0);
       } else if (!walk2.trap && !data.inModal) {
@@ -41882,6 +41928,10 @@ async function keyboardWalk(page, maxTabs = 60) {
       }
     }
     if (noMove) {
+      if (isLast && endsOnPage && !walk2.trap && !data.inModal) {
+        const held = await heldFocus(page, tabKey, [data.selector]);
+        if (held) walk2.trap = { selectors: held, held: HELD_PRESSES };
+      }
       if (!walk2.trap || walk2.trap.selectors[0] !== data.selector) walk2.completedCycle = true;
       break;
     }
@@ -41892,7 +41942,9 @@ async function keyboardWalk(page, maxTabs = 60) {
       break;
     }
     if (stops.length && data.selector === stops[0].selector) {
-      walk2.completedCycle = true;
+      const held = !walk2.trap && stops.length <= HELD_MAX ? await heldFocus(page, tabKey, [...new Set(sequence)]) : null;
+      if (held) walk2.trap = { selectors: held, held: HELD_PRESSES };
+      else walk2.completedCycle = true;
       break;
     }
     sequence.push(data.selector);
@@ -41932,6 +41984,11 @@ async function keyboardWalk(page, maxTabs = 60) {
     prevShot = curShot;
     prevHandle = handle;
     stops.push(newStop(data));
+  }
+  if (i >= limit && !walk2.trap) {
+    const tail = [...new Set(sequence.slice(-HELD_PRESSES))];
+    const held = tail.length && tail.length <= HELD_MAX ? await heldFocus(page, tabKey, tail) : null;
+    if (held) walk2.trap = { selectors: held, held: HELD_PRESSES };
   }
   if (walk2.trap) {
     const advice = await page.evaluate(`(${TRAP_ADVICE})(${JSON.stringify(walk2.trap.selectors)})`).catch(() => null);
@@ -42866,6 +42923,7 @@ async function capturePage(ctx, url, vp, opts) {
       obs.errors.push(`navigation: could not connect: ${signal.slice(opts.guardToken.length + 1)}`);
       return obs;
     }
+    if (redirects.length) obs.redirects = [...redirects];
     obs.loadMs = Date.now() - t0;
     obs.status = response?.status() ?? null;
     obs.finalUrl = redactUrl(page.url());
@@ -43206,6 +43264,14 @@ var CWV = {
     id: "TBT",
     title: "Total Blocking Time (lab proxy for responsiveness)",
     url: "https://developer.chrome.com/docs/lighthouse/performance/lighthouse-total-blocking-time"
+  }
+};
+var LIGHTHOUSE = {
+  redirects: {
+    standard: "Lighthouse",
+    id: "redirects",
+    title: "Avoid multiple page redirects",
+    url: "https://developer.chrome.com/docs/lighthouse/performance/redirects"
   }
 };
 var NN_HEURISTICS = [
@@ -45099,7 +45165,7 @@ function keyboardFindings(obs) {
         provenance: "observed",
         url: obs.url,
         viewport: vp,
-        description: `Pressing Tab cycled between ${kb.trap.selectors.length} element(s) outside any modal dialog while the page has ${kb.focusableCount} focusable elements.${advised ? ` The page explains how to leave ("${kb.trap.advice}")${kb.trap.adviceWorks ? ", and that key let focus out" : ""}; check that the instruction is announced before focus is held.` : ""}${broken ? ` The page says "${kb.trap.advice}", but pressing it did not let focus out.` : ""}`,
+        description: `${kb.trap.held ? `Focus stayed among ${kb.trap.selectors.length} element(s) outside any modal dialog through ${kb.trap.held} presses of Tab, ${kb.trap.held} of Shift+Tab and ${kb.trap.held} of Tab after Escape; it never returned to the page or the browser.` : `Pressing Tab cycled between ${kb.trap.selectors.length} element(s) outside any modal dialog while the page has ${kb.focusableCount} focusable elements.`}${advised ? ` The page explains how to leave ("${kb.trap.advice}")${kb.trap.adviceWorks ? ", and that key let focus out" : ""}; check that the instruction is announced before focus is held.` : ""}${broken ? ` The page says "${kb.trap.advice}", but pressing it did not let focus out.` : ""}`,
         impact: "Keyboard users cannot reach the rest of the page and may have to reload it.",
         recommendation: 'Remove custom keydown handlers that intercept Tab outside dialogs; if this is a dialog, mark it aria-modal="true" and provide Escape to close.',
         standards: [wcag("2.1.2")],
@@ -45597,6 +45663,20 @@ function responsiveFindings(obs) {
   }
   return out;
 }
+function redirectChain(obs, max) {
+  const hops = obs.redirects ?? [];
+  const short = (u) => {
+    try {
+      const a = new URL(redactUrl(u));
+      return a.origin === new URL(obs.url).origin ? `${a.pathname}${a.search}` : a.toString();
+    } catch {
+      return redactText(u);
+    }
+  };
+  const chain = hops.slice(0, max).map((h) => `${h.status} ${short(h.from)} \u2192 ${short(h.to)}`);
+  const chainText = chain.join(", ") + (hops.length > chain.length ? `, and ${hops.length - chain.length} more` : "");
+  return { chain, chainText };
+}
 function reliabilityFindings(obs) {
   const out = [];
   const vp = obs.viewport.name;
@@ -45606,16 +45686,7 @@ function reliabilityFindings(obs) {
     const hops = obs.redirects ?? [];
     const froms = hops.map((h) => h.from);
     const loop = /ERR_TOO_MANY_REDIRECTS/i.test(navError) || new Set(froms).size < froms.length;
-    const short = (u) => {
-      try {
-        const a = new URL(redactUrl(u));
-        return a.origin === new URL(obs.url).origin ? `${a.pathname}${a.search}` : a.toString();
-      } catch {
-        return redactText(u);
-      }
-    };
-    const chain = hops.slice(0, 5).map((h) => `${h.status} ${short(h.from)} \u2192 ${short(h.to)}`);
-    const chainText = chain.join(", ") + (hops.length > chain.length ? `, and ${hops.length - chain.length} more` : "");
+    const { chain, chainText } = redirectChain(obs, 5);
     out.push(
       makeFinding({
         ruleId: "jourilo/page-unreachable",
@@ -45747,9 +45818,33 @@ var METRIC_ADVICE = {
   FCP: "Reduce render-blocking resources and server response time; inline critical CSS.",
   TTFB: "Speed up the server response: caching, CDN, fewer redirects, faster backend queries."
 };
+function redirectChainFinding(obs) {
+  const hops = obs.redirects ?? [];
+  if (hops.length < 3 || obs.errors.some((e) => e.startsWith("navigation:"))) return null;
+  const count = hops.length >= 10 ? `at least ${hops.length}` : String(hops.length);
+  const { chain, chainText } = redirectChain(obs, 10);
+  return makeFinding({
+    ruleId: "jourilo/redirect-chain",
+    title: `Page is reached through ${count} redirects`,
+    category: "performance",
+    kind: "defect",
+    severity: "minor",
+    confidence: "high",
+    provenance: "observed",
+    url: obs.url,
+    viewport: obs.viewport.name,
+    description: `Opening this URL followed ${count} redirects before the page loaded: ${chainText}.`,
+    impact: "Each redirect is another request and round trip before the page can start loading; on slow mobile networks a chain adds noticeable delay.",
+    recommendation: "Link straight to the final URL (internal links, sitemap, canonical) and make every old address redirect to it in one hop, combining HTTP to HTTPS, www and trailing-slash rules.",
+    standards: [LIGHTHOUSE.redirects, CWV.TTFB],
+    // Network evidence only: a redirect lives in server or host configuration, not in a page element.
+    evidence: [{ type: "network", snippet: chain.join("\n") }]
+  });
+}
 function performanceFindings(obs) {
-  if (!obs.vitals) return [];
-  const out = [];
+  const chain = redirectChainFinding(obs);
+  const out = chain ? [chain] : [];
+  if (!obs.vitals) return out;
   const vp = obs.viewport.name;
   for (const m of toMetrics(obs.vitals, obs.vitalsSpread, obs.vitalsRuns)) {
     if (!m.rating || m.rating === "good") continue;
@@ -46512,6 +46607,11 @@ async function serveStatic(root, port = 0, opts = {}) {
       }
     };
     pathname2 = pathname2.replace(/\/+$/, "") || "/";
+    const redirect = cfg.redirects?.[pathname2];
+    if (redirect) {
+      res.writeHead(301, { location: redirect, "cache-control": "no-store" }).end();
+      return;
+    }
     if (delay > 0) setTimeout(send, delay);
     else send();
   });

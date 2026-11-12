@@ -1,5 +1,5 @@
 {
-  "description": "Form grouping, data tables and image alternatives: broken and accessible versions.",
+  "description": "Form grouping, data tables, image alternatives and redirects: broken and accessible versions.",
   "mustFind": [
     {
       "rule": "jourilo/fieldset-legend",
@@ -50,6 +50,12 @@
         "ctl-banner"
       ],
       "why": "visible text over a background image is still reported (F25); pixel sampling now decides it: #6b7280 on #bbf7d0 is about 4:1, under 4.5:1 (F8)"
+    },
+    {
+      "rule": "jourilo/redirect-chain",
+      "path": "/old",
+      "kind": "defect",
+      "why": "/old → /older → /oldest → /new: three redirects before the page (Frameva, field item F23)"
     }
   ],
   "mustNotFind": [
@@ -80,13 +86,22 @@
       "rule": "axe-review/color-contrast",
       "path": "/glyphs",
       "why": "aria-hidden decorative glyphs in a fallback font are not read as text (F25)"
+    },
+    {
+      "rule": "jourilo/redirect-chain",
+      "path": "/moved",
+      "why": "a single 301 to the new address is normal"
     }
   ],
   "maxDefects": {
     "minSeverity": "moderate",
     "count": 0,
     "paths": [
-      "/accessible"
+      "/accessible",
+      "/moved"
     ]
+  },
+  "audit": {
+    "maxPages": 10
   }
 }

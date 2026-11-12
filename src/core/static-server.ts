@@ -1,6 +1,7 @@
 // A tiny static file server bound to 127.0.0.1, used to audit static builds (`jourilo serve`, `audit --dir`)
 // and the benchmark fixtures. Optional `jourilo-fixture.json` in the root can delay paths to simulate slow
-// resources and force SPA fallback: { "delays": { "/hero.jpg": 3000 }, "spa": true }.
+// resources, force SPA fallback and answer paths with a 301 to another path (a redirect chain in a fixture):
+// { "delays": { "/hero.jpg": 3000 }, "spa": true, "redirects": { "/old": "/new" } }.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -65,7 +66,11 @@ export async function serveStatic(
     throw new JouriloError('NOT_FOUND', `Not a directory: ${root}`);
   const cfgFile = join(root, 'jourilo-fixture.json');
   const cfg = existsSync(cfgFile)
-    ? (JSON.parse(readFileSync(cfgFile, 'utf8')) as { delays?: Record<string, number>; spa?: boolean })
+    ? (JSON.parse(readFileSync(cfgFile, 'utf8')) as {
+        delays?: Record<string, number>;
+        spa?: boolean;
+        redirects?: Record<string, string>;
+      })
     : {};
   const spa = opts.spa ?? cfg.spa ?? looksLikeSpa(root);
   const server: Server = createServer((req, res) => {
@@ -109,6 +114,11 @@ export async function serveStatic(
       }
     };
     pathname = pathname.replace(/\/+$/, '') || '/';
+    const redirect = cfg.redirects?.[pathname];
+    if (redirect) {
+      res.writeHead(301, { location: redirect, 'cache-control': 'no-store' }).end();
+      return;
+    }
     if (delay > 0) setTimeout(send, delay);
     else send();
   });

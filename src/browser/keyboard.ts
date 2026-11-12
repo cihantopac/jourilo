@@ -33,20 +33,19 @@ export interface KeyboardWalk {
   stops: FocusStop[];
   focusableCount: number;
   completedCycle: boolean;
-  /** advice: text on the page that explains how to leave (WCAG 2.1.2 allows a documented non-standard key). */
-  trap: { selectors: string[]; advice?: string; adviceWorks?: boolean } | null;
+  /**
+   * advice: text on the page that explains how to leave (WCAG 2.1.2 allows a documented non-standard key).
+   * held: focus never left the selectors (and never returned to the page) through this many presses each of Tab,
+   * Shift+Tab and Tab after Escape; such a trap is found wherever focus starts, even with nothing else to reach.
+   */
+  trap: { selectors: string[]; advice?: string; adviceWorks?: boolean; held?: number } | null;
   pressed: number;
   // The browser build has no key that moves focus to links, so links were not part of the walk.
   skipsLinks?: boolean;
 }
 
-// Plain JS evaluated in the page; returns data about the element (or null for body/document). It runs while the
-// element has focus, so the rect of an element that is off-screen until focused is its focused rect.
-const FOCUS_INFO = `(el) => {
-  if (!el || el === document.body || el === document.documentElement) return null;
-  const sx = window.scrollX, sy = window.scrollY;
-  const r = el.getBoundingClientRect();
-  const sel = (e) => {
+// Plain JS: a CSS selector for an element (a unique id, or a short tag path with :nth-of-type).
+const SELECTOR_OF = `(e) => {
     if (e.id && document.querySelectorAll('#' + CSS.escape(e.id)).length === 1) return '#' + CSS.escape(e.id);
     const parts = []; let c = e;
     while (c && c.nodeType === 1 && c !== document.documentElement && parts.length < 6) {
@@ -57,7 +56,22 @@ const FOCUS_INFO = `(el) => {
       parts.unshift(p); c = c.parentElement;
     }
     return parts.join(' > ');
-  };
+  }`;
+
+// The focused element's selector, or null when focus is on the page itself or has left the document.
+const ACTIVE_SELECTOR = `(() => {
+  const el = document.activeElement;
+  if (!el || el === document.body || el === document.documentElement) return null;
+  return (${SELECTOR_OF})(el);
+})()`;
+
+// Plain JS evaluated in the page; returns data about the element (or null for body/document). It runs while the
+// element has focus, so the rect of an element that is off-screen until focused is its focused rect.
+const FOCUS_INFO = `(el) => {
+  if (!el || el === document.body || el === document.documentElement) return null;
+  const sx = window.scrollX, sy = window.scrollY;
+  const r = el.getBoundingClientRect();
+  const sel = ${SELECTOR_OF};
   // Is the element entirely hidden by other content (a sticky header, a half-closed shutter, a panel)? Content
   // counts as a cover when it paints (background colour, image, media) and is not the element's own label or
   // ancestor; transparent click-catchers do not.
@@ -199,6 +213,62 @@ const TRAP_ADVICE = `(selectors) => {
   return null;
 }`;
 
+// Held focus (F23) is judged over this many presses per direction, for a set of at most HELD_MAX elements.
+const HELD_PRESSES = 12;
+const HELD_MAX = 10;
+
+/** Lets focus handlers run after a key press: a trap often pulls focus back from onblur with a short timeout. */
+async function settleFocus(page: Page): Promise<void> {
+  await page
+    .evaluate(
+      'new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 20))))',
+    )
+    .catch(() => undefined);
+}
+
+/**
+ * Is focus held among `selectors` wherever it starts (F23)? From the first of them, HELD_PRESSES presses of Tab, then
+ * of Shift+Tab, then of Tab after Escape must never take focus to the page itself or out of the document, and only the
+ * Tab round may add elements (up to HELD_MAX). A modal dialog that keeps focus inside is not a trap. Returns the held
+ * set, or null when focus got out.
+ */
+async function heldFocus(page: Page, tabKey: string, selectors: string[]): Promise<string[] | null> {
+  const set = new Set(selectors);
+  const start = async () => {
+    await page
+      .evaluate(
+        `((s) => { const el = document.querySelector(s); if (el) el.focus(); })(${JSON.stringify(selectors[0])})`,
+      )
+      .catch(() => undefined);
+    await settleFocus(page);
+  };
+  const stays = async (key: string, grow: boolean): Promise<boolean> => {
+    for (let i = 0; i < HELD_PRESSES; i++) {
+      await page.keyboard.press(key);
+      await settleFocus(page);
+      const sel = (await page.evaluate(ACTIVE_SELECTOR).catch(() => null)) as string | null;
+      if (!sel || (!grow && !set.has(sel))) return false;
+      set.add(sel);
+      if (set.size > HELD_MAX) return false;
+    }
+    return true;
+  };
+  await start();
+  if (!(await stays(tabKey, true))) return null;
+  await start();
+  if (!(await stays(`Shift+${tabKey}`, false))) return null;
+  await start();
+  await page.keyboard.press('Escape');
+  await settleFocus(page);
+  if (!(await stays(tabKey, false))) return null;
+  const inModal = (await page
+    .evaluate(
+      `((sels) => sels.some((s) => { const el = document.querySelector(s); return !!el && !!el.closest('[aria-modal="true"], dialog[open]'); }))(${JSON.stringify([...set])})`,
+    )
+    .catch(() => true)) as boolean;
+  return inModal ? null : [...set];
+}
+
 /**
  * The area around a focus stop in page coordinates. Comparing it focused and with nothing focused shows indicators
  * that other elements draw (a sibling that lights up, a moving underline), which a style comparison of the element
@@ -265,16 +335,15 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
     if (process.env.JOURILO_DEBUG?.includes('keyboard'))
       process.stderr.write(`[keyboard] webkit key probe ${probes.join(' ')} -> ${tabKey}\n`);
   }
+  // Firefox keeps activeElement on the last tab stop while focus goes to its own UI, so a single element that keeps
+  // focus there cannot be told from the end of the tab order; Chromium and WebKit move focus to the page itself.
+  const endsOnPage = page.context().browser()?.browserType().name() !== 'firefox';
   let escaped = false;
-  for (let i = 0; i < limit; i++) {
+  let i = 0;
+  for (; i < limit; i++) {
     await page.keyboard.press(tabKey);
     walk.pressed++;
-    // Let focus handlers run: a trap often pulls focus back from onblur with a short timeout.
-    await page
-      .evaluate(
-        'new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 20))))',
-      )
-      .catch(() => undefined);
+    await settleFocus(page);
     const handle = (await page.evaluateHandle('document.activeElement')) as ElementHandle;
     const data = (await handle.evaluate(inPage(FOCUS_INFO))) as Omit<
       FocusStop,
@@ -285,8 +354,9 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
     // while focus goes to the browser UI); elsewhere a single element is holding focus.
     const prevSelector = sequence[sequence.length - 1];
     const noMove = !!data && prevSelector === data.selector;
+    let isLast = false;
     if (noMove) {
-      const isLast = (await handle.evaluate(inPage(IS_LAST_TABBABLE)).catch(() => false)) as boolean;
+      isLast = (await handle.evaluate(inPage(IS_LAST_TABBABLE)).catch(() => false)) as boolean;
       if (isLast) {
         await handle.evaluate(inPage('(el) => el.blur()')).catch(() => undefined);
       } else if (!walk.trap && !data!.inModal) {
@@ -327,6 +397,10 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
       }
     }
     if (noMove) {
+      if (isLast && endsOnPage && !walk.trap && !data!.inModal) {
+        const held = await heldFocus(page, tabKey, [data!.selector]);
+        if (held) walk.trap = { selectors: held, held: HELD_PRESSES };
+      }
       if (!walk.trap || walk.trap.selectors[0] !== data!.selector) walk.completedCycle = true;
       break;
     }
@@ -339,7 +413,11 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
       break;
     }
     if (stops.length && data.selector === stops[0]!.selector) {
-      walk.completedCycle = true;
+      // Back at the first stop and focus never left the document on the way: held focus, when it stays held.
+      const held =
+        !walk.trap && stops.length <= HELD_MAX ? await heldFocus(page, tabKey, [...new Set(sequence)]) : null;
+      if (held) walk.trap = { selectors: held, held: HELD_PRESSES };
+      else walk.completedCycle = true;
       break;
     }
     sequence.push(data.selector);
@@ -388,6 +466,13 @@ export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWa
     prevShot = curShot;
     prevHandle = handle;
     stops.push(newStop(data));
+  }
+  // Every press used and focus never left the document: if the last presses kept to a few elements, they may hold it
+  // even though every focusable element was reached once on the way in.
+  if (i >= limit && !walk.trap) {
+    const tail = [...new Set(sequence.slice(-HELD_PRESSES))];
+    const held = tail.length && tail.length <= HELD_MAX ? await heldFocus(page, tabKey, tail) : null;
+    if (held) walk.trap = { selectors: held, held: HELD_PRESSES };
   }
   if (walk.trap) {
     const advice = (await page

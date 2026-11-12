@@ -317,7 +317,11 @@ export function keyboardFindings(obs: PageObservation): Finding[] {
         provenance: 'observed',
         url: obs.url,
         viewport: vp,
-        description: `Pressing Tab cycled between ${kb.trap.selectors.length} element(s) outside any modal dialog while the page has ${kb.focusableCount} focusable elements.${advised ? ` The page explains how to leave ("${kb.trap.advice}")${kb.trap.adviceWorks ? ', and that key let focus out' : ''}; check that the instruction is announced before focus is held.` : ''}${broken ? ` The page says "${kb.trap.advice}", but pressing it did not let focus out.` : ''}`,
+        description: `${
+          kb.trap.held
+            ? `Focus stayed among ${kb.trap.selectors.length} element(s) outside any modal dialog through ${kb.trap.held} presses of Tab, ${kb.trap.held} of Shift+Tab and ${kb.trap.held} of Tab after Escape; it never returned to the page or the browser.`
+            : `Pressing Tab cycled between ${kb.trap.selectors.length} element(s) outside any modal dialog while the page has ${kb.focusableCount} focusable elements.`
+        }${advised ? ` The page explains how to leave ("${kb.trap.advice}")${kb.trap.adviceWorks ? ', and that key let focus out' : ''}; check that the instruction is announced before focus is held.` : ''}${broken ? ` The page says "${kb.trap.advice}", but pressing it did not let focus out.` : ''}`,
         impact: 'Keyboard users cannot reach the rest of the page and may have to reload it.',
         recommendation:
           'Remove custom keydown handlers that intercept Tab outside dialogs; if this is a dialog, mark it aria-modal="true" and provide Escape to close.',

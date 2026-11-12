@@ -4,7 +4,7 @@ import { toMetrics } from '../../browser/vitals.js';
 import { redactText, redactUrl } from '../../core/redact.js';
 import type { Finding, Severity } from '../../core/types.js';
 import { makeFinding } from '../finding.js';
-import { CWV, nielsen, wcag } from '../standards.js';
+import { CWV, LIGHTHOUSE, nielsen, wcag } from '../standards.js';
 
 export function responsiveFindings(obs: PageObservation): Finding[] {
   const p = obs.probe;
@@ -117,6 +117,24 @@ export function responsiveFindings(obs: PageObservation): Finding[] {
   return out;
 }
 
+/** The page's redirect hops as "301 /old → /older" lines (same-origin URLs shortened to the path), at most `max`. */
+function redirectChain(obs: PageObservation, max: number): { chain: string[]; chainText: string } {
+  const hops = obs.redirects ?? [];
+  // Hops are redacted at capture; redact again here so a rule never depends on that.
+  const short = (u: string): string => {
+    try {
+      const a = new URL(redactUrl(u));
+      return a.origin === new URL(obs.url).origin ? `${a.pathname}${a.search}` : a.toString();
+    } catch {
+      return redactText(u);
+    }
+  };
+  const chain = hops.slice(0, max).map((h) => `${h.status} ${short(h.from)} → ${short(h.to)}`);
+  const chainText =
+    chain.join(', ') + (hops.length > chain.length ? `, and ${hops.length - chain.length} more` : '');
+  return { chain, chainText };
+}
+
 export function reliabilityFindings(obs: PageObservation): Finding[] {
   const out: Finding[] = [];
   const vp = obs.viewport.name;
@@ -127,18 +145,7 @@ export function reliabilityFindings(obs: PageObservation): Finding[] {
     const hops = obs.redirects ?? [];
     const froms = hops.map((h) => h.from);
     const loop = /ERR_TOO_MANY_REDIRECTS/i.test(navError) || new Set(froms).size < froms.length;
-    // Hops are redacted at capture; redact again here so a rule never depends on that.
-    const short = (u: string): string => {
-      try {
-        const a = new URL(redactUrl(u));
-        return a.origin === new URL(obs.url).origin ? `${a.pathname}${a.search}` : a.toString();
-      } catch {
-        return redactText(u);
-      }
-    };
-    const chain = hops.slice(0, 5).map((h) => `${h.status} ${short(h.from)} → ${short(h.to)}`);
-    const chainText =
-      chain.join(', ') + (hops.length > chain.length ? `, and ${hops.length - chain.length} more` : '');
+    const { chain, chainText } = redirectChain(obs, 5);
     out.push(
       makeFinding({
         ruleId: 'jourilo/page-unreachable',
@@ -281,9 +288,38 @@ const METRIC_ADVICE: Record<string, string> = {
   TTFB: 'Speed up the server response: caching, CDN, fewer redirects, faster backend queries.',
 };
 
+/** Three or more redirects before a page that loads (a loop that never loads is page-unreachable instead). */
+function redirectChainFinding(obs: PageObservation): Finding | null {
+  const hops = obs.redirects ?? [];
+  if (hops.length < 3 || obs.errors.some((e) => e.startsWith('navigation:'))) return null;
+  // Capture keeps at most 10 hops.
+  const count = hops.length >= 10 ? `at least ${hops.length}` : String(hops.length);
+  const { chain, chainText } = redirectChain(obs, 10);
+  return makeFinding({
+    ruleId: 'jourilo/redirect-chain',
+    title: `Page is reached through ${count} redirects`,
+    category: 'performance',
+    kind: 'defect',
+    severity: 'minor',
+    confidence: 'high',
+    provenance: 'observed',
+    url: obs.url,
+    viewport: obs.viewport.name,
+    description: `Opening this URL followed ${count} redirects before the page loaded: ${chainText}.`,
+    impact:
+      'Each redirect is another request and round trip before the page can start loading; on slow mobile networks a chain adds noticeable delay.',
+    recommendation:
+      'Link straight to the final URL (internal links, sitemap, canonical) and make every old address redirect to it in one hop, combining HTTP to HTTPS, www and trailing-slash rules.',
+    standards: [LIGHTHOUSE.redirects, CWV.TTFB],
+    // Network evidence only: a redirect lives in server or host configuration, not in a page element.
+    evidence: [{ type: 'network', snippet: chain.join('\n') }],
+  });
+}
+
 export function performanceFindings(obs: PageObservation): Finding[] {
-  if (!obs.vitals) return [];
-  const out: Finding[] = [];
+  const chain = redirectChainFinding(obs);
+  const out: Finding[] = chain ? [chain] : [];
+  if (!obs.vitals) return out;
   const vp = obs.viewport.name;
   for (const m of toMetrics(obs.vitals, obs.vitalsSpread, obs.vitalsRuns)) {
     if (!m.rating || m.rating === 'good') continue;

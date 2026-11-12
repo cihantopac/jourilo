@@ -227,6 +227,26 @@ describe('accessibility rules', () => {
       }),
     );
     expect(trap[0]!.severity).toBe('critical');
+    // F23: focus held where nothing else is focusable is still a trap, described as what was pressed.
+    const alone = keyboardFindings(
+      obs({
+        keyboard: {
+          stops: [],
+          focusableCount: 2,
+          completedCycle: false,
+          trap: { selectors: ['#first', '#last'], held: 12 },
+          pressed: 14,
+        },
+      }),
+    );
+    expect([alone[0]!.ruleId, alone[0]!.kind, alone[0]!.severity]).toEqual([
+      'jourilo/keyboard-trap',
+      'defect',
+      'critical',
+    ]);
+    expect(alone[0]!.description).toBe(
+      'Focus stayed among 2 element(s) outside any modal dialog through 12 presses of Tab, 12 of Shift+Tab and 12 of Tab after Escape; it never returned to the page or the browser.',
+    );
   });
 
   it('flags personal-data fields without autocomplete and placeholder-only labels', () => {
@@ -417,6 +437,52 @@ describe('experience rules', () => {
     expect(JSON.stringify([unreachable.title, unreachable.description, unreachable.evidence])).not.toContain(
       'secret',
     );
+  });
+  it('reports a chain of three or more redirects before the page, not one or two', () => {
+    // As capture records them: redacted absolute URLs, main-frame navigation hops only.
+    const hops = [
+      { status: 301, from: 'http://127.0.0.1:41234/old', to: 'http://127.0.0.1:41234/older' },
+      { status: 302, from: 'http://127.0.0.1:41234/older', to: 'http://127.0.0.1:41234/oldest' },
+      { status: 301, from: 'http://127.0.0.1:41234/oldest', to: 'https://cdn.example.test/new?token=secret' },
+    ];
+    const page = {
+      url: 'http://127.0.0.1:41234/old',
+      finalUrl: 'https://cdn.example.test/new?token=REDACTED',
+    };
+    const chain = performanceFindings(obs({ ...page, redirects: hops })).filter(
+      (f) => f.ruleId === 'jourilo/redirect-chain',
+    );
+    expect(chain).toHaveLength(1);
+    const f = chain[0]!;
+    expect([f.kind, f.severity, f.category]).toEqual(['defect', 'minor', 'performance']);
+    expect(f.standards.length).toBeGreaterThan(0);
+    expect(f.title).toBe('Page is reached through 3 redirects');
+    expect(f.description).toContain('301 /old → /older');
+    expect(f.description).toContain('https://cdn.example.test/new');
+    expect(JSON.stringify(f)).not.toContain('secret');
+    // Network evidence only: there is no element or source line to point at.
+    expect(f.evidence.every((e) => e.type === 'network' && !e.selector)).toBe(true);
+    for (const n of [1, 2])
+      expect(
+        performanceFindings(obs({ ...page, redirects: hops.slice(0, n) })).some(
+          (x) => x.ruleId === 'jourilo/redirect-chain',
+        ),
+      ).toBe(false);
+  });
+  it('does not report a redirect chain on top of a redirect loop', () => {
+    const loop = [0, 1, 2, 3].map((i) => ({
+      status: 302,
+      from: `https://example.test/${i % 2 ? 'b' : 'a'}`,
+      to: `https://example.test/${i % 2 ? 'a' : 'b'}`,
+    }));
+    const o = obs({
+      errors: ['navigation: net::ERR_TOO_MANY_REDIRECTS at https://example.test/a'],
+      redirects: loop,
+      status: null,
+      probe: null,
+    });
+    const all = [...reliabilityFindings(o), ...performanceFindings(o)].map((f) => f.ruleId);
+    expect(all).toEqual(['jourilo/page-unreachable']);
   });
   it('labels lab metrics and ignores good values', () => {
     const vitals = {

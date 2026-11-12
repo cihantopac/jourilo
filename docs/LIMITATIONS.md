@@ -37,6 +37,11 @@ Stated so nobody mistakes silence for a pass.
 - A keyboard trap whose page explains a way out ("Press Ctrl+M to exit") is tested with that key; if it works the
   trap is listed for review (WCAG 2.1.2 allows it), not as a defect. Whether the explanation is announced before
   focus is held needs a person.
+- A trap is also found where nothing else is focusable, wherever focus starts: focus that never returns to the page
+  and stays among at most 10 elements through 12 presses each of Tab, Shift+Tab and Tab after Escape. A set that lets
+  focus go only after more presses, or a larger set, is not reported. Firefox keeps focus on the last element of the
+  tab order while it moves to the browser's own interface, so there a single element that holds focus at the end of
+  the order cannot be told from a normal end and is not reported.
 
 ## Performance
 
@@ -47,6 +52,8 @@ Stated so nobody mistakes silence for a pass.
   subresources (LCP 16 → 200 ms, load 13 → 342 ms) but did **not** delay the main document from 127.0.0.1 (TTFB
   unchanged), so TTFB under `--throttle` is not meaningful for local targets.
 - INP is approximated from scripted journey interactions; it is not field INP.
+- A redirect chain is counted from the HTTP redirects (3xx) of the navigation to the page, at most 10 of them. A
+  redirect made by a script or a `<meta http-equiv="refresh">` is not counted.
 
 ## Journeys and forms
 
