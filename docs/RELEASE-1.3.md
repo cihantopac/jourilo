@@ -28,17 +28,19 @@ F16, F21, F22, F23, F26, F29, F31, F35, F36 and F38 in [FIELD-FEEDBACK.md](FIELD
 
 ### Evidence (2026-11-13, macOS 27, Node 22.23, Playwright 1.64.1)
 
-| Check                                                                           | Result |
-| ------------------------------------------------------------------------------- | ------ |
-| `npm run ci` (lint, typecheck, build, unit and browser tests, dist check)       | TBD    |
-| Fixture benchmark (`npm run bench`)                                             | TBD    |
-| Independent W3C ACT benchmark, precision / recall / false positives             | TBD    |
-| `scripts/smoke-pack.mjs` (clean install from the packed tarball, every command) | TBD    |
-| `claude plugin validate` (marketplace and plugin, strict)                       | TBD    |
-| Real project (cihanca.com, read-only), F1                                       | TBD    |
-| — F3                                                                            | TBD    |
-| — F5                                                                            | TBD    |
-| — F8: the inconclusive contrast nodes over images                               | TBD    |
+ci, bench, smoke-pack and plugin validation measured on e5fde19 (the version commit).
+
+| Check                                                                           | Result                                                                                                                       |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `npm run ci` (lint, typecheck, build, unit and browser tests, dist check)       | pass, 38 files, 468 tests (1.2.1: 32 files, 357 tests)                                                                       |
+| Fixture benchmark (`npm run bench`)                                             | 56 / 56 found (1.2.1: 52 / 52; 4 new must-find items from the new fixture pages), 0 false positives, source location 10 / 10 |
+| Independent W3C ACT benchmark, precision / recall / false positives             | TBD                                                                                                                          |
+| `scripts/smoke-pack.mjs` (clean install from the packed tarball, every command) | pass, 17 steps                                                                                                               |
+| `claude plugin validate` (marketplace and plugin, strict)                       | pass                                                                                                                         |
+| Real project (cihanca.com, read-only), F1                                       | TBD                                                                                                                          |
+| — F3                                                                            | TBD                                                                                                                          |
+| — F5                                                                            | TBD                                                                                                                          |
+| — F8: the inconclusive contrast nodes over images                               | TBD                                                                                                                          |
 
 No automated run shows WCAG conformance.
 
