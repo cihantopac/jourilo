@@ -62,8 +62,10 @@ jourilo audit https://example.com --max-duration 600 --run-id nightly-2026-11-03
 When an automated job runs Jourilo, read the exit code: 0 ok, 1 failed gate or error, 2 usage, 3 refused for safety,
 4 browser unavailable, **5 no page could be loaded** (a run is written, with outcome `no-page-loaded`), **6 stopped
 early** by SIGINT, SIGTERM or `--max-duration` (a partial run is written; the pages finished so far are in it). With
-`--json`, progress is one JSON object per stderr line, with `phase`, `done` and `total` on the audit's own lines. Every
-run also has `manifest.json` (sha256 per artifact, the Jourilo, browser and axe-core versions, and the scope) and
+`--json`, progress is one JSON object per stderr line, with `phase`, `done` and `total` on the audit's own lines.
+`done` counts the steps finished before the line's step started, so the last line of a phase has `done` = `total` − 1:
+a phase is over when the next phase's first line arrives, or when the run ends (see
+[RUN-FORMAT.md](RUN-FORMAT.md#progress-lines)). Every run also has `manifest.json` (sha256 per artifact, the Jourilo, browser and axe-core versions, and the scope) and
 follows [`schemas/run.schema.json`](../schemas/run.schema.json) ([RUN-FORMAT.md](RUN-FORMAT.md)).
 
 ## Dismissing a false positive

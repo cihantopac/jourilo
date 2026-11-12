@@ -9,10 +9,12 @@ Every command prints human-readable text, or JSON with `--json`. Errors go to st
 
 Global options: `--json`, `--workspace DIR` (default `.jourilo`, or `JOURILO_WORKSPACE`), `--quiet`. With `--json`,
 progress lines on stderr are JSON too: `{"type":"progress","message":"…","at":"<ISO time>"}`. Lines from the audit
-pipeline also carry `phase` (launch, discover, setup, capture, metrics, forms, rules or report) and, where known
-exactly, `done` (steps of that phase finished before this one), `total`, `url` (redacted) and `viewport`; the
-`message` text is the same as the plain line. `--workspace` is also the output directory: every run is written to
-`DIR/runs/<id>/` (there is no separate `--output-dir`).
+pipeline also carry `phase` (launch, discover, setup, capture, metrics, forms or report; `rules` is reserved and not
+emitted yet) and, where known exactly, `done`, `total`, `url` and `viewport`. `done` counts the steps of that phase
+finished before this step started, so the last line of a phase has `done` = `total` − 1; the phase is over when the
+next phase's first line arrives or the run ends. `url` is redacted like the message, and the `message` text is the
+same as the plain line (see docs/RUN-FORMAT.md). `--workspace` is also the output directory: every run is written
+to `DIR/runs/<id>/` (there is no separate `--output-dir`).
 
 ## Understand
 

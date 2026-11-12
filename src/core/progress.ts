@@ -1,6 +1,7 @@
 // Structured progress (F35): what the audit pipeline reports while it works. The CLI prints `message` as a plain
 // line, or with --json the whole event as one JSON line on stderr.
 
+/** `rules` is reserved: no progress line uses it yet. */
 export type ProgressPhase =
   | 'launch'
   | 'discover'

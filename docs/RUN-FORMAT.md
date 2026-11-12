@@ -52,6 +52,25 @@ The manifest is rewritten whenever the reports are (`report`, `compare`, `findin
 the run.
 No secret (proxy credentials, `--extra-header` values) is ever written to it.
 
+## Progress lines
+
+With `--json`, every progress line on stderr is one JSON object:
+`{"type":"progress","phase":…,"message":…,"done"?,"total"?,"url"?,"viewport"?,"at":"<ISO time>"}`. `message` is the
+text of the plain line (trimmed). Lines from the audit pipeline carry `phase`; other lines (stop notices, warnings,
+`journeys run` steps) carry only `message`.
+
+- `phase` is one of `launch`, `discover`, `setup`, `capture`, `metrics`, `forms` or `report`. `rules` is reserved:
+  no line uses it yet.
+- `done` is the number of steps of that phase finished **before** this line's step started, and `total` the number of
+  steps the phase will take. The last line of a phase therefore has `done` = `total` − 1. No line says that a step
+  finished: a phase is over when the next phase's first line arrives, or when the run ends (the JSON result on stdout).
+- The plan line of the capture phase (`Auditing N page(s) × M viewport(s) …`) and the first capture line both carry
+  `done: 0`.
+- `done` and `total` are left out where Jourilo cannot count exactly (launch, setup, discovery, report); a total is
+  never estimated.
+- `url` (the page the step works on) is redacted like the message, and `viewport` is the viewport name. No secret
+  (proxy credentials, `--extra-header` values) is ever part of a progress line.
+
 ## Validating
 
 Use any draft 2020-12 validator against `schemas/run.schema.json`. Only the required keys are guaranteed; treat
