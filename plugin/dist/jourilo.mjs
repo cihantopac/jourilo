@@ -39631,8 +39631,16 @@ function lexiconSource(concept, opts = {}) {
   if (opts.exact) return `^\\s*(?:${alt})\\s*[.!\u2026]?\\s*$`;
   return `(?<![\\p{L}\\p{N}])(?:${alt})${STEMS.has(concept) ? "" : "(?![\\p{L}\\p{N}])"}`;
 }
+function turkishFold(text) {
+  return text.replace(/İ/g, "i").replace(/I/g, "\u0131").toLowerCase();
+}
+var LexiconRegExp = class extends RegExp {
+  test(text) {
+    return super.test(text) || super.test(turkishFold(text));
+  }
+};
 function lexicon(concept, opts = {}) {
-  return new RegExp(lexiconSource(concept, opts), "iu");
+  return new LexiconRegExp(lexiconSource(concept, opts), "iu");
 }
 function lexiconSources() {
   return Object.fromEntries(Object.keys(LEX).map((k) => [k, lexiconSource(k)]));

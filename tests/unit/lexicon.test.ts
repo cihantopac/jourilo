@@ -84,3 +84,16 @@ describe('multilingual heuristics', () => {
     expect(suggestAutocomplete('text', 'eposta', 'E-posta adresi', 'other')).toBe('email');
   });
 });
+
+describe('toggle-ui lexicon with Turkish capitals', () => {
+  const toggle = lexicon('toggle-ui');
+  it.each(['KARANLIK MOD', 'KARANLIK', 'DİL', 'LIGHT MODE', 'Dark mode', 'AYDINLIK MOD', 'Dil'])(
+    '"%s" is toggle-ui',
+    (text) => {
+      expect(toggle.test(text)).toBe(true);
+    },
+  );
+  it.each(['MODEL', 'Model', 'DİLEK'])('"%s" is not toggle-ui', (text) => {
+    expect(toggle.test(text)).toBe(false);
+  });
+});

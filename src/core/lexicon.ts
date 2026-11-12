@@ -473,8 +473,24 @@ export function lexiconSource(concept: Concept, opts: { exact?: boolean } = {}):
   return `(?<![\\p{L}\\p{N}])(?:${alt})${STEMS.has(concept) ? '' : '(?![\\p{L}\\p{N}])'}`;
 }
 
+/** Turkish fold: dotted capital İ -> i, plain capital I -> ı (dotless), then lower-cased. */
+export function turkishFold(text: string): string {
+  return text.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase();
+}
+
+/**
+ * A case-insensitive regex whose test() also tries the Turkish fold of the text. Plain case-insensitive matching
+ * maps I to i (right for English "LIGHT") but cannot match "KARANLIK" to "karanlık" or "DİL" to "dil", so both the
+ * original text and its Turkish fold are tested.
+ */
+class LexiconRegExp extends RegExp {
+  override test(text: string): boolean {
+    return super.test(text) || super.test(turkishFold(text));
+  }
+}
+
 export function lexicon(concept: Concept, opts: { exact?: boolean } = {}): RegExp {
-  return new RegExp(lexiconSource(concept, opts), 'iu');
+  return new LexiconRegExp(lexiconSource(concept, opts), 'iu');
 }
 
 /** All concept sources, for code that runs inside the page (it receives plain strings). */
