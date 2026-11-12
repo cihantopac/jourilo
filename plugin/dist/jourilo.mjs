@@ -1800,7 +1800,7 @@ var require_axe = __commonJS({
             var Int32Array2 = makeConstructor(4, packI32, unpackI32);
             var Uint32Array3 = makeConstructor(4, packU32, unpackU32);
             var Float32Array = makeConstructor(4, packF32, unpackF32);
-            var Float64Array = makeConstructor(8, packF64, unpackF64);
+            var Float64Array2 = makeConstructor(8, packF64, unpackF64);
             exports2.Int8Array = exports2.Int8Array || Int8Array;
             exports2.Uint8Array = exports2.Uint8Array || Uint8Array2;
             exports2.Uint8ClampedArray = exports2.Uint8ClampedArray || Uint8ClampedArray2;
@@ -1809,7 +1809,7 @@ var require_axe = __commonJS({
             exports2.Int32Array = exports2.Int32Array || Int32Array2;
             exports2.Uint32Array = exports2.Uint32Array || Uint32Array3;
             exports2.Float32Array = exports2.Float32Array || Float32Array;
-            exports2.Float64Array = exports2.Float64Array || Float64Array;
+            exports2.Float64Array = exports2.Float64Array || Float64Array2;
           })();
           (function() {
             function r(array, index) {
@@ -11598,14 +11598,14 @@ var require_axe = __commonJS({
           } catch (e) {
             error = e;
           }
-          var CSS2 = globalThis.CSS, getComputedStyle = globalThis.getComputedStyle;
-          if (_isString(color2) && element && CSS2 && getComputedStyle) {
+          var CSS2 = globalThis.CSS, getComputedStyle2 = globalThis.getComputedStyle;
+          if (_isString(color2) && element && CSS2 && getComputedStyle2) {
             if (CSS2.supports(cssProperty, color2)) {
               var previousValue = element.style[cssProperty];
               if (color2 !== previousValue) {
                 element.style[cssProperty] = color2;
               }
-              var computedColor = getComputedStyle(element).getPropertyValue(cssProperty);
+              var computedColor = getComputedStyle2(element).getPropertyValue(cssProperty);
               if (color2 !== previousValue) {
                 element.style[cssProperty] = previousValue;
               }
@@ -40537,6 +40537,150 @@ async function installRequestGuard(target, policy) {
   };
 }
 
+// src/browser/contrast-sample.ts
+var SAMPLED_REASONS = /* @__PURE__ */ new Set(["bgImage", "bgGradient", "bgOverlap"]);
+var CONTRAST_SAMPLE_CAP = 30;
+var MAX_DEVICE_PIXELS = 4e6;
+function judgeContrast(px, width, height, text, tile) {
+  const lin = (v) => {
+    const c = v / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const lum = (r, g, b) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  const [tr, tg, tb] = text;
+  const lt = lum(tr, tg, tb);
+  const near = 48 * 48;
+  const size = Math.max(4, Math.round(tile));
+  let textPixels = 0;
+  let worst = Number.POSITIVE_INFINITY;
+  let best = 0;
+  for (let y0 = 0; y0 < height; y0 += size) {
+    for (let x0 = 0; x0 < width; x0 += size) {
+      const x1 = Math.min(width, x0 + size);
+      const y1 = Math.min(height, y0 + size);
+      const count = (x1 - x0) * (y1 - y0);
+      if (count < 16) continue;
+      const dist = new Float64Array(count);
+      let k = 0;
+      let nearHere = 0;
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const i = (y * width + x) * 4;
+          const dr = px[i] - tr;
+          const dg = px[i + 1] - tg;
+          const db = px[i + 2] - tb;
+          const d = dr * dr + dg * dg + db * db;
+          if (d <= near) nearHere++;
+          dist[k++] = d;
+        }
+      }
+      if (!nearHere) continue;
+      textPixels += nearHere;
+      const sorted = Float64Array.from(dist).sort();
+      const cut = sorted[Math.floor(count * 0.8)];
+      k = 0;
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          if (dist[k++] < cut) continue;
+          const i = (y * width + x) * 4;
+          const lb = lum(px[i], px[i + 1], px[i + 2]);
+          const ratio = (Math.max(lt, lb) + 0.05) / (Math.min(lt, lb) + 0.05);
+          if (ratio < worst) worst = ratio;
+          if (ratio > best) best = ratio;
+        }
+      }
+    }
+  }
+  if (textPixels < 4 || !Number.isFinite(worst)) return null;
+  return { worst, best };
+}
+var readNodeStyle = (sel) => {
+  const el = document.querySelector(sel);
+  if (!el) return null;
+  const cs = getComputedStyle(el);
+  const canvas = document.createElement("canvas");
+  canvas.width = 1;
+  canvas.height = 1;
+  const g = canvas.getContext("2d");
+  if (!g) return null;
+  g.fillStyle = cs.color;
+  g.fillRect(0, 0, 1, 1);
+  const c = g.getImageData(0, 0, 1, 1).data;
+  if (c[3] !== 255) return null;
+  const range = document.createRange();
+  let lines = 0;
+  for (const node of el.childNodes) {
+    if (node.nodeType !== Node.TEXT_NODE || !node.textContent?.trim()) continue;
+    range.selectNodeContents(node);
+    for (const r of range.getClientRects()) {
+      if (r.width < 1 || r.height < 1) continue;
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      if (!top || top !== el && !el.contains(top)) return null;
+      lines++;
+    }
+  }
+  if (!lines) return null;
+  const box = el.getBoundingClientRect();
+  return {
+    rgb: [c[0], c[1], c[2]],
+    fontSize: Number.parseFloat(cs.fontSize) || 0,
+    fontWeight: Number.parseInt(cs.fontWeight, 10) || 400,
+    width: box.width,
+    height: box.height,
+    dpr: devicePixelRatio || 1
+  };
+};
+var decodeAndJudge = async (a, judge) => {
+  const bin = atob(a.url.slice(a.url.indexOf(",") + 1));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const bmp = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+  const canvas = document.createElement("canvas");
+  canvas.width = bmp.width;
+  canvas.height = bmp.height;
+  const g = canvas.getContext("2d", { willReadFrequently: true });
+  if (!g) return null;
+  g.drawImage(bmp, 0, 0);
+  const data = g.getImageData(0, 0, bmp.width, bmp.height).data;
+  return judge(data, bmp.width, bmp.height, a.rgb, a.tileCss * (bmp.width / Math.max(1, a.width)));
+};
+async function sampleContrast(page, target) {
+  if (!target || target.includes(">>>")) return null;
+  const scroll = await page.evaluate("[scrollX, scrollY]").catch(() => null);
+  try {
+    const locator = page.locator(`css=${target}`).first();
+    await locator.scrollIntoViewIfNeeded({ timeout: 2e3 });
+    const style = await page.evaluate(
+      `(${String(readNodeStyle)})(${JSON.stringify(target)})`
+    );
+    if (!style || style.width < 1 || style.height < 1) return null;
+    if (style.width * style.height * style.dpr * style.dpr > MAX_DEVICE_PIXELS) return null;
+    const png = await locator.screenshot({
+      type: "png",
+      animations: "disabled",
+      caret: "hide",
+      timeout: 2e3
+    });
+    const arg = {
+      url: `data:image/png;base64,${png.toString("base64")}`,
+      rgb: style.rgb,
+      tileCss: Math.max(12, style.fontSize),
+      width: style.width
+    };
+    const judged = await page.evaluate(
+      `(${String(decodeAndJudge)})(${JSON.stringify(arg)}, ${String(judgeContrast)})`
+    );
+    if (!judged) return null;
+    const large = style.fontSize >= 24 || style.fontSize >= 18.66 && style.fontWeight >= 700;
+    return { worst: judged.worst, best: judged.best, large };
+  } catch {
+    return null;
+  } finally {
+    if (scroll)
+      await page.evaluate(`scrollTo({ left: ${scroll[0]}, top: ${scroll[1]}, behavior: "instant" })`).catch(() => void 0);
+  }
+}
+
 // raw:src/browser/inpage/probe.js
 var probe_default = `// Runs inside the audited page. Plain JavaScript (no imports, no bundler helpers) evaluated as
 // \`(probe)(options)\`. It only reads the DOM; it never changes the page.
@@ -42169,6 +42313,17 @@ async function runAxe(page) {
     incomplete: raw.incomplete.map(map),
     version: raw.testEngine.version
   };
+  let sampled = 0;
+  for (const issue of result.incomplete) {
+    if (issue.id !== "color-contrast") continue;
+    for (const n of issue.nodes) {
+      if (sampled >= CONTRAST_SAMPLE_CAP) break;
+      if (!SAMPLED_REASONS.has(String(n.data?.messageKey))) continue;
+      sampled++;
+      const s = await sampleContrast(page, n.target);
+      if (s) n.contrast = s;
+    }
+  }
   const targets = [...result.violations, ...result.incomplete].flatMap((i) => i.nodes.map((n) => n.target));
   const rects = await page.evaluate(
     `(${String(
@@ -44320,6 +44475,13 @@ function axeFindings(obs) {
   for (const issue of obs.axe.incomplete) {
     const standards = wcagFromAxeTags(issue.tags);
     if (!standards.length) continue;
+    let nodes = issue.nodes;
+    if (issue.id === "color-contrast") {
+      const failing = nodes.filter((n) => n.contrast && n.contrast.worst < contrastMinimum(n.contrast.large));
+      if (failing.length) out.push(contrastOverImage(obs, failing));
+      nodes = nodes.filter((n) => !n.contrast);
+      if (!nodes.length) continue;
+    }
     out.push(
       makeFinding({
         ruleId: `axe-review/${issue.id}`,
@@ -44338,7 +44500,7 @@ function axeFindings(obs) {
           ...standards,
           { standard: "axe-core rule", id: issue.id, title: issue.help, url: issue.helpUrl }
         ],
-        evidence: issue.nodes.slice(0, 8).map((n) => ({
+        evidence: nodes.slice(0, 8).map((n) => ({
           type: "element",
           selector: n.target,
           snippet: n.html,
@@ -44346,11 +44508,49 @@ function axeFindings(obs) {
           ...obs.screenshot ? { file: obs.screenshot } : {},
           note: firstLine(n.summary)
         })),
-        occurrences: issue.nodes.length
+        occurrences: nodes.length
       })
     );
   }
   return out;
+}
+var contrastMinimum = (large) => large ? 3 : 4.5;
+var ratio2 = (r) => Math.round(r * 100) / 100;
+function contrastOverImage(obs, nodes) {
+  const vp = obs.viewport.name;
+  return makeFinding({
+    ruleId: "jourilo/contrast-over-image",
+    title: "Text over an image or gradient has too little contrast",
+    category: "accessibility",
+    kind: "defect",
+    severity: "serious",
+    confidence: "medium",
+    provenance: "measured",
+    url: obs.url,
+    viewport: vp,
+    description: `${nodes.length} text element(s) sit on a background image, gradient or overlapping element that axe-core could not reduce to one color. Sampling the rendered pixels behind the text shows that, where the background is closest to the text color, the contrast is below the WCAG minimum.`,
+    impact: "People with low vision, and anyone reading on a phone in bright light, cannot read the parts of the text that sit on the matching part of the image.",
+    recommendation: "Put a scrim behind the text (a solid or semi-transparent layer between image and text), move the text to a calmer part of the image, or change the text color, so every part of the background gives at least 4.5:1 (3:1 for large text: 24 px, or 18.66 px bold).",
+    standards: [wcag("1.4.3")],
+    evidence: nodes.slice(0, 8).map((n) => {
+      const c = n.contrast;
+      const required = contrastMinimum(c.large);
+      return {
+        type: "element",
+        selector: n.target,
+        snippet: n.html,
+        ...n.rect ? { rect: n.rect } : {},
+        ...obs.screenshot ? { file: obs.screenshot } : {},
+        data: { worstRatio: ratio2(c.worst), bestRatio: ratio2(c.best), required, large: c.large },
+        note: `Sampled contrast ${ratio2(c.worst)}:1 at worst (${ratio2(c.best)}:1 at best); ${required}:1 is required.`
+      };
+    }),
+    occurrences: nodes.length,
+    reproduction: [
+      `Open ${obs.url} at the ${vp} viewport.`,
+      `Compare the text color of ${nodes.slice(0, 3).map((n) => `\`${n.target}\``).join(", ")} with the part of the background image closest to it.`
+    ]
+  });
 }
 function firstLine(s) {
   return s.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 2).join(" ");
@@ -45929,6 +46129,7 @@ var VISUAL_STATE_RULES = /* @__PURE__ */ new Set([
   "axe/color-contrast",
   "axe/color-contrast-enhanced",
   "axe/link-in-text-block",
+  "jourilo/contrast-over-image",
   "jourilo/target-size"
 ]);
 var escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

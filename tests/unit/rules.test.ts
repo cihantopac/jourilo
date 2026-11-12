@@ -107,6 +107,72 @@ describe('accessibility rules', () => {
     ]);
   });
 
+  it('decides sampled contrast over images and keeps unsampled nodes for review (F8)', () => {
+    // axe-core 4.14 incomplete data for text over a background image, as recorded in a real run.
+    const node = (id: string, contrast?: { worst: number; best: number; large: boolean }) => ({
+      target: `#${id}`,
+      html: `<p class="hero" id="${id}">Text</p>`,
+      summary:
+        "Fix any of the following:\n  Element's background color could not be determined due to a background image",
+      rect,
+      data: {
+        fgColor: '#ffffff',
+        contrastRatio: 0,
+        fontSize: '15.0pt (20px)',
+        fontWeight: 'normal',
+        messageKey: 'bgImage',
+        expectedContrastRatio: '4.5:1',
+      },
+      ...(contrast ? { contrast } : {}),
+    });
+    const f = axeFindings(
+      obs({
+        screenshot: 'screenshots/a.jpg',
+        axe: {
+          version: '4.14.0',
+          violations: [],
+          incomplete: [
+            {
+              id: 'color-contrast',
+              impact: 'serious',
+              help: 'Elements must meet minimum color contrast ratio thresholds',
+              helpUrl: 'https://x',
+              description: 'd',
+              tags: ['cat.color', 'wcag2aa', 'wcag143'],
+              nodes: [
+                node('bad-light', { worst: 1.0712, best: 1.17, large: false }),
+                node('bad-mixed', { worst: 1.1, best: 17.85, large: false }),
+                node('ok-dark', { worst: 10.47, best: 17.85, large: false }),
+                node('ok-large', { worst: 3.4, best: 5.2, large: true }),
+                node('unsampled'),
+              ],
+            },
+          ],
+        },
+      }),
+    );
+    const defect = f.find((x) => x.ruleId === 'jourilo/contrast-over-image')!;
+    expect(defect).toMatchObject({
+      kind: 'defect',
+      severity: 'serious',
+      confidence: 'medium',
+      provenance: 'measured',
+      occurrences: 2,
+    });
+    expect(defect.standards.map((s) => s.id)).toEqual(['1.4.3']);
+    expect(defect.evidence.map((e) => e.selector)).toEqual(['#bad-light', '#bad-mixed']);
+    expect(defect.evidence[0]!.data).toEqual({
+      worstRatio: 1.07,
+      bestRatio: 1.17,
+      required: 4.5,
+      large: false,
+    });
+    // Passing nodes (3:1 is enough for large text) are dropped; the unsampled one stays for manual review.
+    const review = f.find((x) => x.ruleId === 'axe-review/color-contrast')!;
+    expect(review.evidence.map((e) => e.selector)).toEqual(['#unsampled']);
+    expect(review.occurrences).toBe(1);
+  });
+
   it('reports invisible focus, obscured focus and traps from the keyboard walk', () => {
     const stop = (i: number, changes: string[], obscured = false) => ({
       index: i,

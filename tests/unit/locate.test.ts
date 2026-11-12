@@ -120,6 +120,11 @@ describe('state CSS rules', () => {
     const src = locate(finding('axe/color-contrast', '/', evidence), files);
     expect(src[0]).toMatchObject({ file: 'app/globals.css', confidence: 'high' });
   });
+  it('locates a sampled contrast-over-image finding in a state rule like other contrast findings', () => {
+    const files = stateRepo('.tool[aria-pressed="true"]{color:#fff;background:url(/sky.jpg)}\n');
+    const src = locate(finding('jourilo/contrast-over-image', '/', evidence), files);
+    expect(src[0]).toMatchObject({ file: 'app/globals.css', confidence: 'high' });
+  });
   // Field case (cihanca.com a49b46a): the keyboard walk's selector has no class; only the element's markup
   // names the class and the pressed state, and the state rule sets an outline instead of removing it.
   it('finds a pressed-state outline rule from the markup of a class-less keyboard selector', () => {

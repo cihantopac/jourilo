@@ -43,12 +43,13 @@
       "why": "held focus with a documented, working Ctrl+M exit"
     },
     {
-      "rule": "axe-review/color-contrast",
+      "rule": "jourilo/contrast-over-image",
       "path": "/banner",
+      "kind": "defect",
       "evidenceExactly": [
         "ctl-banner"
       ],
-      "why": "visible text over a background image stays in manual review"
+      "why": "visible text over a background image is still reported (F25); pixel sampling now decides it: #6b7280 on #bbf7d0 is about 4:1, under 4.5:1 (F8)"
     }
   ],
   "mustNotFind": [

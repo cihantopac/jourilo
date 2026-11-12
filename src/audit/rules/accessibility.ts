@@ -1,6 +1,6 @@
 // Accessibility rules: axe-core results mapped to findings, plus Jourilo's own measured checks for things axe
 // does not cover from a static DOM scan (keyboard focus behavior, real tab order, input purpose).
-import type { PageObservation } from '../../browser/capture.js';
+import type { AxeNode, PageObservation } from '../../browser/capture.js';
 import { excerpt } from '../../core/redact.js';
 import type { Evidence, Finding, Rect, Severity } from '../../core/types.js';
 import { makeFinding } from '../finding.js';
@@ -110,6 +110,14 @@ export function axeFindings(obs: PageObservation): Finding[] {
     // Only surface manual-review items that relate to WCAG; best-practice "incomplete" items are noise.
     const standards = wcagFromAxeTags(issue.tags);
     if (!standards.length) continue;
+    let nodes = issue.nodes;
+    if (issue.id === 'color-contrast') {
+      // Nodes whose rendered pixels were sampled (F8) are decided: the worst case fails, or every pixel passes.
+      const failing = nodes.filter((n) => n.contrast && n.contrast.worst < contrastMinimum(n.contrast.large));
+      if (failing.length) out.push(contrastOverImage(obs, failing));
+      nodes = nodes.filter((n) => !n.contrast);
+      if (!nodes.length) continue;
+    }
     out.push(
       makeFinding({
         ruleId: `axe-review/${issue.id}`,
@@ -128,7 +136,7 @@ export function axeFindings(obs: PageObservation): Finding[] {
           ...standards,
           { standard: 'axe-core rule', id: issue.id, title: issue.help, url: issue.helpUrl },
         ],
-        evidence: issue.nodes.slice(0, 8).map((n) => ({
+        evidence: nodes.slice(0, 8).map((n) => ({
           type: 'element',
           selector: n.target,
           snippet: n.html,
@@ -136,11 +144,58 @@ export function axeFindings(obs: PageObservation): Finding[] {
           ...(obs.screenshot ? { file: obs.screenshot } : {}),
           note: firstLine(n.summary),
         })),
-        occurrences: issue.nodes.length,
+        occurrences: nodes.length,
       }),
     );
   }
   return out;
+}
+
+/** WCAG 1.4.3 minimum: 4.5:1, or 3:1 for large text. */
+const contrastMinimum = (large: boolean) => (large ? 3 : 4.5);
+
+const ratio2 = (r: number) => Math.round(r * 100) / 100;
+
+function contrastOverImage(obs: PageObservation, nodes: AxeNode[]): Finding {
+  const vp = obs.viewport.name;
+  return makeFinding({
+    ruleId: 'jourilo/contrast-over-image',
+    title: 'Text over an image or gradient has too little contrast',
+    category: 'accessibility',
+    kind: 'defect',
+    severity: 'serious',
+    confidence: 'medium',
+    provenance: 'measured',
+    url: obs.url,
+    viewport: vp,
+    description: `${nodes.length} text element(s) sit on a background image, gradient or overlapping element that axe-core could not reduce to one color. Sampling the rendered pixels behind the text shows that, where the background is closest to the text color, the contrast is below the WCAG minimum.`,
+    impact:
+      'People with low vision, and anyone reading on a phone in bright light, cannot read the parts of the text that sit on the matching part of the image.',
+    recommendation:
+      'Put a scrim behind the text (a solid or semi-transparent layer between image and text), move the text to a calmer part of the image, or change the text color, so every part of the background gives at least 4.5:1 (3:1 for large text: 24 px, or 18.66 px bold).',
+    standards: [wcag('1.4.3')],
+    evidence: nodes.slice(0, 8).map((n) => {
+      const c = n.contrast!;
+      const required = contrastMinimum(c.large);
+      return {
+        type: 'element' as const,
+        selector: n.target,
+        snippet: n.html,
+        ...(n.rect ? { rect: n.rect } : {}),
+        ...(obs.screenshot ? { file: obs.screenshot } : {}),
+        data: { worstRatio: ratio2(c.worst), bestRatio: ratio2(c.best), required, large: c.large },
+        note: `Sampled contrast ${ratio2(c.worst)}:1 at worst (${ratio2(c.best)}:1 at best); ${required}:1 is required.`,
+      };
+    }),
+    occurrences: nodes.length,
+    reproduction: [
+      `Open ${obs.url} at the ${vp} viewport.`,
+      `Compare the text color of ${nodes
+        .slice(0, 3)
+        .map((n) => `\`${n.target}\``)
+        .join(', ')} with the part of the background image closest to it.`,
+    ],
+  });
 }
 
 function firstLine(s: string): string {

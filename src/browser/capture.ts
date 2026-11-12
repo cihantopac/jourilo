@@ -11,6 +11,12 @@ import { GUARD_UPSTREAM_ERROR_HEADER } from '../core/net-guard.js';
 import { excerpt, redactText, redactUrl } from '../core/redact.js';
 import type { PageInventory, Rect, Viewport } from '../core/types.js';
 import { type BlockedRequest, installRequestGuard } from '../journeys/request-guard.js';
+import {
+  CONTRAST_SAMPLE_CAP,
+  type ContrastSample,
+  SAMPLED_REASONS,
+  sampleContrast,
+} from './contrast-sample.js';
 import PROBE_SOURCE from './inpage/probe.js?raw';
 import { type KeyboardWalk, keyboardWalk } from './keyboard.js';
 import { watchContext } from './session.js';
@@ -51,6 +57,8 @@ export interface AxeNode {
   summary: string;
   rect?: Rect;
   data?: Record<string, unknown>;
+  /** Contrast measured from the rendered pixels, for incomplete color-contrast nodes over images (F8). */
+  contrast?: ContrastSample;
 }
 
 export interface AxeIssue {
@@ -335,6 +343,19 @@ async function runAxe(page: Page): Promise<PageObservation['axe']> {
     incomplete: raw.incomplete.map(map),
     version: raw.testEngine.version,
   };
+  // Contrast axe could not decide because of a background image, gradient or overlapping element: measure it from
+  // the rendered pixels (F8). A node that cannot be measured stays a manual-review item.
+  let sampled = 0;
+  for (const issue of result.incomplete) {
+    if (issue.id !== 'color-contrast') continue;
+    for (const n of issue.nodes) {
+      if (sampled >= CONTRAST_SAMPLE_CAP) break;
+      if (!SAMPLED_REASONS.has(String(n.data?.messageKey))) continue;
+      sampled++;
+      const s = await sampleContrast(page, n.target);
+      if (s) n.contrast = s;
+    }
+  }
   // Element boxes so the report can draw each node on the screenshot.
   const targets = [...result.violations, ...result.incomplete].flatMap((i) => i.nodes.map((n) => n.target));
   const rects = (await page.evaluate(

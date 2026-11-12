@@ -117,6 +117,7 @@ const VISUAL_STATE_RULES = new Set([
   'axe/color-contrast',
   'axe/color-contrast-enhanced',
   'axe/link-in-text-block',
+  'jourilo/contrast-over-image',
   'jourilo/target-size',
 ]);
 
