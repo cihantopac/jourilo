@@ -46,6 +46,16 @@ export function stablePort(root: string): number {
   return 41_000 + (h % 8000);
 }
 
+/** A scheme-less target that is an existing directory (served by Jourilo); a file or a URL is not. */
+export function isDirectoryTarget(arg: string): boolean {
+  return !/^[a-z][a-z0-9+.-]*:\/\//i.test(arg) && existsSync(arg) && statSync(arg).isDirectory();
+}
+
+/** The port Jourilo's own static server listens on. */
+export function servedPort(server: { url: string }): number {
+  return Number(new URL(server.url).port);
+}
+
 export async function serveStatic(
   root: string,
   port = 0,

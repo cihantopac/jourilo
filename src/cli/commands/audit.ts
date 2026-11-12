@@ -1,4 +1,4 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { type AuditOptions, runAudit } from '../../audit/engine.js';
 import { severityRank } from '../../audit/finding.js';
@@ -7,7 +7,7 @@ import type { BrowserName } from '../../browser/runtime.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { JouriloError } from '../../core/errors.js';
 import { displayPath } from '../../core/fs-safety.js';
-import { serveStatic } from '../../core/static-server.js';
+import { isDirectoryTarget, servedPort, serveStatic } from '../../core/static-server.js';
 import type { Category, Run, Severity } from '../../core/types.js';
 import { loadContext } from '../../integrations/context.js';
 import { locateFindings } from '../../repair/locate.js';
@@ -121,8 +121,7 @@ export async function auditCommand(
   const stop = stopController(ctx, maxDuration);
   let server: Awaited<ReturnType<typeof serveStatic>> | undefined;
   try {
-    const isDir =
-      !/^[a-z]+:\/\//i.test(targetArg) && existsSync(targetArg) && statSync(targetArg).isDirectory();
+    const isDir = isDirectoryTarget(targetArg);
     server = isDir ? await serveStatic(resolve(targetArg)) : undefined;
     const repo = str(ctx, 'repo') ?? (isDir ? resolve(targetArg) : undefined);
     const opts: AuditOptions = {
@@ -134,7 +133,9 @@ export async function auditCommand(
       headed: flag(ctx, 'headed'),
       respectRobots: !flag(ctx, 'ignore-robots'),
       allowPrivate: flag(ctx, 'allow-private'),
-      ...(!server && denyLocalFrom(ctx) ? { denyLocal: true } : {}),
+      ...(denyLocalFrom(ctx)
+        ? { denyLocal: true, ...(server ? { servedPort: servedPort(server) } : {}) }
+        : {}),
       keyboard: !flag(ctx, 'no-keyboard'),
       throttle: flag(ctx, 'throttle'),
       runs: num(ctx, 'runs', 1),

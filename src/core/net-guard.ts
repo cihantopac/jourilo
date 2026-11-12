@@ -63,7 +63,7 @@ export async function resolveAllowed(
   deps: GuardDeps = {},
 ): Promise<{ address: string; family: number } | { blocked: string }> {
   const h = host.replace(/^\[|\]$/g, '');
-  const verdict = deps.verdict ?? ((ip: string) => addressVerdict(ip, policy));
+  const verdict = deps.verdict ?? ((ip: string, port: number) => addressVerdict(ip, policy, port));
   let addrs: LookupAddress[];
   if (isIP(h)) addrs = [{ address: h, family: isIP(h) }];
   else {
@@ -135,8 +135,17 @@ export function loopbackRedirectVerdict(location: string, from: URL, policy: Add
   } catch {
     return null;
   }
-  if (policy.denyLocal && isLocalHostname(to.hostname))
-    return `redirect from ${from.host} to ${to.host} (a local address) refused: --deny-local is set.`;
+  if (policy.denyLocal) {
+    const h = to.hostname
+      .replace(/^\[|\]$/g, '')
+      .toLowerCase()
+      .replace(/\.$/, '');
+    const local = isLocalHostname(h) || (isIP(h) !== 0 && classifyIp(h) === 'loopback');
+    const port = Number(to.port || (to.protocol === 'https:' ? 443 : 80));
+    const own = policy.allowLoopbackPorts?.includes(port) && (h === '127.0.0.1' || h === 'localhost');
+    if (local && !own)
+      return `redirect from ${from.host} to ${to.host} (a local address) refused: --deny-local is set.`;
+  }
   if (!isLoopbackName(to.hostname)) return null;
   if (policy.target === 'local' || policy.allowPrivate) return null;
   return `redirect from ${from.host} to ${to.host} (this machine) refused.`;

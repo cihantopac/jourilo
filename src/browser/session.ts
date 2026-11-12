@@ -63,12 +63,20 @@ export function watchContext(browser: Browser, ctx: BrowserContext): void {
 /** Lines for a run's limitations: what the guard refused, and anything it could not prevent. */
 export function networkLimitations(r: NetworkReport): string[] {
   const out: string[] = [];
-  if (r.blocked.length)
+  const list = (bs: NetworkReport['blocked']) =>
+    `${bs
+      .slice(0, 3)
+      .map((b) => `${b.host}:${b.port}`)
+      .join(', ')}${bs.length > 3 ? ', …' : ''}`;
+  const denied = r.blocked.filter((b) => b.reason.includes('--deny-local'));
+  const other = r.blocked.filter((b) => !b.reason.includes('--deny-local'));
+  if (denied.length)
     out.push(
-      `The network guard refused ${r.blocked.length} connection(s) to non-public addresses (${r.blocked
-        .slice(0, 3)
-        .map((b) => `${b.host}:${b.port}`)
-        .join(', ')}${r.blocked.length > 3 ? ', …' : ''}); content that depends on them was not loaded.`,
+      `The network guard refused ${denied.length} connection(s) to local addresses because --deny-local is set (${list(denied)}); content that depends on them was not loaded.`,
+    );
+  if (other.length)
+    out.push(
+      `The network guard refused ${other.length} connection(s) to non-public addresses (${list(other)}); content that depends on them was not loaded.`,
     );
   if (r.escaped.length)
     out.push(

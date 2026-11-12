@@ -5,7 +5,7 @@ import { exitCodeForOutcome, runOutcome } from '../../audit/outcome.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { JouriloError } from '../../core/errors.js';
 import { displayPath } from '../../core/fs-safety.js';
-import { serveStatic } from '../../core/static-server.js';
+import { isDirectoryTarget, servedPort, serveStatic } from '../../core/static-server.js';
 import { loadContext } from '../../integrations/context.js';
 import type { JourneySpec } from '../../journeys/schema.js';
 import { unifiedDiff } from '../../repair/diff.js';
@@ -179,7 +179,7 @@ export const verify: Command = {
     // An explicit --target replaces the baseline's served directory, so a URL target is not ignored.
     const target = str(ctx, 'target');
     const servedDir = target
-      ? existsSync(target)
+      ? isDirectoryTarget(target)
         ? resolve(target)
         : undefined
       : (base.settings.servedDir as string | undefined);
@@ -215,7 +215,9 @@ export const verify: Command = {
         headed: false,
         respectRobots: base.settings.respectRobots !== false,
         allowPrivate: base.settings.hostClass === 'private',
-        ...(!server && denyLocalFrom(ctx) ? { denyLocal: true } : {}),
+        ...(denyLocalFrom(ctx)
+          ? { denyLocal: true, ...(server ? { servedPort: servedPort(server) } : {}) }
+          : {}),
         keyboard: base.settings.keyboard !== false,
         throttle: base.settings.throttle === true,
         // Same number of visits as the baseline, so medians are compared with medians.

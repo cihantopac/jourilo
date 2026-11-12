@@ -10,6 +10,7 @@ import {
   loopbackRedirectVerdict,
   redirectEscape,
   resolveAllowed,
+  startNetGuard,
   upstreamFailureWording,
 } from '../../src/core/net-guard.js';
 import {
@@ -17,6 +18,7 @@ import {
   addressVerdict,
   checkTarget,
   checkTargetDetailed,
+  isLocalHostname,
   LookupFailed,
   resolveInChild,
 } from '../../src/core/url-safety.js';
@@ -273,5 +275,91 @@ describe('--deny-local', () => {
       address: '93.184.216.34',
     });
     expect(await resolveAllowed('127.0.0.1', 80, policy, { resolve })).toHaveProperty('blocked');
+  });
+});
+
+describe('--deny-local hardening', () => {
+  it('normalises a trailing dot', async () => {
+    for (const h of ['localhost.', 'foo.localhost.', 'app.test.', 'LOCALHOST.'])
+      expect(isLocalHostname(h)).toBe(true);
+    await expect(checkTarget(new URL('http://localhost./'), { denyLocal: true })).rejects.toMatchObject({
+      code: 'UNSAFE_URL',
+    });
+    await expect(checkTarget(new URL('http://app.test./'), { denyLocal: true })).rejects.toMatchObject({
+      code: 'UNSAFE_URL',
+    });
+  });
+  it('refuses a public-looking name that resolves to loopback', async () => {
+    const resolver = async () => [{ address: '127.0.0.1', family: 4 }];
+    await expect(
+      checkTarget(new URL('http://127.0.0.1.nip.io/'), { denyLocal: true, resolver }),
+    ).rejects.toThrow(/--deny-local is set/);
+    expect(await checkTarget(new URL('http://127.0.0.1.nip.io/'), { resolver }).catch((e) => e.code)).toBe(
+      'UNSAFE_URL',
+    ); // still refused as before: a public target may not reach loopback
+  });
+  it('refuses a redirect to every loopback form, also with --allow-private', () => {
+    const from = new URL('https://shop.example/a');
+    const policy: AddressPolicy = { target: 'public', allowPrivate: true, denyLocal: true };
+    for (const to of [
+      'http://[::ffff:127.0.0.1]/',
+      'http://localhost./',
+      'http://127.1.2.3:6379/',
+      'http://[::1]/',
+      'http://0.0.0.0/',
+      'http://app.test./',
+    ])
+      expect(loopbackRedirectVerdict(to, from, policy), to).toMatch(/--deny-local/);
+  });
+  it('lets a directory target reach only its own static server port', () => {
+    const policy: AddressPolicy = {
+      target: 'local',
+      allowPrivate: false,
+      denyLocal: true,
+      allowLoopbackPorts: [4173],
+    };
+    expect(addressVerdict('127.0.0.1', policy, 4173).ok).toBe(true);
+    expect(addressVerdict('127.0.0.1', policy, 6379).ok).toBe(false);
+    expect(addressVerdict('::1', policy, 4173).ok).toBe(false);
+    const from = new URL('http://127.0.0.1:4173/');
+    expect(loopbackRedirectVerdict('http://127.0.0.1:4173/b', from, policy)).toBeNull();
+    expect(loopbackRedirectVerdict('http://localhost:6379/', from, policy)).toMatch(/--deny-local/);
+  });
+  it('the guard answers 403 and records --deny-local for a redirect hop to localhost', async () => {
+    const upstream = http.createServer((_req, res) => {
+      res.writeHead(302, { location: 'http://localhost:6379/' }).end();
+    });
+    await new Promise<void>((r) => upstream.listen(0, '127.0.0.1', r));
+    const port = (upstream.address() as AddressInfo).port;
+    const guard = await startNetGuard(
+      { target: 'local', allowPrivate: false, denyLocal: true, allowLoopbackPorts: [port] },
+      { resolve: async () => [{ address: '127.0.0.1', family: 4 }] },
+    );
+    const proxy = new URL(guard.url);
+    const viaProxy = (url: string) =>
+      new Promise<{ status: number; location?: string }>((resolve, reject) => {
+        http
+          .get(
+            { host: proxy.hostname, port: proxy.port, path: url, headers: { host: new URL(url).host } },
+            (res) => {
+              res.resume();
+              resolve({ status: res.statusCode ?? 0, location: res.headers.location });
+            },
+          )
+          .on('error', reject);
+      });
+    try {
+      // The guard reads the upstream's 302 and refuses it before the browser could follow it.
+      expect((await viaProxy(`http://127.0.0.1:${port}/`)).status).toBe(403);
+      expect(guard.blocked[0]!.reason).toContain('--deny-local');
+      expect(guard.blocked[0]!.reason).toContain('localhost:6379');
+      // A direct request to another loopback port is refused too.
+      expect((await viaProxy('http://localhost:6379/')).status).toBe(403);
+      expect(guard.blocked[1]).toMatchObject({ host: 'localhost', port: 6379 });
+      expect(guard.blocked[1]!.reason).toContain('--deny-local');
+    } finally {
+      await guard.close();
+      await new Promise((r) => upstream.close(r));
+    }
   });
 });

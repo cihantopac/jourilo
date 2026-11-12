@@ -38919,8 +38919,18 @@ function flag(ctx, key) {
 }
 function denyLocalFrom(ctx) {
   if (flag(ctx, "deny-local")) return true;
-  return ["1", "true", "yes"].includes((process.env.JOURILO_DENY_LOCAL ?? "").trim().toLowerCase());
+  const v = (process.env.JOURILO_DENY_LOCAL ?? "").trim().toLowerCase();
+  if (["1", "true", "yes"].includes(v)) return true;
+  if (v && !["0", "false", "no", "off"].includes(v) && !warnedDenyLocal) {
+    warnedDenyLocal = true;
+    process.stderr.write(
+      `jourilo: JOURILO_DENY_LOCAL=${process.env.JOURILO_DENY_LOCAL} is not recognised (use 1, true or yes); local targets stay allowed.
+`
+    );
+  }
+  return false;
 }
+var warnedDenyLocal = false;
 function requirePositional(ctx, index, name, usage2) {
   const v = ctx.positionals[index];
   if (!v) throw new JouriloError("USAGE", `Missing <${name}>.`, `Usage: ${usage2}`);
@@ -39077,7 +39087,7 @@ Re-run with --write to install.`
 };
 
 // src/cli/commands/audit.ts
-import { existsSync as existsSync12, statSync as statSync5 } from "node:fs";
+import { existsSync as existsSync12 } from "node:fs";
 import { resolve as resolve6 } from "node:path";
 
 // src/audit/engine.ts
@@ -39622,7 +39632,7 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 var LOCAL_SUFFIXES = [".localhost", ".test"];
 function isLocalHostname(host) {
-  const h = host.replace(/^\[|\]$/g, "").toLowerCase();
+  const h = host.replace(/^\[|\]$/g, "").toLowerCase().replace(/\.$/, "");
   return h === "localhost" || h === "::1" || /^127\.\d+\.\d+\.\d+$/.test(h) || h === "0.0.0.0" || LOCAL_SUFFIXES.some((s) => h.endsWith(s));
 }
 var METADATA_V4 = /* @__PURE__ */ new Set(["169.254.169.254", "169.254.170.2", "169.254.169.123", "100.100.100.200"]);
@@ -39690,7 +39700,7 @@ function classifyIp(ip) {
   if (family === 6) return classifyV6(v);
   return "reserved";
 }
-function addressVerdict(ip, policy) {
+function addressVerdict(ip, policy, port) {
   const cls = classifyIp(ip);
   switch (cls) {
     case "public":
@@ -39703,7 +39713,7 @@ function addressVerdict(ip, policy) {
     case "reserved":
       return { ok: false, reason: `${ip} is a reserved or special-purpose address.` };
     case "loopback":
-      if (policy.denyLocal)
+      if (policy.denyLocal && !(port !== void 0 && policy.allowLoopbackPorts?.includes(port) && ip === "127.0.0.1"))
         return { ok: false, reason: `${ip} is this machine (loopback) and --deny-local is set.` };
       return policy.target === "local" || policy.allowPrivate ? { ok: true } : { ok: false, reason: `${ip} is this machine (loopback); a public target may not reach it.` };
     default:
@@ -39814,6 +39824,15 @@ async function checkTargetDetailed(url, opts = {}) {
       "UNSAFE_URL",
       `${host} resolves to ${forbidden.address}, a ${forbidden.cls} address; Jourilo does not audit it.`
     );
+  if (opts.denyLocal) {
+    const loop = classes.find((c) => c.cls === "loopback");
+    if (loop)
+      throw new JouriloError(
+        "UNSAFE_URL",
+        `${host} resolves to ${loop.address}, a local address, and --deny-local is set.`,
+        DENY_LOCAL_HINT
+      );
+  }
   const nonPublic = classes.filter((c) => c.cls !== "public");
   if (!nonPublic.length) return { hostClass: "public" };
   if (!opts.allowPrivate) {
@@ -39864,7 +39883,7 @@ var systemResolve = (host) => new Promise(
 );
 async function resolveAllowed(host, port, policy, deps = {}) {
   const h = host.replace(/^\[|\]$/g, "");
-  const verdict = deps.verdict ?? ((ip) => addressVerdict(ip, policy));
+  const verdict = deps.verdict ?? ((ip, port2) => addressVerdict(ip, policy, port2));
   let addrs;
   if (isIP2(h)) addrs = [{ address: h, family: isIP2(h) }];
   else {
@@ -39928,8 +39947,14 @@ function loopbackRedirectVerdict(location, from, policy) {
   } catch {
     return null;
   }
-  if (policy.denyLocal && isLocalHostname(to.hostname))
-    return `redirect from ${from.host} to ${to.host} (a local address) refused: --deny-local is set.`;
+  if (policy.denyLocal) {
+    const h = to.hostname.replace(/^\[|\]$/g, "").toLowerCase().replace(/\.$/, "");
+    const local = isLocalHostname(h) || isIP2(h) !== 0 && classifyIp(h) === "loopback";
+    const port = Number(to.port || (to.protocol === "https:" ? 443 : 80));
+    const own = policy.allowLoopbackPorts?.includes(port) && (h === "127.0.0.1" || h === "localhost");
+    if (local && !own)
+      return `redirect from ${from.host} to ${to.host} (a local address) refused: --deny-local is set.`;
+  }
   if (!isLoopbackName(to.hostname)) return null;
   if (policy.target === "local" || policy.allowPrivate) return null;
   return `redirect from ${from.host} to ${to.host} (this machine) refused.`;
@@ -41539,9 +41564,16 @@ function watchContext(browser, ctx) {
 }
 function networkLimitations(r) {
   const out = [];
-  if (r.blocked.length)
+  const list2 = (bs) => `${bs.slice(0, 3).map((b) => `${b.host}:${b.port}`).join(", ")}${bs.length > 3 ? ", \u2026" : ""}`;
+  const denied = r.blocked.filter((b) => b.reason.includes("--deny-local"));
+  const other = r.blocked.filter((b) => !b.reason.includes("--deny-local"));
+  if (denied.length)
     out.push(
-      `The network guard refused ${r.blocked.length} connection(s) to non-public addresses (${r.blocked.slice(0, 3).map((b) => `${b.host}:${b.port}`).join(", ")}${r.blocked.length > 3 ? ", \u2026" : ""}); content that depends on them was not loaded.`
+      `The network guard refused ${denied.length} connection(s) to local addresses because --deny-local is set (${list2(denied)}); content that depends on them was not loaded.`
+    );
+  if (other.length)
+    out.push(
+      `The network guard refused ${other.length} connection(s) to non-public addresses (${list2(other)}); content that depends on them was not loaded.`
     );
   if (r.escaped.length)
     out.push(
@@ -45158,7 +45190,8 @@ async function runAudit(ws, opts) {
   const target = parseTargetUrl(opts.target);
   const check = await checkTargetDetailed(target, {
     allowPrivate: opts.allowPrivate,
-    ...opts.denyLocal ? { denyLocal: true } : {}
+    // The target of a served directory is Jourilo's own server; the guard still confines the page.
+    ...opts.denyLocal && opts.servedPort === void 0 ? { denyLocal: true } : {}
   });
   const hostClass = check.hostClass;
   const log = opts.onProgress ?? (() => void 0);
@@ -45207,7 +45240,10 @@ async function runAudit(ws, opts) {
         {
           target: hostClass,
           allowPrivate: opts.allowPrivate,
-          ...opts.denyLocal ? { denyLocal: true } : {}
+          ...opts.denyLocal ? {
+            denyLocal: true,
+            ...opts.servedPort === void 0 ? {} : { allowLoopbackPorts: [opts.servedPort] }
+          } : {}
         },
         signal !== void 0
       );
@@ -45603,6 +45639,12 @@ function stablePort(root) {
   let h = 0;
   for (const ch of resolve4(root)) h = h * 31 + ch.charCodeAt(0) >>> 0;
   return 41e3 + h % 8e3;
+}
+function isDirectoryTarget(arg) {
+  return !/^[a-z][a-z0-9+.-]*:\/\//i.test(arg) && existsSync7(arg) && statSync2(arg).isDirectory();
+}
+function servedPort(server) {
+  return Number(new URL(server.url).port);
 }
 async function serveStatic(root, port = 0, opts = {}) {
   if (!existsSync7(root) || !statSync2(root).isDirectory())
@@ -48910,7 +48952,7 @@ async function suggest(ctx) {
   if (!target || ctx.ws.listRuns().some((r) => r.id === target) || target === "latest") {
     run = ctx.ws.loadRun(target ?? "latest").run;
   } else {
-    const isDir = existsSync11(target) && !target.includes("://");
+    const isDir = isDirectoryTarget(target);
     const server = isDir ? await serveStatic(resolve5(target)) : void 0;
     try {
       ctx.log("Discovering pages to derive journeys (no audit rules applied) \u2026");
@@ -48923,7 +48965,7 @@ async function suggest(ctx) {
         headed: false,
         respectRobots: true,
         allowPrivate: flag(ctx, "allow-private"),
-        ...!server && denyLocalFrom(ctx) ? { denyLocal: true } : {},
+        ...denyLocalFrom(ctx) ? { denyLocal: true, ...server ? { servedPort: servedPort(server) } : {} } : {},
         keyboard: false,
         throttle: false,
         timeoutMs: 3e4,
@@ -49013,19 +49055,22 @@ async function runCmd(ctx) {
     );
   const state = parseStateOptions(ctx);
   const evidence = parseEvidence(ctx);
-  const isDir = existsSync11(baseArg) && !baseArg.includes("://");
+  const isDir = isDirectoryTarget(baseArg);
   const server = isDir ? await serveStatic(resolve5(baseArg)) : void 0;
   try {
     const base2 = parseTargetUrl(server?.url ?? baseArg);
-    const denyLocal = !server && denyLocalFrom(ctx);
-    const hostClass = await checkTarget(base2, { allowPrivate: flag(ctx, "allow-private"), denyLocal });
+    const denyLocal = denyLocalFrom(ctx);
+    const hostClass = await checkTarget(base2, {
+      allowPrivate: flag(ctx, "allow-private"),
+      denyLocal: denyLocal && !server
+    });
     const id = newRunId();
     const runDir = ctx.ws.createRunDir(id);
     const browserName = str(ctx, "browser") ?? "chromium";
     const session = await openGuardedBrowser(browserName, flag(ctx, "headed"), {
       target: hostClass,
       allowPrivate: flag(ctx, "allow-private"),
-      ...denyLocal ? { denyLocal: true } : {}
+      ...denyLocal ? { denyLocal: true, ...server ? { allowLoopbackPorts: [servedPort(server)] } : {} } : {}
     });
     const browser = session.browser;
     const browserVersion = browser.version();
@@ -49336,7 +49381,7 @@ async function auditCommand(ctx, usage2, categories) {
   const stop = stopController(ctx, maxDuration);
   let server;
   try {
-    const isDir = !/^[a-z]+:\/\//i.test(targetArg) && existsSync12(targetArg) && statSync5(targetArg).isDirectory();
+    const isDir = isDirectoryTarget(targetArg);
     server = isDir ? await serveStatic(resolve6(targetArg)) : void 0;
     const repo = str(ctx, "repo") ?? (isDir ? resolve6(targetArg) : void 0);
     const opts = {
@@ -49348,7 +49393,7 @@ async function auditCommand(ctx, usage2, categories) {
       headed: flag(ctx, "headed"),
       respectRobots: !flag(ctx, "ignore-robots"),
       allowPrivate: flag(ctx, "allow-private"),
-      ...!server && denyLocalFrom(ctx) ? { denyLocal: true } : {},
+      ...denyLocalFrom(ctx) ? { denyLocal: true, ...server ? { servedPort: servedPort(server) } : {} } : {},
       keyboard: !flag(ctx, "no-keyboard"),
       throttle: flag(ctx, "throttle"),
       runs: num(ctx, "runs", 1),
@@ -49654,21 +49699,21 @@ var bench = {
 };
 
 // src/cli/commands/discover.ts
-import { existsSync as existsSync16, statSync as statSync8, writeFileSync as writeFileSync10 } from "node:fs";
+import { existsSync as existsSync16, statSync as statSync7, writeFileSync as writeFileSync10 } from "node:fs";
 import { join as join21, resolve as resolve8 } from "node:path";
 
 // src/discovery/repo.ts
 init_fs_safety();
-import { existsSync as existsSync15, readdirSync as readdirSync11, readFileSync as readFileSync14, statSync as statSync7 } from "node:fs";
+import { existsSync as existsSync15, readdirSync as readdirSync11, readFileSync as readFileSync14, statSync as statSync6 } from "node:fs";
 import { basename as basename5, dirname as dirname8, join as join20, relative as relative5 } from "node:path";
 
 // src/discovery/laravel.ts
 init_fs_safety();
-import { existsSync as existsSync14, readdirSync as readdirSync10, readFileSync as readFileSync13, statSync as statSync6 } from "node:fs";
+import { existsSync as existsSync14, readdirSync as readdirSync10, readFileSync as readFileSync13, statSync as statSync5 } from "node:fs";
 import { basename as basename4, dirname as dirname7, join as join19, relative as relative4 } from "node:path";
 function read(file2) {
   try {
-    return statSync6(file2).size > 4e5 ? "" : readFileSync13(file2, "utf8");
+    return statSync5(file2).size > 4e5 ? "" : readFileSync13(file2, "utf8");
   } catch {
     return "";
   }
@@ -49911,7 +49956,7 @@ function walk(root, max = 2e4) {
       const full = join20(dir, n);
       let st;
       try {
-        st = statSync7(full);
+        st = statSync6(full);
       } catch {
         continue;
       }
@@ -49931,7 +49976,7 @@ function readJson2(file2) {
 }
 function read2(file2, max = 4e5) {
   try {
-    const st = statSync7(file2);
+    const st = statSync6(file2);
     if (st.size > max) return "";
     return readFileSync14(file2, "utf8");
   } catch {
@@ -50553,7 +50598,7 @@ var discover = {
   async run(ctx) {
     const target = requirePositional(ctx, 0, "path|url", discover.usage);
     ctx.ws.ensure();
-    if (!target.includes("://") && existsSync16(target) && statSync8(target).isDirectory()) {
+    if (!target.includes("://") && existsSync16(target) && statSync7(target).isDirectory()) {
       const profile2 = discoverRepository(resolve8(target));
       const file3 = join21(ctx.ws.root, "product.json");
       writeFileSync10(file3, `${JSON.stringify(profile2, null, 2)}
@@ -51518,7 +51563,7 @@ var verify = {
         `Run ${base2.id} has no recorded scope (created by an older version or by journeys).`
       );
     const target = str(ctx, "target");
-    const servedDir = target ? existsSync19(target) ? resolve9(target) : void 0 : base2.settings.servedDir;
+    const servedDir = target ? isDirectoryTarget(target) ? resolve9(target) : void 0 : base2.settings.servedDir;
     const server = servedDir ? await serveStatic(servedDir) : void 0;
     try {
       const origin = server?.url ?? new URL(target ?? scope.urls[0]).origin;
@@ -51550,7 +51595,7 @@ var verify = {
         headed: false,
         respectRobots: base2.settings.respectRobots !== false,
         allowPrivate: base2.settings.hostClass === "private",
-        ...!server && denyLocalFrom(ctx) ? { denyLocal: true } : {},
+        ...denyLocalFrom(ctx) ? { denyLocal: true, ...server ? { servedPort: servedPort(server) } : {} } : {},
         keyboard: base2.settings.keyboard !== false,
         throttle: base2.settings.throttle === true,
         // Same number of visits as the baseline, so medians are compared with medians.

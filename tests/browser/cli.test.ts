@@ -60,6 +60,73 @@ describe('cli', () => {
     const j = jourilo('journeys', 'run', 'home', '--base', 'http://localhost:1/', '--deny-local', '--json');
     expect(j.status).toBe(3);
   });
+  it('JOURILO_DENY_LOCAL=0 or false leaves local targets allowed; a bad value warns on stderr only', () => {
+    for (const value of ['0', 'false', 'maybe']) {
+      const r = spawnSync(
+        process.execPath,
+        [
+          cli,
+          'audit',
+          'http://localhost:1/',
+          '--pages',
+          '1',
+          '--viewports',
+          'mobile',
+          '--workspace',
+          ws,
+          '--json',
+        ],
+        { encoding: 'utf8', cwd: root, env: { ...process.env, JOURILO_DENY_LOCAL: value } },
+      );
+      expect(r.status, value).not.toBe(3);
+      expect(r.stderr.includes('JOURILO_DENY_LOCAL'), value).toBe(value === 'maybe');
+      expect(r.stdout).not.toContain('JOURILO_DENY_LOCAL');
+    }
+  }, 180_000);
+  it('--deny-local keeps confining a served directory: another loopback port is blocked, the page loads', async () => {
+    const other = http.createServer((_req, res) => res.end('secret'));
+    await new Promise<void>((r) => other.listen(0, '127.0.0.1', r));
+    const port = (other.address() as AddressInfo).port;
+    const dir = join(ws, 'deny-local-site');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, 'index.html'),
+      `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Denied</title></head><body><main><h1>Hello</h1><script>fetch('http://127.0.0.1:${port}/').catch(()=>{})</script></main></body></html>`,
+    );
+    try {
+      const r = await new Promise<{ status: number | null; stdout: string }>((resolve) => {
+        const c = spawn(
+          process.execPath,
+          [
+            cli,
+            'audit',
+            dir,
+            '--pages',
+            '1',
+            '--viewports',
+            'mobile',
+            '--deny-local',
+            '--json',
+            '--workspace',
+            ws,
+          ],
+          { cwd: root },
+        );
+        let stdout = '';
+        c.stdout.on('data', (d) => (stdout += d));
+        c.on('close', (status) => resolve({ status, stdout }));
+      });
+      expect(r.status).not.toBe(3);
+      expect(r.status).not.toBe(5);
+      const summary = JSON.parse(r.stdout.trim().split('\n').pop()!) as { runDir: string };
+      const run = JSON.parse(readFileSync(join(summary.runDir, 'run.json'), 'utf8')) as Run;
+      expect(run.pages.length).toBe(1);
+      expect(run.limitations.join(' ')).toContain('--deny-local');
+      expect(run.limitations.join(' ')).toContain(`127.0.0.1:${port}`);
+    } finally {
+      await new Promise((res) => other.close(res));
+    }
+  }, 180_000);
   it('without the option a local target is still allowed', () => {
     const r = jourilo('audit', 'http://localhost:1/', '--pages', '1', '--viewports', 'mobile', '--json');
     expect(r.status).not.toBe(3);

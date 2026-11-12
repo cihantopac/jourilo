@@ -10,7 +10,7 @@ import { applyDismissals, loadDismissals } from '../../core/dismissals.js';
 import { JouriloError } from '../../core/errors.js';
 import { displayPath } from '../../core/fs-safety.js';
 import { newRunId } from '../../core/hash.js';
-import { serveStatic } from '../../core/static-server.js';
+import { isDirectoryTarget, servedPort, serveStatic } from '../../core/static-server.js';
 import type { Finding, JourneyResult, Run } from '../../core/types.js';
 import { RUN_SCHEMA_VERSION } from '../../core/types.js';
 import { checkTarget, parseTargetUrl } from '../../core/url-safety.js';
@@ -86,7 +86,7 @@ async function suggest(ctx: Context) {
   if (!target || ctx.ws.listRuns().some((r) => r.id === target) || target === 'latest') {
     run = ctx.ws.loadRun(target ?? 'latest').run;
   } else {
-    const isDir = existsSync(target) && !target.includes('://');
+    const isDir = isDirectoryTarget(target);
     const server = isDir ? await serveStatic(resolve(target)) : undefined;
     try {
       ctx.log('Discovering pages to derive journeys (no audit rules applied) …');
@@ -100,7 +100,9 @@ async function suggest(ctx: Context) {
           headed: false,
           respectRobots: true,
           allowPrivate: flag(ctx, 'allow-private'),
-          ...(!server && denyLocalFrom(ctx) ? { denyLocal: true } : {}),
+          ...(denyLocalFrom(ctx)
+            ? { denyLocal: true, ...(server ? { servedPort: servedPort(server) } : {}) }
+            : {}),
           keyboard: false,
           throttle: false,
           timeoutMs: 30_000,
@@ -205,19 +207,24 @@ async function runCmd(ctx: Context) {
     );
   const state = parseStateOptions(ctx);
   const evidence = parseEvidence(ctx);
-  const isDir = existsSync(baseArg) && !baseArg.includes('://');
+  const isDir = isDirectoryTarget(baseArg);
   const server = isDir ? await serveStatic(resolve(baseArg)) : undefined;
   try {
     const base = parseTargetUrl(server?.url ?? baseArg);
-    const denyLocal = !server && denyLocalFrom(ctx);
-    const hostClass = await checkTarget(base, { allowPrivate: flag(ctx, 'allow-private'), denyLocal });
+    const denyLocal = denyLocalFrom(ctx);
+    const hostClass = await checkTarget(base, {
+      allowPrivate: flag(ctx, 'allow-private'),
+      denyLocal: denyLocal && !server,
+    });
     const id = newRunId();
     const runDir = ctx.ws.createRunDir(id);
     const browserName = (str(ctx, 'browser') ?? 'chromium') as BrowserName;
     const session = await openGuardedBrowser(browserName, flag(ctx, 'headed'), {
       target: hostClass,
       allowPrivate: flag(ctx, 'allow-private'),
-      ...(denyLocal ? { denyLocal: true } : {}),
+      ...(denyLocal
+        ? { denyLocal: true, ...(server ? { allowLoopbackPorts: [servedPort(server)] } : {}) }
+        : {}),
     });
     const browser = session.browser;
     const browserVersion = browser.version();

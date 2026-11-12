@@ -82,6 +82,8 @@ export interface AuditOptions {
   allowPrivate: boolean;
   /** Refuse local targets (see `--deny-local`), also when reached by redirect. */
   denyLocal?: boolean;
+  /** With denyLocal and a served directory: the static server's port, the only loopback port that stays reachable. */
+  servedPort?: number;
   keyboard: boolean;
   throttle: boolean;
   timeoutMs: number;
@@ -193,7 +195,8 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
   const target = parseTargetUrl(opts.target);
   const check = await checkTargetDetailed(target, {
     allowPrivate: opts.allowPrivate,
-    ...(opts.denyLocal ? { denyLocal: true } : {}),
+    // The target of a served directory is Jourilo's own server; the guard still confines the page.
+    ...(opts.denyLocal && opts.servedPort === undefined ? { denyLocal: true } : {}),
   });
   const hostClass: HostClass = check.hostClass;
   const log = opts.onProgress ?? (() => undefined);
@@ -248,7 +251,12 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         {
           target: hostClass,
           allowPrivate: opts.allowPrivate,
-          ...(opts.denyLocal ? { denyLocal: true } : {}),
+          ...(opts.denyLocal
+            ? {
+                denyLocal: true,
+                ...(opts.servedPort === undefined ? {} : { allowLoopbackPorts: [opts.servedPort] }),
+              }
+            : {}),
         },
         signal !== undefined,
       );

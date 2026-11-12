@@ -18,7 +18,10 @@ export type AddressClass = 'public' | 'loopback' | 'private' | 'link-local' | 'm
 const LOCAL_SUFFIXES = ['.localhost', '.test'];
 
 export function isLocalHostname(host: string): boolean {
-  const h = host.replace(/^\[|\]$/g, '').toLowerCase();
+  const h = host
+    .replace(/^\[|\]$/g, '')
+    .toLowerCase()
+    .replace(/\.$/, '');
   return (
     h === 'localhost' ||
     h === '::1' ||
@@ -122,12 +125,15 @@ export interface AddressPolicy {
   allowPrivate: boolean;
   /** The user passed --deny-local: loopback and local names are refused, also as a redirect or subresource. */
   denyLocal?: boolean;
+  /** With denyLocal: the only loopback ports that stay reachable (Jourilo's own static server for a directory target). */
+  allowLoopbackPorts?: number[];
 }
 
 /** Whether the browser (or Jourilo itself) may connect to this address while auditing a target. */
 export function addressVerdict(
   ip: string,
   policy: AddressPolicy,
+  port?: number,
 ): { ok: true } | { ok: false; reason: string } {
   const cls = classifyIp(ip);
   switch (cls) {
@@ -141,7 +147,10 @@ export function addressVerdict(
     case 'reserved':
       return { ok: false, reason: `${ip} is a reserved or special-purpose address.` };
     case 'loopback':
-      if (policy.denyLocal)
+      if (
+        policy.denyLocal &&
+        !(port !== undefined && policy.allowLoopbackPorts?.includes(port) && ip === '127.0.0.1')
+      )
         return { ok: false, reason: `${ip} is this machine (loopback) and --deny-local is set.` };
       return policy.target === 'local' || policy.allowPrivate
         ? { ok: true }
@@ -321,6 +330,15 @@ export async function checkTargetDetailed(url: URL, opts: UrlCheckOptions = {}):
       'UNSAFE_URL',
       `${host} resolves to ${forbidden.address}, a ${forbidden.cls} address; Jourilo does not audit it.`,
     );
+  if (opts.denyLocal) {
+    const loop = classes.find((c) => c.cls === 'loopback');
+    if (loop)
+      throw new JouriloError(
+        'UNSAFE_URL',
+        `${host} resolves to ${loop.address}, a local address, and --deny-local is set.`,
+        DENY_LOCAL_HINT,
+      );
+  }
   const nonPublic = classes.filter((c) => c.cls !== 'public');
   if (!nonPublic.length) return { hostClass: 'public' };
   if (!opts.allowPrivate) {
