@@ -8,7 +8,7 @@ import { toPosix } from '../core/fs-safety.js';
 import { shortHash, slug } from '../core/hash.js';
 import { lexiconSources } from '../core/lexicon.js';
 import { GUARD_UPSTREAM_ERROR_HEADER } from '../core/net-guard.js';
-import { excerpt, redactText, redactUrl } from '../core/redact.js';
+import { excerpt, redactText, redactUrl, redactUrlsIn } from '../core/redact.js';
 import type { PageInventory, Rect, Viewport } from '../core/types.js';
 import { type BlockedRequest, installRequestGuard } from '../journeys/request-guard.js';
 import {
@@ -525,14 +525,16 @@ export async function capturePage(
     try {
       response = await page.goto(url, { waitUntil: 'load', timeout: timeoutMs });
     } catch (err) {
-      obs.errors.push(`navigation: ${(err as Error).message.split('\n')[0]}`);
+      obs.errors.push(`navigation: ${redactUrlsIn((err as Error).message.split('\n')[0] ?? '')}`);
       if (redirects.length) obs.redirects = redirects;
       return obs;
     }
     // The network guard answers 502 itself when DNS or the connection fails: nothing was loaded.
     const signal = response?.headers()[GUARD_UPSTREAM_ERROR_HEADER];
     if (opts.guardToken && signal?.startsWith(`${opts.guardToken} `) && new URL(url).protocol === 'http:') {
-      obs.errors.push(`navigation: could not connect: ${signal.slice(opts.guardToken.length + 1)}`);
+      obs.errors.push(
+        `navigation: could not connect: ${redactUrlsIn(signal.slice(opts.guardToken.length + 1))}`,
+      );
       return obs;
     }
     // A copy: the listener keeps recording navigations that happen later (keys pressed, widgets operated).

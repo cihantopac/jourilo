@@ -38874,6 +38874,13 @@ function redactUrl(raw) {
   if (url.hash && /(access_token|id_token|token|code)=/i.test(url.hash)) url.hash = "#redacted";
   return redactText(url.toString()).replace(/redacted%5D/g, "redacted]");
 }
+function redactUrlsIn(input) {
+  const out = input.replace(/\bhttps?:\/\/[^\s"'<>]+/gi, (m) => {
+    const trail = /[.,;:!?)\]}]+$/.exec(m)?.[0] ?? "";
+    return redactUrl(trail ? m.slice(0, -trail.length) : m) + trail;
+  });
+  return redactText(out);
+}
 function excerpt(input, max = 240) {
   if (!input) return "";
   const clean = redactText(input.replace(/\s+/g, " ").trim());
@@ -41216,7 +41223,13 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
   const MAX = opts.maxItems || 40;
   // Multilingual vocabulary (en, tr, de, es, fr) from core/lexicon.ts; English fallbacks keep the probe usable alone.
   const LEX = opts.lex || {};
-  const lex = (k, fallback) => new RegExp(LEX[k] || fallback, 'iu');
+  // Same Turkish fold as LexiconRegExp in core/lexicon.ts: test() also tries the text with \u0130 -> i, I -> \u0131, lower-cased,
+  // so "\u015E\u0130FRE" and "KARANLIK" match "\u015Fifre" and "karanl\u0131k". Plain 'iu' matching maps I to i only.
+  const fold = (t) => t.replace(/\u0130/g, 'i').replace(/I/g, '\u0131').toLowerCase();
+  const lex = (k, fallback) => {
+    const re = new RegExp(LEX[k] || fallback, 'iu');
+    return { test: (t) => re.test(t) || re.test(fold(t)) };
+  };
 
   const cssEscape = (s) => (window.CSS?.escape ? CSS.escape(s) : s.replace(/[^a-zA-Z0-9_-]/g, '\\\\$&'));
   const selectorOf = (el) => {
@@ -41605,7 +41618,6 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
 
   const imgs = Array.from(document.images);
   const bodyText = text(document.body).slice(0, 200000);
-  const lower = bodyText.toLowerCase();
   const TRUST = [
     ['testimonials', lex('trustTestimonials', 'testimonial|reviews?')],
     ['ratings', /\u2605|\\b[1-5]([.,]\\d)? ?(\\/ ?5|out of 5|stars?|y\u0131ld\u0131z|sterne|estrellas|\xE9toiles)\\b/iu],
@@ -41618,7 +41630,7 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
     ],
     ['case studies', /case stud(y|ies)|ba\u015Far\u0131 hikaye|fallstudie|casos de \xE9xito|\xE9tudes de cas/iu],
   ];
-  const trustSignals = TRUST.filter(([, re]) => re.test(lower)).map(([n]) => n);
+  const trustSignals = TRUST.filter(([, re]) => re.test(bodyText)).map(([n]) => n);
   if (
     links.some((l) =>
       /privacy|gizlilik|datenschutz|privacidad|confidentialit\xE9|kvkk/i.test(\`\${l.text} \${l.href}\`),
@@ -41634,7 +41646,7 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
       /\\bfree plan\\b|\\bfree forever\\b|\\$0\\b|\xFCcretsiz plan|kostenloser plan|plan gratuito|offre gratuite/iu,
     ],
   ];
-  const pricingSignals = PRICING.filter(([, re]) => re.test(lower)).map(([n]) => n);
+  const pricingSignals = PRICING.filter(([, re]) => re.test(bodyText)).map(([n]) => n);
 
   // ---- Structure of forms, tables and images (WCAG 1.3.1, 1.1.1) ----
   const structure = { fieldsets: [], radioGroups: [], tables: [], altTitle: [] };
@@ -42544,6 +42556,9 @@ var STATE = `(controls, mode) => {
   };
 }`;
 var WAIT_FOCUS_STABLE = `new Promise((resolve) => {
+  let done = false;
+  const finish = () => { if (!done) { done = true; resolve(true); } };
+  setTimeout(finish, 250);
   const deepActive = () => { let a = document.activeElement; while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement; return a; };
   const start = performance.now();
   let last = deepActive();
@@ -42552,7 +42567,8 @@ var WAIT_FOCUS_STABLE = `new Promise((resolve) => {
     const now = deepActive();
     same = now === last ? same + 1 : 0;
     last = now;
-    if (same >= 4 || performance.now() - start >= 250) resolve(true);
+    if (done) return;
+    if (same >= 4 || performance.now() - start >= 250) finish();
     else requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
@@ -42997,13 +43013,15 @@ async function capturePage(ctx, url, vp, opts) {
     try {
       response = await page.goto(url, { waitUntil: "load", timeout: timeoutMs });
     } catch (err) {
-      obs.errors.push(`navigation: ${err.message.split("\n")[0]}`);
+      obs.errors.push(`navigation: ${redactUrlsIn(err.message.split("\n")[0] ?? "")}`);
       if (redirects.length) obs.redirects = redirects;
       return obs;
     }
     const signal = response?.headers()[GUARD_UPSTREAM_ERROR_HEADER];
     if (opts.guardToken && signal?.startsWith(`${opts.guardToken} `) && new URL(url).protocol === "http:") {
-      obs.errors.push(`navigation: could not connect: ${signal.slice(opts.guardToken.length + 1)}`);
+      obs.errors.push(
+        `navigation: could not connect: ${redactUrlsIn(signal.slice(opts.guardToken.length + 1))}`
+      );
       return obs;
     }
     if (redirects.length) obs.redirects = [...redirects];
@@ -45785,7 +45803,7 @@ function reliabilityFindings(obs) {
   const out = [];
   const vp = obs.viewport.name;
   const rawNavError = obs.errors.find((e) => e.startsWith("navigation:"));
-  const navError = rawNavError === void 0 ? void 0 : redactText(rawNavError);
+  const navError = rawNavError === void 0 ? void 0 : redactUrlsIn(rawNavError);
   if (navError) {
     const hops = obs.redirects ?? [];
     const froms = hops.map((h) => h.from);
@@ -46617,7 +46635,7 @@ async function runAudit(ws, opts) {
         hostClass,
         // The exact scope, so `jourilo verify` can repeat this run after a change.
         scope: {
-          urls: [...new Set((urls ?? []).map((u) => u.url))],
+          urls: [...new Set((urls ?? []).map((u) => redactUrl(u.url)))],
           viewports: opts.viewports.map((v) => v.name)
         }
       },
@@ -48821,6 +48839,7 @@ function cropAt(run, vpName, e, o = {}) {
   const box = `left:${pct(r.x - x0, rw)};top:${pct(r.y - y0, rh)};width:${pct(Math.max(3, r.width), rw)};height:${pct(Math.max(3, r.height), rh)}`;
   return `<div class="crop" style="aspect-ratio:${Math.round(rw)}/${Math.round(rh)}"><img loading="lazy" alt="" src="${src}" style="width:${pct(vp.width, rw)};left:-${pct(x0, rw)};top:-${pct(y0, rh)}"><div class="box" style="${box}"></div></div>`;
 }
+var shotOf = (p) => p.screenshot ?? p.foldScreenshot;
 function visualOf(run, f, o = {}) {
   for (const e of f.evidence) {
     const c = crop(run, f, e, o);
@@ -48828,8 +48847,8 @@ function visualOf(run, f, o = {}) {
   }
   const shot = f.evidence.find((e) => e.type === "screenshot" && e.file)?.file;
   const vp = (f.viewport ?? "").split(", ")[0];
-  const page = run.pages.find((p) => p.url === f.url && p.viewport === vp && p.screenshot) ?? run.pages.find((p) => p.url === f.url && p.screenshot);
-  const file2 = shot ?? page?.screenshot;
+  const page = run.pages.find((p) => p.url === f.url && p.viewport === vp && shotOf(p)) ?? run.pages.find((p) => p.url === f.url && shotOf(p));
+  const file2 = shot ?? (page ? shotOf(page) : void 0);
   const src = runFile(file2, o.base);
   if (src === "#") return "";
   return `<img class="cover" loading="lazy" alt="" src="${src}">`;
@@ -49086,7 +49105,7 @@ function loadLine(p) {
 }
 function pagesHtml(run) {
   const rows = run.pages.map(
-    (p) => `<tr><td>${p.screenshot ? `<a href="${runFile(p.screenshot)}" target="_blank" rel="noopener"${attrs({ "aria-label": "shot.open" })}><img class="mini" loading="lazy" alt="" src="${runFile(p.screenshot)}"></a>` : `<span class="muted">${T("pages.noShot")}</span>`}</td>
+    (p) => `<tr><td>${shotOf(p) ? `<a href="${runFile(shotOf(p))}" target="_blank" rel="noopener"${attrs({ "aria-label": "shot.open" })}><img class="mini" loading="lazy" alt="" src="${runFile(shotOf(p))}"></a>` : `<span class="muted">${T("pages.noShot")}</span>`}</td>
 <td><a href="${safeHref(p.url)}" target="_blank" rel="noopener">${esc(pathname(p.url))}</a><div class="muted" lang="en">${esc(p.title)}</div>${loadLine(p)}</td><td>${esc(p.viewport)}</td><td>${p.status ?? "\u2013"}</td>
 ${metricCell(p, "LCP")}${metricCell(p, "CLS")}${metricCell(p, "TBT")}${metricCell(p, "Transfer")}<td>${p.consoleErrors}</td><td>${p.failedRequests}</td></tr>`
   ).join("");

@@ -108,6 +108,9 @@ function cropAt(run: Run, vpName: string, e: Pick<Evidence, 'file' | 'rect'>, o:
   return `<div class="crop" style="aspect-ratio:${Math.round(rw)}/${Math.round(rh)}"><img loading="lazy" alt="" src="${src}" style="width:${pct(vp.width, rw)};left:-${pct(x0, rw)};top:-${pct(y0, rh)}"><div class="box" style="${box}"></div></div>`;
 }
 
+/** A page's screenshot, or its fold screenshot (`--evidence minimal` keeps only that for a one-screen page). */
+const shotOf = (p: { screenshot?: string; foldScreenshot?: string }) => p.screenshot ?? p.foldScreenshot;
+
 /** The best picture for a finding: an outlined element, a screenshot it carries, or its page. */
 function visualOf(run: Run, f: Finding, o: CropOpts = {}): string {
   for (const e of f.evidence) {
@@ -117,9 +120,9 @@ function visualOf(run: Run, f: Finding, o: CropOpts = {}): string {
   const shot = f.evidence.find((e) => e.type === 'screenshot' && e.file)?.file;
   const vp = (f.viewport ?? '').split(', ')[0];
   const page =
-    run.pages.find((p) => p.url === f.url && p.viewport === vp && p.screenshot) ??
-    run.pages.find((p) => p.url === f.url && p.screenshot);
-  const file = shot ?? page?.screenshot;
+    run.pages.find((p) => p.url === f.url && p.viewport === vp && shotOf(p)) ??
+    run.pages.find((p) => p.url === f.url && shotOf(p));
+  const file = shot ?? (page ? shotOf(page) : undefined);
   const src = runFile(file, o.base);
   if (src === '#') return '';
   return `<img class="cover" loading="lazy" alt="" src="${src}">`;
@@ -478,7 +481,7 @@ function pagesHtml(run: Run): string {
     .map(
       (
         p,
-      ) => `<tr><td>${p.screenshot ? `<a href="${runFile(p.screenshot)}" target="_blank" rel="noopener"${attrs({ 'aria-label': 'shot.open' })}><img class="mini" loading="lazy" alt="" src="${runFile(p.screenshot)}"></a>` : `<span class="muted">${T('pages.noShot')}</span>`}</td>
+      ) => `<tr><td>${shotOf(p) ? `<a href="${runFile(shotOf(p))}" target="_blank" rel="noopener"${attrs({ 'aria-label': 'shot.open' })}><img class="mini" loading="lazy" alt="" src="${runFile(shotOf(p))}"></a>` : `<span class="muted">${T('pages.noShot')}</span>`}</td>
 <td><a href="${safeHref(p.url)}" target="_blank" rel="noopener">${esc(pathname(p.url))}</a><div class="muted" lang="en">${esc(p.title)}</div>${loadLine(p)}</td><td>${esc(p.viewport)}</td><td>${p.status ?? '–'}</td>
 ${metricCell(p, 'LCP')}${metricCell(p, 'CLS')}${metricCell(p, 'TBT')}${metricCell(p, 'Transfer')}<td>${p.consoleErrors}</td><td>${p.failedRequests}</td></tr>`,
     )

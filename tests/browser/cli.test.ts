@@ -271,6 +271,29 @@ describe('cli --budget', () => {
 });
 
 describe('cli no page loaded', () => {
+  it('never writes a token from a failing target URL to the run, stdout or stderr', async () => {
+    const srv = http.createServer();
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+    const port = (srv.address() as AddressInfo).port;
+    await new Promise((r) => srv.close(r));
+    const r = jourilo(
+      'audit',
+      `http://127.0.0.1:${port}/?access_token=s3cret&code=abc`,
+      '--pages',
+      '1',
+      '--viewports',
+      'desktop',
+      '--json',
+    );
+    expect(r.status).toBe(5);
+    const out = JSON.parse(r.stdout);
+    const runJson = readFileSync(join(out.runDir, 'run.json'), 'utf8');
+    for (const text of [r.stdout, r.stderr, runJson]) {
+      expect(text).not.toContain('s3cret');
+      expect(text).not.toMatch(/code=abc/);
+    }
+    expect(runJson).toContain('page-unreachable');
+  }, 120_000);
   it('an unresolvable host exits 5 and still writes the run', () => {
     const r = jourilo(
       'audit',

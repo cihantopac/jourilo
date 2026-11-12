@@ -51,6 +51,18 @@ export function redactUrl(raw: string): string {
   return redactText(url.toString()).replace(/redacted%5D/g, 'redacted]');
 }
 
+/**
+ * Redacts every http(s) URL inside free text (an error message) with `redactUrl`, then the rest as text. A token in a
+ * query string (`code=`, `sig=`) is not a key=value pair `redactText` knows, so the URL must be parsed.
+ */
+export function redactUrlsIn(input: string): string {
+  const out = input.replace(/\bhttps?:\/\/[^\s"'<>]+/gi, (m) => {
+    const trail = /[.,;:!?)\]}]+$/.exec(m)?.[0] ?? '';
+    return redactUrl(trail ? m.slice(0, -trail.length) : m) + trail;
+  });
+  return redactText(out);
+}
+
 /** Short excerpt of untrusted page content, redacted and length-limited. */
 export function excerpt(input: string | null | undefined, max = 240): string {
   if (!input) return '';

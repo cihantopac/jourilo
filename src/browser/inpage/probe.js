@@ -9,7 +9,13 @@
   const MAX = opts.maxItems || 40;
   // Multilingual vocabulary (en, tr, de, es, fr) from core/lexicon.ts; English fallbacks keep the probe usable alone.
   const LEX = opts.lex || {};
-  const lex = (k, fallback) => new RegExp(LEX[k] || fallback, 'iu');
+  // Same Turkish fold as LexiconRegExp in core/lexicon.ts: test() also tries the text with İ -> i, I -> ı, lower-cased,
+  // so "ŞİFRE" and "KARANLIK" match "şifre" and "karanlık". Plain 'iu' matching maps I to i only.
+  const fold = (t) => t.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase();
+  const lex = (k, fallback) => {
+    const re = new RegExp(LEX[k] || fallback, 'iu');
+    return { test: (t) => re.test(t) || re.test(fold(t)) };
+  };
 
   const cssEscape = (s) => (window.CSS?.escape ? CSS.escape(s) : s.replace(/[^a-zA-Z0-9_-]/g, '\\$&'));
   const selectorOf = (el) => {
@@ -398,7 +404,6 @@
 
   const imgs = Array.from(document.images);
   const bodyText = text(document.body).slice(0, 200000);
-  const lower = bodyText.toLowerCase();
   const TRUST = [
     ['testimonials', lex('trustTestimonials', 'testimonial|reviews?')],
     ['ratings', /★|\b[1-5]([.,]\d)? ?(\/ ?5|out of 5|stars?|yıldız|sterne|estrellas|étoiles)\b/iu],
@@ -411,7 +416,7 @@
     ],
     ['case studies', /case stud(y|ies)|başarı hikaye|fallstudie|casos de éxito|études de cas/iu],
   ];
-  const trustSignals = TRUST.filter(([, re]) => re.test(lower)).map(([n]) => n);
+  const trustSignals = TRUST.filter(([, re]) => re.test(bodyText)).map(([n]) => n);
   if (
     links.some((l) =>
       /privacy|gizlilik|datenschutz|privacidad|confidentialité|kvkk/i.test(`${l.text} ${l.href}`),
@@ -427,7 +432,7 @@
       /\bfree plan\b|\bfree forever\b|\$0\b|ücretsiz plan|kostenloser plan|plan gratuito|offre gratuite/iu,
     ],
   ];
-  const pricingSignals = PRICING.filter(([, re]) => re.test(lower)).map(([n]) => n);
+  const pricingSignals = PRICING.filter(([, re]) => re.test(bodyText)).map(([n]) => n);
 
   // ---- Structure of forms, tables and images (WCAG 1.3.1, 1.1.1) ----
   const structure = { fieldsets: [], radioGroups: [], tables: [], altTitle: [] };

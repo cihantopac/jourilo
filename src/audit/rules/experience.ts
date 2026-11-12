@@ -1,7 +1,7 @@
 // Responsive layout, reliability (errors, failed requests) and lab performance rules.
 import type { PageObservation } from '../../browser/capture.js';
 import { toMetrics } from '../../browser/vitals.js';
-import { redactText, redactUrl } from '../../core/redact.js';
+import { redactText, redactUrl, redactUrlsIn } from '../../core/redact.js';
 import type { Finding, Severity } from '../../core/types.js';
 import { makeFinding } from '../finding.js';
 import { CWV, LIGHTHOUSE, nielsen, wcag } from '../standards.js';
@@ -140,7 +140,7 @@ export function reliabilityFindings(obs: PageObservation): Finding[] {
   const vp = obs.viewport.name;
 
   const rawNavError = obs.errors.find((e) => e.startsWith('navigation:'));
-  const navError = rawNavError === undefined ? undefined : redactText(rawNavError);
+  const navError = rawNavError === undefined ? undefined : redactUrlsIn(rawNavError);
   if (navError) {
     const hops = obs.redirects ?? [];
     const froms = hops.map((h) => h.from);

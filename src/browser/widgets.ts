@@ -133,8 +133,11 @@ const STATE = `(controls, mode) => {
 }`;
 
 // Resolves once the deep active element (through shadow roots) is unchanged on four consecutive animation frames
-// (about 64 ms; two frames raced a 30 ms guard timer), or after 250 ms. Dialog libraries park focus on a guard and wrap it a tick later.
-const WAIT_FOCUS_STABLE = `new Promise((resolve) => {
+// (about 64 ms; two frames raced a 30 ms guard timer), or after 250 ms (a setTimeout cap too, since requestAnimationFrame is paused in a background tab). Dialog libraries park focus on a guard and wrap it a tick later.
+export const WAIT_FOCUS_STABLE = `new Promise((resolve) => {
+  let done = false;
+  const finish = () => { if (!done) { done = true; resolve(true); } };
+  setTimeout(finish, 250);
   const deepActive = () => { let a = document.activeElement; while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement; return a; };
   const start = performance.now();
   let last = deepActive();
@@ -143,7 +146,8 @@ const WAIT_FOCUS_STABLE = `new Promise((resolve) => {
     const now = deepActive();
     same = now === last ? same + 1 : 0;
     last = now;
-    if (same >= 4 || performance.now() - start >= 250) resolve(true);
+    if (done) return;
+    if (same >= 4 || performance.now() - start >= 250) finish();
     else requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
