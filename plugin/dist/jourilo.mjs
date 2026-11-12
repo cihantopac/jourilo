@@ -40302,6 +40302,7 @@ function redirectEscape(url, redirectedFrom, policy) {
   }
 }
 var GUARD_UPSTREAM_ERROR_HEADER = "x-jourilo-guard-upstream-error";
+var GUARD_REFUSED_WORDING = "the network guard refused the destination";
 function upstreamFailureWording(message) {
   if (/upstream proxy: answered 407/.test(message)) return "the upstream proxy asked for credentials (407)";
   if (/upstream proxy:/.test(message)) return "the upstream proxy could not open the connection";
@@ -40437,9 +40438,12 @@ async function startNetGuard(policy, deps = {}) {
         client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
         pipeBoth(client, upstream, head);
       },
+      // Browsers ignore a failed CONNECT's headers. Jourilo's own fetches through the guard (route.fetch for
+      // --extra-header) read the reply as the response, so it carries the token signal too, in fixed wording.
       (status, reason) => client.end(
         `HTTP/1.1 ${status} ${status === 403 ? "Forbidden" : "Bad Gateway"}\r
 content-type: text/plain\r
+${GUARD_UPSTREAM_ERROR_HEADER}: ${token} ${status === 403 ? GUARD_REFUSED_WORDING : upstreamFailureWording(reason)}\r
 \r
 ${status === 403 ? `Blocked by Jourilo network guard: ${reason}` : ""}`
       )
@@ -42155,6 +42159,12 @@ async function sendTargetHeaders(ctx, scope, timeoutMs) {
     try {
       const response = await route.fetch({ headers, maxRedirects: 0, timeout: timeoutMs });
       const status = response.status();
+      const signal = response.headers()[GUARD_UPSTREAM_ERROR_HEADER];
+      if (scope.guardToken && signal?.startsWith(`${scope.guardToken} `) && safeUrl(req.url())?.protocol === "https:") {
+        await response.dispose().catch(() => void 0);
+        await route.abort(status === 403 ? "blockedbyclient" : "connectionfailed");
+        return;
+      }
       const location = response.headers().location;
       const next = status >= 300 && status < 400 && location ? safeUrl(location, req.url()) : void 0;
       if (next?.origin === scope.origin && scope.redirects.size < 100)
@@ -45982,6 +45992,7 @@ async function runAudit(ws, opts) {
       );
       const browser = session.browser;
       browserVersion = browser.version();
+      if (headers) headers.guardToken = session.guard.token;
       halt();
       if (opts.setupJourney) {
         const spec = opts.setupJourney;
@@ -49875,6 +49886,7 @@ async function runCmd(ctx) {
     );
     const browser = session.browser;
     const browserVersion = browser.version();
+    if (headers) headers.guardToken = session.guard.token;
     const startedAt = (/* @__PURE__ */ new Date()).toISOString();
     const journeys2 = [];
     let findings = [];

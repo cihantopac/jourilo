@@ -619,6 +619,38 @@ describe('cli request options (F16)', () => {
   });
 });
 
+describe('cli --extra-header against an unreachable target (F16)', () => {
+  it('an unreachable target with --extra-header exits 5 with no-page-loaded, not a "loaded" 502', async () => {
+    // A port that was open a moment ago and is closed now: the guard's connection is refused.
+    const probe = http.createServer();
+    await new Promise<void>((r) => probe.listen(0, '127.0.0.1', () => r()));
+    const port = (probe.address() as AddressInfo).port;
+    await new Promise((r) => probe.close(r));
+    for (const scheme of ['https', 'http']) {
+      const r = await auditAsync([
+        `${scheme}://127.0.0.1:${port}/`,
+        '--pages',
+        '1',
+        '--viewports',
+        'desktop',
+        '--no-keyboard',
+        '--no-forms',
+        '--extra-header',
+        'X-Test: s3cret-unreachable',
+      ]);
+      expect(r.code, `${scheme}: ${r.stderr}`).toBe(5);
+      const out = JSON.parse(r.stdout);
+      expect(out.outcome, scheme).toBe('no-page-loaded');
+      const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8')) as Run;
+      expect(
+        run.pages.every((p) => p.status === null || p.status < 400),
+        scheme,
+      ).toBe(true);
+      expect(`${r.stdout}${r.stderr}${runFilesText(out.runDir)}`).not.toContain('s3cret-unreachable');
+    }
+  }, 240_000);
+});
+
 describe('cli --ignore-https-errors (F16)', () => {
   it('--ignore-https-errors audits a self-signed local https server and adds a limitation', async () => {
     const certs = join(root, 'tests', 'certs');

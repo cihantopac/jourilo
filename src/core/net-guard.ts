@@ -257,6 +257,8 @@ export interface NetGuard {
 
 /** Set on the guard's own 502 so a page that never reached the server is not mistaken for an HTTP error page. */
 export const GUARD_UPSTREAM_ERROR_HEADER = 'x-jourilo-guard-upstream-error';
+/** The signal's wording for a destination the guard refused (a failed CONNECT answered 403). */
+export const GUARD_REFUSED_WORDING = 'the network guard refused the destination';
 
 /** Fixed wording for a connection failure; the raw error can carry resolved IP addresses and must not be reported. */
 export function upstreamFailureWording(message: string): string {
@@ -422,9 +424,11 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
         client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
         pipeBoth(client, upstream, head);
       },
+      // Browsers ignore a failed CONNECT's headers. Jourilo's own fetches through the guard (route.fetch for
+      // --extra-header) read the reply as the response, so it carries the token signal too, in fixed wording.
       (status, reason) =>
         client.end(
-          `HTTP/1.1 ${status} ${status === 403 ? 'Forbidden' : 'Bad Gateway'}\r\ncontent-type: text/plain\r\n\r\n${status === 403 ? `Blocked by Jourilo network guard: ${reason}` : ''}`,
+          `HTTP/1.1 ${status} ${status === 403 ? 'Forbidden' : 'Bad Gateway'}\r\ncontent-type: text/plain\r\n${GUARD_UPSTREAM_ERROR_HEADER}: ${token} ${status === 403 ? GUARD_REFUSED_WORDING : upstreamFailureWording(reason)}\r\n\r\n${status === 403 ? `Blocked by Jourilo network guard: ${reason}` : ''}`,
         ),
     );
   });

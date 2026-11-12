@@ -3,12 +3,16 @@
 // WebSocket), in every engine, while the page itself and its own resources still load.
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import http from 'node:http';
+import https from 'node:https';
 import net, { type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { newContext, observe } from '../../src/browser/capture.js';
 import { launchBrowser } from '../../src/browser/runtime.js';
 import { networkLimitations, openGuardedBrowser } from '../../src/browser/session.js';
+import { targetHeaders } from '../../src/browser/target-headers.js';
+import { parseViewports } from '../../src/browser/viewports.js';
 import { audit } from '../../src/cli/commands/audit.js';
 import { parse } from '../../src/cli/framework.js';
 import { startNetGuard } from '../../src/core/net-guard.js';
@@ -530,4 +534,79 @@ describe('proxy credentials', () => {
       rmSync(ws, { recursive: true, force: true });
     }
   }, 180_000);
+});
+
+describe('--extra-header behind the guard', () => {
+  it('a first-party request the guard refuses is a failed request, not a 403 response', async (testCtx) => {
+    const certs = join(import.meta.dirname, '..', 'certs');
+    const hits: string[] = [];
+    const site = https.createServer(
+      {
+        key: readFileSync(join(certs, 'localhost-key.pem')),
+        cert: readFileSync(join(certs, 'localhost-cert.pem')),
+      },
+      (req, res) => {
+        hits.push(req.url ?? '');
+        if (req.url === '/') {
+          res
+            .writeHead(200, { 'content-type': 'text/html', connection: 'close' })
+            .end(
+              '<!doctype html><html lang="en"><title>First party</title><h1>Page</h1><img src="/later.gif" alt="">',
+            );
+          return;
+        }
+        res.writeHead(200, { 'content-type': 'image/gif', connection: 'close' }).end('GIF89a');
+      },
+    );
+    const port = await new Promise<number>((r) =>
+      site.listen(0, '127.0.0.1', () => r((site.address() as AddressInfo).port)),
+    );
+    // The first connection to the site is allowed, later ones are refused, as when the name is rebound to a
+    // forbidden address while the page loads.
+    let connections = 0;
+    const policy: AddressPolicy = { target: 'local', allowPrivate: false };
+    const guard = await startNetGuard(policy, {
+      verdict: (ip, p) =>
+        p === port
+          ? ++connections === 1
+            ? { ok: true }
+            : { ok: false, reason: 'rebound to a forbidden address (test)' }
+          : addressVerdict(ip, policy, p),
+    });
+    let browser: Awaited<ReturnType<typeof launchBrowser>>;
+    try {
+      browser = await launchBrowser('chromium', false, guard);
+    } catch {
+      await guard.close();
+      site.close();
+      return testCtx.skip();
+    }
+    try {
+      const origin = `https://127.0.0.1:${port}`;
+      const headers = targetHeaders(origin, { 'X-Test': '1' });
+      headers.guardToken = guard.token;
+      const ctx = await newContext(browser, parseViewports('desktop')[0]!, {
+        runDir: tmpdir(),
+        extraHeaders: headers,
+        ignoreHttpsErrors: true,
+      });
+      const page = await ctx.newPage();
+      const live = observe(page, origin);
+      const response = await page.goto(`${origin}/`, { waitUntil: 'load' });
+      await page.waitForTimeout(500);
+      expect(response?.status()).toBe(200);
+      expect(await page.textContent('h1')).toBe('Page');
+      expect(hits).toEqual(['/']);
+      const failed = live.network.find((n) => n.url.endsWith('/later.gif'));
+      expect(failed, JSON.stringify(live.network)).toBeDefined();
+      expect(failed!.status).toBeNull();
+      expect(failed!.failure).toMatch(/BLOCKED_BY_CLIENT/);
+      expect(failed!.firstParty).toBe(true);
+      expect(guard.blocked.map((b) => b.port)).toContain(port);
+    } finally {
+      await browser.close();
+      await guard.close();
+      await new Promise((r) => site.close(r));
+    }
+  }, 120_000);
 });

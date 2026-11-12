@@ -368,6 +368,8 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       );
       const browser: Browser = session.browser;
       browserVersion = browser.version();
+      // The header route tells the guard's own CONNECT failures from pages by this token.
+      if (headers) headers.guardToken = session.guard.token;
       halt();
 
       // 0. Setup journey: bring the site into the state to audit. It goes through the same safety policy as

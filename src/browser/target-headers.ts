@@ -6,6 +6,7 @@
 // still checks it) without following redirects, and hands the response to the browser. A redirect is followed by the
 // browser as a new request, which Playwright does not route again, so it goes without the headers.
 import type { BrowserContext, Route } from 'playwright-core';
+import { GUARD_UPSTREAM_ERROR_HEADER } from '../core/net-guard.js';
 import { redactUrl } from '../core/redact.js';
 
 export interface TargetHeaders {
@@ -15,6 +16,11 @@ export interface TargetHeaders {
   headers: Record<string, string>;
   /** Filled while browsing: redirects within the origin that the browser followed without the headers (redacted). */
   redirects: Set<string>;
+  /**
+   * Token of the network guard the browser goes through, set once the guard runs. A failed CONNECT reaches
+   * `route.fetch` as an HTTP response (Playwright replays the proxy's reply); the token tells it apart from a page.
+   */
+  guardToken?: string;
 }
 
 export function targetHeaders(origin: string, headers: Record<string, string>): TargetHeaders {
@@ -49,6 +55,19 @@ export async function sendTargetHeaders(
     try {
       const response = await route.fetch({ headers, maxRedirects: 0, timeout: timeoutMs });
       const status = response.status();
+      // The guard's reply to a failed CONNECT (refused destination, DNS or connection failure) is not the site's page:
+      // it fails as it does in the browser without --extra-header. Plain HTTP keeps the guard's 502, which the
+      // capture recognises by the same token.
+      const signal = response.headers()[GUARD_UPSTREAM_ERROR_HEADER];
+      if (
+        scope.guardToken &&
+        signal?.startsWith(`${scope.guardToken} `) &&
+        safeUrl(req.url())?.protocol === 'https:'
+      ) {
+        await response.dispose().catch(() => undefined);
+        await route.abort(status === 403 ? 'blockedbyclient' : 'connectionfailed');
+        return;
+      }
       const location = response.headers().location;
       const next = status >= 300 && status < 400 && location ? safeUrl(location, req.url()) : undefined;
       if (next?.origin === scope.origin && scope.redirects.size < 100)

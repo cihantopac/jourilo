@@ -264,6 +264,8 @@ async function runCmd(ctx: Context) {
     );
     const browser = session.browser;
     const browserVersion = browser.version();
+    // The header route tells the guard's own CONNECT failures from pages by this token.
+    if (headers) headers.guardToken = session.guard.token;
     const startedAt = new Date().toISOString();
     const journeys: JourneyResult[] = [];
     let findings: Finding[] = [];
