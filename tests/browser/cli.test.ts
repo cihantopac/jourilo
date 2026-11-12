@@ -728,8 +728,19 @@ describe('cli --chromium-sandbox and browser.pids (F21)', () => {
     }
   };
 
-  /** Starts an audit that is held at its first page; returns the browser's pids once the file appears. */
-  async function holdAudit(extra: string[]) {
+  /** Child processes can outlive close() by a moment on a slow runner: poll for up to 2 s. */
+  async function expectDead(pids: number[]) {
+    const deadline = Date.now() + 2000;
+    let live = pids.filter(alive);
+    while (live.length && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 100));
+      live = pids.filter(alive);
+    }
+    expect(live, 'pids still alive').toEqual([]);
+  }
+
+  /** Starts an audit (or, with `argv`, any command) held at its first page; returns the browser's pids once the file appears. */
+  async function holdAudit(extra: string[], argv?: string[]) {
     held = new Promise<void>((r) => {
       release = r;
     });
@@ -737,18 +748,20 @@ describe('cli --chromium-sandbox and browser.pids (F21)', () => {
       process.execPath,
       [
         cli,
-        'audit',
-        url,
-        '--pages',
-        '1',
-        '--viewports',
-        'desktop',
-        '--no-keyboard',
-        '--no-forms',
-        '--json',
-        '-q',
-        '--workspace',
-        sandboxWs,
+        ...(argv ?? [
+          'audit',
+          url,
+          '--pages',
+          '1',
+          '--viewports',
+          'desktop',
+          '--no-keyboard',
+          '--no-forms',
+          '--json',
+          '-q',
+          '--workspace',
+          sandboxWs,
+        ]),
         ...extra,
       ],
       { cwd: root },
@@ -777,7 +790,7 @@ describe('cli --chromium-sandbox and browser.pids (F21)', () => {
       throw new Error(`browser.pids never appeared: ${stderr}`);
     }
     const pids = readFileSync(file, 'utf8').split('\n').filter(Boolean).map(Number);
-    return { file, pids, closed, result: () => ({ stdout, stderr }) };
+    return { child, file, pids, closed, result: () => ({ stdout, stderr }) };
   }
 
   it.skipIf(!posix)(
@@ -825,8 +838,63 @@ describe('cli --chromium-sandbox and browser.pids (F21)', () => {
       files: { path: string }[];
     };
     expect(manifest.files.some((f) => f.path === 'browser.pids')).toBe(false);
-    if (posix) for (const pid of live.pids) expect(alive(pid), `pid ${pid}`).toBe(false);
+    if (posix) await expectDead(live.pids);
   }, 240_000);
+
+  it.skipIf(!posix)(
+    'a second signal (exit 130) leaves no browser.pids behind',
+    async () => {
+      const held2 = await holdAudit([]);
+      held2.child.kill('SIGTERM');
+      await new Promise((r) => setTimeout(r, 1500));
+      held2.child.kill('SIGTERM');
+      const code = await held2.closed;
+      release();
+      expect(code, held2.result().stderr).toBe(130);
+      expect(existsSync(held2.file)).toBe(false);
+      await expectDead(held2.pids);
+    },
+    240_000,
+  );
+
+  it.skipIf(!posix)(
+    'journeys run interrupted with SIGINT leaves no browser.pids behind',
+    async () => {
+      const dir = join(sandboxWs, 'journeys');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        join(dir, 'held.json'),
+        JSON.stringify({
+          version: 1,
+          id: 'held',
+          name: 'Held',
+          start: '/',
+          steps: [{ action: 'click', target: { role: 'link', name: 'Home' } }],
+          success: [{ description: 'Stays home', url: '/' }],
+        }),
+      );
+      const j = await holdAudit(
+        [],
+        [
+          'journeys',
+          'run',
+          'held',
+          '--base',
+          url.replace(/\/$/, ''),
+          '--json',
+          '-q',
+          '--workspace',
+          sandboxWs,
+        ],
+      );
+      j.child.kill('SIGINT');
+      await j.closed;
+      release();
+      expect(existsSync(j.file)).toBe(false);
+      await expectDead(j.pids);
+    },
+    240_000,
+  );
 });
 
 /** Spawns an audit with --json, sends `signal` once a progress line matches `when`, and returns the outcome. */

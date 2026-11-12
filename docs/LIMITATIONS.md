@@ -144,11 +144,13 @@ Stated so nobody mistakes silence for a pass.
   kernel that denies unprivileged user namespaces (some CI runners), the run ends with "browser unavailable" (exit 4).
   Jourilo's own test for the flag skips itself on such a kernel and on Windows, where it cannot inspect the process
   command line.
-- While a Chromium run is going, its directory holds `browser.pids`: the process ids of the browser, GPU and network
-  service processes, one per line. It is removed when the browser closes, including after Ctrl-C, SIGTERM and
-  `--max-duration`, and is not listed in `manifest.json`. A `SIGKILL` of Jourilo (or a crashed machine) leaves the file
-  and may leave the browser running: an integrator can clean up with `kill $(cat <run dir>/browser.pids)` (on
-  Windows, `taskkill /F /PID` for each id). Check first that the ids still belong to Chromium, since ids are reused.
+- While a Chromium run is going, its directory holds `browser.pids`: a snapshot, taken when the browser launched, of
+  the process ids of the browser, GPU and network service processes, one per line (renderers and utility processes
+  started later are not listed). The file is removed when the browser closes and on Jourilo's own exit, including
+  after Ctrl-C, SIGTERM, a second signal (exit 130) and `--max-duration`, and is not listed in `manifest.json`. A
+  `SIGKILL` of Jourilo (or a crashed machine) leaves the file and may leave the browser running: an integrator can
+  clean up with `kill $(cat <run dir>/browser.pids)` (on Windows, `taskkill /F /PID` for each id). Check first that
+  the ids still belong to Chromium, since ids are reused.
   Firefox and WebKit write no `browser.pids`.
 
 ## Reports

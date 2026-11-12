@@ -42082,7 +42082,16 @@ async function openGuardedBrowser(name, headed, policy, ownSignals = false, extr
     throw err;
   }
   const pidsFile = extra.runDir ? join6(extra.runDir, PIDS_FILE) : void 0;
-  if (pidsFile) await writeBrowserPids(browser, name, pidsFile);
+  const unlinkOnExit = () => {
+    try {
+      if (pidsFile) rmSync2(pidsFile, { force: true });
+    } catch {
+    }
+  };
+  if (pidsFile) {
+    process.on("exit", unlinkOnExit);
+    await writeBrowserPids(browser, name, pidsFile);
+  }
   const escaped = [];
   sessions.set(browser, { policy, escaped });
   return {
@@ -42091,7 +42100,10 @@ async function openGuardedBrowser(name, headed, policy, ownSignals = false, extr
     report: () => ({ blocked: [...guard.blocked], escaped: [...escaped] }),
     close: async () => {
       await browser.close().catch(() => void 0);
-      if (pidsFile) rmSync2(pidsFile, { force: true });
+      if (pidsFile) {
+        rmSync2(pidsFile, { force: true });
+        process.off("exit", unlinkOnExit);
+      }
       await guard.close();
     }
   };

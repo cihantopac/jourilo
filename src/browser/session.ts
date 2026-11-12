@@ -64,7 +64,19 @@ export async function openGuardedBrowser(
     throw err;
   }
   const pidsFile = extra.runDir ? join(extra.runDir, PIDS_FILE) : undefined;
-  if (pidsFile) await writeBrowserPids(browser, name, pidsFile);
+  // The list must not outlive the browser. A second signal (process.exit) or Playwright's own signal handler ends the
+  // process without close(), so an exit hook removes the file too; close() takes the hook off again.
+  const unlinkOnExit = () => {
+    try {
+      if (pidsFile) rmSync(pidsFile, { force: true });
+    } catch {
+      // Nothing more to do while exiting.
+    }
+  };
+  if (pidsFile) {
+    process.on('exit', unlinkOnExit);
+    await writeBrowserPids(browser, name, pidsFile);
+  }
   const escaped: NetworkReport['escaped'] = [];
   sessions.set(browser, { policy, escaped });
   return {
@@ -73,7 +85,10 @@ export async function openGuardedBrowser(
     report: () => ({ blocked: [...guard.blocked], escaped: [...escaped] }),
     close: async () => {
       await browser.close().catch(() => undefined);
-      if (pidsFile) rmSync(pidsFile, { force: true });
+      if (pidsFile) {
+        rmSync(pidsFile, { force: true });
+        process.off('exit', unlinkOnExit);
+      }
       await guard.close();
     },
   };
