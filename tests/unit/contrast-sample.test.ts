@@ -45,17 +45,25 @@ describe('judgeContrast', () => {
     expect(r.best).toBeGreaterThanOrEqual(7);
   });
 
-  it('skips tiles with no pixel near the text color, such as padding over a different part of the image', () => {
-    // Dark text over a white left half; the right half is a dark part of the image with no glyphs.
+  it('judges only the line boxes: a bright sun in the padding of a dark hero is not behind the text', () => {
+    // White text over a dark photo; the right half is padding with a near-white sun and no glyphs.
+    const px = render(120, 40, () => [15, 23, 42]);
+    for (let y = 0; y < 40; y++)
+      for (let x = 60; x < 120; x++) px.set([254, 252, 232, 255], (y * 120 + x) * 4);
+    const lines = [{ x: 0, y: 0, w: 60, h: 40 }];
+    expect(judgeContrast(px, 120, 40, WHITE, 20, lines)!.worst).toBeGreaterThanOrEqual(7);
+    // Without line boxes the glyph-free sun would be judged as background and fail.
+    expect(judgeContrast(px, 120, 40, WHITE, 20)!.worst).toBeLessThan(1.5);
+  });
+
+  it('skips tiles inside the line boxes with no pixel near the text color', () => {
+    // Dark text over white; the right half of the line box is a light grey part of the image with no glyphs.
     const text: RGB = [17, 24, 39];
     const px = render(120, 40, () => [255, 255, 255], text);
-    for (let y = 0; y < 40; y++) for (let x = 60; x < 120; x++) px.set([15, 23, 42, 255], (y * 120 + x) * 4);
-    // The dark half is as dark as the text, so it counts as text-colored and is judged: report it.
-    expect(judgeContrast(px, 120, 40, text, 20)!.worst).toBeLessThan(1.5);
-    // A light grey right half has no pixel near the text color and is skipped.
     for (let y = 0; y < 40; y++)
       for (let x = 60; x < 120; x++) px.set([150, 150, 150, 255], (y * 120 + x) * 4);
-    expect(judgeContrast(px, 120, 40, text, 20)!.worst).toBeGreaterThanOrEqual(7);
+    const lines = [{ x: 0, y: 0, w: 120, h: 40 }];
+    expect(judgeContrast(px, 120, 40, text, 20, lines)!.worst).toBeGreaterThanOrEqual(7);
   });
 
   it('returns null when no pixel is near the computed text color (text under a tint)', () => {

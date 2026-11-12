@@ -40750,7 +40750,7 @@ async function installRequestGuard(target, policy) {
 var SAMPLED_REASONS = /* @__PURE__ */ new Set(["bgImage", "bgGradient", "bgOverlap"]);
 var CONTRAST_SAMPLE_CAP = 30;
 var MAX_DEVICE_PIXELS = 4e6;
-function judgeContrast(px, width, height, text, tile) {
+function judgeContrast(px, width, height, text, tile, lines) {
   const lin = (v) => {
     const c = v / 255;
     return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
@@ -40760,6 +40760,17 @@ function judgeContrast(px, width, height, text, tile) {
   const lt = lum(tr, tg, tb);
   const near = 48 * 48;
   const size = Math.max(4, Math.round(tile));
+  let mask = null;
+  if (lines) {
+    mask = new Uint8Array(width * height);
+    for (const l of lines) {
+      const xa = Math.max(0, Math.floor(l.x));
+      const ya = Math.max(0, Math.floor(l.y));
+      const xb = Math.min(width, Math.ceil(l.x + l.w));
+      const yb = Math.min(height, Math.ceil(l.y + l.h));
+      for (let y = ya; y < yb; y++) mask.fill(1, y * width + xa, y * width + Math.max(xa, xb));
+    }
+  }
   let textPixels = 0;
   let worst = Number.POSITIVE_INFINITY;
   let best = 0;
@@ -40767,36 +40778,34 @@ function judgeContrast(px, width, height, text, tile) {
     for (let x0 = 0; x0 < width; x0 += size) {
       const x1 = Math.min(width, x0 + size);
       const y1 = Math.min(height, y0 + size);
-      const count = (x1 - x0) * (y1 - y0);
-      if (count < 16) continue;
-      const dist = new Float64Array(count);
-      let k = 0;
+      const at = new Int32Array((x1 - x0) * (y1 - y0));
+      const dist = new Float64Array(at.length);
+      let count = 0;
       let nearHere = 0;
       for (let y = y0; y < y1; y++) {
         for (let x = x0; x < x1; x++) {
-          const i = (y * width + x) * 4;
+          const p = y * width + x;
+          if (mask && !mask[p]) continue;
+          const i = p * 4;
           const dr = px[i] - tr;
           const dg = px[i + 1] - tg;
           const db = px[i + 2] - tb;
           const d = dr * dr + dg * dg + db * db;
           if (d <= near) nearHere++;
-          dist[k++] = d;
+          at[count] = i;
+          dist[count++] = d;
         }
       }
-      if (!nearHere) continue;
+      if (count < 16 || !nearHere) continue;
       textPixels += nearHere;
-      const sorted = Float64Array.from(dist).sort();
-      const cut = sorted[Math.floor(count * 0.8)];
-      k = 0;
-      for (let y = y0; y < y1; y++) {
-        for (let x = x0; x < x1; x++) {
-          if (dist[k++] < cut) continue;
-          const i = (y * width + x) * 4;
-          const lb = lum(px[i], px[i + 1], px[i + 2]);
-          const ratio = (Math.max(lt, lb) + 0.05) / (Math.min(lt, lb) + 0.05);
-          if (ratio < worst) worst = ratio;
-          if (ratio > best) best = ratio;
-        }
+      const cut = dist.slice(0, count).sort()[Math.floor(count * 0.8)];
+      for (let k = 0; k < count; k++) {
+        if (dist[k] < cut) continue;
+        const i = at[k];
+        const lb = lum(px[i], px[i + 1], px[i + 2]);
+        const ratio = (Math.max(lt, lb) + 0.05) / (Math.min(lt, lb) + 0.05);
+        if (ratio < worst) worst = ratio;
+        if (ratio > best) best = ratio;
       }
     }
   }
@@ -40816,8 +40825,9 @@ var readNodeStyle = (sel) => {
   g.fillRect(0, 0, 1, 1);
   const c = g.getImageData(0, 0, 1, 1).data;
   if (c[3] !== 255) return null;
+  const box = el.getBoundingClientRect();
   const range = document.createRange();
-  let lines = 0;
+  const lines = [];
   for (const node of el.childNodes) {
     if (node.nodeType !== Node.TEXT_NODE || !node.textContent?.trim()) continue;
     range.selectNodeContents(node);
@@ -40825,18 +40835,18 @@ var readNodeStyle = (sel) => {
       if (r.width < 1 || r.height < 1) continue;
       const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
       if (!top || top !== el && !el.contains(top)) return null;
-      lines++;
+      lines.push({ x: r.left - box.left, y: r.top - box.top, w: r.width, h: r.height });
     }
   }
-  if (!lines) return null;
-  const box = el.getBoundingClientRect();
+  if (!lines.length) return null;
   return {
     rgb: [c[0], c[1], c[2]],
     fontSize: Number.parseFloat(cs.fontSize) || 0,
     fontWeight: Number.parseInt(cs.fontWeight, 10) || 400,
     width: box.width,
     height: box.height,
-    dpr: devicePixelRatio || 1
+    dpr: devicePixelRatio || 1,
+    lines
   };
 };
 var decodeAndJudge = async (a, judge) => {
@@ -40851,7 +40861,9 @@ var decodeAndJudge = async (a, judge) => {
   if (!g) return null;
   g.drawImage(bmp, 0, 0);
   const data = g.getImageData(0, 0, bmp.width, bmp.height).data;
-  return judge(data, bmp.width, bmp.height, a.rgb, a.tileCss * (bmp.width / Math.max(1, a.width)));
+  const k = bmp.width / Math.max(1, a.width);
+  const lines = a.lines.map((l) => ({ x: l.x * k, y: l.y * k, w: l.w * k, h: l.h * k }));
+  return judge(data, bmp.width, bmp.height, a.rgb, a.tileCss * k, lines);
 };
 async function sampleContrast(page, target) {
   if (!target || target.includes(">>>")) return null;
@@ -40874,7 +40886,8 @@ async function sampleContrast(page, target) {
       url: `data:image/png;base64,${png.toString("base64")}`,
       rgb: style.rgb,
       tileCss: Math.max(12, style.fontSize),
-      width: style.width
+      width: style.width,
+      lines: style.lines
     };
     const judged = await page.evaluate(
       `(${String(decodeAndJudge)})(${JSON.stringify(arg)}, ${String(judgeContrast)})`
