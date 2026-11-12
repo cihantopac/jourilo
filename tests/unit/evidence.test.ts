@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { emptyInventory } from '../../src/audit/engine.js';
+import { closeBrowsing, emptyInventory } from '../../src/audit/engine.js';
 import {
   firstScreenLimitation,
   journeyStepsToKeep,
@@ -119,5 +119,28 @@ describe('journeyStepsToKeep', () => {
   });
   it('keeps only the last executed step of a passing journey', () => {
     expect([...journeyStepsToKeep([s('passed'), s('passed'), s('passed')])]).toEqual([2]);
+  });
+});
+
+describe('closeBrowsing', () => {
+  it('setup-state.json is removed when closing the session fails', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'jourilo-close-'));
+    const state = join(dir, 'setup-state.json');
+    writeFileSync(state, '{}');
+    try {
+      await expect(
+        closeBrowsing(
+          {
+            close: async () => {
+              throw new Error('browser crashed');
+            },
+          },
+          state,
+        ),
+      ).rejects.toThrow('browser crashed');
+      expect(existsSync(state)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

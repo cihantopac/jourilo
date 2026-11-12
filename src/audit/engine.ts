@@ -298,9 +298,9 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
   // Closes the browser first, so a setup journey abandoned by a stop cannot write its state after the removal.
   const endBrowsing = async () => {
     if (session) network = session.report();
-    await session?.close();
+    const closing = session;
     session = undefined;
-    rmSync(setupState, { force: true });
+    await closeBrowsing(closing, setupState);
   };
   try {
     try {
@@ -627,6 +627,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       title: o.title,
       viewport: o.viewport.name,
       ...(o.screenshot ? { screenshot: o.screenshot } : {}),
+      ...(o.foldScreenshot ? { foldScreenshot: o.foldScreenshot } : {}),
       loadMs: o.loadMs,
       metrics: o.vitals ? toMetrics(o.vitals, o.vitalsSpread, o.vitalsRuns) : [],
       consoleErrors: o.console.filter((c) => c.type !== 'warning').length,
@@ -686,6 +687,18 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
     return { run, runDir, observations };
   } finally {
     await endBrowsing();
+  }
+}
+
+/** Closes the browser, then removes the setup journey's session state even when closing throws (the error is reported). */
+export async function closeBrowsing(
+  session: { close(): Promise<unknown> } | undefined,
+  setupState: string,
+): Promise<void> {
+  try {
+    await session?.close();
+  } finally {
+    rmSync(setupState, { force: true });
   }
 }
 

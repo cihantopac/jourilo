@@ -36,6 +36,8 @@ export interface JourneyRunOptions {
   allowOrigins?: string[];
   /** `minimal`: JPEG quality 55. The caller prunes step screenshots (`pruneJourneyScreenshots`) once it has picked the attempt it reports. */
   evidence?: EvidenceMode;
+  /** 1-based attempt number under `--repeat`; step files carry it so attempts never overwrite each other. */
+  attempt?: number;
   log?: (msg: string) => void;
 }
 
@@ -291,7 +293,10 @@ export async function runJourney(
   const startUrl = new URL(interpolate(spec.start, opts.data), opts.base);
   const allSteps: Step[] = [{ action: 'goto', url: startUrl.toString() }, ...spec.steps];
   const shot = async (i: number) => {
-    const file = join('screenshots', `journey-${spec.id}-${vp.name}-${String(i).padStart(2, '0')}.jpg`);
+    const file = join(
+      'screenshots',
+      `journey-${spec.id}-${vp.name}${opts.attempt === undefined ? '' : `-a${opts.attempt}`}-${String(i).padStart(2, '0')}.jpg`,
+    );
     try {
       await page.screenshot({
         path: join(opts.runDir, file),

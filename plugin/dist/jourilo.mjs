@@ -43965,7 +43965,10 @@ async function runJourney(browser, spec, opts) {
   const startUrl = new URL(interpolate(spec.start, opts.data), opts.base);
   const allSteps = [{ action: "goto", url: startUrl.toString() }, ...spec.steps];
   const shot = async (i) => {
-    const file2 = join9("screenshots", `journey-${spec.id}-${vp.name}-${String(i).padStart(2, "0")}.jpg`);
+    const file2 = join9(
+      "screenshots",
+      `journey-${spec.id}-${vp.name}${opts.attempt === void 0 ? "" : `-a${opts.attempt}`}-${String(i).padStart(2, "0")}.jpg`
+    );
     try {
       await page.screenshot({
         path: join9(opts.runDir, file2),
@@ -45301,9 +45304,9 @@ async function runAudit(ws, opts) {
   let network = { blocked: [], escaped: [] };
   const endBrowsing = async () => {
     if (session) network = session.report();
-    await session?.close();
+    const closing = session;
     session = void 0;
-    rmSync2(setupState, { force: true });
+    await closeBrowsing(closing, setupState);
   };
   try {
     try {
@@ -45592,6 +45595,7 @@ async function runAudit(ws, opts) {
       title: o.title,
       viewport: o.viewport.name,
       ...o.screenshot ? { screenshot: o.screenshot } : {},
+      ...o.foldScreenshot ? { foldScreenshot: o.foldScreenshot } : {},
       loadMs: o.loadMs,
       metrics: o.vitals ? toMetrics(o.vitals, o.vitalsSpread, o.vitalsRuns) : [],
       consoleErrors: o.console.filter((c) => c.type !== "warning").length,
@@ -45650,6 +45654,13 @@ async function runAudit(ws, opts) {
     return { run, runDir, observations };
   } finally {
     await endBrowsing();
+  }
+}
+async function closeBrowsing(session, setupState) {
+  try {
+    await session?.close();
+  } finally {
+    rmSync2(setupState, { force: true });
   }
 }
 function summarize(findings, pages, journeys2) {
@@ -49229,6 +49240,7 @@ async function runCmd(ctx) {
               ...str(ctx, "auth") ? { storageState: str(ctx, "auth") } : {},
               ...state,
               ...evidence ? { evidence } : {},
+              ...repeat > 1 ? { attempt: k + 1 } : {},
               ...saveAuth ? { saveAuth } : {},
               ...allowOrigins.length ? { allowOrigins } : {},
               log: k === 0 ? ctx.log : void 0

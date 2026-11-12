@@ -745,6 +745,21 @@ describe('cli --evidence minimal', () => {
     return { run, bytes, runDir: out.runDir };
   };
 
+  it('every capture records its first-screen file', () => {
+    for (const mode of ['full', 'minimal']) {
+      const { run, runDir } = audit(['--evidence', mode]);
+      expect(run.pages.length).toBeGreaterThan(0);
+      for (const p of run.pages) {
+        expect(p.foldScreenshot, `${p.url} ${p.viewport} (${mode})`).toBeTruthy();
+        expect(existsSync(join(runDir, p.foldScreenshot!))).toBe(true);
+      }
+      if (mode === 'minimal') {
+        const single = run.pages.filter((p) => p.foldScreenshot === p.screenshot);
+        expect(single.length).toBeGreaterThan(0);
+      }
+    }
+  }, 240_000);
+
   it('--evidence minimal at least halves the evidence on acme-saas', () => {
     const full = audit([]);
     const min = audit(['--evidence', 'minimal']);

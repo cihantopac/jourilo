@@ -295,6 +295,7 @@ async function runCmd(ctx: Context) {
               ...(str(ctx, 'auth') ? { storageState: str(ctx, 'auth')! } : {}),
               ...state,
               ...(evidence ? { evidence } : {}),
+              ...(repeat > 1 ? { attempt: k + 1 } : {}),
               ...(saveAuth ? { saveAuth } : {}),
               ...(allowOrigins.length ? { allowOrigins } : {}),
               log: k === 0 ? ctx.log : undefined,
