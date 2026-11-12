@@ -4,6 +4,63 @@ All notable changes are documented here. The project follows [Semantic Versionin
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-12
+
+Field feedback from a second run of the container adapter (F19-F40 in
+[docs/FIELD-FEEDBACK.md](docs/FIELD-FEEDBACK.md)) drove this release: fewer false positives on modern front ends,
+safer behaviour when Jourilo audits on behalf of others, and sturdier automation edges. `RUN_SCHEMA_VERSION` stays 1;
+the one new run field is optional and old runs still load. No run shows WCAG conformance.
+
+### Upgrade note
+
+- Fingerprints now use a slash-insensitive page path. Crawled links that end in a slash keep their 1.2.0
+  fingerprints. Findings on explicitly requested slash URLs (`--url /x/`, single-page runs whose target path ends in
+  `/`, journey step URLs ending in `/`) get new fingerprints once: dismissals and baselines for those need to be
+  recorded again.
+- `--pages 0`, an invalid `--max-duration`, a `--run-id` directory that already exists and a `verify --target` that
+  is not a URL are now usage or input errors (exit 2) instead of being accepted or ending in an internal error.
+
+### Added
+
+- **`--deny-local` and `JOURILO_DENY_LOCAL`** (F19, opt-in) for integrations that audit on behalf of others: refuse
+  targets, redirects and subresources that point at loopback, `*.localhost` and `*.test`. A directory target is
+  served on 127.0.0.1 and may reach only its own port. Available on `audit`, `discover`, `journeys` and `verify`.
+  The variable fails closed: `1`, `true`, `yes` and `on` enable it, `0`, `false`, `no`, `off` and empty disable it, and
+  any other value enables it and prints a warning. It is refused together with `--browser webkit` (exit 3), because
+  WebKit's HTTPS redirects bypass the proxy.
+- `foldScreenshot` in `run.json` (optional): the file that is a page's first screen, so a consumer of
+  `--evidence minimal` runs can tell it from the full-page file (F39).
+
+### Fixed
+
+- **Keyboard (F24).** Focus stops without a box and dev-server overlays such as `nextjs-portal` are no longer
+  reported by `jourilo/focus-visible`; a hidden-while-focused control that has text or an accessible name is still
+  reported. `aria-labelledby` ids are split on whitespace.
+- **Contrast (F25).** `aria-hidden` content is left out of the manual contrast review.
+- **Structure (F27).** A fieldset named by `aria-label` or `aria-labelledby` is not reported as lacking a legend.
+- **Widgets (F30).** `dialog-focus-containment` waits for a dialog library's focus guard to wrap (about 4 frames, at
+  most 250 ms) before judging containment; a guard that wraps later is treated as a sentinel.
+- **Run outcome (F28, F23 part).** A redirect loop is explained with its status chain; hop URLs are redacted.
+- **Layout (F37).** Sideways scrolling without a located element is reported as a low-confidence needs-review item,
+  not a defect.
+- **Merging.** When two sightings of one finding differ, the stronger one decides kind, confidence and text, so a
+  located serious overflow cannot merge into a needs-review item and escape `--fail-on`.
+- **Crawl (F20).** A trailing slash on the start URL is kept (`/staff/` is no longer audited as `/staff`), and an
+  explicitly requested URL that robots.txt disallows is audited and the run says so.
+- **Network (F34).** An unresolvable `*.test` name fails in seconds, not after the 30 s navigation timeout. The host
+  reaches the resolver as data, not as an option.
+- **Automation (F32, F33, F40, F22 part).** `--max-duration` is bounded and keeps the limit within a few seconds of
+  the current page; a used `--run-id` directory is refused; a second stop signal prints a line (JSON with `--json`)
+  before exiting 130; `--pages 0` is a usage error; duplicate `--url` values are audited once.
+- **Evidence (F39).** `--evidence minimal` records the first-screen file; journeys keep per-attempt screenshots;
+  setup-state removal no longer depends on the guard closing cleanly.
+- **Turkish lexicon.** Capitals (`KARANLIK`, `DİL`, `SİL`) match the toggle, action and journey vocabularies.
+
+### Docs
+
+- `docs/RELEASE-1.2.md` (1.2.1 evidence), `docs/FIELD-FEEDBACK.md` (status after 1.2.1), new limitations and the
+  roadmap with the 1.3.0 items.
+
 ## [1.2.0] - 2026-11-03
 
 Field feedback from two real projects (a portfolio site and a container adapter, F1-F23 in

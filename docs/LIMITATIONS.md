@@ -29,6 +29,11 @@ Stated so nobody mistakes silence for a pass.
   sample points. Not found: an overlay with `pointer-events: none` (it is invisible to hit-testing), a cover that is
   only translucent, an iframe or embedded object painting over the element, `oklch()`/`lab()` backgrounds with
   alpha, and a cover that reaches the element only outside the five sampled points.
+- A dialog's focus containment is judged after a short wait for focus guards (about 4 frames, at most 250 ms). A
+  guard that wraps later than that is treated as a sentinel: an empty, hidden element that holds focus is not a
+  stop, so a very slow library can still be misjudged in either direction.
+- Sideways scrolling is reported as a defect only when an element that causes it is located. Overflow without a
+  located element is a needs-review item with low confidence, so it never fails `--fail-on`.
 - A keyboard trap whose page explains a way out ("Press Ctrl+M to exit") is tested with that key; if it works the
   trap is listed for review (WCAG 2.1.2 allows it), not as a defect. Whether the explanation is announced before
   focus is held needs a person.
@@ -99,6 +104,11 @@ Stated so nobody mistakes silence for a pass.
   addresses for public targets. WebKit on macOS follows HTTPS redirects to `127.0.0.1`/`localhost` outside the
   guard: such a request is detected and reported as a security event, but not prevented. Use Chromium (default) or
   Firefox for untrusted sites. See [SECURITY-REVIEW.md](SECURITY-REVIEW.md).
+- `--deny-local` (and `JOURILO_DENY_LOCAL`) refuses targets, redirects and subresources that point at loopback,
+  `*.localhost` and `*.test`, and a name that resolves to loopback; a directory target is served on 127.0.0.1 and may
+  reach only its own port. It does not cover other private ranges (use the default guard for public targets), and it
+  is refused with `--browser webkit` because WebKit's HTTPS redirects bypass the proxy. A blocked request appears in
+  the run's limitations and can show as an error page for that URL.
 - Lab timings include one local proxy hop per connection.
 
 ## Reports

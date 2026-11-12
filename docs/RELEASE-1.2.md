@@ -1,4 +1,50 @@
-# Jourilo 1.2.0 — release notes and evidence
+# Jourilo 1.2.1 and 1.2.0
+
+## 1.2.1 (2026-11-12)
+
+A patch release from a second field report on the container adapter (F19-F40 in [FIELD-FEEDBACK.md](FIELD-FEEDBACK.md)).
+Details are in the [changelog](../CHANGELOG.md).
+
+- **Fewer false positives** on modern front ends: dev-server overlays and boxless focus stops, `aria-hidden` contrast
+  glyphs, fieldsets named by ARIA, dialog focus guards, overflow without a located element (now a review item).
+- **`--deny-local` / `JOURILO_DENY_LOCAL`** refuses local targets, redirects and subresources for integrations that
+  audit on behalf of others. It fails closed and is refused with WebKit.
+- **Automation edges:** bounded `--max-duration`, a used `--run-id` directory is refused, a second stop signal leaves
+  a line, `--pages 0` and a non-URL `verify --target` are usage errors, unresolvable `*.test` names fail fast.
+- **Crawl:** the start URL keeps its trailing slash and is checked against robots.txt.
+- **Upgrade note:** findings on explicitly requested slash URLs get new fingerprints once (see the changelog).
+
+`RUN_SCHEMA_VERSION` stays 1. No new runtime dependencies.
+
+### Evidence (2026-11-12, macOS 27, Node 22.23, Playwright 1.64.1)
+
+| Check                                                                              | Result                                                                                                                       |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `npm run ci` (lint, typecheck, build, unit and browser tests, dist check)          | pass, 32 files, 357 tests (1.2.0: 31 files, 295 tests)                                                                       |
+| Fixture benchmark (`npm run bench`)                                                | 52 / 52 found (1.2.0: 47 / 47; 5 new must-find items from the new fixture pages), 0 false positives, source location 10 / 10 |
+| Independent W3C ACT benchmark, precision / recall / false positives                | TBD (measured on the final commit)                                                                                           |
+| `scripts/smoke-pack.mjs` (clean install from the packed tarball, every command)    | TBD                                                                                                                          |
+| `claude plugin validate` (marketplace and plugin, strict)                          | TBD                                                                                                                          |
+| Real project (cihanca.com a49b46a, read-only, day clock, `--evidence minimal`), F1 | still found: `jourilo/focus-obscured`, covered by `#kepenk`                                                                  |
+| — F3                                                                               | still gone: 0 dialog findings                                                                                                |
+| — F5                                                                               | still locates `app/globals.css:351`                                                                                          |
+| — fingerprints compared with the 1.2.0 notes                                       | identical                                                                                                                    |
+| — F24 under `next dev`                                                             | 1.2.1 reports no `nextjs-portal` stop; 1.2.0 on the same server did                                                          |
+
+No automated run shows WCAG conformance.
+
+### Known limitations (1.2.1)
+
+- WebKit HTTPS redirects to loopback are still only detected, not prevented; `--deny-local` is refused with WebKit.
+- The dialog focus-guard wait is about 4 frames and at most 250 ms; the cap is checked inside `requestAnimationFrame`.
+- Failed-navigation URLs are redacted as text, not as URLs: a token in a failing target URL can appear in the
+  `page-unreachable` text. Planned for 1.3.0, with the Turkish capitals in the in-page probe lexicon and the report
+  falling back to `foldScreenshot`.
+- The 1.2.0 limitations below still apply, except the 1.2.x parked items, which are fixed.
+
+---
+
+## 1.2.0
 
 **Walk every journey. Find the friction. Prove the fix.**
 

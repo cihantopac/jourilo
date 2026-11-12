@@ -206,6 +206,40 @@ F37 becomes a review item when no element is located, F20 ships in full in 1.2.1
 | F40 | 1.2.1 (task 10)                                      |
 | F41 | Covered by `--setup-journey` and `--auth`            |
 
+## Status after 1.2.1
+
+Done in 1.2.1 unless a row says otherwise; the rest is planned for 1.3.0
+([plan](superpowers/plans/2026-11-11-jourilo-1.3.0.md)). F10 stays declined (D3).
+
+| #   | Status                                                                                         |
+| --- | ---------------------------------------------------------------------------------------------- |
+| F8  | 1.3.0                                                                                          |
+| F15 | 1.3.0                                                                                          |
+| F16 | 1.3.0 (`--output-dir` is the existing `--workspace`)                                           |
+| F19 | Done: opt-in `--deny-local` / `JOURILO_DENY_LOCAL` (fail-closed; refused with WebKit)          |
+| F20 | Done: trailing slash kept, explicit start URL checked against robots.txt                       |
+| F21 | 1.3.0, opt-in                                                                                  |
+| F22 | `--pages 0` is a usage error (done); pages vs captures and the truncation signal in 1.3.0      |
+| F23 | Redirect loop explained with its chain (done); long chains and start-independent trap in 1.3.0 |
+| F24 | Done: boxless stops and dev-server overlays skipped                                            |
+| F25 | Done: `aria-hidden` content left out of contrast review                                        |
+| F26 | 1.3.0                                                                                          |
+| F27 | Done: `aria-label` / `aria-labelledby` name a fieldset                                         |
+| F28 | Done: redirect loop shows the status chain                                                     |
+| F29 | 1.3.0                                                                                          |
+| F30 | Done: dialog focus guard wait (about 4 frames, at most 250 ms)                                 |
+| F31 | 1.3.0                                                                                          |
+| F32 | Done: `--max-duration` bounded and kept near the limit                                         |
+| F33 | Done: a used `--run-id` directory is refused                                                   |
+| F34 | Done: unresolvable `*.test` names fail fast                                                    |
+| F35 | 1.3.0                                                                                          |
+| F36 | 1.3.0                                                                                          |
+| F37 | Done: overflow without a located element is a needs-review item                                |
+| F38 | 1.3.0                                                                                          |
+| F39 | Done: `foldScreenshot` in `run.json`                                                           |
+| F40 | Done: a second stop signal prints a line                                                       |
+| F41 | Covered by `--setup-journey` and `--auth`                                                      |
+
 ## Recurrence
 
 Count each project that reports the same item again here; recurrence decides priority in each release plan.

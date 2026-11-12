@@ -39,9 +39,40 @@ Driven by field reports ([FIELD-FEEDBACK.md](FIELD-FEEDBACK.md), [RELEASE-1.2.md
   `--run-id`, the published run schema and its compatibility policy.
 - Every implemented flag in the CLI reference.
 
+## Done in 1.2.1
+
+Field items F19, F20, F24, F25, F27, F28, F30, F32-F34, F37, F39, F40 and part of F22/F23
+([FIELD-FEEDBACK.md](FIELD-FEEDBACK.md), [RELEASE-1.2.md](RELEASE-1.2.md)):
+
+- `--deny-local` / `JOURILO_DENY_LOCAL` (fail-closed, refused with WebKit); the start URL keeps its trailing slash and
+  is checked against robots.txt.
+- Fewer false positives: dev-server overlays and boxless focus stops, `aria-hidden` contrast glyphs, fieldsets named by
+  ARIA, dialog focus guards; overflow without a located element is a review item; the stronger sighting decides a
+  merged finding.
+- Automation: bounded `--max-duration`, `--run-id` reuse refused, a trace on the second stop signal, `--pages 0` and
+  `verify --target` as usage errors, fast failure for unresolvable `*.test` names, redirect-loop explanation.
+- `foldScreenshot` for `--evidence minimal`; per-attempt journey screenshots; Turkish capitals in the lexicon.
+
+## Planned for 1.3.0
+
+[Plan](superpowers/plans/2026-11-11-jourilo-1.3.0.md). Open items from the list below plus the new features:
+
+- **F21** Chromium sandbox and process group, as an opt-in (test in containers first).
+- **F26** `rules list --json`, a machine-readable rule registry.
+- **F29** budgets as arguments (`--budget LCP=2000,CLS=0.05`).
+- **F31** `--wait-for <selector>` and the load state in the report.
+- **F35** structured progress (`phase`, `done`, `total`) and a richer `manifest.json`.
+- **F36** stable evidence for snapshot consumers.
+- **F38** screenshot names independent of the audited origin.
+- Carried from 1.2.1 review: redact failed-navigation URLs with `redactUrl` (a token in a failing target URL can
+  appear in `page-unreachable` text today); Turkish capitals in the in-page probe lexicon (form purpose, trust and
+  pricing signals); a `setTimeout` fallback for the dialog wait (the 250 ms cap is checked only inside
+  `requestAnimationFrame`); the report's HTML falling back to `foldScreenshot`, so a minimal-evidence page does not
+  show "no screenshot".
+
 ## Deferred from 1.2.0
 
-All planned: F19, F20 and part of F22/F23 in [1.2.1](superpowers/plans/2026-11-11-jourilo-1.2.1.md), the rest in
+Shipped in 1.2.1: F19, F20 and part of F22/F23. The rest is planned for
 [1.3.0](superpowers/plans/2026-11-11-jourilo-1.3.0.md). Each item has its number in [FIELD-FEEDBACK.md](FIELD-FEEDBACK.md). F10 (an overall score) stays declined
 ([DECISIONS.md](DECISIONS.md) D3), and F17 is covered by `--auth` plus `--setup-journey`.
 
@@ -64,15 +95,9 @@ All planned: F19, F20 and part of F22/F23 in [1.2.1](superpowers/plans/2026-11-1
 
 ## 1.2.x follow-ups
 
-Real defects found while building 1.2.0, all planned for [1.2.1](superpowers/plans/2026-11-11-jourilo-1.2.1.md) together
-with the field items F24–F40 (false positives on modern front ends and automation edges):
-
-- `verify --target` with a typo ends in an internal `TypeError`; it should be `INVALID_INPUT`.
-- If `guard.close()` throws while browsing ends, the setup journey's session state is not removed.
-- `journeys run --repeat`: put the attempt index in the step file names, so a kept screenshot belongs to the
-  representative attempt.
-- Turkish uppercase folding in the toggle lexicon (`KARANLIK`, `DİL`): `İ` and `ı` do not fold like ASCII.
-- A `--run-id` directory left by a crashed run (no `run.json`) is accepted and its leftovers enter the manifest.
+All five (the `verify --target` typo error, setup-state removal when the guard fails to close, the attempt index in
+`--repeat` file names, Turkish uppercase folding in the toggle lexicon, a `--run-id` directory left by a crashed run)
+shipped in 1.2.1, together with F24-F40 (see Done in 1.2.1). What remains is listed under 1.3.0.
 
 ## Next (1.x)
 
