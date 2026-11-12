@@ -107,6 +107,8 @@ export interface AuditOptions {
   extraHeaders?: Record<string, string>;
   /** `--ignore-https-errors`: the browser accepts invalid certificates; the guard still checks destinations. */
   ignoreHttpsErrors?: boolean;
+  /** `--chromium-sandbox`: keep Chromium's process sandbox (Playwright disables it by default). */
+  chromiumSandbox?: boolean;
   keyboard: boolean;
   throttle: boolean;
   timeoutMs: number;
@@ -362,6 +364,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
           ...(opts.upstream ? { upstream: opts.upstream } : {}),
         },
         signal !== undefined,
+        { ...(opts.chromiumSandbox ? { sandbox: true } : {}), runDir },
       );
       const browser: Browser = session.browser;
       browserVersion = browser.version();
@@ -722,6 +725,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         ...(opts.userAgent ? { userAgent: opts.userAgent } : {}),
         ...(opts.extraHeaders ? { extraHeaders: Object.keys(opts.extraHeaders) } : {}),
         ...(opts.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}),
+        ...(opts.chromiumSandbox ? { chromiumSandbox: true } : {}),
         axe: observations.find((o) => o.axe)?.axe?.version ?? null,
         hostClass,
         // The exact scope, so `jourilo verify` can repeat this run after a change.

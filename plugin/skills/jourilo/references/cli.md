@@ -42,6 +42,10 @@ Options:
   --ignore-https-errors
                       Accept invalid or self-signed certificates in the browser (test environments only); the network
                       guard still checks every destination, and the run lists it in the limitations
+  --chromium-sandbox
+                      Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1
+                      does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch
+                      where the system denies the sandbox (containers, some Linux CI kernels)
 ```
 
 ## Audit
@@ -94,6 +98,10 @@ Options:
   --ignore-https-errors
                        Accept invalid or self-signed certificates in the browser (test environments only); the network
                        guard still checks every destination, and the run lists it in the limitations
+  --chromium-sandbox
+                       Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1
+                       does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch
+                       where the system denies the sandbox (containers, some Linux CI kernels)
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -158,6 +166,10 @@ Options:
   --ignore-https-errors
                        Accept invalid or self-signed certificates in the browser (test environments only); the network
                        guard still checks every destination, and the run lists it in the limitations
+  --chromium-sandbox
+                       Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1
+                       does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch
+                       where the system denies the sandbox (containers, some Linux CI kernels)
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -222,6 +234,10 @@ Options:
   --ignore-https-errors
                        Accept invalid or self-signed certificates in the browser (test environments only); the network
                        guard still checks every destination, and the run lists it in the limitations
+  --chromium-sandbox
+                       Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1
+                       does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch
+                       where the system denies the sandbox (containers, some Linux CI kernels)
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -275,6 +291,10 @@ Suggest options:
   --ignore-https-errors
                          Accept invalid or self-signed certificates in the browser (test environments only); the network
                          guard still checks every destination, and the run lists it in the limitations
+  --chromium-sandbox
+                         Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1
+                         does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch
+                         where the system denies the sandbox (containers, some Linux CI kernels)
 
 Run options:
   --base URL|DIR         The site or static build to run against (required)
@@ -312,6 +332,10 @@ Run options:
   --ignore-https-errors
                          Accept invalid or self-signed certificates in the browser (test environments only); the network
                          guard still checks every destination, and the run lists it in the limitations
+  --chromium-sandbox
+                         Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1
+                         does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch
+                         where the system denies the sandbox (containers, some Linux CI kernels)
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission
@@ -393,6 +417,10 @@ Options:
   --ignore-https-errors
                          Accept invalid or self-signed certificates in the browser (test environments only); the network
                          guard still checks every destination, and the run lists it in the limitations
+  --chromium-sandbox
+                         Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1
+                         does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch
+                         where the system denies the sandbox (containers, some Linux CI kernels)
                          Without --allow-hosts / --block-hosts, the baseline run's lists are used again; so are its
                          --user-agent and --ignore-https-errors. Header values are never stored: a baseline that sent
                          --extra-header needs the headers again (exit 2 without them)

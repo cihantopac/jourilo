@@ -86,6 +86,10 @@
           "type": "boolean",
           "description": "--ignore-https-errors: the browser accepted invalid certificates; the network guard still checked every destination."
         },
+        "chromiumSandbox": {
+          "type": "boolean",
+          "description": "--chromium-sandbox: Chromium ran with its process sandbox on (Playwright disables it by default)."
+        },
         "scope": {
           "type": "object",
           "properties": {

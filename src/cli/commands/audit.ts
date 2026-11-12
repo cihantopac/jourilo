@@ -16,6 +16,7 @@ import {
   type Command,
   type CommandResult,
   type Context,
+  chromiumSandboxFrom,
   denyLocalFrom,
   flag,
   list,
@@ -166,6 +167,7 @@ export async function auditCommand(
         ? { denyLocal: true, ...(server ? { servedPort: servedPort(server) } : {}) }
         : {}),
       ...networkFrom(ctx, auditTarget),
+      ...(chromiumSandboxFrom(ctx, browser) ? { chromiumSandbox: true } : {}),
       keyboard: !flag(ctx, 'no-keyboard'),
       throttle: flag(ctx, 'throttle'),
       runs: num(ctx, 'runs', 1),

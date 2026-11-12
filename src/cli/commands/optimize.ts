@@ -29,6 +29,7 @@ import { compareRuns, type MetricDelta } from '../../report/compare.js';
 import { writeReports } from '../../report/index.js';
 import {
   type Command,
+  chromiumSandboxFrom,
   denyLocalFrom,
   flag,
   list,
@@ -282,6 +283,9 @@ ${networkOptionsHelp(25)}
         ...(userAgent ? { userAgent } : {}),
         ...(network.extraHeaders ? { extraHeaders: network.extraHeaders } : {}),
         ...(ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}),
+        ...(chromiumSandboxFrom(ctx, String(base.browser.name ?? 'chromium'))
+          ? { chromiumSandbox: true }
+          : {}),
         keyboard: base.settings.keyboard !== false,
         throttle: base.settings.throttle === true,
         // Same number of visits as the baseline, so medians are compared with medians.

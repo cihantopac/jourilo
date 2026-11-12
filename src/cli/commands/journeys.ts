@@ -27,6 +27,7 @@ import { writeReports } from '../../report/index.js';
 import {
   type Command,
   type Context,
+  chromiumSandboxFrom,
   denyLocalFrom,
   flag,
   list,
@@ -110,6 +111,7 @@ async function suggest(ctx: Context) {
             ? { denyLocal: true, ...(server ? { servedPort: servedPort(server) } : {}) }
             : {}),
           ...networkFrom(ctx, server?.url ?? target),
+          ...(chromiumSandboxFrom(ctx, 'chromium') ? { chromiumSandbox: true } : {}),
           keyboard: false,
           throttle: false,
           timeoutMs: 30_000,
@@ -244,15 +246,22 @@ async function runCmd(ctx: Context) {
     const id = newRunId();
     const runDir = ctx.ws.createRunDir(id);
     const browserName = (str(ctx, 'browser') ?? 'chromium') as BrowserName;
-    const session = await openGuardedBrowser(browserName, flag(ctx, 'headed'), {
-      target: hostClass,
-      allowPrivate: flag(ctx, 'allow-private'),
-      ...(denyLocal
-        ? { denyLocal: true, ...(server ? { allowLoopbackPorts: [servedPort(server)] } : {}) }
-        : {}),
-      ...hostLists,
-      ...(network.upstream ? { upstream: network.upstream } : {}),
-    });
+    const sandbox = chromiumSandboxFrom(ctx, browserName);
+    const session = await openGuardedBrowser(
+      browserName,
+      flag(ctx, 'headed'),
+      {
+        target: hostClass,
+        allowPrivate: flag(ctx, 'allow-private'),
+        ...(denyLocal
+          ? { denyLocal: true, ...(server ? { allowLoopbackPorts: [servedPort(server)] } : {}) }
+          : {}),
+        ...hostLists,
+        ...(network.upstream ? { upstream: network.upstream } : {}),
+      },
+      false,
+      { ...(sandbox ? { sandbox: true } : {}), runDir },
+    );
     const browser = session.browser;
     const browserVersion = browser.version();
     const startedAt = new Date().toISOString();
@@ -385,6 +394,7 @@ async function runCmd(ctx: Context) {
         ...(network.userAgent ? { userAgent: network.userAgent } : {}),
         ...(network.extraHeaders ? { extraHeaders: Object.keys(network.extraHeaders) } : {}),
         ...(network.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}),
+        ...(sandbox ? { chromiumSandbox: true } : {}),
       },
       pages: [],
       journeys,

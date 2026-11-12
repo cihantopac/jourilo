@@ -39253,6 +39253,34 @@ function denyLocalFrom(ctx) {
   return true;
 }
 var warnedDenyLocal = false;
+function chromiumSandboxFrom(ctx, browser) {
+  const chromium = browser === "chromium" || browser === "chrome" || browser === "msedge";
+  if (flag(ctx, "chromium-sandbox")) {
+    if (!chromium)
+      throw new JouriloError(
+        "USAGE",
+        `--chromium-sandbox only affects Chromium, Chrome and Edge, not --browser ${browser}.`,
+        "Use --browser chromium, or drop --chromium-sandbox."
+      );
+    return true;
+  }
+  const raw = process.env.JOURILO_CHROMIUM_SANDBOX ?? "";
+  const v = raw.trim().toLowerCase();
+  if (!v || ["0", "false", "no", "off"].includes(v)) return false;
+  const known = ["1", "true", "yes", "on"].includes(v);
+  if (!known && !warnedSandbox) {
+    warnedSandbox = true;
+    ctx.log(
+      `JOURILO_CHROMIUM_SANDBOX=${raw} is not recognised (use 1, true, yes or on to enable, 0, false, no or off to disable); the Chromium sandbox is on.`
+    );
+  }
+  if (!chromium) {
+    ctx.log(`JOURILO_CHROMIUM_SANDBOX only affects Chromium; it is ignored with --browser ${browser}.`);
+    return false;
+  }
+  return true;
+}
+var warnedSandbox = false;
 function refuseDenyLocalWebkit(denyLocal, browser) {
   if (denyLocal && browser === "webkit")
     throw new JouriloError(
@@ -39267,7 +39295,8 @@ var NETWORK_OPTIONS = {
   "block-hosts": { type: "string", multiple: true },
   "user-agent": { type: "string" },
   "extra-header": { type: "string", multiple: true },
-  "ignore-https-errors": { type: "boolean" }
+  "ignore-https-errors": { type: "boolean" },
+  "chromium-sandbox": { type: "boolean" }
 };
 function networkOptionsHelp(column) {
   const pad = (flag2) => `  ${flag2.padEnd(column - 2)}`;
@@ -39286,7 +39315,11 @@ function networkOptionsHelp(column) {
     `${cont}elsewhere (a redirect is followed without them). The run records the names, never the values`,
     `  --ignore-https-errors`,
     `${cont}Accept invalid or self-signed certificates in the browser (test environments only); the network`,
-    `${cont}guard still checks every destination, and the run lists it in the limitations`
+    `${cont}guard still checks every destination, and the run lists it in the limitations`,
+    `  --chromium-sandbox`,
+    `${cont}Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1`,
+    `${cont}does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch`,
+    `${cont}where the system denies the sandbox (containers, some Linux CI kernels)`
   ].join("\n");
 }
 var HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
@@ -39582,12 +39615,12 @@ import { existsSync as existsSync12, writeSync as writeSync2 } from "node:fs";
 import { resolve as resolve6 } from "node:path";
 
 // src/audit/engine.ts
-import { existsSync as existsSync6, rmSync as rmSync2 } from "node:fs";
-import { join as join10 } from "node:path";
+import { existsSync as existsSync6, rmSync as rmSync3 } from "node:fs";
+import { join as join11 } from "node:path";
 
 // src/browser/capture.ts
 var import_axe_core = __toESM(require_axe(), 1);
-import { join as join6 } from "node:path";
+import { join as join7 } from "node:path";
 
 // src/audit/evidence.ts
 import { rmSync } from "node:fs";
@@ -41939,6 +41972,10 @@ function adviceKey(advice) {
   return parts.join("+");
 }
 
+// src/browser/session.ts
+import { rmSync as rmSync2, writeFileSync as writeFileSync4 } from "node:fs";
+import { join as join6 } from "node:path";
+
 // src/browser/runtime.ts
 init_errors();
 import { spawnSync } from "node:child_process";
@@ -41958,11 +41995,12 @@ async function loadPlaywright() {
     );
   }
 }
-async function launchBrowser(name = "chromium", headed = false, guard, ownSignals = false) {
+async function launchBrowser(name = "chromium", headed = false, guard, ownSignals = false, sandbox = false) {
   const pw = await loadPlaywright();
   const type = name === "firefox" ? pw.firefox : name === "webkit" ? pw.webkit : pw.chromium;
   const opts = {
     headless: !headed,
+    ...sandbox ? { chromiumSandbox: true } : {},
     ...ownSignals ? { handleSIGINT: false, handleSIGTERM: false } : {}
   };
   if (name === "chrome" || name === "msedge") opts.channel = name;
@@ -42016,16 +42054,31 @@ function installBrowser(name) {
 }
 
 // src/browser/session.ts
+var PIDS_FILE = "browser.pids";
+async function writeBrowserPids(browser, name, file2) {
+  if (name === "firefox" || name === "webkit") return;
+  try {
+    const cdp = await browser.newBrowserCDPSession();
+    const { processInfo } = await cdp.send("SystemInfo.getProcessInfo");
+    await cdp.detach().catch(() => void 0);
+    const pids = [...new Set(processInfo.map((p) => p.id).filter((id) => Number.isInteger(id) && id > 0))];
+    if (pids.length) writeFileSync4(file2, `${pids.join("\n")}
+`);
+  } catch {
+  }
+}
 var sessions = /* @__PURE__ */ new WeakMap();
-async function openGuardedBrowser(name, headed, policy, ownSignals = false) {
+async function openGuardedBrowser(name, headed, policy, ownSignals = false, extra = {}) {
   const guard = await startNetGuard(policy);
   let browser;
   try {
-    browser = await launchBrowser(name, headed, guard, ownSignals);
+    browser = await launchBrowser(name, headed, guard, ownSignals, extra.sandbox === true);
   } catch (err) {
     await guard.close();
     throw err;
   }
+  const pidsFile = extra.runDir ? join6(extra.runDir, PIDS_FILE) : void 0;
+  if (pidsFile) await writeBrowserPids(browser, name, pidsFile);
   const escaped = [];
   sessions.set(browser, { policy, escaped });
   return {
@@ -42034,6 +42087,7 @@ async function openGuardedBrowser(name, headed, policy, ownSignals = false) {
     report: () => ({ blocked: [...guard.blocked], escaped: [...escaped] }),
     close: async () => {
       await browser.close().catch(() => void 0);
+      if (pidsFile) rmSync2(pidsFile, { force: true });
       await guard.close();
     }
   };
@@ -42737,7 +42791,7 @@ async function applyThrottle(page) {
 }
 function captureScreenshotFiles(url, vp) {
   const base2 = `${slug(new URL(url).pathname.replace(/^\/$/, "home"), 40)}-${shortHash(url).slice(0, 6)}-${vp.name}`;
-  return { full: join6("screenshots", `${base2}.jpg`), fold: join6("screenshots", `${base2}-fold.jpg`) };
+  return { full: join7("screenshots", `${base2}.jpg`), fold: join7("screenshots", `${base2}-fold.jpg`) };
 }
 async function capturePage(ctx, url, vp, opts) {
   const timeoutMs = opts.timeoutMs ?? 3e4;
@@ -42820,7 +42874,7 @@ async function capturePage(ctx, url, vp, opts) {
         const height = Math.min(obs.probe?.scroll.height ?? vp.height, FULL_PAGE_MAX_HEIGHT[mode]);
         if (mode === "minimal" && height <= vp.height) {
           await page.screenshot({
-            path: join6(opts.runDir, full),
+            path: join7(opts.runDir, full),
             type: "jpeg",
             quality: EVIDENCE_QUALITY[mode],
             animations: "disabled",
@@ -42832,7 +42886,7 @@ async function capturePage(ctx, url, vp, opts) {
           obs.foldScreenshot = obs.screenshot;
         } else {
           await page.screenshot({
-            path: join6(opts.runDir, full),
+            path: join7(opts.runDir, full),
             type: "jpeg",
             quality: EVIDENCE_QUALITY[mode],
             fullPage: true,
@@ -42844,7 +42898,7 @@ async function capturePage(ctx, url, vp, opts) {
           });
           obs.screenshot = toPosix(full);
           await page.screenshot({
-            path: join6(opts.runDir, fold),
+            path: join7(opts.runDir, fold),
             type: "jpeg",
             quality: EVIDENCE_QUALITY[mode],
             animations: "disabled",
@@ -43380,9 +43434,9 @@ function formFriction(obs, form) {
 
 // src/core/dismissals.ts
 init_errors();
-import { existsSync as existsSync4, readFileSync as readFileSync3, writeFileSync as writeFileSync4 } from "node:fs";
-import { join as join7 } from "node:path";
-var file = (ws) => join7(ws.root, "dismissed.json");
+import { existsSync as existsSync4, readFileSync as readFileSync3, writeFileSync as writeFileSync5 } from "node:fs";
+import { join as join8 } from "node:path";
+var file = (ws) => join8(ws.root, "dismissed.json");
 function loadDismissals(ws) {
   if (!existsSync4(file(ws))) return [];
   const bad = () => new JouriloError(
@@ -43406,7 +43460,7 @@ function loadDismissals(ws) {
 }
 function write(ws, list2) {
   ws.ensure();
-  writeFileSync4(file(ws), `${JSON.stringify(list2, null, 2)}
+  writeFileSync5(file(ws), `${JSON.stringify(list2, null, 2)}
 `);
 }
 function saveDismissal(ws, d) {
@@ -43668,7 +43722,7 @@ async function crawl(ctx, start, opts) {
 // src/integrations/context.ts
 init_fs_safety();
 import { existsSync as existsSync5, readdirSync as readdirSync2, readFileSync as readFileSync4, statSync } from "node:fs";
-import { join as join8, relative as relative2 } from "node:path";
+import { join as join9, relative as relative2 } from "node:path";
 var CONTEXT_SCHEMA = "jourilo.context/v1";
 function readJson(file2) {
   try {
@@ -43702,11 +43756,11 @@ function flattenTokens(tokens) {
 }
 function readMarkilo(root, brandSlug) {
   for (const dir of ["branding", "brand"]) {
-    const manifestFile = join8(root, dir, "markilo.json");
+    const manifestFile = join9(root, dir, "markilo.json");
     const manifest = readJson(manifestFile);
     if (!manifest?.brands?.length) continue;
     const brand = manifest.brands.find((b) => b.slug === brandSlug) ?? manifest.brands.find((b) => b.role === "master") ?? manifest.brands[0];
-    const tokensFile = join8(root, dir, "brands", brand.slug, "exports", "tokens", "tokens.json");
+    const tokensFile = join9(root, dir, "brands", brand.slug, "exports", "tokens", "tokens.json");
     if (!existsSync5(tokensFile)) continue;
     const { colors, fonts } = flattenTokens(readJson(tokensFile));
     return {
@@ -43721,13 +43775,13 @@ function readMarkilo(root, brandSlug) {
   return null;
 }
 function readSearvex(root) {
-  const runs2 = join8(root, ".searvex", "runs");
+  const runs2 = join9(root, ".searvex", "runs");
   if (!existsSync5(runs2)) return null;
-  const dirs = readdirSync2(runs2).filter((d) => existsSync5(join8(runs2, d, "report.json"))).sort(
-    (a, b) => statSync(join8(runs2, b, "report.json")).mtimeMs - statSync(join8(runs2, a, "report.json")).mtimeMs
+  const dirs = readdirSync2(runs2).filter((d) => existsSync5(join9(runs2, d, "report.json"))).sort(
+    (a, b) => statSync(join9(runs2, b, "report.json")).mtimeMs - statSync(join9(runs2, a, "report.json")).mtimeMs
   );
   if (!dirs.length) return null;
-  const file2 = join8(runs2, dirs[0], "report.json");
+  const file2 = join9(runs2, dirs[0], "report.json");
   const report2 = readJson(file2);
   if (!report2?.findings) return null;
   return {
@@ -43743,7 +43797,7 @@ function readSearvex(root) {
   };
 }
 function readExplicit(root) {
-  const file2 = join8(root, "jourilo.context.json");
+  const file2 = join9(root, "jourilo.context.json");
   const data = readJson(file2);
   if (!data) return null;
   if (data.schema !== CONTEXT_SCHEMA)
@@ -44106,7 +44160,7 @@ async function probeFormValidation(ctx, url, form, vp, policy, runDir) {
 }
 
 // src/journeys/runner.ts
-import { join as join9 } from "node:path";
+import { join as join10 } from "node:path";
 
 // src/browser/viewports.ts
 init_errors();
@@ -44487,7 +44541,7 @@ async function runJourney(browser, spec, opts) {
     ...opts.extraHeaders ? { extraHeaders: opts.extraHeaders } : {},
     ...opts.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}
   });
-  const tracePath = opts.trace ? join9("traces", `${spec.id}-${vp.name}.zip`) : void 0;
+  const tracePath = opts.trace ? join10("traces", `${spec.id}-${vp.name}.zip`) : void 0;
   if (tracePath) await ctx.tracing.start({ screenshots: true, snapshots: true, title: spec.name });
   const guard = await installRequestGuard(ctx, {
     ...opts.policy,
@@ -44505,13 +44559,13 @@ async function runJourney(browser, spec, opts) {
   const startUrl = new URL(interpolate(spec.start, opts.data), opts.base);
   const allSteps = [{ action: "goto", url: startUrl.toString() }, ...spec.steps];
   const shot = async (i) => {
-    const file2 = join9(
+    const file2 = join10(
       "screenshots",
       `journey-${spec.id}-${vp.name}${opts.attempt === void 0 ? "" : `-a${opts.attempt}`}-${String(i).padStart(2, "0")}.jpg`
     );
     try {
       await page.screenshot({
-        path: join9(opts.runDir, file2),
+        path: join10(opts.runDir, file2),
         type: "jpeg",
         quality: opts.evidence === "minimal" ? EVIDENCE_QUALITY.minimal : 70,
         animations: "disabled",
@@ -44618,7 +44672,7 @@ async function runJourney(browser, spec, opts) {
     const vitals = await page.evaluate(READ_VITALS_SCRIPT).catch(() => null);
     const durationMs = Date.now() - t0;
     if (tracePath) {
-      await ctx.tracing.stop({ path: join9(opts.runDir, tracePath) });
+      await ctx.tracing.stop({ path: join10(opts.runDir, tracePath) });
     }
     if (opts.saveAuth && status === "passed") {
       writeFileSafe(opts.saveAuth, JSON.stringify(await ctx.storageState(), null, 2), { private: true });
@@ -45847,7 +45901,7 @@ function resolveRunId(ws, requested) {
       'Use 1-64 letters, digits, "_" or "-", starting with a letter or digit.'
     );
   const dir = ws.runDir(requested);
-  if (existsSync6(join10(dir, "run.json")))
+  if (existsSync6(join11(dir, "run.json")))
     throw new JouriloError("INVALID_INPUT", `Run ${requested} already exists.`, "Pick another --run-id.");
   if (existsSync6(dir))
     throw new JouriloError(
@@ -45897,7 +45951,7 @@ async function runAudit(ws, opts) {
   const simulated = [];
   const runs2 = Math.max(1, Math.min(9, Math.round(opts.runs ?? 1)));
   let stoppedBy;
-  const setupState = join10(runDir, "setup-state.json");
+  const setupState = join11(runDir, "setup-state.json");
   let network = { blocked: [], escaped: [] };
   const endBrowsing = async () => {
     if (session) network = session.report();
@@ -45923,7 +45977,8 @@ async function runAudit(ws, opts) {
           ...hostLists,
           ...opts.upstream ? { upstream: opts.upstream } : {}
         },
-        signal !== void 0
+        signal !== void 0,
+        { ...opts.chromiumSandbox ? { sandbox: true } : {}, runDir }
       );
       const browser = session.browser;
       browserVersion = browser.version();
@@ -46038,7 +46093,7 @@ async function runAudit(ws, opts) {
               await ctx.close();
               await settled(capture, 1e3);
               const { full, fold } = captureScreenshotFiles(url, vp);
-              for (const f of [full, fold]) rmSync2(join10(runDir, f), { force: true });
+              for (const f of [full, fold]) rmSync3(join11(runDir, f), { force: true });
             });
             observations.push(obs);
           }
@@ -46102,7 +46157,7 @@ async function runAudit(ws, opts) {
               const r = await withinGrace(probe, signal, async () => {
                 await ctx.close();
                 await settled(probe, 1e3);
-                rmSync2(join10(runDir, formScreenshotFile(o.finalUrl, form.selector, vp)), { force: true });
+                rmSync3(join11(runDir, formScreenshotFile(o.finalUrl, form.selector, vp)), { force: true });
               });
               formFindings.push(...r.findings);
               if (r.result.outcome === "blocked")
@@ -46248,6 +46303,7 @@ async function runAudit(ws, opts) {
         ...opts.userAgent ? { userAgent: opts.userAgent } : {},
         ...opts.extraHeaders ? { extraHeaders: Object.keys(opts.extraHeaders) } : {},
         ...opts.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {},
+        ...opts.chromiumSandbox ? { chromiumSandbox: true } : {},
         axe: observations.find((o) => o.axe)?.axe?.version ?? null,
         hostClass,
         // The exact scope, so `jourilo verify` can repeat this run after a change.
@@ -46276,7 +46332,7 @@ async function closeBrowsing(session, setupState) {
   try {
     await session?.close();
   } finally {
-    rmSync2(setupState, { force: true });
+    rmSync3(setupState, { force: true });
   }
 }
 function summarize(findings, pages, journeys2) {
@@ -46328,7 +46384,7 @@ init_errors();
 init_fs_safety();
 import { existsSync as existsSync7, readdirSync as readdirSync3, readFileSync as readFileSync5, statSync as statSync2 } from "node:fs";
 import { createServer } from "node:http";
-import { extname, join as join11, resolve as resolve4 } from "node:path";
+import { extname, join as join12, resolve as resolve4 } from "node:path";
 var TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -46367,7 +46423,7 @@ function servedPort(server) {
 async function serveStatic(root, port = 0, opts = {}) {
   if (!existsSync7(root) || !statSync2(root).isDirectory())
     throw new JouriloError("NOT_FOUND", `Not a directory: ${root}`);
-  const cfgFile = join11(root, "jourilo-fixture.json");
+  const cfgFile = join12(root, "jourilo-fixture.json");
   const cfg = existsSync7(cfgFile) ? JSON.parse(readFileSync5(cfgFile, "utf8")) : {};
   const spa = opts.spa ?? cfg.spa ?? looksLikeSpa(root);
   const server = createServer((req, res) => {
@@ -46387,14 +46443,14 @@ async function serveStatic(root, port = 0, opts = {}) {
     const send = () => {
       try {
         let file2 = resolveInside(root, `.${pathname2}`);
-        if (existsSync7(file2) && statSync2(file2).isDirectory()) file2 = join11(file2, "index.html");
+        if (existsSync7(file2) && statSync2(file2).isDirectory()) file2 = join12(file2, "index.html");
         if (!existsSync7(file2) && !extname(pathname2)) {
           const html = resolveInside(root, `.${pathname2}.html`);
           if (existsSync7(html)) file2 = html;
         }
-        if (!existsSync7(file2) && spa && !extname(pathname2)) file2 = join11(root, "index.html");
+        if (!existsSync7(file2) && spa && !extname(pathname2)) file2 = join12(root, "index.html");
         if (!existsSync7(file2)) {
-          const notFound = join11(root, "404.html");
+          const notFound = join12(root, "404.html");
           res.writeHead(404, { "content-type": TYPES[".html"] });
           res.end(existsSync7(notFound) ? readFileSync5(notFound) : "Not found");
           return;
@@ -46440,7 +46496,7 @@ async function serveStatic(root, port = 0, opts = {}) {
 // src/repair/locate.ts
 init_fs_safety();
 import { readdirSync as readdirSync4, readFileSync as readFileSync6, statSync as statSync3 } from "node:fs";
-import { extname as extname2, join as join12, relative as relative3 } from "node:path";
+import { extname as extname2, join as join13, relative as relative3 } from "node:path";
 var SOURCE_EXT = /* @__PURE__ */ new Set([
   ".html",
   ".htm",
@@ -46499,7 +46555,7 @@ function indexRepository(root, maxFiles = 6e3) {
     for (const name of entries) {
       if (out.length >= maxFiles) return;
       if (name.startsWith(".") && name !== ".vitepress") continue;
-      const full = join12(dir, name);
+      const full = join13(dir, name);
       let st;
       try {
         st = statSync3(full);
@@ -46846,30 +46902,31 @@ function locateFindings(run, repoRoot) {
 }
 
 // src/report/index.ts
-import { writeFileSync as writeFileSync6 } from "node:fs";
-import { join as join14 } from "node:path";
+import { writeFileSync as writeFileSync7 } from "node:fs";
+import { join as join15 } from "node:path";
 
 // src/core/manifest.ts
 import { createHash as createHash2 } from "node:crypto";
-import { readdirSync as readdirSync5, readFileSync as readFileSync7, writeFileSync as writeFileSync5 } from "node:fs";
-import { join as join13 } from "node:path";
+import { readdirSync as readdirSync5, readFileSync as readFileSync7, writeFileSync as writeFileSync6 } from "node:fs";
+import { join as join14 } from "node:path";
 var MANIFEST_FILE = "manifest.json";
+var TRANSIENT_FILE = "browser.pids";
 function listFiles(dir, prefix = "") {
   const out = [];
   for (const entry of readdirSync5(dir, { withFileTypes: true })) {
     const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
-    if (entry.isDirectory()) out.push(...listFiles(join13(dir, entry.name), rel));
-    else if (entry.isFile() && rel !== MANIFEST_FILE) out.push(rel);
+    if (entry.isDirectory()) out.push(...listFiles(join14(dir, entry.name), rel));
+    else if (entry.isFile() && rel !== MANIFEST_FILE && rel !== TRANSIENT_FILE) out.push(rel);
   }
   return out;
 }
 function writeManifest(runDir, runId) {
   const files = listFiles(runDir).sort().map((path2) => {
-    const data = readFileSync7(join13(runDir, path2));
+    const data = readFileSync7(join14(runDir, path2));
     return { path: path2, bytes: data.length, sha256: createHash2("sha256").update(data).digest("hex") };
   });
   const manifest = { schemaVersion: 1, runId, files };
-  writeFileSync5(join13(runDir, MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}
+  writeFileSync6(join14(runDir, MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}
 `);
   return manifest;
 }
@@ -49059,14 +49116,14 @@ function renderSarif(run) {
 
 // src/report/index.ts
 function writeReports(dir, run, cmp, opts = {}) {
-  const html = join14(dir, "report.html");
-  const markdown = join14(dir, "report.md");
-  writeFileSync6(html, renderHtml(run, cmp, opts.history));
-  writeFileSync6(markdown, renderMarkdown(run, cmp));
+  const html = join15(dir, "report.html");
+  const markdown = join15(dir, "report.md");
+  writeFileSync7(html, renderHtml(run, cmp, opts.history));
+  writeFileSync7(markdown, renderMarkdown(run, cmp));
   const out = { html, markdown };
   if (opts.sarif) {
-    out.sarif = join14(dir, "report.sarif");
-    writeFileSync6(out.sarif, `${JSON.stringify(renderSarif(run), null, 2)}
+    out.sarif = join15(dir, "report.sarif");
+    writeFileSync7(out.sarif, `${JSON.stringify(renderSarif(run), null, 2)}
 `);
   }
   writeManifest(dir, run.id);
@@ -49074,8 +49131,8 @@ function writeReports(dir, run, cmp, opts = {}) {
 }
 
 // src/cli/commands/journeys.ts
-import { existsSync as existsSync11, mkdirSync as mkdirSync6, readdirSync as readdirSync8, readFileSync as readFileSync11, writeFileSync as writeFileSync8 } from "node:fs";
-import { basename as basename3, join as join17, resolve as resolve5 } from "node:path";
+import { existsSync as existsSync11, mkdirSync as mkdirSync6, readdirSync as readdirSync8, readFileSync as readFileSync11, writeFileSync as writeFileSync9 } from "node:fs";
+import { basename as basename3, join as join18, resolve as resolve5 } from "node:path";
 init_errors();
 init_fs_safety();
 init_types();
@@ -49280,8 +49337,8 @@ function suggestJourneys(run) {
 init_errors();
 init_fs_safety();
 import { spawnSync as spawnSync2 } from "node:child_process";
-import { existsSync as existsSync10, mkdirSync as mkdirSync5, readdirSync as readdirSync7, readFileSync as readFileSync10, writeFileSync as writeFileSync7 } from "node:fs";
-import { dirname as dirname6, join as join16 } from "node:path";
+import { existsSync as existsSync10, mkdirSync as mkdirSync5, readdirSync as readdirSync7, readFileSync as readFileSync10, writeFileSync as writeFileSync8 } from "node:fs";
+import { dirname as dirname6, join as join17 } from "node:path";
 
 // src/repair/transaction.ts
 init_errors();
@@ -49297,18 +49354,18 @@ import {
   readdirSync as readdirSync6,
   readFileSync as readFileSync9,
   renameSync,
-  rmSync as rmSync3,
+  rmSync as rmSync4,
   statSync as statSync4,
   unlinkSync,
   writeSync
 } from "node:fs";
-import { basename as basename2, dirname as dirname5, join as join15 } from "node:path";
+import { basename as basename2, dirname as dirname5, join as join16 } from "node:path";
 var sha256 = (b) => createHash3("sha256").update(b).digest("hex");
-var recordsDir = (wsRoot) => join15(wsRoot, "checkpoints");
-var txDir = (wsRoot, id) => join15(recordsDir(wsRoot), id);
+var recordsDir = (wsRoot) => join16(wsRoot, "checkpoints");
+var txDir = (wsRoot, id) => join16(recordsDir(wsRoot), id);
 function atomicWrite(path2, data, mode) {
   mkdirSync4(dirname5(path2), { recursive: true });
-  const tmp = join15(dirname5(path2), `.${basename2(path2)}.jourilo-${randomBytes3(4).toString("hex")}.tmp`);
+  const tmp = join16(dirname5(path2), `.${basename2(path2)}.jourilo-${randomBytes3(4).toString("hex")}.tmp`);
   const fd = openSync(tmp, "wx", mode ?? 420);
   try {
     let off = 0;
@@ -49323,7 +49380,7 @@ function atomicWrite(path2, data, mode) {
       return;
     } catch (err) {
       if (attempt >= 5 || !["EPERM", "EBUSY", "EACCES"].includes(err.code ?? "")) {
-        rmSync3(tmp, { force: true });
+        rmSync4(tmp, { force: true });
         throw err;
       }
       const until = Date.now() + 50 * (attempt + 1);
@@ -49333,12 +49390,12 @@ function atomicWrite(path2, data, mode) {
 }
 function saveRecord(wsRoot, tx) {
   mkdirSync4(recordsDir(wsRoot), { recursive: true });
-  atomicWrite(join15(recordsDir(wsRoot), `${tx.id}.json`), Buffer.from(`${JSON.stringify(tx, null, 2)}
+  atomicWrite(join16(recordsDir(wsRoot), `${tx.id}.json`), Buffer.from(`${JSON.stringify(tx, null, 2)}
 `));
 }
 function writablePath(root, file2) {
   const abs = resolveInside(root, file2);
-  const lexical = join15(root, file2);
+  const lexical = join16(root, file2);
   if (existsSync9(lexical) && lstatSync(lexical).isSymbolicLink())
     throw new JouriloError(
       "UNSAFE_PATH",
@@ -49389,7 +49446,7 @@ function applyTransaction(root, wsRoot, edits, opts = {}) {
     }))
   };
   for (const p of prepared)
-    if (p.before) atomicWrite(resolveInside(join15(txDir(wsRoot, tx.id), "before"), p.file), p.before);
+    if (p.before) atomicWrite(resolveInside(join16(txDir(wsRoot, tx.id), "before"), p.file), p.before);
   saveRecord(wsRoot, tx);
   try {
     prepared.forEach((p, i) => {
@@ -49441,7 +49498,7 @@ function rollbackTransaction(wsRoot, tx, opts = {}) {
       }
       let savedCopy;
       if (current) {
-        savedCopy = resolveInside(join15(txDir(wsRoot, tx.id), "conflicts", stamp), f.file);
+        savedCopy = resolveInside(join16(txDir(wsRoot, tx.id), "conflicts", stamp), f.file);
         atomicWrite(savedCopy, current);
       }
       result.conflicts.push({ file: f.file, reason, ...savedCopy ? { savedCopy } : {} });
@@ -49449,7 +49506,7 @@ function rollbackTransaction(wsRoot, tx, opts = {}) {
     if (f.beforeSha === null) {
       if (existsSync9(abs)) unlinkSync(abs);
     } else {
-      const backup = resolveInside(join15(txDir(wsRoot, tx.id), "before"), f.file);
+      const backup = resolveInside(join16(txDir(wsRoot, tx.id), "before"), f.file);
       if (!existsSync9(backup)) {
         f.state = "conflict";
         f.conflict = "backup missing";
@@ -49481,7 +49538,7 @@ function activeTransactions(wsRoot) {
   const out = [];
   for (const f of readdirSync6(dir).filter((n) => n.endsWith(".json")).sort()) {
     try {
-      const rec = JSON.parse(readFileSync9(join15(dir, f), "utf8"));
+      const rec = JSON.parse(readFileSync9(join16(dir, f), "utf8"));
       if (isTransaction(rec) && ["pending", "applied", "partially-rolled-back"].includes(rec.state))
         out.push(rec);
     } catch {
@@ -49539,15 +49596,15 @@ function createCheckpoint(root, wsRoot, note = "") {
     note
   };
   git(root, ["update-ref", `refs/jourilo/checkpoints/${cp.id}`, cp.snapshot]);
-  const dir = join16(wsRoot, "checkpoints");
+  const dir = join17(wsRoot, "checkpoints");
   mkdirSync5(dir, { recursive: true });
-  writeFileSync7(join16(dir, `${cp.id}.json`), `${JSON.stringify(cp, null, 2)}
+  writeFileSync8(join17(dir, `${cp.id}.json`), `${JSON.stringify(cp, null, 2)}
 `);
   return cp;
 }
 function loadCheckpoint(wsRoot, id) {
-  const dir = join16(wsRoot, "checkpoints");
-  const read3 = (name) => JSON.parse(readFileSync10(join16(dir, `${name}.json`), "utf8"));
+  const dir = join17(wsRoot, "checkpoints");
+  const read3 = (name) => JSON.parse(readFileSync10(join17(dir, `${name}.json`), "utf8"));
   let pick2 = id;
   if (id === "latest") {
     const names = existsSync10(dir) ? readdirSync7(dir).filter((f) => f.endsWith(".json")).map((f) => f.replace(/\.json$/, "")).sort().reverse() : [];
@@ -49561,7 +49618,7 @@ function loadCheckpoint(wsRoot, id) {
       }
     });
   }
-  if (!pick2 || !/^[\w-]+$/.test(pick2) || !existsSync10(join16(dir, `${pick2}.json`)))
+  if (!pick2 || !/^[\w-]+$/.test(pick2) || !existsSync10(join17(dir, `${pick2}.json`)))
     throw new JouriloError("NOT_FOUND", `Checkpoint not found: ${id}`);
   return read3(pick2);
 }
@@ -49572,7 +49629,7 @@ function diffSince(root, cp) {
   return { stat, patch, newFiles };
 }
 function backupDir(wsRoot, cp) {
-  return join16(wsRoot, "checkpoints", cp.id);
+  return join17(wsRoot, "checkpoints", cp.id);
 }
 function blob(root, rev, file2) {
   const r = spawnSync2("git", ["cat-file", "blob", `${rev}:${file2}`], {
@@ -49613,8 +49670,8 @@ function rollbackCheckpoint(root, cp, wsRoot, opts = {}) {
   };
 }
 function markRolledBack(wsRoot, cp, transactionId) {
-  const file2 = join16(wsRoot, "checkpoints", `${cp.id}.json`);
-  writeFileSync7(file2, `${JSON.stringify({ ...cp, rolledBack: transactionId }, null, 2)}
+  const file2 = join17(wsRoot, "checkpoints", `${cp.id}.json`);
+  writeFileSync8(file2, `${JSON.stringify({ ...cp, rolledBack: transactionId }, null, 2)}
 `);
 }
 function wouldBeCommitted(file2) {
@@ -49627,7 +49684,7 @@ function wouldBeCommitted(file2) {
 
 // src/cli/commands/journeys.ts
 function journeysDir(ws) {
-  return join17(ws.root, "journeys");
+  return join18(ws.root, "journeys");
 }
 function loadJourneys(ws, refs) {
   const dir = journeysDir(ws);
@@ -49635,12 +49692,12 @@ function loadJourneys(ws, refs) {
   if (!refs.length) {
     if (!existsSync11(dir)) return [];
     files.push(
-      ...readdirSync8(dir).filter((f) => f.endsWith(".json")).sort().map((f) => join17(dir, f))
+      ...readdirSync8(dir).filter((f) => f.endsWith(".json")).sort().map((f) => join18(dir, f))
     );
   } else {
     for (const r of refs) {
       if (r.endsWith(".json") && existsSync11(r)) files.push(resolve5(r));
-      else if (existsSync11(join17(dir, `${r}.json`))) files.push(join17(dir, `${r}.json`));
+      else if (existsSync11(join18(dir, `${r}.json`))) files.push(join18(dir, `${r}.json`));
       else throw new JouriloError("NOT_FOUND", `Journey not found: ${r} (looked in ${dir})`);
     }
   }
@@ -49686,6 +49743,7 @@ async function suggest(ctx) {
         allowPrivate: flag(ctx, "allow-private"),
         ...denyLocalFrom(ctx) ? { denyLocal: true, ...server ? { servedPort: servedPort(server) } : {} } : {},
         ...networkFrom(ctx, server?.url ?? target),
+        ...chromiumSandboxFrom(ctx, "chromium") ? { chromiumSandbox: true } : {},
         keyboard: false,
         throttle: false,
         timeoutMs: 3e4,
@@ -49704,12 +49762,12 @@ async function suggest(ctx) {
   const written = [];
   const kept = [];
   for (const s of specs) {
-    const file2 = join17(dir, `${s.id}.json`);
+    const file2 = join18(dir, `${s.id}.json`);
     if (existsSync11(file2) && !flag(ctx, "force")) {
       kept.push(s.id);
       continue;
     }
-    writeFileSync8(file2, `${JSON.stringify(s, null, 2)}
+    writeFileSync9(file2, `${JSON.stringify(s, null, 2)}
 `);
     written.push(file2);
   }
@@ -49801,13 +49859,20 @@ async function runCmd(ctx) {
     const id = newRunId();
     const runDir = ctx.ws.createRunDir(id);
     const browserName = str(ctx, "browser") ?? "chromium";
-    const session = await openGuardedBrowser(browserName, flag(ctx, "headed"), {
-      target: hostClass,
-      allowPrivate: flag(ctx, "allow-private"),
-      ...denyLocal ? { denyLocal: true, ...server ? { allowLoopbackPorts: [servedPort(server)] } : {} } : {},
-      ...hostLists,
-      ...network.upstream ? { upstream: network.upstream } : {}
-    });
+    const sandbox = chromiumSandboxFrom(ctx, browserName);
+    const session = await openGuardedBrowser(
+      browserName,
+      flag(ctx, "headed"),
+      {
+        target: hostClass,
+        allowPrivate: flag(ctx, "allow-private"),
+        ...denyLocal ? { denyLocal: true, ...server ? { allowLoopbackPorts: [servedPort(server)] } : {} } : {},
+        ...hostLists,
+        ...network.upstream ? { upstream: network.upstream } : {}
+      },
+      false,
+      { ...sandbox ? { sandbox: true } : {}, runDir }
+    );
     const browser = session.browser;
     const browserVersion = browser.version();
     const startedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -49850,7 +49915,7 @@ async function runCmd(ctx) {
         "--evidence minimal: only the failed step, the step before it and the last step of each journey kept a screenshot."
       );
     if (flag(ctx, "trace")) {
-      mkdirSync6(join17(runDir, "traces"), { recursive: true });
+      mkdirSync6(join18(runDir, "traces"), { recursive: true });
       limitations.push(
         "Playwright traces contain DOM snapshots and typed values: keep them private (they are excluded from git)."
       );
@@ -49937,7 +50002,8 @@ async function runCmd(ctx) {
         // The user agent as given; of the extra headers only the names, never their values.
         ...network.userAgent ? { userAgent: network.userAgent } : {},
         ...network.extraHeaders ? { extraHeaders: Object.keys(network.extraHeaders) } : {},
-        ...network.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}
+        ...network.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {},
+        ...sandbox ? { chromiumSandbox: true } : {}
       },
       pages: [],
       journeys: journeys2,
@@ -50171,6 +50237,7 @@ async function auditCommand(ctx, usage2, categories) {
       allowPrivate: flag(ctx, "allow-private"),
       ...denyLocalFrom(ctx) ? { denyLocal: true, ...server ? { servedPort: servedPort(server) } : {} } : {},
       ...networkFrom(ctx, auditTarget),
+      ...chromiumSandboxFrom(ctx, browser) ? { chromiumSandbox: true } : {},
       keyboard: !flag(ctx, "no-keyboard"),
       throttle: flag(ctx, "throttle"),
       runs: num(ctx, "runs", 1),
@@ -50336,12 +50403,12 @@ var conversion = {
 };
 
 // src/cli/commands/bench.ts
-import { existsSync as existsSync13, readdirSync as readdirSync9, readFileSync as readFileSync12, writeFileSync as writeFileSync9 } from "node:fs";
-import { join as join18, resolve as resolve7 } from "node:path";
+import { existsSync as existsSync13, readdirSync as readdirSync9, readFileSync as readFileSync12, writeFileSync as writeFileSync10 } from "node:fs";
+import { join as join19, resolve as resolve7 } from "node:path";
 init_errors();
 var matches = (f, e) => f.ruleId === e.rule && (!e.kind || f.kind === e.kind) && pathOf2(f.url).split("?")[0].replace(/\/$/, "") === e.path.replace(/\/$/, "") && (!e.viewport || (f.viewport ?? "").split(", ").includes(e.viewport));
 async function benchFixture(dir, wsRoot) {
-  const expected = JSON.parse(readFileSync12(join18(dir, "expected.json"), "utf8"));
+  const expected = JSON.parse(readFileSync12(join19(dir, "expected.json"), "utf8"));
   const server = await serveStatic(dir);
   const t0 = Date.now();
   try {
@@ -50424,12 +50491,12 @@ var bench = {
     const root = resolve7(ctx.positionals[0] ?? "fixtures/sites");
     if (!existsSync13(root)) throw new JouriloError("NOT_FOUND", `No fixtures at ${root}`);
     const only = str(ctx, "only");
-    const dirs = readdirSync9(root).filter((d) => existsSync13(join18(root, d, "expected.json"))).filter((d) => !only || d === only);
+    const dirs = readdirSync9(root).filter((d) => existsSync13(join19(root, d, "expected.json"))).filter((d) => !only || d === only);
     if (!dirs.length) throw new JouriloError("NOT_FOUND", `No fixtures with expected.json in ${root}`);
     const results = [];
     for (const d of dirs) {
       ctx.log(`bench: ${d}`);
-      results.push(await benchFixture(join18(root, d), join18(ctx.ws.root, "bench")));
+      results.push(await benchFixture(join19(root, d), join19(ctx.ws.root, "bench")));
     }
     const found = results.reduce((a, r) => a + r.found, 0);
     const expected = results.reduce((a, r) => a + r.expected, 0);
@@ -50449,7 +50516,7 @@ var bench = {
     const record = str(ctx, "record");
     if (record) {
       const prev = existsSync13(record) ? readFileSync12(record, "utf8") : "";
-      writeFileSync9(
+      writeFileSync10(
         record,
         `${prev}${JSON.stringify({ ...summary, fixtures: results.map((r) => ({ fixture: r.fixture, found: r.found, expected: r.expected, fp: r.falsePositives.length + r.excessDefects.length, seconds: r.seconds })) })}
 `
@@ -50479,18 +50546,18 @@ var bench = {
 };
 
 // src/cli/commands/discover.ts
-import { existsSync as existsSync16, statSync as statSync7, writeFileSync as writeFileSync10 } from "node:fs";
-import { join as join21, resolve as resolve8 } from "node:path";
+import { existsSync as existsSync16, statSync as statSync7, writeFileSync as writeFileSync11 } from "node:fs";
+import { join as join22, resolve as resolve8 } from "node:path";
 
 // src/discovery/repo.ts
 init_fs_safety();
 import { existsSync as existsSync15, readdirSync as readdirSync11, readFileSync as readFileSync14, statSync as statSync6 } from "node:fs";
-import { basename as basename5, dirname as dirname8, join as join20, relative as relative5 } from "node:path";
+import { basename as basename5, dirname as dirname8, join as join21, relative as relative5 } from "node:path";
 
 // src/discovery/laravel.ts
 init_fs_safety();
 import { existsSync as existsSync14, readdirSync as readdirSync10, readFileSync as readFileSync13, statSync as statSync5 } from "node:fs";
-import { basename as basename4, dirname as dirname7, join as join19, relative as relative4 } from "node:path";
+import { basename as basename4, dirname as dirname7, join as join20, relative as relative4 } from "node:path";
 function read(file2) {
   try {
     return statSync5(file2).size > 4e5 ? "" : readFileSync13(file2, "utf8");
@@ -50522,13 +50589,13 @@ function middlewares(chain) {
 function entryFiles(appRoot) {
   const out = /* @__PURE__ */ new Set();
   const add = (rel) => {
-    const abs = join19(appRoot, rel);
+    const abs = join20(appRoot, rel);
     if (existsSync14(abs)) out.add(toPosix(relative4(appRoot, abs)));
   };
   add("routes/web.php");
   for (const f of ["bootstrap/app.php", "app/Providers/RouteServiceProvider.php"]) {
-    const t = read(join19(appRoot, f));
-    for (const m of t.matchAll(/web\s*:\s*__DIR__\s*\.\s*['"]([^'"]+)['"]/g)) add(join19(dirname7(f), m[1]));
+    const t = read(join20(appRoot, f));
+    for (const m of t.matchAll(/web\s*:\s*__DIR__\s*\.\s*['"]([^'"]+)['"]/g)) add(join20(dirname7(f), m[1]));
     for (const m of t.matchAll(/base_path\(\s*['"](routes\/[^'"]+\.php)['"]\s*\)/g))
       if (!/routes\/(api|console|channels)\.php$/.test(m[1])) add(m[1]);
   }
@@ -50537,7 +50604,7 @@ function entryFiles(appRoot) {
 function scanFile(appRoot, rel, inherited, routes, seen) {
   if (seen.has(rel)) return;
   seen.add(rel);
-  const text = stripComments(read(join19(appRoot, rel)));
+  const text = stripComments(read(join20(appRoot, rel)));
   if (!text) return;
   const stack = [{ prefix: inherited.prefix, auth: inherited.auth, depth: -1 }];
   let depth = 0;
@@ -50580,7 +50647,7 @@ function scanFile(appRoot, rel, inherited, routes, seen) {
       );
       const g = groupOf(chain);
       if (included) {
-        const target = included[1] ? join19(dirname7(rel), included[1]) : included[2];
+        const target = included[1] ? join20(dirname7(rel), included[1]) : included[2];
         scanFile(appRoot, toPosix(target), g, routes, seen);
       } else if (/^group\(\s*(?:static\s+)?function/.test(rest)) pendingGroup = g;
     }
@@ -50597,7 +50664,7 @@ function scanFile(appRoot, rel, inherited, routes, seen) {
   function handleStatement(stmt) {
     const req = stmt.match(/^\s*(?:require|include)(?:_once)?\s*\(?\s*__DIR__\s*\.\s*['"]([^'"]+\.php)['"]/);
     if (req) {
-      scanFile(appRoot, toPosix(join19(dirname7(rel), req[1])), top(), routes, seen);
+      scanFile(appRoot, toPosix(join20(dirname7(rel), req[1])), top(), routes, seen);
       return;
     }
     const m = stmt.match(
@@ -50625,19 +50692,19 @@ function phpFiles(dir, depth) {
   if (!existsSync14(dir)) return [];
   const out = [];
   for (const e of readdirSync10(dir, { withFileTypes: true })) {
-    const full = join19(dir, e.name);
+    const full = join20(dir, e.name);
     if (e.isDirectory() && depth > 1) out.push(...phpFiles(full, depth - 1));
     else if (e.isFile() && e.name.endsWith(".php")) out.push(full);
   }
   return out.sort();
 }
 function filamentPanels(appRoot, routes) {
-  const dir = join19(appRoot, "app/Providers/Filament");
+  const dir = join20(appRoot, "app/Providers/Filament");
   const files = existsSync14(dir) ? readdirSync10(dir).filter((f) => f.endsWith("PanelProvider.php")) : [];
   const panels = [];
   for (const f of files) {
     const rel = `app/Providers/Filament/${f}`;
-    const t = stripComments(read(join19(appRoot, rel)));
+    const t = stripComments(read(join20(appRoot, rel)));
     const id = t.match(/->id\(\s*['"]([^'"]+)['"]/)?.[1] ?? kebab(f.replace(/PanelProvider\.php$/, ""));
     const pathArg = t.match(/->path\(([^)]*\)?)\)/)?.[1];
     const path2 = joinPath("", (pathArg !== void 0 ? argValue(pathArg) : null) ?? id);
@@ -50651,10 +50718,10 @@ function filamentPanels(appRoot, routes) {
       ["app/Filament/Resources", true],
       ["app/Filament/Pages", false]
     ]) {
-      for (const file2 of phpFiles(join19(appRoot, sub), 2)) {
+      for (const file2 of phpFiles(join20(appRoot, sub), 2)) {
         const name = basename4(file2, ".php");
         if (isResource ? !name.endsWith("Resource") : name === "Dashboard") continue;
-        const relFile = toPosix(join19(sub, relative4(join19(appRoot, sub), file2)));
+        const relFile = toPosix(join20(sub, relative4(join20(appRoot, sub), file2)));
         if (!isResource && /\/(Concerns|Widgets)\//.test(relFile)) continue;
         const own = read(file2).match(/static\s+(?:\?string\s+)?\$slug\s*=\s*['"]([^'"]+)['"]/)?.[1];
         const slug3 = own ?? (isResource ? plural(kebab(name.replace(/Resource$/, ""))) : kebab(name));
@@ -50688,14 +50755,14 @@ function laravelProfile(appRoot) {
   const routes = [];
   const seen = /* @__PURE__ */ new Set();
   for (const f of entryFiles(appRoot)) scanFile(appRoot, f, { prefix: "", auth: [] }, routes, seen);
-  const routesDir = join19(appRoot, "routes");
+  const routesDir = join20(appRoot, "routes");
   if (existsSync14(routesDir)) {
     for (const f of readdirSync10(routesDir))
       if (f.endsWith(".php") && !/^(api|console|channels)\.php$/.test(f))
         scanFile(appRoot, `routes/${f}`, { prefix: "", auth: [] }, routes, seen);
   }
   const panels = filamentPanels(appRoot, routes);
-  const authConfig = stripComments(read(join19(appRoot, "config/auth.php")));
+  const authConfig = stripComments(read(join20(appRoot, "config/auth.php")));
   const guards = topLevelKeys(authConfig, "guards");
   const unique = /* @__PURE__ */ new Map();
   for (const r of routes) if (!unique.has(r.path)) unique.set(r.path, r);
@@ -50733,7 +50800,7 @@ function walk(root, max = 2e4) {
     }
     for (const n of entries) {
       if (SKIP.has(n) || n.startsWith(".") && n !== ".github") continue;
-      const full = join20(dir, n);
+      const full = join21(dir, n);
       let st;
       try {
         st = statSync6(full);
@@ -50924,7 +50991,7 @@ function fileRoutes(appRoot, files, frameworks) {
   for (const f of files) {
     for (const [fileRe, re, label] of codeRoute) {
       if (!fileRe.test(f)) continue;
-      const text = read2(join20(appRoot, f));
+      const text = read2(join21(appRoot, f));
       if (!text) continue;
       for (const m of text.matchAll(re)) {
         const raw = m[1].trim();
@@ -50959,7 +51026,7 @@ function devCommand(appRoot, pkg, frameworks, rel) {
   };
   const def = frameworks.map((f) => defaults[f]).find(Boolean) ?? null;
   if (script) {
-    const lock = existsSync15(join20(appRoot, "pnpm-lock.yaml")) ? "pnpm" : existsSync15(join20(appRoot, "yarn.lock")) ? "yarn" : existsSync15(join20(appRoot, "bun.lockb")) || existsSync15(join20(appRoot, "bun.lock")) ? "bun" : "npm";
+    const lock = existsSync15(join21(appRoot, "pnpm-lock.yaml")) ? "pnpm" : existsSync15(join21(appRoot, "yarn.lock")) ? "yarn" : existsSync15(join21(appRoot, "bun.lockb")) || existsSync15(join21(appRoot, "bun.lock")) ? "bun" : "npm";
     return {
       command: lock,
       args: ["run", script],
@@ -50967,9 +51034,9 @@ function devCommand(appRoot, pkg, frameworks, rel) {
       source: `${rel || "."}/package.json`
     };
   }
-  if (existsSync15(join20(appRoot, "artisan")))
+  if (existsSync15(join21(appRoot, "artisan")))
     return { command: "php", args: ["artisan", "serve"], port: 8e3, source: `${rel || "."}/artisan` };
-  if (existsSync15(join20(appRoot, "pubspec.yaml")) && existsSync15(join20(appRoot, "web")))
+  if (existsSync15(join21(appRoot, "pubspec.yaml")) && existsSync15(join21(appRoot, "web")))
     return {
       command: "flutter",
       args: ["run", "-d", "web-server", "--web-port", "8080"],
@@ -50980,7 +51047,7 @@ function devCommand(appRoot, pkg, frameworks, rel) {
 }
 function profileApp(repoRoot, appRoot, files) {
   const rel = toPosix(relative5(repoRoot, appRoot));
-  const pkgFile = join20(appRoot, "package.json");
+  const pkgFile = join21(appRoot, "package.json");
   const pkg = existsSync15(pkgFile) ? readJson2(pkgFile) : null;
   const deps = {
     ...pkg?.dependencies ?? {},
@@ -50992,14 +51059,14 @@ function profileApp(repoRoot, appRoot, files) {
       if (s.group === "framework" && s.dep.test(d) && !frameworks.some((f) => f.value === s.label))
         frameworks.push(fact(s.label, `${rel || "."}/package.json`));
   }
-  const composer = existsSync15(join20(appRoot, "composer.json")) ? readJson2(join20(appRoot, "composer.json")) : null;
+  const composer = existsSync15(join21(appRoot, "composer.json")) ? readJson2(join21(appRoot, "composer.json")) : null;
   if (composer && JSON.stringify(composer.require ?? {}).includes("laravel/framework"))
     frameworks.push(fact("Laravel", `${rel || "."}/composer.json`));
-  const pubspec = read2(join20(appRoot, "pubspec.yaml"));
+  const pubspec = read2(join21(appRoot, "pubspec.yaml"));
   if (/\bflutter:\s*\n\s+sdk:\s*flutter/.test(pubspec))
     frameworks.push(
       fact(
-        existsSync15(join20(appRoot, "web")) ? "Flutter (web enabled)" : "Flutter",
+        existsSync15(join21(appRoot, "web")) ? "Flutter (web enabled)" : "Flutter",
         `${rel || "."}/pubspec.yaml`
       )
     );
@@ -51028,26 +51095,26 @@ function profileApp(repoRoot, appRoot, files) {
 function discoverRepository(root) {
   const files = walk(root);
   const gaps = [];
-  const rootPkg = existsSync15(join20(root, "package.json")) ? readJson2(join20(root, "package.json")) : null;
+  const rootPkg = existsSync15(join21(root, "package.json")) ? readJson2(join21(root, "package.json")) : null;
   let monorepo = null;
   const appRoots = [];
   const ws = rootPkg?.workspaces;
   const wsGlobs = Array.isArray(ws) ? ws : Array.isArray(ws?.packages) ? ws.packages : [];
-  const pnpm = read2(join20(root, "pnpm-workspace.yaml"));
+  const pnpm = read2(join21(root, "pnpm-workspace.yaml"));
   for (const m of pnpm.matchAll(/^\s*-\s*['"]?([^'"\n]+)['"]?\s*$/gm)) wsGlobs.push(m[1]);
   if (wsGlobs.length)
     monorepo = fact(
       `workspaces: ${wsGlobs.join(", ")}`,
-      existsSync15(join20(root, "pnpm-workspace.yaml")) ? "pnpm-workspace.yaml" : "package.json"
+      existsSync15(join21(root, "pnpm-workspace.yaml")) ? "pnpm-workspace.yaml" : "package.json"
     );
   for (const g of wsGlobs) {
     const base2 = g.replace(/\/\*\*?$/, "");
     if (g.endsWith("*")) {
-      const dir = join20(root, base2);
+      const dir = join21(root, base2);
       if (!existsSync15(dir)) continue;
       for (const n of readdirSync11(dir))
-        if (existsSync15(join20(dir, n, "package.json"))) appRoots.push(join20(dir, n));
-    } else if (existsSync15(join20(root, base2, "package.json"))) appRoots.push(join20(root, base2));
+        if (existsSync15(join21(dir, n, "package.json"))) appRoots.push(join21(dir, n));
+    } else if (existsSync15(join21(root, base2, "package.json"))) appRoots.push(join21(root, base2));
   }
   const apps = (appRoots.length ? appRoots : [root]).map((r) => profileApp(root, r, files)).filter(
     (a, _, all) => all.length === 1 || a.routes.length > 0 || a.frameworks.some((f) => !["React", "Vue", "Svelte", "Vite"].includes(f.value))
@@ -51057,7 +51124,7 @@ function discoverRepository(root) {
   const allPkgs = files.filter((f) => f.endsWith("package.json")).slice(0, 60);
   const signals = /* @__PURE__ */ new Map();
   for (const p of allPkgs) {
-    const j = readJson2(join20(root, p));
+    const j = readJson2(join21(root, p));
     const deps = Object.keys({
       ...j?.dependencies ?? {},
       ...j?.devDependencies ?? {}
@@ -51070,13 +51137,13 @@ function discoverRepository(root) {
         signals.set(s.group, list2);
       }
   }
-  const composer = existsSync15(join20(root, "composer.json")) ? JSON.stringify(readJson2(join20(root, "composer.json"))?.require ?? {}) : "";
+  const composer = existsSync15(join21(root, "composer.json")) ? JSON.stringify(readJson2(join21(root, "composer.json"))?.require ?? {}) : "";
   if (/laravel\/(breeze|fortify|jetstream|sanctum)/.test(composer))
     (signals.get("auth") ?? signals.set("auth", []).get("auth")).push(
       fact(composer.match(/laravel\/(breeze|fortify|jetstream|sanctum)/)[0], "composer.json")
     );
   for (const app of apps.filter((a) => a.frameworks.some((f) => f.value === "Laravel"))) {
-    const lp = laravelProfile(join20(root, app.root));
+    const lp = laravelProfile(join21(root, app.root));
     const at = (f) => app.root === "." ? f : `${app.root}/${f}`;
     const authList = signals.get("auth") ?? signals.set("auth", []).get("auth");
     if (lp.guards.length)
@@ -51106,7 +51173,7 @@ function discoverRepository(root) {
     if (/(^|\/)(tokens?|design-tokens|theme)\.(json|ts|js|css)$/i.test(f) || /\.tokens\.json$/.test(f))
       tokens.push(fact(basename5(f), f));
     if (/\.(css|scss)$/.test(f)) {
-      const t = read2(join20(root, f), 3e5);
+      const t = read2(join21(root, f), 3e5);
       cssVariables += (t.match(/--[a-z0-9-]+\s*:/gi) ?? []).length;
       for (const m of t.matchAll(/font-family\s*:\s*["']?([A-Za-z][\w -]+?)["']?\s*[,;]/g)) {
         const name = m[1].trim();
@@ -51115,7 +51182,7 @@ function discoverRepository(root) {
       }
     }
     if (/\.(tsx|jsx|ts|js)$/.test(f) && /layout|_app|_document/.test(f)) {
-      const t = read2(join20(root, f));
+      const t = read2(join21(root, f));
       for (const m of t.matchAll(/import\s*\{\s*([A-Z][\w,\s]+)\}\s*from\s*['"]next\/font\/google['"]/g))
         for (const n of m[1].split(",").map((s) => s.trim()).filter(Boolean))
           if (!fonts.some((x) => x.value === n)) fonts.push(fact(n.replace(/_/g, " "), f));
@@ -51141,7 +51208,7 @@ function discoverRepository(root) {
   roles.unshift(fact("visitor", "public routes"));
   for (const r of laravelRoles) if (!roles.some((x) => x.value === r.value)) roles.push(r);
   for (const f of files.filter((x) => /\.(ts|tsx|js|php|dart|rb|py)$/.test(x)).slice(0, 3e3)) {
-    const t = read2(join20(root, f), 12e4);
+    const t = read2(join21(root, f), 12e4);
     for (const m of t.matchAll(
       /\brole\s*(?:===?|==|:)\s*['"](owner|admin|editor|viewer|member|manager|customer|seller|vendor|teacher|student)['"]/gi
     )) {
@@ -51174,7 +51241,7 @@ function discoverRepository(root) {
   let readmeSummary = null;
   const readmeFile = files.find((f) => /^readme\.md$/i.test(f));
   if (readmeFile) {
-    const para = read2(join20(root, readmeFile)).split(/\n\s*\n/).map((p) => p.replace(/<[^>]+>|!\[[^\]]*\]\([^)]*\)|\[!\[[^\]]*\]\([^)]*\)\]\([^)]*\)/g, "").trim()).find((p) => p.length > 60 && !p.startsWith("#") && !p.startsWith("```") && !p.startsWith("|"));
+    const para = read2(join21(root, readmeFile)).split(/\n\s*\n/).map((p) => p.replace(/<[^>]+>|!\[[^\]]*\]\([^)]*\)|\[!\[[^\]]*\]\([^)]*\)\]\([^)]*\)/g, "").trim()).find((p) => p.length > 60 && !p.startsWith("#") && !p.startsWith("```") && !p.startsWith("|"));
     if (para) readmeSummary = fact(para.replace(/\s+/g, " ").slice(0, 400), readmeFile);
   }
   const description = typeof rootPkg?.description === "string" ? fact(rootPkg.description, "package.json") : null;
@@ -51382,8 +51449,8 @@ ${networkOptionsHelp(22)}`,
     ctx.ws.ensure();
     if (!target.includes("://") && existsSync16(target) && statSync7(target).isDirectory()) {
       const profile2 = discoverRepository(resolve8(target));
-      const file3 = join21(ctx.ws.root, "product.json");
-      writeFileSync10(file3, `${JSON.stringify(profile2, null, 2)}
+      const file3 = join22(ctx.ws.root, "product.json");
+      writeFileSync11(file3, `${JSON.stringify(profile2, null, 2)}
 `);
       return { data: { file: file3, profile: profile2 }, text: `${repoText(profile2)}
 
@@ -51400,6 +51467,7 @@ ${networkOptionsHelp(22)}`,
       allowPrivate: flag(ctx, "allow-private"),
       ...denyLocalFrom(ctx) ? { denyLocal: true } : {},
       ...networkFrom(ctx, target),
+      ...chromiumSandboxFrom(ctx, "chromium") ? { chromiumSandbox: true } : {},
       keyboard: false,
       throttle: false,
       timeoutMs: 3e4,
@@ -51409,8 +51477,8 @@ ${networkOptionsHelp(22)}`,
       onProgress: ctx.log
     });
     const profile = buildSiteProfile(run, observations);
-    const file2 = join21(ctx.ws.root, "site.json");
-    writeFileSync10(file2, `${JSON.stringify(profile, null, 2)}
+    const file2 = join22(ctx.ws.root, "site.json");
+    writeFileSync11(file2, `${JSON.stringify(profile, null, 2)}
 `);
     return { data: { file: file2, profile }, text: `${siteText(profile)}
 
@@ -51420,8 +51488,8 @@ ${networkOptionsHelp(22)}`,
 
 // src/cli/commands/experiment.ts
 init_errors();
-import { existsSync as existsSync17, mkdirSync as mkdirSync7, readFileSync as readFileSync15, writeFileSync as writeFileSync11 } from "node:fs";
-import { join as join22 } from "node:path";
+import { existsSync as existsSync17, mkdirSync as mkdirSync7, readFileSync as readFileSync15, writeFileSync as writeFileSync12 } from "node:fs";
+import { join as join23 } from "node:path";
 
 // src/experiment/stats.ts
 function normCdf(z) {
@@ -51843,7 +51911,7 @@ Jourilo never invents traffic, conversions or effects: every number comes from y
       if (!f) throw new JouriloError("NOT_FOUND", `Finding ${fp} is not in run ${run.id}.`);
       if (f.kind !== "hypothesis")
         ctx.log(`Note: ${f.ruleId} is a ${f.kind}; defects should usually be fixed, not A/B tested.`);
-      const productFile = join22(ctx.ws.root, "product.json");
+      const productFile = join23(ctx.ws.root, "product.json");
       const product = existsSync17(productFile) ? JSON.parse(readFileSync15(productFile, "utf8")) : null;
       const plan = planExperiment(run.id, f, {
         ...numOpt(ctx, "baseline") !== void 0 ? { baseline: numOpt(ctx, "baseline") } : {},
@@ -51851,11 +51919,11 @@ Jourilo never invents traffic, conversions or effects: every number comes from y
         ...numOpt(ctx, "daily-traffic") !== void 0 ? { dailyTraffic: numOpt(ctx, "daily-traffic") } : {},
         product
       });
-      const outDir = join22(ctx.ws.root, "experiments");
+      const outDir = join23(ctx.ws.root, "experiments");
       mkdirSync7(outDir, { recursive: true });
-      const md2 = join22(outDir, `${plan.id}.md`);
-      writeFileSync11(md2, planMarkdown(plan));
-      writeFileSync11(join22(outDir, `${plan.id}.json`), `${JSON.stringify(plan, null, 2)}
+      const md2 = join23(outDir, `${plan.id}.md`);
+      writeFileSync12(md2, planMarkdown(plan));
+      writeFileSync12(join23(outDir, `${plan.id}.json`), `${JSON.stringify(plan, null, 2)}
 `);
       return { data: { plan, file: md2 }, text: `${planMarkdown(plan)}
 Saved: ${md2}` };
@@ -51879,7 +51947,7 @@ Saved: ${md2}` };
 
 // src/cli/commands/finding.ts
 import { existsSync as existsSync18 } from "node:fs";
-import { join as join23 } from "node:path";
+import { join as join24 } from "node:path";
 init_errors();
 init_fs_safety();
 var CATEGORIES = [
@@ -52004,7 +52072,7 @@ undismiss options:
     writeReports(dir, run, void 0, { history: ctx.ws.listRuns() });
     return {
       data: f,
-      text: `Added ${f.provenance} finding ${f.fingerprint} to run ${run.id} (${join23(dir, "report.html")}).`
+      text: `Added ${f.provenance} finding ${f.fingerprint} to run ${run.id} (${join24(dir, "report.html")}).`
     };
   }
 };
@@ -52077,8 +52145,8 @@ function undismiss(ctx) {
 }
 
 // src/cli/commands/optimize.ts
-import { existsSync as existsSync19, mkdirSync as mkdirSync8, writeFileSync as writeFileSync12 } from "node:fs";
-import { join as join24, resolve as resolve9 } from "node:path";
+import { existsSync as existsSync19, mkdirSync as mkdirSync8, writeFileSync as writeFileSync13 } from "node:fs";
+import { join as join25, resolve as resolve9 } from "node:path";
 init_errors();
 init_fs_safety();
 
@@ -52269,10 +52337,10 @@ Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
         }
       );
       checkpoint2 = tx.id;
-      const outDir = join24(ctx.ws.root, "fixes");
+      const outDir = join25(ctx.ws.root, "fixes");
       mkdirSync8(outDir, { recursive: true });
-      writeFileSync12(
-        join24(outDir, `${run.id}.json`),
+      writeFileSync13(
+        join25(outDir, `${run.id}.json`),
         `${JSON.stringify({ run: run.id, checkpoint: checkpoint2, applied: plans.map((p) => ({ fingerprint: p.fingerprint, ruleId: p.ruleId, title: p.title, files: p.edits.map((e) => e.file) })) }, null, 2)}
 `
       );
@@ -52285,7 +52353,7 @@ Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
     }
     lines.push(
       "",
-      `${manual.length} other defect(s) need a person or agent; source candidates are in the report (${join24(dir, "report.html")}).`
+      `${manual.length} other defect(s) need a person or agent; source candidates are in the report (${join25(dir, "report.html")}).`
     );
     return {
       data: {
@@ -52424,6 +52492,7 @@ ${networkOptionsHelp(25)}
         ...userAgent ? { userAgent } : {},
         ...network.extraHeaders ? { extraHeaders: network.extraHeaders } : {},
         ...ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {},
+        ...chromiumSandboxFrom(ctx, String(base2.browser.name ?? "chromium")) ? { chromiumSandbox: true } : {},
         keyboard: base2.settings.keyboard !== false,
         throttle: base2.settings.throttle === true,
         // Same number of visits as the baseline, so medians are compared with medians.

@@ -10,13 +10,15 @@ export interface Manifest {
 }
 
 const MANIFEST_FILE = 'manifest.json';
+// The browser's process ids exist only while it runs (see browser/session.ts); never an artifact of the run.
+const TRANSIENT_FILE = 'browser.pids';
 
 function listFiles(dir: string, prefix = ''): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
     if (entry.isDirectory()) out.push(...listFiles(join(dir, entry.name), rel));
-    else if (entry.isFile() && rel !== MANIFEST_FILE) out.push(rel);
+    else if (entry.isFile() && rel !== MANIFEST_FILE && rel !== TRANSIENT_FILE) out.push(rel);
   }
   return out;
 }

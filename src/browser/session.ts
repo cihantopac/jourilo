@@ -1,5 +1,7 @@
 // A guarded browser session: the network guard proxy plus a browser routed through it. Every audit, journey run and
 // form probe uses one, so the address policy applies to every request the page makes, not only to the target URL.
+import { rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { Browser, BrowserContext } from 'playwright-core';
 import { type BlockedConnection, type NetGuard, redirectEscape, startNetGuard } from '../core/net-guard.js';
 import { redactUrl } from '../core/redact.js';
@@ -20,6 +22,30 @@ export interface GuardedSession {
   close(): Promise<void>;
 }
 
+/** Process ids of the browser, one per line, for as long as it runs (an integrator can kill them after a SIGKILL). */
+export const PIDS_FILE = 'browser.pids';
+
+/**
+ * Writes the ids of the browser's processes (browser, GPU, network service; renderers started later are children of
+ * the browser process and exit with it). Playwright 1.64 exposes no browser pid (`Browser.process()` does not exist),
+ * so this asks Chromium itself through CDP `SystemInfo.getProcessInfo`; Firefox and WebKit have no such session and
+ * get no file. A failure here never stops the run: the file is a convenience for cleanup.
+ */
+async function writeBrowserPids(browser: Browser, name: BrowserName, file: string): Promise<void> {
+  if (name === 'firefox' || name === 'webkit') return;
+  try {
+    const cdp = await browser.newBrowserCDPSession();
+    const { processInfo } = (await cdp.send('SystemInfo.getProcessInfo')) as {
+      processInfo: { id: number }[];
+    };
+    await cdp.detach().catch(() => undefined);
+    const pids = [...new Set(processInfo.map((p) => p.id).filter((id) => Number.isInteger(id) && id > 0))];
+    if (pids.length) writeFileSync(file, `${pids.join('\n')}\n`);
+  } catch {
+    // Not available: the run goes on without the file.
+  }
+}
+
 const sessions = new WeakMap<Browser, { policy: AddressPolicy; escaped: NetworkReport['escaped'] }>();
 
 export async function openGuardedBrowser(
@@ -27,15 +53,18 @@ export async function openGuardedBrowser(
   headed: boolean,
   policy: AddressPolicy,
   ownSignals = false,
+  extra: { sandbox?: boolean; runDir?: string } = {},
 ): Promise<GuardedSession> {
   const guard = await startNetGuard(policy);
   let browser: Browser;
   try {
-    browser = await launchBrowser(name, headed, guard, ownSignals);
+    browser = await launchBrowser(name, headed, guard, ownSignals, extra.sandbox === true);
   } catch (err) {
     await guard.close();
     throw err;
   }
+  const pidsFile = extra.runDir ? join(extra.runDir, PIDS_FILE) : undefined;
+  if (pidsFile) await writeBrowserPids(browser, name, pidsFile);
   const escaped: NetworkReport['escaped'] = [];
   sessions.set(browser, { policy, escaped });
   return {
@@ -44,6 +73,7 @@ export async function openGuardedBrowser(
     report: () => ({ blocked: [...guard.blocked], escaped: [...escaped] }),
     close: async () => {
       await browser.close().catch(() => undefined);
+      if (pidsFile) rmSync(pidsFile, { force: true });
       await guard.close();
     },
   };

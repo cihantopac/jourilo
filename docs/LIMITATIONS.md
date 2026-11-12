@@ -135,6 +135,22 @@ Stated so nobody mistakes silence for a pass.
 - `--user-agent` replaces the browser's User-Agent header and `navigator.userAgent`. `robots.txt` is still read and
   matched as Jourilo's own user agent.
 
+## Browser sandbox and cleanup
+
+- Playwright starts Chromium with its process sandbox off (`--no-sandbox`), which is what makes it start in containers
+  and CI. `--chromium-sandbox` (or `JOURILO_CHROMIUM_SANDBOX=1`) keeps the sandbox on for Chromium, Chrome and Edge. It
+  is a usage error with `--browser firefox` or `webkit`; the environment variable is ignored there with a warning. A
+  system that denies the sandbox cannot start the browser: in a container without the needed privileges, or on a Linux
+  kernel that denies unprivileged user namespaces (some CI runners), the run ends with "browser unavailable" (exit 4).
+  Jourilo's own test for the flag skips itself on such a kernel and on Windows, where it cannot inspect the process
+  command line.
+- While a Chromium run is going, its directory holds `browser.pids`: the process ids of the browser, GPU and network
+  service processes, one per line. It is removed when the browser closes, including after Ctrl-C, SIGTERM and
+  `--max-duration`, and is not listed in `manifest.json`. A `SIGKILL` of Jourilo (or a crashed machine) leaves the file
+  and may leave the browser running: an integrator can clean up with `kill $(cat <run dir>/browser.pids)` (on
+  Windows, `taskkill /F /PID` for each id). Check first that the ids still belong to Chromium, since ids are reused.
+  Firefox and WebKit write no `browser.pids`.
+
 ## Reports
 
 - The report interface is in English and Turkish; finding titles, descriptions and recommendations come from the

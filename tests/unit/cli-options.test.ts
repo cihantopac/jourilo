@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   type Command,
   type Context,
+  chromiumSandboxFrom,
   extraHeadersFrom,
   maxDurationOption,
   pagesOption,
@@ -106,6 +107,49 @@ describe('request options', () => {
     }
     const dup = thrown(() => extraHeadersFrom(ctxWith({ 'extra-header': ['X-A: 1', 'x-a: 2'] })));
     expect(dup.code).toBe('USAGE');
+  });
+});
+
+describe('chromium sandbox option (F21)', () => {
+  const logged: string[] = [];
+  const ctx = (values: Context['values']): Context =>
+    ({ values, positionals: [], json: false, log: (m: string) => logged.push(m) }) as unknown as Context;
+  const withEnv = (value: string | undefined, fn: () => void) => {
+    const before = process.env.JOURILO_CHROMIUM_SANDBOX;
+    if (value === undefined) delete process.env.JOURILO_CHROMIUM_SANDBOX;
+    else process.env.JOURILO_CHROMIUM_SANDBOX = value;
+    try {
+      fn();
+    } finally {
+      if (before === undefined) delete process.env.JOURILO_CHROMIUM_SANDBOX;
+      else process.env.JOURILO_CHROMIUM_SANDBOX = before;
+    }
+  };
+  it('is off by default and on with --chromium-sandbox or JOURILO_CHROMIUM_SANDBOX', () => {
+    withEnv(undefined, () => {
+      expect(chromiumSandboxFrom(ctx({}), 'chromium')).toBe(false);
+      expect(chromiumSandboxFrom(ctx({ 'chromium-sandbox': true }), 'chromium')).toBe(true);
+      expect(chromiumSandboxFrom(ctx({ 'chromium-sandbox': true }), 'chrome')).toBe(true);
+    });
+    for (const v of ['1', 'true', 'YES', ' on '])
+      withEnv(v, () => expect(chromiumSandboxFrom(ctx({}), 'chromium')).toBe(true));
+    for (const v of ['', '0', 'false', 'no', 'off'])
+      withEnv(v, () => expect(chromiumSandboxFrom(ctx({}), 'chromium')).toBe(false));
+  });
+  it('an unrecognised environment value fails closed (sandbox on) with a warning', () => {
+    logged.length = 0;
+    withEnv('sometimes', () => expect(chromiumSandboxFrom(ctx({}), 'chromium')).toBe(true));
+    expect(logged.join('\n')).toContain('JOURILO_CHROMIUM_SANDBOX=sometimes');
+  });
+  it('--chromium-sandbox with Firefox or WebKit is a usage error; the environment variable is ignored there with a warning', () => {
+    for (const b of ['firefox', 'webkit'] as const) {
+      const err = thrown(() => chromiumSandboxFrom(ctx({ 'chromium-sandbox': true }), b));
+      expect(err.code).toBe('USAGE');
+      expect(err.message).toContain('--chromium-sandbox');
+    }
+    logged.length = 0;
+    withEnv('1', () => expect(chromiumSandboxFrom(ctx({}), 'firefox')).toBe(false));
+    expect(logged.join('\n')).toContain('only affects Chromium');
   });
 });
 

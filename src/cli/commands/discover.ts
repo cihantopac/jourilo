@@ -6,6 +6,7 @@ import { discoverRepository, type ProductProfile } from '../../discovery/repo.js
 import { buildSiteProfile, type SiteProfile } from '../../discovery/site.js';
 import {
   type Command,
+  chromiumSandboxFrom,
   denyLocalFrom,
   flag,
   NETWORK_OPTIONS,
@@ -111,6 +112,7 @@ ${networkOptionsHelp(22)}`,
       allowPrivate: flag(ctx, 'allow-private'),
       ...(denyLocalFrom(ctx) ? { denyLocal: true } : {}),
       ...networkFrom(ctx, target),
+      ...(chromiumSandboxFrom(ctx, 'chromium') ? { chromiumSandbox: true } : {}),
       keyboard: false,
       throttle: false,
       timeoutMs: 30_000,

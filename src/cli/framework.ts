@@ -186,6 +186,41 @@ export function denyLocalFrom(ctx: Context): boolean {
 }
 let warnedDenyLocal = false;
 
+/**
+ * `--chromium-sandbox`, or `JOURILO_CHROMIUM_SANDBOX`: keep Chromium's process sandbox, which Playwright turns off by
+ * default. Environment values are parsed like JOURILO_DENY_LOCAL (1/true/yes/on enable, 0/false/no/off or empty
+ * disable, anything else fails closed to enabled with a warning). The flag is Chromium-only: with Firefox or WebKit it
+ * is a usage error; the environment variable, which may be set for every command, is ignored there with a warning.
+ */
+export function chromiumSandboxFrom(ctx: Context, browser: string): boolean {
+  const chromium = browser === 'chromium' || browser === 'chrome' || browser === 'msedge';
+  if (flag(ctx, 'chromium-sandbox')) {
+    if (!chromium)
+      throw new JouriloError(
+        'USAGE',
+        `--chromium-sandbox only affects Chromium, Chrome and Edge, not --browser ${browser}.`,
+        'Use --browser chromium, or drop --chromium-sandbox.',
+      );
+    return true;
+  }
+  const raw = process.env.JOURILO_CHROMIUM_SANDBOX ?? '';
+  const v = raw.trim().toLowerCase();
+  if (!v || ['0', 'false', 'no', 'off'].includes(v)) return false;
+  const known = ['1', 'true', 'yes', 'on'].includes(v);
+  if (!known && !warnedSandbox) {
+    warnedSandbox = true;
+    ctx.log(
+      `JOURILO_CHROMIUM_SANDBOX=${raw} is not recognised (use 1, true, yes or on to enable, 0, false, no or off to disable); the Chromium sandbox is on.`,
+    );
+  }
+  if (!chromium) {
+    ctx.log(`JOURILO_CHROMIUM_SANDBOX only affects Chromium; it is ignored with --browser ${browser}.`);
+    return false;
+  }
+  return true;
+}
+let warnedSandbox = false;
+
 /** WebKit sends HTTPS redirects outside the proxy, so the redirect protection of --deny-local cannot hold there. */
 export function refuseDenyLocalWebkit(denyLocal: boolean, browser: string): void {
   if (denyLocal && browser === 'webkit')
@@ -207,6 +242,7 @@ export const NETWORK_OPTIONS: OptionSpec = {
   'user-agent': { type: 'string' },
   'extra-header': { type: 'string', multiple: true },
   'ignore-https-errors': { type: 'boolean' },
+  'chromium-sandbox': { type: 'boolean' },
 };
 
 /** The `details` lines for NETWORK_OPTIONS, indented to a command's option column. */
@@ -228,6 +264,10 @@ export function networkOptionsHelp(column: number): string {
     `  --ignore-https-errors`,
     `${cont}Accept invalid or self-signed certificates in the browser (test environments only); the network`,
     `${cont}guard still checks every destination, and the run lists it in the limitations`,
+    `  --chromium-sandbox`,
+    `${cont}Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1`,
+    `${cont}does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch`,
+    `${cont}where the system denies the sandbox (containers, some Linux CI kernels)`,
   ].join('\n');
 }
 

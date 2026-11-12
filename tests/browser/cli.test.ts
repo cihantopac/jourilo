@@ -658,6 +658,145 @@ describe('cli --ignore-https-errors (F16)', () => {
   }, 240_000);
 });
 
+describe('cli --chromium-sandbox and browser.pids (F21)', () => {
+  const posix = process.platform !== 'win32';
+  const sandboxWs = join(root, 'tests', '.tmp', 'sandbox-ws');
+  let site: http.Server;
+  let release: () => void = () => undefined;
+  let held: Promise<void>;
+  let url: string;
+
+  beforeAll(async () => {
+    rmSync(sandboxWs, { recursive: true, force: true });
+    site = http.createServer((req, res) => {
+      const send = () =>
+        res
+          .writeHead(200, { 'content-type': 'text/html' })
+          .end('<!doctype html><html lang="en"><title>Held</title><main><h1>Held</h1></main>');
+      // The page answers only when the test lets it, so the browser is alive while the test looks at it.
+      if (req.url === '/') void held.then(send);
+      else res.writeHead(404).end();
+    });
+    await new Promise<void>((r) => site.listen(0, '127.0.0.1', () => r()));
+    url = `http://127.0.0.1:${(site.address() as AddressInfo).port}/`;
+  });
+  afterAll(async () => {
+    release();
+    await new Promise((r) => site.close(r));
+  });
+
+  const commandLine = (pid: number) =>
+    execFileSync('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' }).trim();
+  const alive = (pid: number) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  /** Starts an audit that is held at its first page; returns the browser's pids once the file appears. */
+  async function holdAudit(extra: string[]) {
+    held = new Promise<void>((r) => {
+      release = r;
+    });
+    const child = spawn(
+      process.execPath,
+      [
+        cli,
+        'audit',
+        url,
+        '--pages',
+        '1',
+        '--viewports',
+        'desktop',
+        '--no-keyboard',
+        '--no-forms',
+        '--json',
+        '-q',
+        '--workspace',
+        sandboxWs,
+        ...extra,
+      ],
+      { cwd: root },
+    );
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => {
+      stdout += d;
+    });
+    child.stderr.on('data', (d) => {
+      stderr += d;
+    });
+    const closed = new Promise<number | null>((r) => child.on('close', r));
+    const runs = join(sandboxWs, 'runs');
+    const deadline = Date.now() + 90_000;
+    let file = '';
+    while (!file && Date.now() < deadline) {
+      for (const id of existsSync(runs) ? readdirSync(runs) : []) {
+        const f = join(runs, id, 'browser.pids');
+        if (existsSync(f)) file = f;
+      }
+      if (!file) await new Promise((r) => setTimeout(r, 100));
+    }
+    if (!file) {
+      child.kill('SIGKILL');
+      throw new Error(`browser.pids never appeared: ${stderr}`);
+    }
+    const pids = readFileSync(file, 'utf8').split('\n').filter(Boolean).map(Number);
+    return { file, pids, closed, result: () => ({ stdout, stderr }) };
+  }
+
+  it.skipIf(!posix)(
+    '--chromium-sandbox launches without --no-sandbox; the default keeps it',
+    async (t) => {
+      // Some Linux CI kernels deny unprivileged user namespaces, so Chromium cannot start sandboxed there:
+      // detect that by launching it, instead of assuming a platform.
+      const { chromium } = await import('playwright-core');
+      const probe = await chromium.launch({ chromiumSandbox: true }).catch(() => undefined);
+      if (!probe) return t.skip();
+      await probe.close();
+      const plain = await holdAudit([]);
+      expect(commandLine(plain.pids[0]!)).toContain('--no-sandbox');
+      release();
+      expect(await plain.closed, plain.result().stderr).toBe(0);
+
+      const sandboxed = await holdAudit(['--chromium-sandbox']);
+      const line = commandLine(sandboxed.pids[0]!);
+      release();
+      const code = await sandboxed.closed;
+      expect(line).not.toContain('--no-sandbox');
+      expect(code, sandboxed.result().stderr).toBe(0);
+      const out = JSON.parse(sandboxed.result().stdout);
+      const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8')) as Run;
+      expect(run.settings.chromiumSandbox).toBe(true);
+    },
+    240_000,
+  );
+
+  it('--chromium-sandbox with Firefox is a usage error', () => {
+    const r = jourilo('audit', url, '--browser', 'firefox', '--chromium-sandbox', '--json');
+    expect(r.status).toBe(2);
+    expect(JSON.parse(r.stderr.trim().split('\n').pop()!).error.message).toContain('--chromium-sandbox');
+  });
+
+  it('browser.pids lists live browser processes during the run and is gone after it', async () => {
+    const live = await holdAudit([]);
+    expect(live.pids.length).toBeGreaterThan(0);
+    if (posix) for (const pid of live.pids) expect(alive(pid), `pid ${pid}`).toBe(true);
+    release();
+    expect(await live.closed, live.result().stderr).toBe(0);
+    const out = JSON.parse(live.result().stdout);
+    expect(existsSync(live.file)).toBe(false);
+    const manifest = JSON.parse(readFileSync(join(out.runDir, 'manifest.json'), 'utf8')) as {
+      files: { path: string }[];
+    };
+    expect(manifest.files.some((f) => f.path === 'browser.pids')).toBe(false);
+    if (posix) for (const pid of live.pids) expect(alive(pid), `pid ${pid}`).toBe(false);
+  }, 240_000);
+});
+
 /** Spawns an audit with --json, sends `signal` once a progress line matches `when`, and returns the outcome. */
 async function auditUntil(
   args: string[],
