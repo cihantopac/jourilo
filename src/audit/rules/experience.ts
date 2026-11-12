@@ -328,8 +328,12 @@ export function performanceFindings(obs: PageObservation): Finding[] {
     const severity: Severity =
       m.rating === 'poor' ? (m.name === 'LCP' || m.name === 'CLS' ? 'serious' : 'moderate') : 'minor';
     const shown = m.unit === 'ms' ? `${(m.value / 1000).toFixed(2)} s` : String(m.value);
+    // One item per metric and capture. The viewport is part of the item so merging two viewports keeps both,
+    // and values are rounded so a snapshot does not change with millisecond noise. Raw values stay in
+    // run.pages[].metrics, which is what budgets read.
+    const value = m.unit === 'ms' ? Math.round(m.value / 10) * 10 : Math.round(m.value * 1000) / 1000;
     const evidence: Finding['evidence'] = [
-      { type: 'metric', data: { name: m.name, value: m.value, unit: m.unit, rating: m.rating } },
+      { type: 'metric', data: { name: m.name, viewport: vp, value, unit: m.unit, rating: m.rating } },
     ];
     if (m.name === 'LCP' && obs.vitals.lcpElement)
       evidence.push({ type: 'element', selector: obs.vitals.lcpElement, note: 'LCP element' });
@@ -337,7 +341,7 @@ export function performanceFindings(obs: PageObservation): Finding[] {
       for (const e of obs.vitals.clsEntries.slice(0, 5))
         evidence.push({
           type: 'metric',
-          data: { shift: Math.round(e.value * 1000) / 1000, at: Math.round(e.t) },
+          data: { shift: Math.round(e.value * 1000) / 1000, at: Math.round(e.t / 10) * 10 },
           note: e.sources.join(', '),
         });
     out.push(

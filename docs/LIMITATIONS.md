@@ -125,6 +125,10 @@ Stated so nobody mistakes silence for a pass.
 - `--allow-hosts` and `--block-hosts` refuse hosts by name (`*.example.com` matches its subdomains, not
   `example.com`); the target's own host is always allowed. Refused requests are listed in the run's limitations.
 - Lab timings include one local proxy hop per connection.
+- Layout shift (CLS) includes shifts caused by font swaps, so it varies with font caching and font loading. That is
+  real layout shift for a visitor, so it stays in the metric. Performance evidence in findings has one item per metric
+  and viewport, with milliseconds rounded to the nearest 10 and CLS to 3 decimals, so snapshots stay stable; the raw
+  values are in `run.pages[].metrics`, which `--budget` reads.
 - `--extra-header "Name: value"` is sent only with requests to the target's origin (scheme, host and port), never to
   another origin. Playwright would carry an overridden header along every hop of a redirect chain, so Jourilo makes
   each request to the target's origin itself (through the guard) without following redirects and hands the response

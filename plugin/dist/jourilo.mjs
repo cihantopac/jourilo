@@ -45950,8 +45950,9 @@ function performanceFindings(obs) {
     if (!std) continue;
     const severity = m.rating === "poor" ? m.name === "LCP" || m.name === "CLS" ? "serious" : "moderate" : "minor";
     const shown = m.unit === "ms" ? `${(m.value / 1e3).toFixed(2)} s` : String(m.value);
+    const value = m.unit === "ms" ? Math.round(m.value / 10) * 10 : Math.round(m.value * 1e3) / 1e3;
     const evidence = [
-      { type: "metric", data: { name: m.name, value: m.value, unit: m.unit, rating: m.rating } }
+      { type: "metric", data: { name: m.name, viewport: vp, value, unit: m.unit, rating: m.rating } }
     ];
     if (m.name === "LCP" && obs.vitals.lcpElement)
       evidence.push({ type: "element", selector: obs.vitals.lcpElement, note: "LCP element" });
@@ -45959,7 +45960,7 @@ function performanceFindings(obs) {
       for (const e of obs.vitals.clsEntries.slice(0, 5))
         evidence.push({
           type: "metric",
-          data: { shift: Math.round(e.value * 1e3) / 1e3, at: Math.round(e.t) },
+          data: { shift: Math.round(e.value * 1e3) / 1e3, at: Math.round(e.t / 10) * 10 },
           note: e.sources.join(", ")
         });
     out.push(

@@ -507,6 +507,51 @@ describe('experience rules', () => {
   });
 });
 
+describe('performance evidence for snapshot consumers', () => {
+  const vit = (lcp: number, cls = 0.02) => ({
+    lcp,
+    lcpElement: 'h1',
+    cls,
+    clsEntries: [],
+    fcp: 100,
+    ttfb: 30,
+    tbt: 0,
+    inp: null,
+    interactions: 0,
+    domContentLoaded: 100,
+    load: 200,
+    transferBytes: 1000,
+    requests: 3,
+    domNodes: 50,
+  });
+  const lcpItems = (f: ReturnType<typeof mergeFindings>) =>
+    f
+      .filter((x) => x.ruleId === 'perf/lcp')
+      .flatMap((x) => x.evidence.filter((e) => e.type === 'metric' && e.data?.name === 'LCP'));
+  const both = (a: number, b: number) =>
+    mergeFindings([
+      ...performanceFindings(obs({ vitals: vit(a), viewport: VIEWPORTS.desktop! })),
+      ...performanceFindings(obs({ vitals: vit(b), viewport: VIEWPORTS.mobile! })),
+    ]);
+  it('two viewports with the same LCP give two evidence items', () => {
+    const items = lcpItems(both(4300, 4300));
+    expect(items.map((e) => e.data?.viewport).sort()).toEqual(['desktop', 'mobile']);
+  });
+  it('two viewports with different LCP give two evidence items', () => {
+    const items = lcpItems(both(4300, 5200));
+    expect(items.map((e) => e.data?.viewport).sort()).toEqual(['desktop', 'mobile']);
+  });
+  it('evidence values are rounded and the fingerprint does not depend on them', () => {
+    const a = performanceFindings(obs({ vitals: vit(4347, 0.31449) })).find((x) => x.ruleId === 'perf/lcp')!;
+    const b = performanceFindings(obs({ vitals: vit(4352, 0.31449) })).find((x) => x.ruleId === 'perf/lcp')!;
+    expect(a.evidence[0]!.data?.value).toBe(4350);
+    expect(b.evidence[0]!.data?.value).toBe(4350);
+    expect(a.fingerprint).toBe(b.fingerprint);
+    const cls = performanceFindings(obs({ vitals: vit(100, 0.31449) })).find((x) => x.ruleId === 'perf/cls')!;
+    expect(cls.evidence[0]!.data?.value).toBe(0.314);
+  });
+});
+
 describe('conversion rules', () => {
   it('treats findings as hypotheses, never defects', () => {
     const p = probe();
