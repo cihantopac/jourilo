@@ -36,9 +36,9 @@ Options:
   --proxy URL         Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
                       default HTTPS_PROXY / HTTP_PROXY (either case; prefer the variable for credentials, argv shows
                       in ps). NO_PROXY is decided per destination host (NO_PROXY=* = no proxy). The guard resolves and
-                      checks every destination itself, then asks the proxy only for the checked address (CONNECT ip:port;
-                      plain HTTP as GET http://ip:port/path); loopback connects directly. The run records the proxy
-                      without its credentials
+                      checks every destination itself, then tunnels to the checked address (CONNECT ip:443, and ip:80
+                      for plain HTTP; a proxy that refuses port 80 fails those requests: give an https:// target);
+                      loopback connects directly. The run records the proxy without its credentials
   --allow-hosts LIST  Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
                       the target's own host is always allowed. Other hosts are refused and listed in the limitations
   --block-hosts LIST  Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
@@ -96,9 +96,9 @@ Options:
   --proxy URL          Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
                        default HTTPS_PROXY / HTTP_PROXY (either case; prefer the variable for credentials, argv shows
                        in ps). NO_PROXY is decided per destination host (NO_PROXY=* = no proxy). The guard resolves and
-                       checks every destination itself, then asks the proxy only for the checked address (CONNECT ip:port;
-                       plain HTTP as GET http://ip:port/path); loopback connects directly. The run records the proxy
-                       without its credentials
+                       checks every destination itself, then tunnels to the checked address (CONNECT ip:443, and ip:80
+                       for plain HTTP; a proxy that refuses port 80 fails those requests: give an https:// target);
+                       loopback connects directly. The run records the proxy without its credentials
   --allow-hosts LIST   Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
                        the target's own host is always allowed. Other hosts are refused and listed in the limitations
   --block-hosts LIST   Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
@@ -171,9 +171,9 @@ Options:
   --proxy URL          Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
                        default HTTPS_PROXY / HTTP_PROXY (either case; prefer the variable for credentials, argv shows
                        in ps). NO_PROXY is decided per destination host (NO_PROXY=* = no proxy). The guard resolves and
-                       checks every destination itself, then asks the proxy only for the checked address (CONNECT ip:port;
-                       plain HTTP as GET http://ip:port/path); loopback connects directly. The run records the proxy
-                       without its credentials
+                       checks every destination itself, then tunnels to the checked address (CONNECT ip:443, and ip:80
+                       for plain HTTP; a proxy that refuses port 80 fails those requests: give an https:// target);
+                       loopback connects directly. The run records the proxy without its credentials
   --allow-hosts LIST   Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
                        the target's own host is always allowed. Other hosts are refused and listed in the limitations
   --block-hosts LIST   Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
@@ -246,9 +246,9 @@ Options:
   --proxy URL          Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
                        default HTTPS_PROXY / HTTP_PROXY (either case; prefer the variable for credentials, argv shows
                        in ps). NO_PROXY is decided per destination host (NO_PROXY=* = no proxy). The guard resolves and
-                       checks every destination itself, then asks the proxy only for the checked address (CONNECT ip:port;
-                       plain HTTP as GET http://ip:port/path); loopback connects directly. The run records the proxy
-                       without its credentials
+                       checks every destination itself, then tunnels to the checked address (CONNECT ip:443, and ip:80
+                       for plain HTTP; a proxy that refuses port 80 fails those requests: give an https:// target);
+                       loopback connects directly. The run records the proxy without its credentials
   --allow-hosts LIST   Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
                        the target's own host is always allowed. Other hosts are refused and listed in the limitations
   --block-hosts LIST   Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
@@ -308,9 +308,9 @@ Suggest options:
   --proxy URL            Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
                          default HTTPS_PROXY / HTTP_PROXY (either case; prefer the variable for credentials, argv shows
                          in ps). NO_PROXY is decided per destination host (NO_PROXY=* = no proxy). The guard resolves and
-                         checks every destination itself, then asks the proxy only for the checked address (CONNECT ip:port;
-                         plain HTTP as GET http://ip:port/path); loopback connects directly. The run records the proxy
-                         without its credentials
+                         checks every destination itself, then tunnels to the checked address (CONNECT ip:443, and ip:80
+                         for plain HTTP; a proxy that refuses port 80 fails those requests: give an https:// target);
+                         loopback connects directly. The run records the proxy without its credentials
   --allow-hosts LIST     Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
                          the target's own host is always allowed. Other hosts are refused and listed in the limitations
   --block-hosts LIST     Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
@@ -351,9 +351,9 @@ Run options:
   --proxy URL            Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
                          default HTTPS_PROXY / HTTP_PROXY (either case; prefer the variable for credentials, argv shows
                          in ps). NO_PROXY is decided per destination host (NO_PROXY=* = no proxy). The guard resolves and
-                         checks every destination itself, then asks the proxy only for the checked address (CONNECT ip:port;
-                         plain HTTP as GET http://ip:port/path); loopback connects directly. The run records the proxy
-                         without its credentials
+                         checks every destination itself, then tunnels to the checked address (CONNECT ip:443, and ip:80
+                         for plain HTTP; a proxy that refuses port 80 fails those requests: give an https:// target);
+                         loopback connects directly. The run records the proxy without its credentials
   --allow-hosts LIST     Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
                          the target's own host is always allowed. Other hosts are refused and listed in the limitations
   --block-hosts LIST     Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
@@ -438,9 +438,9 @@ Options:
   --proxy URL            Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
                          default HTTPS_PROXY / HTTP_PROXY (either case; prefer the variable for credentials, argv shows
                          in ps). NO_PROXY is decided per destination host (NO_PROXY=* = no proxy). The guard resolves and
-                         checks every destination itself, then asks the proxy only for the checked address (CONNECT ip:port;
-                         plain HTTP as GET http://ip:port/path); loopback connects directly. The run records the proxy
-                         without its credentials
+                         checks every destination itself, then tunnels to the checked address (CONNECT ip:443, and ip:80
+                         for plain HTTP; a proxy that refuses port 80 fails those requests: give an https:// target);
+                         loopback connects directly. The run records the proxy without its credentials
   --allow-hosts LIST     Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
                          the target's own host is always allowed. Other hosts are refused and listed in the limitations
   --block-hosts LIST     Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations

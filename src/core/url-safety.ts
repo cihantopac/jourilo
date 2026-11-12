@@ -132,9 +132,8 @@ export interface AddressPolicy {
   /** `--block-hosts`: these hosts are refused by name, before any lookup. */
   blockHosts?: string[];
   /**
-   * `--proxy` / `HTTPS_PROXY`: the guard checks every destination first, then reaches the checked address through this
-   * proxy (a CONNECT tunnel, or an absolute-URI request for plain HTTP). `auth` is `user:password` and is never written
-   * anywhere.
+   * `--proxy` / `HTTPS_PROXY`: the guard checks every destination first, then opens a CONNECT tunnel through this
+   * proxy to the checked address (for plain HTTP too). `auth` is `user:password` and is never written anywhere.
    */
   upstream?: Upstream;
 }

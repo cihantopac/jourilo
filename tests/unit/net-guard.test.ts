@@ -143,17 +143,7 @@ describe('guardedFetchText', () => {
   });
   it('fetches through the upstream proxy with the checked address, and honours --block-hosts', async () => {
     const connects: string[] = [];
-    // Plain HTTP reaches the proxy as an absolute-URI request; the stub forwards it to the test site.
-    const proxy = http.createServer((req, res) => {
-      connects.push(`${req.method} ${req.url} host=${req.headers.host}`);
-      const path = new URL(req.url ?? '/').pathname;
-      http
-        .get({ host: '127.0.0.1', port: sitePort, path, agent: false }, (r) => {
-          res.writeHead(r.statusCode ?? 502, r.headers);
-          r.pipe(res);
-        })
-        .on('error', () => res.destroy());
-    });
+    const proxy = http.createServer();
     proxy.on('connect', (req, client: net.Socket) => {
       connects.push(req.url ?? '');
       const up = net.connect(sitePort, '127.0.0.1', () => {
@@ -178,9 +168,7 @@ describe('guardedFetchText', () => {
       expect(await guardedFetchText(`http://site.example:${sitePort}/robots.txt`, policy, opts)).toContain(
         'Disallow: /admin',
       );
-      expect(connects).toEqual([
-        `GET http://93.184.216.34:${sitePort}/robots.txt host=site.example:${sitePort}`,
-      ]);
+      expect(connects).toEqual([`93.184.216.34:${sitePort}`]);
       expect(await guardedFetchText('http://x.tracker.test/robots.txt', policy, opts)).toBeNull();
       expect(connects).toHaveLength(1);
     } finally {
@@ -443,7 +431,7 @@ describe('upstream proxy: NO_PROXY per destination', () => {
   });
 });
 
-describe('upstream proxy: plain HTTP and the guard lifetime', () => {
+describe('upstream proxy: plain HTTP, request framing and the guard lifetime', () => {
   const listen = (s: net.Server) =>
     new Promise<number>((r) => s.listen(0, '127.0.0.1', () => r((s.address() as AddressInfo).port)));
   const resolveExample = async () => [{ address: '93.184.216.34', family: 4 }];
@@ -462,22 +450,32 @@ describe('upstream proxy: plain HTTP and the guard lifetime', () => {
         .on('error', reject);
     });
 
-  it('sends plain HTTP as an absolute-URI request for the checked IP, never by name, with Proxy-Authorization', async () => {
-    const seen: { line: string; host?: string; auth?: string; browserProxyHeader?: string }[] = [];
-    let connects = 0;
-    // A proxy that refuses CONNECT to port 80 (as many corporate proxies do) and answers forwarded requests itself.
-    const proxy = http.createServer((req, res) => {
+  it('plain HTTP is tunnelled to the checked IP (CONNECT ip:80) and the origin gets the original Host', async () => {
+    const seen: { line: string; auth?: string }[] = [];
+    const originHosts: string[] = [];
+    const origin = http.createServer((req, res) => {
+      originHosts.push(String(req.headers.host));
+      res.end(`origin ${req.url}`);
+    });
+    const originPort = await listen(origin);
+    let requestsByName = 0;
+    // The stub tunnels any CONNECT to the local origin (the test cannot reach 93.184.216.34).
+    const proxy = http.createServer((_req, res) => {
+      requestsByName++;
+      res.writeHead(405).end();
+    });
+    proxy.on('connect', (req, client: net.Socket) => {
       seen.push({
         line: `${req.method} ${req.url}`,
-        ...(req.headers.host ? { host: req.headers.host } : {}),
         ...(req.headers['proxy-authorization'] ? { auth: String(req.headers['proxy-authorization']) } : {}),
-        ...(req.headers['proxy-foo'] ? { browserProxyHeader: String(req.headers['proxy-foo']) } : {}),
       });
-      res.writeHead(200, { 'content-type': 'text/plain' }).end('via proxy');
-    });
-    proxy.on('connect', (_req, client: net.Socket) => {
-      connects++;
-      client.end('HTTP/1.1 403 Forbidden\r\n\r\n');
+      const up = net.connect(originPort, '127.0.0.1', () => {
+        client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+        up.pipe(client);
+        client.pipe(up);
+      });
+      up.on('error', () => client.destroy());
+      client.on('error', () => up.destroy());
     });
     const proxyPort = await listen(proxy);
     const guard = await startNetGuard(
@@ -488,18 +486,45 @@ describe('upstream proxy: plain HTTP and the guard lifetime', () => {
       const res = await getVia(guard.url, 'http://example.com/plain?x=1', {
         host: 'example.com',
         'proxy-authorization': 'Basic browser-own',
-        'proxy-foo': 'bar',
       });
-      expect(res.status).toBe(200);
-      expect(res.body).toBe('via proxy');
-      expect(connects).toBe(0);
+      expect(res).toMatchObject({ status: 200, body: 'origin /plain?x=1' });
       expect(seen).toEqual([
         {
-          line: 'GET http://93.184.216.34:80/plain?x=1',
-          host: 'example.com',
+          line: 'CONNECT 93.184.216.34:80',
           auth: `Basic ${Buffer.from('jourilo:s3cret').toString('base64')}`,
         },
       ]);
+      expect(originHosts).toEqual(['example.com']);
+      expect(requestsByName).toBe(0);
+    } finally {
+      await guard.close();
+      await closeServer(proxy);
+      await closeServer(origin);
+    }
+  });
+
+  it('a proxy that refuses CONNECT to port 80 is a 502 with the token and fixed wording, never its page', async () => {
+    let requestsByName = 0;
+    const proxy = http.createServer((_req, res) => {
+      requestsByName++;
+      res.writeHead(200, { 'content-type': 'text/html' }).end('<html>proxy page</html>');
+    });
+    proxy.on('connect', (_req, client: net.Socket) => {
+      client.end('HTTP/1.1 403 Forbidden\r\ncontent-type: text/html\r\n\r\n<html>proxy denied page</html>');
+    });
+    const proxyPort = await listen(proxy);
+    const guard = await startNetGuard(
+      { ...pub, upstream: { host: '127.0.0.1', port: proxyPort } },
+      { resolve: resolveExample },
+    );
+    try {
+      const res = await getVia(guard.url, 'http://example.com/', { host: 'example.com' });
+      expect(res.status).toBe(502);
+      expect(res.body).not.toMatch(/proxy (denied )?page/);
+      expect(String(res.headers['x-jourilo-guard-upstream-error'])).toBe(
+        `${guard.token} the upstream proxy refuses tunnels to port 80; give the target's https:// URL`,
+      );
+      expect(requestsByName).toBe(0);
     } finally {
       await guard.close();
       await closeServer(proxy);
@@ -509,6 +534,11 @@ describe('upstream proxy: plain HTTP and the guard lifetime', () => {
   it("a proxy 407 or an unreachable proxy is the guard's own 502 with the token signal", async () => {
     const asking = http.createServer((_req, res) =>
       res.writeHead(407, { 'proxy-authenticate': 'Basic' }).end('<html>proxy login page</html>'),
+    );
+    asking.on('connect', (_req, client: net.Socket) =>
+      client.end(
+        'HTTP/1.1 407 Proxy Authentication Required\r\nproxy-authenticate: Basic\r\n\r\n<html>proxy login page</html>',
+      ),
     );
     const askingPort = await listen(asking);
     const dead = net.createServer();
@@ -523,14 +553,48 @@ describe('upstream proxy: plain HTTP and the guard lifetime', () => {
         const res = await getVia(guard.url, 'http://example.com/', { host: 'example.com' });
         expect(res.status, String(port)).toBe(502);
         expect(res.body).not.toContain('proxy login page');
-        expect(String(res.headers['x-jourilo-guard-upstream-error'])).toMatch(
-          new RegExp(`^${guard.token} the upstream proxy`),
+        expect(String(res.headers['x-jourilo-guard-upstream-error'])).toBe(
+          `${guard.token} ${port === askingPort ? 'the upstream proxy asked for credentials (407)' : 'the upstream proxy could not open the connection'}`,
         );
       } finally {
         await guard.close();
       }
     }
     await closeServer(asking);
+  });
+
+  it('a chunked request body on a GET keeps its framing on the way to the server', async () => {
+    const bodies: string[] = [];
+    const origin = http.createServer((req, res) => {
+      let body = '';
+      req.on('data', (d) => (body += d));
+      req.on('end', () => {
+        bodies.push(body);
+        res.end(`got ${body.length}`);
+      });
+    });
+    const originPort = await listen(origin);
+    const guard = await startNetGuard({ target: 'local', allowPrivate: false });
+    try {
+      const p = new URL(guard.url);
+      const raw = await new Promise<string>((resolve, reject) => {
+        let out = '';
+        const s = net.connect(Number(p.port), p.hostname, () =>
+          s.write(
+            `GET http://127.0.0.1:${originPort}/echo HTTP/1.1\r\nHost: 127.0.0.1:${originPort}\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n`,
+          ),
+        );
+        s.on('data', (d) => (out += d.toString('latin1')));
+        s.on('close', () => resolve(out));
+        s.on('error', reject);
+      });
+      expect(raw).toMatch(/^HTTP\/1\.1 200/);
+      expect(raw).toContain('got 11');
+      expect(bodies).toEqual(['hello world']);
+    } finally {
+      await guard.close();
+      await closeServer(origin);
+    }
   });
 
   /** A proxy that accepts connections and never answers; resolves with each connection's closed promise. */

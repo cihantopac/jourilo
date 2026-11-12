@@ -253,29 +253,7 @@ describe('upstream proxy', () => {
     originPort = await listen(origin);
     // A stub corporate proxy: records the CONNECT line and its credentials, then tunnels to the local origin,
     // whatever address was asked for (the test cannot reach 93.184.216.34).
-    // Plain HTTP arrives as an absolute-URI request: recorded the same way, then forwarded to the local origin.
-    proxy = http.createServer((req, res) => {
-      connects.push({
-        line: `${req.method} ${req.url}`,
-        ...(req.headers['proxy-authorization'] ? { auth: String(req.headers['proxy-authorization']) } : {}),
-      });
-      const target = new URL(req.url ?? '/');
-      http
-        .get(
-          {
-            host: '127.0.0.1',
-            port: originPort,
-            path: `${target.pathname}${target.search}`,
-            headers: { host: req.headers.host ?? '' },
-            agent: false,
-          },
-          (r) => {
-            res.writeHead(r.statusCode ?? 502, r.headers);
-            r.pipe(res);
-          },
-        )
-        .on('error', () => res.destroy());
-    });
+    proxy = http.createServer((_req, res) => res.writeHead(405).end());
     proxy.on('connect', (req, client: net.Socket, head: Buffer) => {
       connects.push({
         line: `${req.method} ${req.url}`,
@@ -322,7 +300,7 @@ describe('upstream proxy', () => {
         line: 'CONNECT 93.184.216.34:443',
         auth: `Basic ${Buffer.from('jourilo:s3cret').toString('base64')}`,
       });
-      // Plain HTTP is an absolute-URI request, so the proxy again sees only the checked address.
+      // Plain HTTP takes the same tunnel, so the proxy again sees only the checked address.
       const res = await new Promise<{ status?: number; body: string }>((resolve, reject) => {
         const p = new URL(guard.url);
         http
@@ -342,10 +320,7 @@ describe('upstream proxy', () => {
           .on('error', reject);
       });
       expect(res).toEqual({ status: 200, body: 'origin ok' });
-      expect(connects[1]).toEqual({
-        line: 'GET http://93.184.216.34:80/plain?x=1',
-        auth: `Basic ${Buffer.from('jourilo:s3cret').toString('base64')}`,
-      });
+      expect(connects[1]?.line).toBe('CONNECT 93.184.216.34:80');
       expect(originHits.at(-1)).toEqual({ url: '/plain?x=1', host: 'example.com' });
       expect(connects.every((c) => !c.line.includes('example.com'))).toBe(true);
     } finally {

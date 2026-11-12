@@ -39079,9 +39079,9 @@ function networkOptionsHelp(column) {
     `${pad("--proxy URL")}Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;`,
     `${cont}default HTTPS_PROXY / HTTP_PROXY (either case; prefer the variable for credentials, argv shows`,
     `${cont}in ps). NO_PROXY is decided per destination host (NO_PROXY=* = no proxy). The guard resolves and`,
-    `${cont}checks every destination itself, then asks the proxy only for the checked address (CONNECT ip:port;`,
-    `${cont}plain HTTP as GET http://ip:port/path); loopback connects directly. The run records the proxy`,
-    `${cont}without its credentials`,
+    `${cont}checks every destination itself, then tunnels to the checked address (CONNECT ip:443, and ip:80`,
+    `${cont}for plain HTTP; a proxy that refuses port 80 fails those requests: give an https:// target);`,
+    `${cont}loopback connects directly. The run records the proxy without its credentials`,
     `${pad("--allow-hosts LIST")}Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);`,
     `${cont}the target's own host is always allowed. Other hosts are refused and listed in the limitations`,
     `${pad("--block-hosts LIST")}Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations`,
@@ -40576,6 +40576,8 @@ var GUARD_UPSTREAM_ERROR_HEADER = "x-jourilo-guard-upstream-error";
 var GUARD_REFUSED_WORDING = "the network guard refused the destination";
 function upstreamFailureWording(message) {
   if (/upstream proxy: answered 407/.test(message)) return "the upstream proxy asked for credentials (407)";
+  const port = /upstream proxy: refuses tunnels to port (\d+)/.exec(message)?.[1];
+  if (port) return `the upstream proxy refuses tunnels to port ${port}; give the target's https:// URL`;
   if (/upstream proxy:/.test(message)) return "the upstream proxy could not open the connection";
   if (/DNS lookup failed|ENOTFOUND|EAI_AGAIN/i.test(message)) return "the host name could not be resolved";
   if (/ECONNREFUSED/i.test(message)) return "the connection was refused";
@@ -40667,26 +40669,21 @@ async function startNetGuard(policy, deps = {}) {
         ...status === 403 ? {} : { [GUARD_UPSTREAM_ERROR_HEADER]: `${token} ${upstreamFailureWording(reason)}` }
       }).end(status === 403 ? `Blocked by Jourilo network guard: ${reason}` : "Bad gateway");
     };
-    checkDestination(
+    if (req.headers["transfer-encoding"] && req.headers["content-length"] === void 0)
+      headers["transfer-encoding"] = "chunked";
+    connectUpstream(
       host,
       port2,
-      (address, proxy) => {
-        const socket = track(
-          proxy ? net.connect({ host: proxy.host, port: proxy.port }) : net.connect({ host: address, port: port2 })
-        );
-        const path2 = `${target.pathname}${target.search}`;
+      (socket) => {
         const upstream = http.request({
           method: req.method,
-          path: proxy ? `http://${authorityOf(address, port2)}${path2}` : path2,
-          headers: proxy ? { ...headers, ...proxyAuthorization(proxy) } : headers,
+          path: `${target.pathname}${target.search}`,
+          headers,
           setHost: false,
           createConnection: () => socket
         });
+        socket.resume();
         upstream.on("response", (up) => {
-          if (proxy && up.statusCode === 407) {
-            up.resume();
-            return fail(502, "upstream proxy: answered 407");
-          }
           const loc = (up.statusCode ?? 0) >= 300 && (up.statusCode ?? 0) < 400 ? up.headers.location : void 0;
           const refused = loc ? loopbackRedirectVerdict(loc, target, policy) : null;
           if (refused) {
@@ -40705,14 +40702,17 @@ async function startNetGuard(policy, deps = {}) {
           if (!res.writableFinished) upstream.destroy();
         });
         upstream.on("error", (err) => {
-          if (!res.destroyed)
-            fail(502, proxy ? `upstream proxy: ${err.code ?? "connection failed"}` : err.message);
+          if (!res.destroyed) fail(502, err.message);
         });
         req.pipe(upstream);
       },
       (status, reason) => {
         req.resume();
-        fail(status, reason);
+        const answered = /^upstream proxy: answered (\d{3})/.exec(reason)?.[1];
+        fail(
+          status,
+          answered && answered !== "407" ? `upstream proxy: refuses tunnels to port ${port2}` : reason
+        );
       }
     );
   });
@@ -40803,7 +40803,7 @@ async function guardedFetchText(url, policy, opts) {
     const proxy = viaUpstream(policy, servername, pre.address, port);
     const secure = current.protocol === "https:";
     let tunnel;
-    if (proxy && secure) {
+    if (proxy) {
       tunnel = await openTunnel(proxy, pre.address, port, opts.timeoutMs).catch(() => void 0);
       if (!tunnel) return null;
     }
@@ -40818,16 +40818,12 @@ async function guardedFetchText(url, policy, opts) {
           ...tunnel ? {
             createConnection: () => {
               tunnel.resume();
-              return tls.connect({
+              return secure ? tls.connect({
                 socket: tunnel,
                 host: servername,
                 ...isIP2(servername) ? {} : { servername }
-              });
+              }) : tunnel;
             }
-          } : proxy ? {
-            path: `http://${authorityOf(pre.address, port)}${current.pathname}${current.search}`,
-            headers: { ...headers, host: current.host, ...proxyAuthorization(proxy) },
-            createConnection: () => net.connect({ host: proxy.host, port: proxy.port })
           } : { lookup: guardedLookup(policy, port, opts.deps), agent: false }
         },
         (r) => {
@@ -42460,7 +42456,7 @@ function networkLimitations(r) {
 function proxyLimitation(up) {
   if (!up) return [];
   return [
-    `Requests went through the upstream proxy ${upstreamLabel(up)}: the network guard resolved and checked every destination first and asked the proxy only for the checked address (a CONNECT tunnel, or an absolute-URI request for plain HTTP); loopback addresses${up.noProxy ? " and hosts NO_PROXY matches" : ""} were reached directly. Timings include the proxy hop.`
+    `Requests went through the upstream proxy ${upstreamLabel(up)}: the network guard resolved and checked every destination first and tunnelled to the checked address (CONNECT, for HTTPS and plain HTTP alike; a proxy that refuses tunnels to port 80 fails plain-HTTP requests); loopback addresses${up.noProxy ? " and hosts NO_PROXY matches" : ""} were reached directly. Timings include the proxy hop.`
   ];
 }
 

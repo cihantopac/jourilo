@@ -8,10 +8,12 @@
 //
 // With an upstream proxy (`--proxy`, HTTPS_PROXY), the guard still resolves and checks every destination itself, then
 // asks the proxy for a CONNECT tunnel to the checked address (`CONNECT 93.184.216.34:443`), never to the name, so the
-// proxy's own DNS cannot send a request somewhere the guard did not check. Plain HTTP goes to the proxy as an
-// absolute-URI request for the checked address (`GET http://93.184.216.34:80/path`, the original Host header kept),
-// since many proxies refuse CONNECT to port 80. Loopback addresses a local target may reach, and hosts NO_PROXY
-// matches, connect directly (the proxy's loopback is another machine).
+// proxy's own DNS cannot send a request somewhere the guard did not check. Plain HTTP takes the same tunnel
+// (`CONNECT 93.184.216.34:80`), and the original request, Host header included, is sent inside it: an absolute-URI
+// request would make the proxy rebuild Host from the address (RFC 9112 3.2.2), so a name-based site would answer as
+// its default host. A proxy that refuses tunnels to port 80 fails the request with the guard's own 502, never its
+// page. Loopback addresses a local target may reach, and hosts NO_PROXY matches, connect directly (the proxy's
+// loopback is another machine).
 import { randomBytes } from 'node:crypto';
 import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
@@ -287,6 +289,8 @@ export const GUARD_REFUSED_WORDING = 'the network guard refused the destination'
 /** Fixed wording for a connection failure; the raw error can carry resolved IP addresses and must not be reported. */
 export function upstreamFailureWording(message: string): string {
   if (/upstream proxy: answered 407/.test(message)) return 'the upstream proxy asked for credentials (407)';
+  const port = /upstream proxy: refuses tunnels to port (\d+)/.exec(message)?.[1];
+  if (port) return `the upstream proxy refuses tunnels to port ${port}; give the target's https:// URL`;
   if (/upstream proxy:/.test(message)) return 'the upstream proxy could not open the connection';
   if (/DNS lookup failed|ENOTFOUND|EAI_AGAIN/i.test(message)) return 'the host name could not be resolved';
   if (/ECONNREFUSED/i.test(message)) return 'the connection was refused';
@@ -403,29 +407,24 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
         })
         .end(status === 403 ? `Blocked by Jourilo network guard: ${reason}` : 'Bad gateway');
     };
-    // Direct: a connection to the checked address. Through the upstream proxy: an absolute-URI request that names the
-    // checked address, never the host name (the Host header keeps the name for the origin server).
-    checkDestination(
+    // A chunked body on a method Node does not chunk by default (GET, HEAD, DELETE, OPTIONS) keeps its framing.
+    if (req.headers['transfer-encoding'] && req.headers['content-length'] === undefined)
+      headers['transfer-encoding'] = 'chunked';
+    // One path for direct connections and the upstream proxy's tunnel (CONNECT to the checked address): the socket
+    // comes from connectUpstream, and the request inside it keeps its own Host header.
+    connectUpstream(
       host,
       port,
-      (address, proxy) => {
-        const socket = track(
-          proxy ? net.connect({ host: proxy.host, port: proxy.port }) : net.connect({ host: address, port }),
-        );
-        const path = `${target.pathname}${target.search}`;
+      (socket) => {
         const upstream = http.request({
           method: req.method,
-          path: proxy ? `http://${authorityOf(address, port)}${path}` : path,
-          headers: proxy ? { ...headers, ...proxyAuthorization(proxy) } : headers,
+          path: `${target.pathname}${target.search}`,
+          headers,
           setHost: false,
           createConnection: () => socket,
         });
+        socket.resume();
         upstream.on('response', (up) => {
-          // The proxy's own refusal is not a page from the target.
-          if (proxy && up.statusCode === 407) {
-            up.resume();
-            return fail(502, 'upstream proxy: answered 407');
-          }
           // WebKit follows redirects to loopback hosts outside the proxy, so a forbidden redirect target is
           // refused here, while the proxy can still see it (plain HTTP only; see redirectEscape for HTTPS).
           const loc =
@@ -452,15 +451,20 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
         res.on('close', () => {
           if (!res.writableFinished) upstream.destroy();
         });
-        upstream.on('error', (err: NodeJS.ErrnoException) => {
-          if (!res.destroyed)
-            fail(502, proxy ? `upstream proxy: ${err.code ?? 'connection failed'}` : err.message);
+        upstream.on('error', (err) => {
+          if (!res.destroyed) fail(502, err.message);
         });
         req.pipe(upstream);
       },
       (status, reason) => {
         req.resume();
-        fail(status, reason);
+        // A proxy that answers a plain-HTTP tunnel with anything but 2xx or 407 refuses that port (403/405 for a
+        // non-SSL port is common): say so in fixed wording, the proxy's page is never shown.
+        const answered = /^upstream proxy: answered (\d{3})/.exec(reason)?.[1];
+        fail(
+          status,
+          answered && answered !== '407' ? `upstream proxy: refuses tunnels to port ${port}` : reason,
+        );
       },
     );
   });
@@ -556,13 +560,13 @@ export async function guardedFetchText(
     // Node skips `lookup` for literal IPs, so every hop is checked here as well.
     const pre = await resolveAllowed(current.hostname, port, policy, opts.deps).catch(() => null);
     if (!pre || 'blocked' in pre) return null;
-    // Through the upstream proxy, by the checked address: HTTPS in a CONNECT tunnel with TLS to the host name inside
-    // it, plain HTTP as an absolute-URI request (as the guard sends it).
+    // Through the upstream proxy: a CONNECT tunnel to the checked address (HTTPS with TLS to the host name inside it,
+    // plain HTTP with its own Host header), as the guard does.
     const servername = current.hostname.replace(/^\[|\]$/g, '');
     const proxy = viaUpstream(policy, servername, pre.address, port);
     const secure = current.protocol === 'https:';
     let tunnel: Socket | undefined;
-    if (proxy && secure) {
+    if (proxy) {
       tunnel = await openTunnel(proxy, pre.address, port, opts.timeoutMs).catch(() => undefined);
       if (!tunnel) return null;
     }
@@ -578,20 +582,16 @@ export async function guardedFetchText(
             ? {
                 createConnection: () => {
                   tunnel!.resume();
-                  return tls.connect({
-                    socket: tunnel!,
-                    host: servername,
-                    ...(isIP(servername) ? {} : { servername }),
-                  });
+                  return secure
+                    ? tls.connect({
+                        socket: tunnel!,
+                        host: servername,
+                        ...(isIP(servername) ? {} : { servername }),
+                      })
+                    : tunnel!;
                 },
               }
-            : proxy
-              ? {
-                  path: `http://${authorityOf(pre.address, port)}${current.pathname}${current.search}`,
-                  headers: { ...headers, host: current.host, ...proxyAuthorization(proxy) },
-                  createConnection: () => net.connect({ host: proxy.host, port: proxy.port }),
-                }
-              : { lookup: guardedLookup(policy, port, opts.deps) as never, agent: false }),
+            : { lookup: guardedLookup(policy, port, opts.deps) as never, agent: false }),
         },
         (r) => {
           const status = r.statusCode ?? 0;

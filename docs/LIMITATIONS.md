@@ -129,12 +129,13 @@ Stated so nobody mistakes silence for a pass.
   is refused with `--browser webkit` because WebKit's HTTPS redirects bypass the proxy. A blocked request appears in
   the run's limitations and can show as an error page for that URL.
 - `--proxy` (or `HTTPS_PROXY` / `HTTP_PROXY`) chains to an upstream HTTP proxy behind the guard. The guard still
-  resolves and checks every destination, then asks the proxy only for the checked address, never for the name: a
-  tunnel for HTTPS and WebSockets (`CONNECT 93.184.216.34:443`), and an absolute-URI request for plain HTTP
-  (`GET http://93.184.216.34:80/path`, with the original `Host` header), since many proxies refuse `CONNECT` to port
-  80. A proxy that allows destinations by host name therefore sees only addresses. A proxy's `407` or an unreachable
-  proxy is reported as a failed request, not as a page. Only `http://` proxies are supported; loopback addresses are
-  reached directly. `NO_PROXY` is decided per destination host, as curl and browsers do (`NO_PROXY=*` means no proxy;
+  resolves and checks every destination, then asks the proxy for a tunnel to the checked address, never to the name:
+  `CONNECT 93.184.216.34:443` for HTTPS and WebSockets, and `CONNECT 93.184.216.34:80` for plain HTTP, whose request
+  (with its original `Host` header) is sent inside the tunnel. A proxy that allows destinations by host name therefore
+  sees only addresses. Many proxies refuse tunnels to port 80 (or to any port but 443): plain-HTTP requests then fail
+  with "the upstream proxy refuses tunnels to port 80; give the target's https:// URL", so audit the target at its
+  `https://` URL. A proxy's refusal, its `407` or an unreachable proxy is reported as a failed request, never as a
+  page. Only `http://` proxies are supported; loopback addresses are reached directly. `NO_PROXY` is decided per destination host, as curl and browsers do (`NO_PROXY=*` means no proxy;
   CIDR ranges are not supported). The run records the proxy as `http://host:port` without its credentials.
 - Because the guard resolves every name itself (so that it can check the address), a network where only the proxy can
   resolve external names cannot be audited through the proxy. Command-line arguments show in `ps` and in shell
