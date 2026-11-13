@@ -4,14 +4,28 @@ import { JouriloError } from '../../core/errors.js';
 import { compareRuns } from '../../report/compare.js';
 import { writeReports } from '../../report/index.js';
 import { renderMarkdown, renderSarif } from '../../report/text.js';
-import { type Command, flag, str } from '../framework.js';
+import { trendReport } from '../../report/trends.js';
+import { type Command, type Context, flag, str } from '../framework.js';
 
 export const runs: Command = {
   name: 'runs',
   summary: 'List stored runs in the workspace (.jourilo/runs).',
-  usage: 'jourilo runs',
+  usage: 'jourilo runs [trend [--target URL]]',
+  options: { target: { type: 'string' } },
+  details: `Subcommands:
+  trend            Defects per capture, critical and serious defects, LCP and CLS for every page and viewport across the
+                   runs of one target, oldest first. Partial and no-page-loaded runs are left out and counted.
+
+Options:
+  --target URL     With trend, the target to follow (default: the target of the latest run)`,
   async run(ctx) {
-    const list = ctx.ws.listRuns();
+    const sub = ctx.positionals[0];
+    if (sub === 'trend') return runsTrend(ctx);
+    if (sub)
+      throw new JouriloError('USAGE', `Unknown runs subcommand: ${sub}.`, 'Usage: jourilo runs [trend]');
+    if (str(ctx, 'target')) throw new JouriloError('USAGE', '--target applies to `jourilo runs trend`.');
+    // The trend slice is for `runs trend` and the report; the listing itself stays as it was.
+    const list = ctx.ws.listRuns().map((r) => ({ ...r, trend: undefined }));
     return {
       data: list,
       text: list.length
@@ -20,6 +34,27 @@ export const runs: Command = {
     };
   },
 };
+
+async function runsTrend(ctx: Context) {
+  const list = ctx.ws.listRuns();
+  const target = str(ctx, 'target') ?? list[list.length - 1]?.target;
+  if (!target)
+    return { data: { target: null, rows: [], used: 0, skipped: 0 }, text: `No runs in ${ctx.ws.runsDir}.` };
+  const t = trendReport(
+    list.flatMap((r) => (r.trend ? [r.trend] : [])),
+    { target },
+  );
+  const lines = [
+    `Trend for ${target}: ${t.used} run(s)${t.skipped ? `, ${t.skipped} partial or empty run(s) left out` : ''}.`,
+    ...t.rows.map((r) => {
+      const v = (pick: (p: (typeof r.points)[number]) => number | null) =>
+        r.points.map((p) => pick(p) ?? '–').join(' → ');
+      return `${r.url} [${r.viewport}]\n  defects/capture ${v((p) => +p.defectsPerCapture.toFixed(2))}\n  serious         ${v((p) => +p.serious.toFixed(2))}\n  LCP ms          ${v((p) => (p.lcp === null ? null : Math.round(p.lcp)))}\n  CLS             ${v((p) => p.cls)}`;
+    }),
+  ];
+  if (!t.rows.length) lines.push('No comparable runs yet.');
+  return { data: { target, ...t }, text: lines.join('\n') };
+}
 
 export const report: Command = {
   name: 'report',

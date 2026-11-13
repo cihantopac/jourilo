@@ -161,6 +161,14 @@ const EN = {
   'history.hint':
     'Runs with the same target in this workspace. Different page sets or viewports make counts not directly comparable; use jourilo verify for like-for-like comparisons.',
   'history.this': '(this run)',
+  'trend.title': 'Trend per page and viewport',
+  'trend.hint':
+    'Defects are counted per capture (one page at one viewport), so runs audited with different --pages stay comparable. Values run from the oldest run to this one.',
+  'trend.skipped': '{n} partial or empty run(s) left out: their numbers are not comparable.',
+  'trend.series': 'Oldest to newest: {list}',
+  'trend.noData': 'no data',
+  'th.trendDefects': 'Defects per capture',
+  'th.trendSerious': 'Critical and serious',
   'context.title': 'Context from other tools',
   'context.brand': 'Brand',
   'context.search': 'Search',
@@ -407,6 +415,14 @@ const TR: Record<MsgKey, string> = {
   'history.hint':
     'Bu çalışma alanında aynı hedefe ait çalışmalar. Farklı sayfa kümeleri veya görünüm alanları sayıları doğrudan karşılaştırılamaz kılar; birebir karşılaştırma için jourilo verify kullanın.',
   'history.this': '(bu çalışma)',
+  'trend.title': 'Sayfa ve görünüm alanı başına eğilim',
+  'trend.hint':
+    'Kusurlar yakalama başına (bir sayfa, bir görünüm alanı) sayılır; bu yüzden farklı --pages ile yapılan çalışmalar karşılaştırılabilir kalır. Değerler en eski çalışmadan bu çalışmaya doğru gider.',
+  'trend.skipped': '{n} yarım veya boş çalışma dışarıda bırakıldı: sayıları karşılaştırılamaz.',
+  'trend.series': 'Eskiden yeniye: {list}',
+  'trend.noData': 'veri yok',
+  'th.trendDefects': 'Yakalama başına kusur',
+  'th.trendSerious': 'Kritik ve ciddi',
   'context.title': 'Diğer araçlardan bağlam',
   'context.brand': 'Marka',
   'context.search': 'Arama',

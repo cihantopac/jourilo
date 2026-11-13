@@ -6,6 +6,7 @@ import { renderHtml } from '../../src/report/html.js';
 import { fill, I18N } from '../../src/report/html-i18n.js';
 import { PROMPT_JS } from '../../src/report/html-prompt.js';
 import { fixPathOf, rootCauseKey } from '../../src/report/remediation.js';
+import { trendSlice } from '../../src/report/trends.js';
 import { run } from '../helpers.js';
 
 const f = (rule: string, path: string, over: Partial<Finding> = {}) =>
@@ -267,5 +268,44 @@ describe('report interface', () => {
     expect(html).toContain('Before / after');
     const evil = run([f('axe/x', '/', { evidence: [shot] })], { id: '../../etc', pages: [page] });
     expect(renderHtml(head, compareRuns(evil, head))).not.toMatch(/src="\.\.\/\.\./);
+  });
+
+  it('the report shows a trend table with an accessible text alternative', () => {
+    const cap = (lcp: number) => ({
+      url: 'https://example.test/',
+      finalUrl: 'https://example.test/',
+      status: 200,
+      title: 't',
+      viewport: 'desktop',
+      loadMs: 1,
+      metrics: [{ name: 'LCP', value: lcp, unit: 'ms' as const, source: 'lab' as const }],
+      consoleErrors: 0,
+      failedRequests: 0,
+      inventory: {} as never,
+    });
+    const older = run([f('axe/x', '/'), f('axe/y', '/')], { id: 'old1', pages: [cap(3000)] });
+    const now = run([f('axe/x', '/')], { id: 'new1', pages: [cap(2000)] });
+    const listing = (r: typeof now) => ({
+      id: r.id,
+      target: r.target,
+      startedAt: r.startedAt,
+      findings: r.findings.length,
+      defects: r.summary.findings,
+      kinds: r.summary.byKind,
+      pages: 1,
+      journeys: 0,
+      trend: trendSlice(r),
+    });
+    const html = renderHtml(now, undefined, [listing(older)]);
+    expect(html).toContain('class="history trend"');
+    expect(html).toMatch(/<svg class="spark"[^>]*aria-hidden="true"/);
+    // The series is real text next to the (decorative) line, not only an aria-label on the SVG.
+    expect(html).toMatch(
+      /class="sr">\. <span data-i18n="trend\.series" data-i18n-v="\{&quot;list&quot;:&quot;2, 1&quot;\}">Oldest to newest: 2, 1/,
+    );
+    expect(html).toContain('3000 ms, 2000 ms');
+    expect(html).toContain('data-i18n="trend.title"');
+    // Without a second run there is nothing to trend.
+    expect(renderHtml(now, undefined, [])).not.toContain('class="history trend"');
   });
 });

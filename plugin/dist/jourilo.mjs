@@ -81,6 +81,88 @@ var init_errors = __esm({
   }
 });
 
+// src/audit/outcome.ts
+function runOutcome(run) {
+  if (run.stoppedBy) return "partial";
+  return run.pages.some((p) => p.status !== null) ? "complete" : "no-page-loaded";
+}
+function exitCodeForOutcome(outcome, gateFailed) {
+  if (outcome === "partial") return 6;
+  if (outcome === "no-page-loaded") return 5;
+  return gateFailed ? 1 : 0;
+}
+var init_outcome = __esm({
+  "src/audit/outcome.ts"() {
+    "use strict";
+  }
+});
+
+// src/report/trends.ts
+function trendSlice(run) {
+  return {
+    id: run.id,
+    target: run.target,
+    startedAt: run.startedAt,
+    outcome: run.outcome,
+    stoppedBy: run.stoppedBy,
+    pages: run.pages.map((p) => ({ url: p.url, viewport: p.viewport, status: p.status, metrics: p.metrics })),
+    findings: run.findings.map((f) => ({
+      kind: f.kind,
+      severity: f.severity,
+      url: f.url,
+      viewport: f.viewport
+    }))
+  };
+}
+function usable(run) {
+  return (run.outcome ?? runOutcome(run)) === "complete";
+}
+function trendReport(runs2, key) {
+  const same = runs2.filter((r) => r.target === key.target).sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+  const good = same.filter(usable);
+  const rows = /* @__PURE__ */ new Map();
+  for (const run of good) {
+    const captures = /* @__PURE__ */ new Map();
+    for (const p of run.pages) {
+      if (p.status === null) continue;
+      const k = `${p.url}
+${p.viewport}`;
+      captures.set(k, [...captures.get(k) ?? [], p]);
+    }
+    for (const [k, caps] of captures) {
+      const first = caps[0];
+      const mine = run.findings.filter(
+        (f) => f.kind === "defect" && f.url === first.url && (f.viewport === void 0 || f.viewport === first.viewport)
+      );
+      const row = rows.get(k) ?? { url: first.url, viewport: first.viewport, points: [] };
+      row.points.push({
+        runId: run.id,
+        at: run.startedAt,
+        defectsPerCapture: mine.length / caps.length,
+        serious: mine.filter((f) => f.severity === "critical" || f.severity === "serious").length / caps.length,
+        lcp: metric(first, "LCP"),
+        cls: metric(first, "CLS")
+      });
+      rows.set(k, row);
+    }
+  }
+  return {
+    rows: [...rows.values()].sort(
+      (a, b) => a.url.localeCompare(b.url) || a.viewport.localeCompare(b.viewport)
+    ),
+    used: good.length,
+    skipped: same.length - good.length
+  };
+}
+var metric;
+var init_trends = __esm({
+  "src/report/trends.ts"() {
+    "use strict";
+    init_outcome();
+    metric = (p, name) => p.metrics.find((m) => m.name === name)?.value ?? null;
+  }
+});
+
 // src/core/fs-safety.ts
 import { chmodSync, existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -146,6 +228,7 @@ var Workspace;
 var init_workspace = __esm({
   "src/core/workspace.ts"() {
     "use strict";
+    init_trends();
     init_errors();
     init_fs_safety();
     init_types();
@@ -194,7 +277,8 @@ var init_workspace = __esm({
               defects: run.summary.findings,
               kinds: run.summary.byKind,
               pages: run.summary.pages,
-              journeys: run.summary.journeys
+              journeys: run.summary.journeys,
+              trend: trendSlice(run)
             });
           } catch {
           }
@@ -39524,26 +39608,26 @@ function parseBudgets(value) {
   const specs = [];
   for (const part of value.split(",").map((s) => s.trim())) {
     const [name = "", raw, ...rest] = part.split("=").map((s) => s.trim());
-    const metric = name.toUpperCase();
-    if (!(metric in THRESHOLDS)) throw usage2(`has an unknown metric "${name}" (known: ${known}).`);
+    const metric2 = name.toUpperCase();
+    if (!(metric2 in THRESHOLDS)) throw usage2(`has an unknown metric "${name}" (known: ${known}).`);
     const limit = Number(raw);
     if (raw === void 0 || rest.length || raw === "" || !Number.isFinite(limit) || limit < 0)
-      throw usage2(`needs a number of 0 or more for ${metric} (got "${raw ?? ""}").`);
-    if (specs.some((s) => s.metric === metric)) throw usage2(`names ${metric} twice.`);
-    specs.push({ metric, limit });
+      throw usage2(`needs a number of 0 or more for ${metric2} (got "${raw ?? ""}").`);
+    if (specs.some((s) => s.metric === metric2)) throw usage2(`names ${metric2} twice.`);
+    specs.push({ metric: metric2, limit });
   }
   return specs;
 }
 function evaluateBudgets(pages, specs) {
-  return specs.map(({ metric, limit }) => {
+  return specs.map(({ metric: metric2, limit }) => {
     let worst;
     for (const page of pages) {
-      const m = page.metrics.find((x) => x.name === metric);
+      const m = page.metrics.find((x) => x.name === metric2);
       if (m && (!worst || m.value > worst.value)) worst = { value: m.value, page };
     }
-    if (!worst) return { metric, limit, worst: null, url: null, viewport: null, ok: null };
+    if (!worst) return { metric: metric2, limit, worst: null, url: null, viewport: null, ok: null };
     return {
-      metric,
+      metric: metric2,
       limit,
       worst: worst.value,
       url: worst.page.url,
@@ -43713,7 +43797,7 @@ function isPricingPage(obs) {
   const inv = obs.probe?.inventory;
   return /pric|plans|subscribe|fiyat|preise|precios|tarifs|abonelik/i.test(pathOf2(obs.url)) || (inv?.pricingSignals.length ?? 0) >= 2;
 }
-function hypothesis(obs, ruleId, title, description, recommendation, metric, evidence, opts = {}) {
+function hypothesis(obs, ruleId, title, description, recommendation, metric2, evidence, opts = {}) {
   return makeFinding({
     ruleId,
     ...opts.key ? { key: opts.key } : {},
@@ -43726,7 +43810,7 @@ function hypothesis(obs, ruleId, title, description, recommendation, metric, evi
     url: obs.url,
     viewport: obs.viewport.name,
     description,
-    impact: `Hypothesis, not a measured effect. Validate with: ${metric}.`,
+    impact: `Hypothesis, not a measured effect. Validate with: ${metric2}.`,
     recommendation,
     standards: [],
     evidence
@@ -47178,18 +47262,8 @@ function emptyInventory() {
   };
 }
 
-// src/audit/outcome.ts
-function runOutcome(run) {
-  if (run.stoppedBy) return "partial";
-  return run.pages.some((p) => p.status !== null) ? "complete" : "no-page-loaded";
-}
-function exitCodeForOutcome(outcome, gateFailed) {
-  if (outcome === "partial") return 6;
-  if (outcome === "no-page-loaded") return 5;
-  return gateFailed ? 1 : 0;
-}
-
 // src/cli/commands/audit.ts
+init_outcome();
 init_errors();
 init_fs_safety();
 
@@ -48321,6 +48395,13 @@ var EN = {
   "history.title": "History for this target",
   "history.hint": "Runs with the same target in this workspace. Different page sets or viewports make counts not directly comparable; use jourilo verify for like-for-like comparisons.",
   "history.this": "(this run)",
+  "trend.title": "Trend per page and viewport",
+  "trend.hint": "Defects are counted per capture (one page at one viewport), so runs audited with different --pages stay comparable. Values run from the oldest run to this one.",
+  "trend.skipped": "{n} partial or empty run(s) left out: their numbers are not comparable.",
+  "trend.series": "Oldest to newest: {list}",
+  "trend.noData": "no data",
+  "th.trendDefects": "Defects per capture",
+  "th.trendSerious": "Critical and serious",
   "context.title": "Context from other tools",
   "context.brand": "Brand",
   "context.search": "Search",
@@ -48537,6 +48618,13 @@ var TR = {
   "history.title": "Bu hedefin ge\xE7mi\u015Fi",
   "history.hint": "Bu \xE7al\u0131\u015Fma alan\u0131nda ayn\u0131 hedefe ait \xE7al\u0131\u015Fmalar. Farkl\u0131 sayfa k\xFCmeleri veya g\xF6r\xFCn\xFCm alanlar\u0131 say\u0131lar\u0131 do\u011Frudan kar\u015F\u0131la\u015Ft\u0131r\u0131lamaz k\u0131lar; birebir kar\u015F\u0131la\u015Ft\u0131rma i\xE7in jourilo verify kullan\u0131n.",
   "history.this": "(bu \xE7al\u0131\u015Fma)",
+  "trend.title": "Sayfa ve g\xF6r\xFCn\xFCm alan\u0131 ba\u015F\u0131na e\u011Filim",
+  "trend.hint": "Kusurlar yakalama ba\u015F\u0131na (bir sayfa, bir g\xF6r\xFCn\xFCm alan\u0131) say\u0131l\u0131r; bu y\xFCzden farkl\u0131 --pages ile yap\u0131lan \xE7al\u0131\u015Fmalar kar\u015F\u0131la\u015Ft\u0131r\u0131labilir kal\u0131r. De\u011Ferler en eski \xE7al\u0131\u015Fmadan bu \xE7al\u0131\u015Fmaya do\u011Fru gider.",
+  "trend.skipped": "{n} yar\u0131m veya bo\u015F \xE7al\u0131\u015Fma d\u0131\u015Far\u0131da b\u0131rak\u0131ld\u0131: say\u0131lar\u0131 kar\u015F\u0131la\u015Ft\u0131r\u0131lamaz.",
+  "trend.series": "Eskiden yeniye: {list}",
+  "trend.noData": "veri yok",
+  "th.trendDefects": "Yakalama ba\u015F\u0131na kusur",
+  "th.trendSerious": "Kritik ve ciddi",
   "context.title": "Di\u011Fer ara\xE7lardan ba\u011Flam",
   "context.brand": "Marka",
   "context.search": "Arama",
@@ -49007,6 +49095,7 @@ td.good{color:var(--good)}td.poor{color:var(--poor);font-weight:600}td.needs-imp
 .mini{width:104px;max-height:74px;object-fit:cover;object-position:top;border:1px solid var(--line);border-radius:6px;display:block}
 .history .bar{display:inline-block;height:8px;background:var(--brass-mark);border-radius:4px;vertical-align:middle;margin-right:6px}
 .history tr.current td{font-weight:600}
+.trend .spark{vertical-align:middle;color:var(--brass-mark);margin-right:6px}
 
 /* compare */
 .pairs{display:grid;gap:16px}
@@ -49565,6 +49654,7 @@ function rootCauseKey(f) {
 }
 
 // src/report/html.ts
+init_trends();
 function esc(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
@@ -49843,6 +49933,12 @@ function contextHtml(run) {
 function historyHtml(run, history) {
   const same = history.filter((h) => h.target === run.target && h.id !== run.id && h.pages > 0).slice(-9);
   if (!same.length) return "";
+  const trend = trendHtml(
+    trendReport(
+      [...history.filter((h) => h.id !== run.id).flatMap((h) => h.trend ? [h.trend] : []), trendSlice(run)],
+      run
+    )
+  );
   const rows = [
     ...same,
     {
@@ -49858,9 +49954,49 @@ function historyHtml(run, history) {
   return `<details class="fold"><summary>${T("history.title")}</summary><div class="tablewrap" tabindex="0" role="region"${attrs({ "aria-label": "history.title" })}><table class="history"><thead><tr><th>${T("th.run")}</th><th>${T("th.date")}</th>${SEVS.map((s) => `<th>${T(`sev.${s}`)}</th>`).join("")}<th>${T("th.defects")}</th></tr></thead><tbody>${rows.map((r, i) => {
     const t = total(r.defects);
     const prev = i ? total(rows[i - 1].defects) : t;
-    const trend = t < prev ? "good" : t > prev ? "poor" : "";
-    return `<tr${"current" in r ? ' class="current"' : ""}><td><code>${esc(r.id)}</code>${"current" in r ? ` ${T("history.this")}` : ""}</td><td>${esc(new Date(r.startedAt).toISOString().slice(0, 16).replace("T", " "))}</td><td>${r.defects.critical}</td><td>${r.defects.serious}</td><td>${r.defects.moderate}</td><td>${r.defects.minor}</td><td class="${trend}"><span class="bar" style="width:${Math.round(t / max * 120)}px"></span> ${t}</td></tr>`;
-  }).join("")}</tbody></table></div><p class="muted">${T("history.hint")}</p></details>`;
+    const trend2 = t < prev ? "good" : t > prev ? "poor" : "";
+    return `<tr${"current" in r ? ' class="current"' : ""}><td><code>${esc(r.id)}</code>${"current" in r ? ` ${T("history.this")}` : ""}</td><td>${esc(new Date(r.startedAt).toISOString().slice(0, 16).replace("T", " "))}</td><td>${r.defects.critical}</td><td>${r.defects.serious}</td><td>${r.defects.moderate}</td><td>${r.defects.minor}</td><td class="${trend2}"><span class="bar" style="width:${Math.round(t / max * 120)}px"></span> ${t}</td></tr>`;
+  }).join("")}</tbody></table></div><p class="muted">${T("history.hint")}</p>${trend}</details>`;
+}
+var numText = (n, digits = 0) => n === null ? "\u2013" : String(+n.toFixed(digits));
+function sparkline(values) {
+  const pts = values.flatMap((v, i) => v === null ? [] : [{ i, v }]);
+  if (pts.length < 2) return "";
+  const max = Math.max(...pts.map((p) => p.v));
+  const min = Math.min(...pts.map((p) => p.v));
+  const span = max - min || 1;
+  const w = 84;
+  const h = 22;
+  const x = (i) => (i / Math.max(1, values.length - 1) * (w - 4) + 2).toFixed(1);
+  const y = (v) => (h - 3 - (v - min) / span * (h - 6)).toFixed(1);
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true" focusable="false"><polyline fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" points="${pts.map((p) => `${x(p.i)},${y(p.v)}`).join(" ")}"/></svg>`;
+}
+function trendCell(values, digits, unit = "") {
+  const last = values[values.length - 1] ?? null;
+  const list2 = values.map((v) => v === null ? "\u2013" : `${numText(v, digits)}${unit}`).join(", ");
+  return `<td>${sparkline(values)} <b>${last === null ? T("trend.noData") : `${numText(last, digits)}${unit}`}</b><span class="sr">. ${T("trend.series", { list: list2 })}</span></td>`;
+}
+function trendHtml(t) {
+  const rows = t.rows.filter((r) => r.points.length >= 2);
+  if (!rows.length) return "";
+  const col = (r, pick2) => r.points.map(pick2);
+  const body = rows.map(
+    (r) => `<tr><td lang="en"><code>${esc(pathname(r.url))}</code></td><td>${esc(r.viewport)}</td>${trendCell(
+      col(r, (p) => p.defectsPerCapture),
+      1
+    )}${trendCell(
+      col(r, (p) => p.serious),
+      1
+    )}${trendCell(
+      col(r, (p) => p.lcp),
+      0,
+      " ms"
+    )}${trendCell(
+      col(r, (p) => p.cls),
+      3
+    )}</tr>`
+  ).join("");
+  return `<h4>${T("trend.title")}</h4><div class="tablewrap" tabindex="0" role="region"${attrs({ "aria-label": "trend.title" })}><table class="history trend"><thead><tr><th>${T("th.page")}</th><th>${T("th.viewport")}</th><th>${T("th.trendDefects")}</th><th>${T("th.trendSerious")}</th><th>LCP</th><th>CLS</th></tr></thead><tbody>${body}</tbody></table></div><p class="muted">${T("trend.hint")}${t.skipped ? ` ${T("trend.skipped", { n: t.skipped })}` : ""}</p>`;
 }
 function journeysHtml(run) {
   if (!run.journeys.length) return `<p class="empty">${T("j.none")}</p>`;
@@ -52961,7 +53097,7 @@ var METRICS = {
   }
 };
 function planExperiment(runId, f, opts = {}) {
-  const metric = METRICS[f.ruleId] ?? {
+  const metric2 = METRICS[f.ruleId] ?? {
     name: "Primary conversion",
     definition: "define the conversion event this change should move",
     events: ["exposure", "conversion"]
@@ -52986,9 +53122,9 @@ function planExperiment(runId, f, opts = {}) {
     schemaVersion: 1,
     id: `exp-${f.fingerprint}`,
     source: { runId, finding: f.fingerprint, ruleId: f.ruleId, url: f.url },
-    hypothesis: `If we address "${f.title}" (${f.recommendation}), then ${metric.name.toLowerCase()} will increase, because ${f.description.replace(/\.$/, "")}.`,
+    hypothesis: `If we address "${f.title}" (${f.recommendation}), then ${metric2.name.toLowerCase()} will increase, because ${f.description.replace(/\.$/, "")}.`,
     change: f.recommendation,
-    primaryMetric: metric,
+    primaryMetric: metric2,
     guardrails: [
       {
         name: "Downstream conversion",
@@ -53389,6 +53525,7 @@ function undismiss(ctx) {
 // src/cli/commands/optimize.ts
 import { existsSync as existsSync19, mkdirSync as mkdirSync8, writeFileSync as writeFileSync13 } from "node:fs";
 import { join as join25, resolve as resolve9 } from "node:path";
+init_outcome();
 init_errors();
 init_fs_safety();
 
@@ -54368,18 +54505,54 @@ ${text}`
 
 // src/cli/commands/runs.ts
 init_errors();
+init_trends();
 var runs = {
   name: "runs",
   summary: "List stored runs in the workspace (.jourilo/runs).",
-  usage: "jourilo runs",
+  usage: "jourilo runs [trend [--target URL]]",
+  options: { target: { type: "string" } },
+  details: `Subcommands:
+  trend            Defects per capture, critical and serious defects, LCP and CLS for every page and viewport across the
+                   runs of one target, oldest first. Partial and no-page-loaded runs are left out and counted.
+
+Options:
+  --target URL     With trend, the target to follow (default: the target of the latest run)`,
   async run(ctx) {
-    const list2 = ctx.ws.listRuns();
+    const sub = ctx.positionals[0];
+    if (sub === "trend") return runsTrend(ctx);
+    if (sub)
+      throw new JouriloError("USAGE", `Unknown runs subcommand: ${sub}.`, "Usage: jourilo runs [trend]");
+    if (str(ctx, "target")) throw new JouriloError("USAGE", "--target applies to `jourilo runs trend`.");
+    const list2 = ctx.ws.listRuns().map((r) => ({ ...r, trend: void 0 }));
     return {
       data: list2,
       text: list2.length ? list2.map((r) => `${r.id}  ${String(r.findings).padStart(4)} findings  ${r.target}`).join("\n") : `No runs in ${ctx.ws.runsDir}.`
     };
   }
 };
+async function runsTrend(ctx) {
+  const list2 = ctx.ws.listRuns();
+  const target = str(ctx, "target") ?? list2[list2.length - 1]?.target;
+  if (!target)
+    return { data: { target: null, rows: [], used: 0, skipped: 0 }, text: `No runs in ${ctx.ws.runsDir}.` };
+  const t = trendReport(
+    list2.flatMap((r) => r.trend ? [r.trend] : []),
+    { target }
+  );
+  const lines = [
+    `Trend for ${target}: ${t.used} run(s)${t.skipped ? `, ${t.skipped} partial or empty run(s) left out` : ""}.`,
+    ...t.rows.map((r) => {
+      const v = (pick2) => r.points.map((p) => pick2(p) ?? "\u2013").join(" \u2192 ");
+      return `${r.url} [${r.viewport}]
+  defects/capture ${v((p) => +p.defectsPerCapture.toFixed(2))}
+  serious         ${v((p) => +p.serious.toFixed(2))}
+  LCP ms          ${v((p) => p.lcp === null ? null : Math.round(p.lcp))}
+  CLS             ${v((p) => p.cls)}`;
+    })
+  ];
+  if (!t.rows.length) lines.push("No comparable runs yet.");
+  return { data: { target, ...t }, text: lines.join("\n") };
+}
 var report = {
   name: "report",
   summary: "Re-render the report for a run (html, markdown, sarif or json) \u2014 default: latest run.",

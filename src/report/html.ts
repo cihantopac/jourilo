@@ -14,6 +14,7 @@ import { fill, I18N, type MsgKey, type Vars } from './html-i18n.js';
 import { PROMPT_JS } from './html-prompt.js';
 import { REPORT_CSS } from './html-style.js';
 import { FIX_PATHS, type FixPath, fixPathOf, rootCauseKey } from './remediation.js';
+import { type TrendReport, trendReport, trendSlice } from './trends.js';
 
 export function esc(s: unknown): string {
   return String(s ?? '')
@@ -414,6 +415,12 @@ function contextHtml(run: Run): string {
 function historyHtml(run: Run, history: RunListing[]): string {
   const same = history.filter((h) => h.target === run.target && h.id !== run.id && h.pages > 0).slice(-9);
   if (!same.length) return '';
+  const trend = trendHtml(
+    trendReport(
+      [...history.filter((h) => h.id !== run.id).flatMap((h) => (h.trend ? [h.trend] : [])), trendSlice(run)],
+      run,
+    ),
+  );
   const rows = [
     ...same,
     {
@@ -433,7 +440,59 @@ function historyHtml(run: Run, history: RunListing[]): string {
       const trend = t < prev ? 'good' : t > prev ? 'poor' : '';
       return `<tr${'current' in r ? ' class="current"' : ''}><td><code>${esc(r.id)}</code>${'current' in r ? ` ${T('history.this')}` : ''}</td><td>${esc(new Date(r.startedAt).toISOString().slice(0, 16).replace('T', ' '))}</td><td>${r.defects.critical}</td><td>${r.defects.serious}</td><td>${r.defects.moderate}</td><td>${r.defects.minor}</td><td class="${trend}"><span class="bar" style="width:${Math.round((t / max) * 120)}px"></span> ${t}</td></tr>`;
     })
-    .join('')}</tbody></table></div><p class="muted">${T('history.hint')}</p></details>`;
+    .join('')}</tbody></table></div><p class="muted">${T('history.hint')}</p>${trend}</details>`;
+}
+
+const numText = (n: number | null, digits = 0): string => (n === null ? '–' : String(+n.toFixed(digits)));
+
+/** A small line over the series; decorative, because the numbers beside it carry the same information. */
+function sparkline(values: (number | null)[]): string {
+  const pts = values.flatMap((v, i) => (v === null ? [] : [{ i, v }]));
+  if (pts.length < 2) return '';
+  const max = Math.max(...pts.map((p) => p.v));
+  const min = Math.min(...pts.map((p) => p.v));
+  const span = max - min || 1;
+  const w = 84;
+  const h = 22;
+  const x = (i: number) => ((i / Math.max(1, values.length - 1)) * (w - 4) + 2).toFixed(1);
+  const y = (v: number) => (h - 3 - ((v - min) / span) * (h - 6)).toFixed(1);
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true" focusable="false"><polyline fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" points="${pts.map((p) => `${x(p.i)},${y(p.v)}`).join(' ')}"/></svg>`;
+}
+
+/** One cell: the sparkline, the latest value, and the whole series as text for people who cannot see the line. */
+function trendCell(values: (number | null)[], digits: number, unit = ''): string {
+  const last = values[values.length - 1] ?? null;
+  const list = values.map((v) => (v === null ? '–' : `${numText(v, digits)}${unit}`)).join(', ');
+  return `<td>${sparkline(values)} <b>${last === null ? T('trend.noData') : `${numText(last, digits)}${unit}`}</b><span class="sr">. ${T('trend.series', { list })}</span></td>`;
+}
+
+function trendHtml(t: TrendReport): string {
+  const rows = t.rows.filter((r) => r.points.length >= 2);
+  if (!rows.length) return '';
+  const col = (
+    r: TrendReport['rows'][number],
+    pick: (p: TrendReport['rows'][number]['points'][number]) => number | null,
+  ) => r.points.map(pick);
+  const body = rows
+    .map(
+      (r) =>
+        `<tr><td lang="en"><code>${esc(pathname(r.url))}</code></td><td>${esc(r.viewport)}</td>${trendCell(
+          col(r, (p) => p.defectsPerCapture),
+          1,
+        )}${trendCell(
+          col(r, (p) => p.serious),
+          1,
+        )}${trendCell(
+          col(r, (p) => p.lcp),
+          0,
+          ' ms',
+        )}${trendCell(
+          col(r, (p) => p.cls),
+          3,
+        )}</tr>`,
+    )
+    .join('');
+  return `<h4>${T('trend.title')}</h4><div class="tablewrap" tabindex="0" role="region"${attrs({ 'aria-label': 'trend.title' })}><table class="history trend"><thead><tr><th>${T('th.page')}</th><th>${T('th.viewport')}</th><th>${T('th.trendDefects')}</th><th>${T('th.trendSerious')}</th><th>LCP</th><th>CLS</th></tr></thead><tbody>${body}</tbody></table></div><p class="muted">${T('trend.hint')}${t.skipped ? ` ${T('trend.skipped', { n: t.skipped })}` : ''}</p>`;
 }
 
 function journeysHtml(run: Run): string {

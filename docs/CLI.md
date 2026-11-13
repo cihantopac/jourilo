@@ -516,7 +516,16 @@ jourilo compare <baseline-run> [head-run=latest] [--fail-on-regression]
 List stored runs in the workspace (.jourilo/runs).
 
 ```
-jourilo runs
+jourilo runs [trend [--target URL]]
+```
+
+```
+Subcommands:
+  trend            Defects per capture, critical and serious defects, LCP and CLS for every page and viewport across the
+                   runs of one target, oldest first. Partial and no-page-loaded runs are left out and counted.
+
+Options:
+  --target URL     With trend, the target to follow (default: the target of the latest run)
 ```
 
 ### `jourilo finding`

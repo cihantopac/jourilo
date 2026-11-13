@@ -245,6 +245,7 @@ td.good{color:var(--good)}td.poor{color:var(--poor);font-weight:600}td.needs-imp
 .mini{width:104px;max-height:74px;object-fit:cover;object-position:top;border:1px solid var(--line);border-radius:6px;display:block}
 .history .bar{display:inline-block;height:8px;background:var(--brass-mark);border-radius:4px;vertical-align:middle;margin-right:6px}
 .history tr.current td{font-weight:600}
+.trend .spark{vertical-align:middle;color:var(--brass-mark);margin-right:6px}
 
 /* compare */
 .pairs{display:grid;gap:16px}
