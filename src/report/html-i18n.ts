@@ -1,5 +1,6 @@
 // Interface strings of the HTML report in English and Turkish. The report is rendered in English on the server; the
-// client swaps every element marked with data-i18n to the chosen language. Finding texts, code, selectors, URLs and
+// client swaps every element marked with data-i18n to the chosen language. The titles, impacts and recommendations of
+// Jourilo's own rules have Turkish texts in rule-text-tr.ts; other finding texts, code, selectors, URLs and
 // screenshots come from the engine or the audited page and are never translated.
 //
 // Placeholders: {name} inserts a value; {name:s} adds an English plural "s" unless the value is 1.
@@ -182,7 +183,7 @@ const EN = {
   'f.count': '{g} root cause{g:s} · {n} finding{n:s} shown',
   'f.selectShown': 'Select shown',
   'f.none': 'No findings match these filters.',
-  'f.original': 'Finding texts, code and evidence stay in their original language.',
+  'f.original': 'Descriptions, axe-core texts, code and evidence stay in their original language.',
   'f.fixedTitle': 'Fixed since the baseline',
 
   'j.none': 'No journeys were run. Use jourilo journeys suggest, then jourilo journeys run.',
@@ -436,7 +437,7 @@ const TR: Record<MsgKey, string> = {
   'f.count': '{g} kök neden · {n} bulgu gösteriliyor',
   'f.selectShown': 'Gösterilenleri seç',
   'f.none': 'Bu filtrelere uyan bulgu yok.',
-  'f.original': 'Bulgu metinleri, kod ve kanıtlar özgün dillerinde kalır.',
+  'f.original': 'Açıklamalar, axe-core metinleri, kod ve kanıtlar özgün dillerinde kalır.',
   'f.fixedTitle': 'Taban çalışmadan bu yana düzeltilenler',
 
   'j.none': 'Yolculuk çalıştırılmadı. Önce jourilo journeys suggest, sonra jourilo journeys run kullanın.',

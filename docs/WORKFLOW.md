@@ -141,7 +141,8 @@ one offline file: no network requests, a strict Content-Security-Policy, and eve
 - **Before / after** — after `verify` or `report --baseline`: fixed, new and still-present findings, the same
   element region before and after, page screenshots side by side, and metric verdicts.
 - **Language and appearance** — English or Turkish and light, dark or system theme. The browser's preferences are
-  used first; a choice is remembered. Finding texts, code, selectors and screenshots stay in their original language.
+  used first; a choice is remembered. Jourilo's own rules have Turkish titles, impacts and recommendations;
+  descriptions, axe-core texts, code, selectors and screenshots stay in their original language.
 
 ## Repair prompts
 

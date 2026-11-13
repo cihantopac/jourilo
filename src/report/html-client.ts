@@ -35,6 +35,7 @@ function applyLang() {
       var i = pair.indexOf('='); if (i > 0) el.setAttribute(pair.slice(0, i), t(pair.slice(i + 1), v));
     });
   });
+  qsa('[data-rl]').forEach(function (el) { el.hidden = el.getAttribute('data-rl') !== lang; });
   qsa('[data-date]').forEach(function (el) {
     try { el.textContent = new Date(el.getAttribute('data-date')).toLocaleString(lang === 'tr' ? 'tr-TR' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { /* keep server text */ }
   });

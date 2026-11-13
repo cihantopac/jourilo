@@ -207,8 +207,12 @@ Stated so nobody mistakes silence for a pass.
 
 ## Reports
 
-- The report interface is in English and Turkish; finding titles, descriptions and recommendations come from the
-  rules and stay in English, and page text stays as captured.
+- The report interface is in English and Turkish. In a Turkish report, Jourilo's own rules show a Turkish title,
+  impact and recommendation. These are fixed per rule, so they leave out values the English text names (a width, a
+  journey name, a measured time, suggested autocomplete tokens, the nearest brand colors); the English description,
+  the viewport and the journey shown with the finding still give most of them. Descriptions, reproduction steps and
+  sources stay in English, and page text stays as captured.
+- axe-core rule help stays English in Turkish reports, because axe-core ships no Turkish locale.
 - Repair prompts are text. Whether a coding agent follows them is outside Jourilo's control; `jourilo verify` is
   what shows whether a fix worked.
 - Before/after crops reuse the baseline element's position on the new screenshot; if the layout moved, the "after"

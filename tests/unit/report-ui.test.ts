@@ -3,9 +3,11 @@ import { makeFinding } from '../../src/audit/finding.js';
 import type { Finding } from '../../src/core/types.js';
 import { compareRuns } from '../../src/report/compare.js';
 import { renderHtml } from '../../src/report/html.js';
+import { REPORT_JS } from '../../src/report/html-client.js';
 import { fill, I18N } from '../../src/report/html-i18n.js';
 import { PROMPT_JS } from '../../src/report/html-prompt.js';
 import { fixPathOf, rootCauseKey } from '../../src/report/remediation.js';
+import { RULE_TEXT_TR } from '../../src/report/rule-text-tr.js';
 import { trendSlice } from '../../src/report/trends.js';
 import { run } from '../helpers.js';
 
@@ -313,5 +315,56 @@ describe('report interface', () => {
     expect(html).not.toContain('data-i18n="trend.skipped"');
     // Without a second run there is nothing to trend.
     expect(renderHtml(now, undefined, [])).not.toContain('class="history trend"');
+  });
+  // Field evidence: the texts jourilo/focus-visible really emits (src/audit/rules/accessibility.ts).
+  const focusVisible = () =>
+    f('jourilo/focus-visible', '/', {
+      title: 'Keyboard focus is not visible',
+      description: '3 of 12 focus stops show no visible focus indicator.',
+      impact: 'Keyboard users cannot see where they are on the page, so they cannot operate it reliably.',
+      recommendation:
+        'Do not remove the focus outline without a replacement. Add a clearly visible :focus-visible style (e.g. a 2 px outline with 3:1 contrast) to the shared button/link/input components.',
+    });
+
+  it('a Turkish report shows the Turkish title with lang="tr"', () => {
+    const html = renderHtml(run([focusVisible()]));
+    const tr = RULE_TEXT_TR['jourilo/focus-visible']!;
+    // English stays the server text (the report works without JavaScript); the Turkish text sits next to it.
+    expect(html).toContain(
+      `<span class="t"><span lang="en" data-rl="en">Keyboard focus is not visible</span><span lang="tr" data-rl="tr" hidden>${tr.title}</span></span>`,
+    );
+    expect(html).toContain(`<span lang="tr" data-rl="tr" hidden>${tr.impact}</span>`);
+    expect(html).toContain(
+      `<span lang="tr" data-rl="tr" hidden>${tr.recommendation.replace(/"/g, '&quot;')}</span>`,
+    );
+    // The "fix first" card heading too.
+    expect(html).toMatch(
+      new RegExp(
+        `<h3><a href="#[^"]+"><span lang="en" data-rl="en">Keyboard focus is not visible</span><span lang="tr" data-rl="tr" hidden>${tr.title}</span></a></h3>`,
+      ),
+    );
+    // The description is dynamic and stays English.
+    expect(html).toContain('<p lang="en">3 of 12 focus stops show no visible focus indicator.</p>');
+    // The client shows the text of the chosen language, through the same language switch as the interface.
+    expect(REPORT_JS).toMatch(
+      /qsa\('\[data-rl\]'\)\.forEach\(function \(el\) \{ el\.hidden = el\.getAttribute\('data-rl'\) !== lang; \}\);/,
+    );
+  });
+
+  it('a rule without a translation falls back to English with lang="en"', () => {
+    const saved = RULE_TEXT_TR['jourilo/focus-visible']!;
+    delete RULE_TEXT_TR['jourilo/focus-visible'];
+    try {
+      const html = renderHtml(run([focusVisible(), f('ai/custom-check', '/b')]));
+      expect(html).toContain('<span class="t"><span lang="en">Keyboard focus is not visible</span></span>');
+      expect(html).toContain(
+        '<dd><span lang="en">Keyboard users cannot see where they are on the page, so they cannot operate it reliably.</span></dd>',
+      );
+      expect(html).toContain('<span class="t"><span lang="en">T ai/custom-check</span></span>');
+      // Never an empty or hidden-only text: without a translation nothing is marked for the language switch.
+      expect(html).not.toContain('data-rl=');
+    } finally {
+      RULE_TEXT_TR['jourilo/focus-visible'] = saved;
+    }
   });
 });

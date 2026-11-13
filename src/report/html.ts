@@ -14,6 +14,7 @@ import { fill, I18N, type MsgKey, type Vars } from './html-i18n.js';
 import { PROMPT_JS } from './html-prompt.js';
 import { REPORT_CSS } from './html-style.js';
 import { FIX_PATHS, type FixPath, fixPathOf, rootCauseKey } from './remediation.js';
+import { RULE_TEXT_TR } from './rule-text-tr.js';
 import { type TrendReport, trendReport, trendSlice } from './trends.js';
 
 export function esc(s: unknown): string {
@@ -53,6 +54,19 @@ function attrs(map: Record<string, MsgKey>, vars?: Vars): string {
   const pairs = Object.entries(map);
   const v = vars ? ` data-i18n-v="${esc(JSON.stringify(vars))}"` : '';
   return `${pairs.map(([a, k]) => ` ${a}="${esc(fill(I18N.en[k], vars))}"`).join('')} data-i18n-attr="${pairs.map(([a, k]) => `${a}=${k}`).join(';')}"${v}`;
+}
+
+/**
+ * A rule's title, impact or recommendation. English is the server text; when the rule has a Turkish text, it sits
+ * next to it, hidden, and the client shows the one that matches the report language (data-rl). Without a Turkish
+ * text only the English one is rendered, so a Turkish report falls back to English with lang="en", never to nothing.
+ */
+function ruleText(f: Finding, field: 'title' | 'impact' | 'recommendation'): string {
+  const en = esc(f[field]);
+  const tr = Object.hasOwn(RULE_TEXT_TR, f.ruleId) ? RULE_TEXT_TR[f.ruleId]?.[field] : undefined;
+  return tr
+    ? `<span lang="en" data-rl="en">${en}</span><span lang="tr" data-rl="tr" hidden>${esc(tr)}</span>`
+    : `<span lang="en">${en}</span>`;
 }
 
 function pathname(u: string): string {
@@ -262,10 +276,10 @@ function groupHtml(run: Run, g: Group, status?: string, base?: string): string {
     : ` data-kind="${f.kind}" data-sev="${f.severity}" data-cat="${esc(f.category)}" data-path="${g.path}" data-pages="${esc(g.pages.join(' '))}" data-n="${g.members.length}"`;
   return `<article class="rc sev-${f.severity} k-${f.kind}${status ? ` st-${esc(status)}` : ''}" id="${base ? 'fixed-' : ''}${g.id}"${data}>
 ${base ? '<span></span>' : pick(g)}
-<details><summary>${chipsHtml(g, status)}<span class="t" lang="en">${esc(f.title)}</span><span class="where">${whereHtml(g)}</span></summary>
+<details><summary>${chipsHtml(g, status)}<span class="t">${ruleText(f, 'title')}</span><span class="where">${whereHtml(g)}</span></summary>
 <div class="body">
 <p lang="en">${esc(f.description)}</p>
-<dl class="facts"><dt>${T('fd.why')}</dt><dd lang="en">${esc(f.impact)}</dd><dt>${T('fd.fix')}</dt><dd lang="en">${esc(f.recommendation)}</dd>
+<dl class="facts"><dt>${T('fd.why')}</dt><dd>${ruleText(f, 'impact')}</dd><dt>${T('fd.fix')}</dt><dd>${ruleText(f, 'recommendation')}</dd>
 <dt>${T('fd.basis')}</dt><dd><span class="chip">${T(`prov.${f.provenance}` as MsgKey)}</span> <span class="chip">${T(`conf.${f.confidence}` as MsgKey)}</span> ${T('fd.rule')} <code>${esc(f.ruleId)}</code> · ${T('fd.id')} <code>${esc(f.fingerprint)}</code></dd>
 ${stds ? `<dt>${T('fd.standards')}</dt><dd><ul class="stds">${stds}</ul></dd>` : ''}
 <dt>${T('fd.repro')}</dt><dd><ol lang="en">${f.reproduction.map((r) => `<li>${esc(r)}</li>`).join('')}</ol></dd></dl>
@@ -278,7 +292,7 @@ function cardHtml(run: Run, g: Group): string {
   const f = g.lead;
   const src = f.sources?.[0];
   return `<article class="rc-card sev-${f.severity}"><div class="vis">${visualOf(run, f, { minW: 520, ratio: 0.5 })}</div>
-<div class="in">${chipsHtml(g)}<h3><a href="#${g.id}" lang="en">${esc(f.title)}</a></h3>
+<div class="in">${chipsHtml(g)}<h3><a href="#${g.id}">${ruleText(f, 'title')}</a></h3>
 <div class="where">${whereHtml(g)}</div>
 ${src ? `<div class="src">${T('fd.sources')}: <code>${esc(src.file)}:${src.line}</code></div>` : ''}
 ${pick(g, 'rc.select', true)}</div></article>`;

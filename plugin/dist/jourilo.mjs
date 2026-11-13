@@ -48774,6 +48774,7 @@ function applyLang() {
       var i = pair.indexOf('='); if (i > 0) el.setAttribute(pair.slice(0, i), t(pair.slice(i + 1), v));
     });
   });
+  qsa('[data-rl]').forEach(function (el) { el.hidden = el.getAttribute('data-rl') !== lang; });
   qsa('[data-date]').forEach(function (el) {
     try { el.textContent = new Date(el.getAttribute('data-date')).toLocaleString(lang === 'tr' ? 'tr-TR' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { /* keep server text */ }
   });
@@ -49151,7 +49152,7 @@ var EN = {
   "f.count": "{g} root cause{g:s} \xB7 {n} finding{n:s} shown",
   "f.selectShown": "Select shown",
   "f.none": "No findings match these filters.",
-  "f.original": "Finding texts, code and evidence stay in their original language.",
+  "f.original": "Descriptions, axe-core texts, code and evidence stay in their original language.",
   "f.fixedTitle": "Fixed since the baseline",
   "j.none": "No journeys were run. Use jourilo journeys suggest, then jourilo journeys run.",
   "j.criteria": "Success criteria",
@@ -49374,7 +49375,7 @@ var TR = {
   "f.count": "{g} k\xF6k neden \xB7 {n} bulgu g\xF6steriliyor",
   "f.selectShown": "G\xF6sterilenleri se\xE7",
   "f.none": "Bu filtrelere uyan bulgu yok.",
-  "f.original": "Bulgu metinleri, kod ve kan\u0131tlar \xF6zg\xFCn dillerinde kal\u0131r.",
+  "f.original": "A\xE7\u0131klamalar, axe-core metinleri, kod ve kan\u0131tlar \xF6zg\xFCn dillerinde kal\u0131r.",
   "f.fixedTitle": "Taban \xE7al\u0131\u015Fmadan bu yana d\xFCzeltilenler",
   "j.none": "Yolculuk \xE7al\u0131\u015Ft\u0131r\u0131lmad\u0131. \xD6nce jourilo journeys suggest, sonra jourilo journeys run kullan\u0131n.",
   "j.criteria": "Ba\u015Far\u0131 \xF6l\xE7\xFCtleri",
@@ -50390,6 +50391,313 @@ function rootCauseKey(f) {
   return `${f.ruleId}|fp|${f.fingerprint}`;
 }
 
+// src/report/rule-text-tr.ts
+function hypothesis2(metric2) {
+  return `\xD6l\xE7\xFClm\xFC\u015F bir etki de\u011Fil, bir hipotez. Do\u011Frulamak i\xE7in: ${metric2}.`;
+}
+var SLOW_PAGE = "Yava\u015F sayfalar, ziyaret\xE7ileri teklifi g\xF6rmeden kaybeder.";
+var RULE_TEXT_TR = {
+  "jourilo/contrast-over-image": {
+    title: "G\xF6rselin veya gradyan\u0131n \xFCzerindeki metnin kontrast\u0131 yetersiz",
+    impact: "Az g\xF6ren ki\u015Filer ve parlak \u0131\u015F\u0131kta telefondan okuyanlar, metnin g\xF6rselin benzer tondaki b\xF6l\xFCm\xFCne denk gelen k\u0131s\u0131mlar\u0131n\u0131 okuyamaz.",
+    recommendation: "Metnin arkas\u0131na bir perde katman\u0131 (g\xF6rselle metin aras\u0131nda d\xFCz veya yar\u0131 saydam bir katman) ekleyin, metni g\xF6rselin daha sade bir b\xF6l\xFCm\xFCne ta\u015F\u0131y\u0131n ya da metin rengini de\u011Fi\u015Ftirin; arka plan\u0131n her noktas\u0131nda kontrast en az 4,5:1 olsun (b\xFCy\xFCk metinde 3:1: 24 px ya da kal\u0131n 18,66 px)."
+  },
+  "jourilo/focus-visible": {
+    title: "Klavye oda\u011F\u0131 g\xF6r\xFCnm\xFCyor",
+    impact: "Klavye kullan\u0131c\u0131lar\u0131 sayfada nerede olduklar\u0131n\u0131 g\xF6remez, bu y\xFCzden sayfay\u0131 g\xFCvenilir bi\xE7imde kullanamaz.",
+    recommendation: "Odak \xE7er\xE7evesini (outline) yerine ba\u015Fka bir g\xF6sterge koymadan kald\u0131rmay\u0131n. Ortak d\xFC\u011Fme, ba\u011Flant\u0131 ve giri\u015F alan\u0131 bile\u015Fenlerine a\xE7\u0131k\xE7a g\xF6r\xFCnen bir :focus-visible stili ekleyin (\xF6r. 3:1 kontrastl\u0131 2 px outline)."
+  },
+  "jourilo/focus-obscured": {
+    title: "Odaktaki \xF6\u011Fe ba\u015Fka i\xE7eri\u011Fin arkas\u0131nda kal\u0131yor",
+    impact: "Odak \xFCst bilgi, banner, panel veya sohbet penceresinin arkas\u0131nda kald\u0131\u011F\u0131nda klavye kullan\u0131c\u0131lar\u0131 onu g\xF6zden kaybeder.",
+    recommendation: "Odak geldi\u011Finde \xF6\u011Fenin \xFCst\xFCn\xFC kapatan i\xE7eri\u011Fi ba\u015Fka yere ta\u015F\u0131y\u0131n veya kapat\u0131n ya da yap\u0131\u015Fkan \xE7ubuklar\u0131n y\xFCksekli\u011Fi kadar scroll-padding (\xFCstte ve altta) verin."
+  },
+  "jourilo/button-implicit-submit": {
+    title: "T\xFCr\xFC belirtilmemi\u015F bir d\xFC\u011Fme, ad\u0131 g\xF6nderme anlam\u0131 ta\u015F\u0131mad\u0131\u011F\u0131 h\xE2lde formu g\xF6nderiyor",
+    impact: "Ba\u015Fka bir i\u015F i\xE7in konmu\u015F bir kontrol (parolay\u0131 g\xF6stermek, men\xFC a\xE7mak, panel kapatmak) o ana kadar yaz\u0131lanlarla birlikte formu da g\xF6nderir.",
+    recommendation: 'D\xFC\u011Fmeye type="button" verin. Formu g\xF6ndermesi gereken d\xFC\u011Fme type="submit" olarak kals\u0131n.'
+  },
+  "jourilo/keyboard-trap": {
+    title: "Klavye oda\u011F\u0131 bir alanda tutuluyor",
+    impact: "Klavye kullan\u0131c\u0131lar\u0131 sayfan\u0131n geri kalan\u0131na ula\u015Famaz ve sayfay\u0131 yeniden y\xFCklemek zorunda kalabilir.",
+    recommendation: 'Diyaloglar d\u0131\u015F\u0131nda Tab tu\u015Funu yakalayan \xF6zel keydown i\u015Fleyicilerini kald\u0131r\u0131n; bu bir diyalogsa aria-modal="true" ile i\u015Faretleyin ve Escape ile kapanmas\u0131n\u0131 sa\u011Flay\u0131n.'
+  },
+  "jourilo/target-size": {
+    title: "Dokunma ve t\u0131klama hedefleri 24\xD724 px'den k\xFC\xE7\xFCk",
+    impact: "Eli titreyen, parmaklar\u0131 iri olan veya i\u015Faret\xE7iyi hassas kullanamayan ki\u015Filer yanl\u0131\u015F kontrole basar.",
+    recommendation: "T\u0131klanabilir alan\u0131 dolgu (padding) ile en az 24\xD724 px'e \xE7\u0131kar\u0131n (dokunmatik ekranda 44\xD744 px daha iyidir) ya da hedeflerin aras\u0131na bo\u015Fluk b\u0131rak\u0131n."
+  },
+  "jourilo/pointer-only-control": {
+    title: "Klavye kullan\u0131c\u0131lar\u0131n\u0131n ula\u015Famad\u0131\u011F\u0131 t\u0131klanabilir \xF6\u011Feler",
+    impact: "Klavye ve ekran okuyucu kullan\u0131c\u0131lar\u0131 bu kontrolleri etkinle\u015Ftiremez.",
+    recommendation: "T\u0131klanabilir <div>/<span> yerine <button> (sayfa ge\xE7i\u015Fi i\xE7in <a href>) kullan\u0131n."
+  },
+  "jourilo/paste-blocked": {
+    title: "Parola veya kod alanlar\u0131na yap\u0131\u015Ft\u0131rma engellenmi\u015F",
+    impact: "Parola y\xF6neticisi kullanan ya da parolay\u0131 ezberleyip yeniden yazamayan ki\u015Filer (bili\u015Fsel ve motor engelliler) giri\u015F yapamaz.",
+    recommendation: "Kimlik bilgisi alanlar\u0131ndaki yap\u0131\u015Ft\u0131rma engelini (onpaste i\u015Fleyicileri, paste olay\u0131nda preventDefault) kald\u0131r\u0131n."
+  },
+  "jourilo/input-purpose": {
+    title: "Ki\u015Fisel veri alanlar\u0131nda autocomplete yok",
+    impact: "Taray\u0131c\u0131lar ve parola y\xF6neticileri bu alanlar\u0131 dolduramaz; motor veya bili\u015Fsel engeli olan ki\u015Filer daha \xE7ok yazmak zorunda kal\u0131r.",
+    recommendation: "Kullan\u0131c\u0131yla ilgili bilgi toplayan her alana amac\u0131na uygun bir autocomplete de\u011Feri ekleyin (\xF6r. e-posta i\xE7in email, telefon i\xE7in tel, ad soyad i\xE7in name, adres i\xE7in street-address)."
+  },
+  "jourilo/placeholder-label": {
+    title: "Form alanlar\u0131 etiket yerine yer tutucu metne dayan\u0131yor",
+    impact: "Ki\u015Filer yazmaya ba\u015Flay\u0131nca alan\u0131n ne istedi\u011Fini unutur; d\xFC\u015F\xFCk kontrastl\u0131 yer tutucular zor okunur.",
+    recommendation: "Her alana g\xF6r\xFCn\xFCr bir <label for> ekleyin; yer tutucular\u0131 yaln\u0131zca \xF6rnek g\xF6stermek i\xE7in kullan\u0131n."
+  },
+  "jourilo/dialog-focus": {
+    title: "Diyalog a\xE7\u0131ld\u0131\u011F\u0131nda klavye oda\u011F\u0131 diyalo\u011Fa ge\xE7miyor",
+    impact: "Klavye ve ekran okuyucu kullan\u0131c\u0131lar\u0131 diyalo\u011Fun arkas\u0131nda kal\u0131r ve a\xE7\u0131ld\u0131\u011F\u0131n\u0131 fark etmeyebilir.",
+    recommendation: 'Diyalog a\xE7\u0131l\u0131nca oda\u011F\u0131 ilk odaklanabilir \xF6\u011Fesine (ya da tabindex="-1" ile diyalo\u011Fun kendisine) ta\u015F\u0131y\u0131n; m\xFCmk\xFCnse <dialog>.showModal() kullan\u0131n.'
+  },
+  "jourilo/composite-keyboard": {
+    title: "Sekme listesi, radyo grubu, liste kutusu veya men\xFC \xE7ubu\u011Fundaki \xF6\u011Felere klavyeyle ula\u015F\u0131lam\u0131yor",
+    impact: "Klavye ve ekran okuyucu kullan\u0131c\u0131lar\u0131 yaln\u0131zca ge\xE7erli \xF6\u011Feye ula\u015Fabilir; di\u011Fer sekmeler, se\xE7enekler veya tercihler ula\u015F\u0131lamaz durumda kal\u0131r.",
+    recommendation: "Bu bile\u015Fen i\xE7in ok tu\u015Fu desenini uygulay\u0131n (ok tu\u015Flar\u0131yla oda\u011F\u0131 ya da aria-activedescendant'\u0131 sonraki \xF6\u011Feye ta\u015F\u0131y\u0131n) veya her \xF6\u011Feyi Tab s\u0131ras\u0131na ekleyin."
+  },
+  "jourilo/menu-arrow-keys": {
+    title: "Ok tu\u015Flar\u0131 men\xFC \xF6\u011Feleri aras\u0131nda ge\xE7i\u015F yapm\u0131yor",
+    impact: "Klavye ve ekran okuyucu kullan\u0131c\u0131lar\u0131 ilk \xF6\u011Feden sonraki men\xFC \xF6\u011Felerine ula\u015Famaz.",
+    recommendation: "APG men\xFC d\xFC\u011Fmesi deseninde anlat\u0131ld\u0131\u011F\u0131 gibi ArrowDown ve ArrowUp ile oda\u011F\u0131 sonraki veya \xF6nceki men\xFC \xF6\u011Fesine ta\u015F\u0131y\u0131n (u\xE7larda ba\u015Fa ve sona d\xF6nerek)."
+  },
+  "jourilo/menu-home-end": {
+    title: "Home ve End tu\u015Flar\u0131 ilk ve son men\xFC \xF6\u011Fesine atlam\u0131yor",
+    impact: "Klavye kullan\u0131c\u0131lar\u0131 uzun bir men\xFCn\xFCn ba\u015F\u0131na veya sonuna ula\u015Fmak i\xE7in ok tu\u015Funa defalarca basmak zorunda kal\u0131r.",
+    recommendation: "Home tu\u015Funda oda\u011F\u0131 ilk men\xFC \xF6\u011Fesine, End tu\u015Funda son men\xFC \xF6\u011Fesine ta\u015F\u0131y\u0131n."
+  },
+  "jourilo/menu-escape": {
+    title: "Escape men\xFCy\xFC kapatm\u0131yor",
+    impact: "Klavye kullan\u0131c\u0131lar\u0131n\u0131n a\xE7\u0131k bir men\xFCy\xFC kapatmak i\xE7in h\u0131zl\u0131 ve beklenen bir yolu yok.",
+    recommendation: "Escape'e bas\u0131l\u0131nca men\xFCy\xFC kapat\u0131n ve oda\u011F\u0131 men\xFC d\xFC\u011Fmesine geri verin."
+  },
+  "jourilo/menu-focus-return": {
+    title: "Men\xFC kapan\u0131nca odak kayboluyor",
+    impact: "Men\xFC kapand\u0131ktan sonra klavye kullan\u0131c\u0131lar\u0131 ba\u015Fka bir yere g\xF6nderilir ve kald\u0131klar\u0131 yeri yeniden bulmak zorunda kal\u0131r.",
+    recommendation: "Men\xFC Escape ile kapand\u0131\u011F\u0131nda oda\u011F\u0131 men\xFC d\xFC\u011Fmesine geri ta\u015F\u0131y\u0131n."
+  },
+  "jourilo/dialog-escape": {
+    title: "Escape diyalo\u011Fu kapatm\u0131yor",
+    impact: "Klavye kullan\u0131c\u0131lar\u0131n\u0131n diyalogdan \xE7\u0131kmak i\xE7in h\u0131zl\u0131 ve beklenen bir yolu yok.",
+    recommendation: "Diyalo\u011Fu Escape ile kapat\u0131n (yerel <dialog> bunu kendisi yapar) ve oda\u011F\u0131 diyalo\u011Fu a\xE7an \xF6\u011Feye geri verin."
+  },
+  "jourilo/dialog-focus-return": {
+    title: "Diyalog kapan\u0131nca odak kayboluyor",
+    impact: "Diyalog kapand\u0131ktan sonra klavye kullan\u0131c\u0131lar\u0131 ba\u015Fka bir yere (\xE7o\u011Funlukla sayfan\u0131n ba\u015F\u0131na) g\xF6nderilir ve kald\u0131klar\u0131 yeri yeniden bulmak zorunda kal\u0131r.",
+    recommendation: "Diyalo\u011Fu a\xE7an \xF6\u011Feyi saklay\u0131n ve diyalog kapan\u0131nca oda\u011F\u0131 yeniden ona verin."
+  },
+  "jourilo/dialog-focus-containment": {
+    title: "Klavye oda\u011F\u0131 a\xE7\u0131k diyalo\u011Fun d\u0131\u015F\u0131na \xE7\u0131k\u0131yor",
+    impact: "Klavye kullan\u0131c\u0131lar\u0131 Tab ile katman\u0131n arkas\u0131nda kalan sayfaya ge\xE7er ve nerede olduklar\u0131n\u0131 kaybeder.",
+    recommendation: "Kal\u0131c\u0131 (modal) diyalog a\xE7\u0131kken oda\u011F\u0131 i\xE7inde tutun (yerel <dialog>.showModal() ya da sayfan\u0131n geri kalan\u0131nda inert \xF6zniteli\u011Fi)."
+  },
+  "jourilo/dialog-role": {
+    title: "Katman, diyalog rol\xFC olmadan a\xE7\u0131l\u0131yor",
+    impact: "Ekran okuyucu kullan\u0131c\u0131lar\u0131na bir diyalo\u011Fun a\xE7\u0131ld\u0131\u011F\u0131 ya da bunun ne oldu\u011Fu bildirilmez.",
+    recommendation: '<dialog> (showModal) ya da aria-modal="true" ve eri\u015Filebilir bir adla (aria-labelledby) birlikte role="dialog" kullan\u0131n.'
+  },
+  "jourilo/expanded-state": {
+    title: "aria-expanded, ekranda g\xF6r\xFCnenle uyu\u015Fmuyor",
+    impact: "Ekran okuyucular men\xFCy\xFC veya b\xF6l\xFCm\xFC a\xE7\u0131kken kapal\u0131 (ya da tersi) olarak duyurur.",
+    recommendation: "Tetikleyicideki aria-expanded de\u011Ferini, denetledi\u011Fi \xF6\u011Fenin g\xF6r\xFCn\xFCrl\xFC\u011F\xFCyle birlikte de\u011Fi\u015Ftirin."
+  },
+  "jourilo/fieldset-legend": {
+    title: "Fieldset'in legend'\u0131 yok",
+    impact: 'Ekran okuyucu kullan\u0131c\u0131lar\u0131 alanlar\u0131 yan\u0131tlad\u0131klar\u0131 soru olmadan duyar (\xF6r. "Pasaportunuz var m\u0131?" olmadan "Evet / Hay\u0131r").',
+    recommendation: "Her fieldset'e ilk alt \xF6\u011Fe olarak grup sorusunu i\xE7eren bir <legend> verin (ya da grubu adland\u0131ran bir aria-label / aria-labelledby); yaln\u0131zca stil i\xE7in kullan\u0131lan fieldset'leri kald\u0131r\u0131n."
+  },
+  "jourilo/radio-group": {
+    title: "Radyo d\xFC\u011Fmeleri ad\u0131 olan bir grupta toplanmam\u0131\u015F",
+    impact: "Se\xE7enekler, ait olduklar\u0131 soru olmadan duyurulur.",
+    recommendation: 'Her grubu bir <legend> ile birlikte <fieldset> i\xE7ine al\u0131n (ya da aria-labelledby ile role="radiogroup" kullan\u0131n).'
+  },
+  "jourilo/table-headers": {
+    title: "Ba\u015Fl\u0131k h\xFCcresi olmayan veri tablosu",
+    impact: "Ekran okuyucu kullan\u0131c\u0131lar\u0131, hangi sat\u0131ra veya s\xFCtuna ait olduklar\u0131n\u0131 bilmeden art arda de\u011Ferler duyar.",
+    recommendation: 'Ba\u015Fl\u0131klar i\xE7in <th scope="col"> / <th scope="row"> kullan\u0131n; sayfa d\xFCzeni i\xE7in tablo yerine CSS kullan\u0131n.'
+  },
+  "jourilo/empty-alt-with-title": {
+    title: "Dekoratif olarak i\u015Faretlenen g\xF6rsel, title \xF6zniteli\u011Finde a\xE7\u0131klan\u0131yor",
+    impact: "Ekran okuyucular g\xF6rseli atlar, fareyle gezen g\xF6ren kullan\u0131c\u0131lar ise bilgiyi ara\xE7 ipucu olarak g\xF6r\xFCr.",
+    recommendation: "G\xF6rsel bilgi veriyorsa metni alt \xF6zniteli\u011Fine ta\u015F\u0131y\u0131n; dekoratifse title \xF6zniteli\u011Fini kald\u0131r\u0131n."
+  },
+  "a11y/errors-not-associated": {
+    title: "Hata mesajlar\u0131 g\xF6r\xFCn\xFCyor ama yard\u0131mc\u0131 teknolojilere iletilmiyor",
+    impact: "Ekran okuyucu kullan\u0131c\u0131lar\u0131na g\xF6nderimin ba\u015Far\u0131s\u0131z oldu\u011Fu veya hangi alan\u0131 d\xFCzeltmeleri gerekti\u011Fi bildirilmez.",
+    recommendation: 'Ge\xE7ersiz alanlara aria-invalid="true" ekleyin, her mesaj\u0131 aria-describedby ile alan\u0131na ba\u011Flay\u0131n ve hata \xF6zetini role="alert" b\xF6lgesinde duyurun ya da oda\u011F\u0131 \xF6zete ta\u015F\u0131y\u0131n.'
+  },
+  "jourilo/horizontal-overflow": {
+    title: "Sayfa yatay olarak kay\u0131yor",
+    impact: "\u0130\xE7erik kesilir ya da iki y\xF6nl\xFC kayd\u0131rma gerektirir; telefonda sayfa kayd\u0131r\u0131l\u0131rken yana do\u011Fru oynar.",
+    recommendation: "Ta\u015Fmaya neden olan \xF6\u011Feyi s\u0131n\u0131rlay\u0131n (max-width: 100%, flex-wrap, flex alt \xF6\u011Felerinde min-width: 0, uzun dizeler i\xE7in overflow-wrap: anywhere, tablolar i\xE7in kayd\u0131r\u0131labilir bir kapsay\u0131c\u0131)."
+  },
+  "jourilo/missing-viewport-meta": {
+    title: "Duyarl\u0131 viewport meta etiketi yok",
+    impact: "Telefonlarda metin \xE7ok k\xFC\xE7\xFCk g\xF6r\xFCn\xFCr ve kontrollere dokunmak zorla\u015F\u0131r.",
+    recommendation: 'Belgenin head b\xF6l\xFCm\xFCne <meta name="viewport" content="width=device-width, initial-scale=1"> ekleyin.'
+  },
+  "jourilo/small-text": {
+    title: "Mobilde g\xF6vde metni 12 px'in alt\u0131nda",
+    impact: "K\xFC\xE7\xFCk metin telefonda, \xF6zellikle ya\u015Fl\u0131 kullan\u0131c\u0131lar i\xE7in zor okunur; bu bir okunabilirlik de\u011Ferlendirmesidir, WCAG ihlali de\u011Fildir.",
+    recommendation: "Mobilde g\xF6vde metni i\xE7in en az 16 px, ikincil metin i\xE7in en az 12 px kullan\u0131n."
+  },
+  "ux/required-fields-unmarked": {
+    title: "Zorunlu alanlar belirtilmemi\u015F",
+    impact: "Ki\u015Filer hangi alanlar\u0131n zorunlu oldu\u011Funu ancak formu g\xF6nderince \xF6\u011Frenir; bu da fazladan hata turlar\u0131na ve hayal k\u0131r\u0131kl\u0131\u011F\u0131na yol a\xE7ar.",
+    recommendation: "Zorunlu alanlar\u0131 required/aria-required ve g\xF6r\xFCn\xFCr bir i\u015Faretle belirtin ya da iste\u011Fe ba\u011Fl\u0131 olanlar\u0131 i\u015Faretleyin."
+  },
+  "ux/no-validation-feedback": {
+    title: "Eksik veya bo\u015F form g\xF6nderildi\u011Finde geri bildirim verilmiyor",
+    impact: "Ki\u015Filer neyin eksik oldu\u011Funu \xF6\u011Frenemez; k\xF6rlemesine yeniden dener ya da formu b\u0131rak\u0131r.",
+    recommendation: "Zorunlu alanlar\u0131 do\u011Frulay\u0131n ve her alan\u0131n yan\u0131nda o alana \xF6zg\xFC bir mesaj g\xF6sterin (uzun formlarda bir hata \xF6zeti de ekleyin); alanlar\u0131 aria-invalid ile i\u015Faretleyin ve mesajlar\u0131 aria-describedby ile ba\u011Flay\u0131n."
+  },
+  "ux/error-focus": {
+    title: "Odak ilk hataya ta\u015F\u0131nm\u0131yor",
+    impact: "Klavye ve ekran okuyucu kullan\u0131c\u0131lar\u0131 sorunu aramak zorunda kal\u0131r; mobilde hata ekran\u0131n d\u0131\u015F\u0131nda kalabilir.",
+    recommendation: "Ba\u015Far\u0131s\u0131z bir g\xF6nderimden sonra oda\u011F\u0131 hata \xF6zetine veya ilk ge\xE7ersiz alana ta\u015F\u0131y\u0131n."
+  },
+  "journey/failed": {
+    title: "Yolculuk hedefine ula\u015Fm\u0131yor",
+    impact: "Ki\u015Filer bu g\xF6revi tamamlayam\u0131yor.",
+    recommendation: "Ba\u015Far\u0131s\u0131z olan ad\u0131m\u0131 d\xFCzeltin ve yolculu\u011Fu yeniden \xE7al\u0131\u015Ft\u0131r\u0131n. Yolculuk Jourilo taraf\u0131ndan \xF6nerildiyse \xF6nce tan\u0131m\u0131n ama\xE7lanan ak\u0131\u015Fla e\u015Fle\u015Fti\u011Fini kontrol edin."
+  },
+  "journey/blocked-by-policy": {
+    title: "Yolculuk g\xFCvenlik politikas\u0131 taraf\u0131ndan durduruldu",
+    impact: "Bu yolculu\u011Fun geri kalan\u0131 test edilmedi.",
+    recommendation: "Bu yolculu\u011Fun kapsanmas\u0131 gerekiyorsa test hesaplar\u0131yla yerel veya sandbox bir ortamda \xE7al\u0131\u015Ft\u0131r\u0131n."
+  },
+  "journey/page-errors": {
+    title: "Yolculuk s\u0131ras\u0131nda yakalanmam\u0131\u015F istisnalar",
+    impact: "Etkile\u015Fimli \xF6zellikler ger\xE7ek kullan\u0131c\u0131lar i\xE7in sessizce \xE7al\u0131\u015Fmayabilir.",
+    recommendation: "Ad\u0131mlar\u0131 yeniden \xFCretin ve kan\u0131tta listelenen istisnalar\u0131 d\xFCzeltin."
+  },
+  "journey/flaky": {
+    title: "Yolculuk denemelerin yaln\u0131zca bir k\u0131sm\u0131nda ba\u015Far\u0131l\u0131 oldu",
+    impact: "Aral\u0131kl\u0131 hatalar ger\xE7ek kullan\u0131c\u0131lara ula\u015F\u0131r ve \xF6nce/sonra kar\u015F\u0131la\u015Ft\u0131rmalar\u0131n\u0131 g\xFCvenilmez k\u0131lar.",
+    recommendation: "Ba\u015Far\u0131s\u0131z denemeyi ba\u015Far\u0131l\u0131 bir denemeyle kar\u015F\u0131la\u015Ft\u0131r\u0131n: farkl\u0131 s\u0131rada tamamlanan isteklere, ge\xE7 olu\u015Fan \xF6\u011Felere veya \xF6nceki bir \xE7al\u0131\u015Fman\u0131n olu\u015Fturdu\u011Fu verilere bak\u0131n. Sorun bir yar\u0131\u015F durumuysa (race condition) \xFCr\xFCn\xFC d\xFCzeltin; de\u011Filse yolculu\u011Fun do\u011Fru durumu beklemesini sa\u011Flay\u0131n."
+  },
+  "jourilo/page-unreachable": {
+    title: "Sayfa y\xFCklenemiyor ya da kendine y\xF6nlendiren bir d\xF6ng\xFCye giriyor",
+    impact: "Ziyaret\xE7iler bu sayfay\u0131 hi\xE7 kullanamaz.",
+    recommendation: "Bu URL i\xE7in sunucuyu, DNS'i ve y\xF6nlendirmeleri kontrol edin. Sayfa kendine y\xF6nlendiriyorsa sunucunun y\xF6nlendirme kurallar\u0131n\u0131 veya bar\u0131nd\u0131rma yap\u0131land\u0131rmas\u0131n\u0131 (HTTP/HTTPS, www ve sondaki e\u011Fik \xE7izgi y\xF6nlendirmeleri, proxy veya CDN y\xF6nlendirmesi) d\xFCzeltin."
+  },
+  "jourilo/http-error-page": {
+    title: "Sayfa HTTP hata koduyla yan\u0131t veriyor",
+    impact: "Yolculukta \xE7\u0131kmaz sokak; ziyaret\xE7iler siteden ayr\u0131l\u0131r ya da siteye g\xFCvenlerini yitirir.",
+    recommendation: "Bu URL'ye giden ba\u011Flant\u0131lar\u0131 d\xFCzeltin veya kald\u0131r\u0131n ya da URL'yi do\u011Fru sayfaya y\xF6nlendirin."
+  },
+  "jourilo/console-errors": {
+    title: "Taray\u0131c\u0131 konsoluna hata yaz\u0131l\u0131yor veya yakalanmam\u0131\u015F JavaScript istisnalar\u0131 var",
+    impact: "Hatalar \xE7o\u011Fu zaman ekran g\xF6r\xFCnt\xFCs\xFCnde g\xF6r\xFCnmeyen bozuk \xF6zelliklere (hi\xE7bir \u015Fey yapmayan d\xFC\u011Fmeler, eksik i\xE7erik) i\u015Faret eder.",
+    recommendation: "Listelenen mesajlarla hatay\u0131 yeniden \xFCretin ve as\u0131l istisnay\u0131 d\xFCzeltin; bir hata izleme arac\u0131 ekleyin."
+  },
+  "jourilo/failed-requests": {
+    title: "Birinci taraf istekleri ba\u015Far\u0131s\u0131z oldu",
+    impact: "Eksik betikler, stiller, veriler veya g\xF6rseller sayfan\u0131n baz\u0131 b\xF6l\xFCmlerini bozar.",
+    recommendation: "Kan\u0131tta listelenen URL'leri veya sunucu i\u015Fleyicilerini d\xFCzeltin."
+  },
+  "jourilo/failed-third-party": {
+    title: "\xDC\xE7\xFCnc\xFC taraf istekleri ba\u015Far\u0131s\u0131z oldu",
+    impact: "G\xF6m\xFCl\xFC i\xE7erikler, yaz\u0131 tipleri veya bile\u015Fenler bozuk olabilir.",
+    recommendation: "Her ba\u011F\u0131ml\u0131l\u0131\u011F\u0131n h\xE2l\xE2 gerekli ve ula\u015F\u0131labilir olup olmad\u0131\u011F\u0131n\u0131 kontrol edin."
+  },
+  "jourilo/redirect-chain": {
+    title: "Sayfaya birden \xE7ok y\xF6nlendirmeyle ula\u015F\u0131l\u0131yor",
+    impact: "Her y\xF6nlendirme, sayfa y\xFCklenmeye ba\u015Flamadan \xF6nce bir istek ve bir gidi\u015F-d\xF6n\xFC\u015F daha ekler; yava\u015F mobil a\u011Flarda zincir fark edilir bir gecikme yarat\u0131r.",
+    recommendation: "Do\u011Frudan son URL'ye ba\u011Flant\u0131 verin (i\xE7 ba\u011Flant\u0131lar, site haritas\u0131, canonical) ve her eski adresi tek ad\u0131mda ona y\xF6nlendirin; HTTP'den HTTPS'ye, www ve sondaki e\u011Fik \xE7izgi kurallar\u0131n\u0131 birle\u015Ftirin."
+  },
+  "jourilo/unsized-images": {
+    title: "Yeri ayr\u0131lmam\u0131\u015F g\xF6rseller d\xFCzen kaymas\u0131na yol a\xE7\u0131yor",
+    impact: "G\xF6rseller y\xFCklendik\xE7e i\xE7erik yer de\u011Fi\u015Ftirir.",
+    recommendation: "G\xF6rsellere width ve height \xF6znitelikleri (ya da aspect-ratio) ekleyin."
+  },
+  "perf/lcp": {
+    title: "Largest Contentful Paint (LCP) zay\u0131f veya iyile\u015Ftirilmeli (laboratuvar)",
+    impact: SLOW_PAGE,
+    recommendation: "LCP \xF6\u011Fesini daha erken sunun: hero g\xF6rselini veya yaz\u0131 tipini \xF6nceden y\xFCkleyin (preload), tembel y\xFCklemeyin (lazy loading), s\u0131k\u0131\u015Ft\u0131r\u0131n; olu\u015Fturmay\u0131 engelleyen CSS/JS'yi ve sunucu s\xFCresini azalt\u0131n."
+  },
+  "perf/cls": {
+    title: "Cumulative Layout Shift (CLS) zay\u0131f veya iyile\u015Ftirilmeli (laboratuvar)",
+    impact: "Ki\u015Filer okurken veya dokunmaya \xE7al\u0131\u015F\u0131rken i\xE7erik z\u0131plar ve yanl\u0131\u015F t\u0131klamalara yol a\xE7ar.",
+    recommendation: "G\xF6rseller, reklamlar ve g\xF6m\xFCl\xFC i\xE7erikler i\xE7in yer ay\u0131r\u0131n (width/height ya da aspect-ratio), mevcut i\xE7eri\u011Fin \xFCst\xFCne yeni i\xE7erik eklemeyin, boyutu ayarlanm\u0131\u015F yedek yaz\u0131 tipleriyle font-display kullan\u0131n."
+  },
+  "perf/fcp": {
+    title: "First Contentful Paint (FCP) zay\u0131f veya iyile\u015Ftirilmeli (laboratuvar)",
+    impact: SLOW_PAGE,
+    recommendation: "Olu\u015Fturmay\u0131 engelleyen kaynaklar\u0131 ve sunucu yan\u0131t s\xFCresini azalt\u0131n; kritik CSS'i sat\u0131r i\xE7ine al\u0131n."
+  },
+  "perf/ttfb": {
+    title: "Time to First Byte (TTFB) zay\u0131f veya iyile\u015Ftirilmeli (laboratuvar)",
+    impact: SLOW_PAGE,
+    recommendation: "Sunucu yan\u0131t\u0131n\u0131 h\u0131zland\u0131r\u0131n: \xF6nbellekleme, CDN, daha az y\xF6nlendirme, daha h\u0131zl\u0131 arka u\xE7 sorgular\u0131."
+  },
+  "perf/tbt": {
+    title: "Total Blocking Time (TBT) zay\u0131f veya iyile\u015Ftirilmeli (laboratuvar)",
+    impact: SLOW_PAGE,
+    recommendation: "Ana i\u015F par\xE7ac\u0131\u011F\u0131ndaki uzun g\xF6revleri b\xF6l\xFCn: kodu par\xE7alara ay\u0131r\u0131n (code splitting), kritik olmayan betikleri erteleyin, i\u015Fi ana i\u015F par\xE7ac\u0131\u011F\u0131n\u0131n d\u0131\u015F\u0131na ta\u015F\u0131y\u0131n."
+  },
+  "perf/inp": {
+    title: "Yolculuk s\u0131ras\u0131nda etkile\u015Fime yava\u015F yan\u0131t (laboratuvar)",
+    impact: "Aray\xFCz tepkisiz hissettirir; ki\u015Filer yeniden t\u0131klar ya da vazge\xE7er.",
+    recommendation: "Etkile\u015Fimi DevTools Performance panelinde inceleyin; olay i\u015Fleyicilerindeki uzun g\xF6revleri b\xF6l\xFCn ve acil olmayan i\u015Fleri erteleyin."
+  },
+  "conv/no-primary-cta-above-fold": {
+    title: "\u0130lk ekranda belirgin bir eylem \xE7a\u011Fr\u0131s\u0131 yok",
+    impact: hypothesis2("a\xE7\u0131l\u0131\u015F sayfas\u0131ndan huninin sonraki ad\u0131m\u0131na t\u0131klama oran\u0131"),
+    recommendation: 'Hero alan\u0131nda tek ve y\xFCksek kontrastl\u0131 bir birincil eylemi (\xF6r. "\xDCcretsiz denemeyi ba\u015Flat") test edin.'
+  },
+  "conv/competing-ctas": {
+    title: "\u0130lk ekranda birbiriyle yar\u0131\u015Fan birden \xE7ok birincil eylem var",
+    impact: hypothesis2("birincil eylem \xE7a\u011Fr\u0131s\u0131n\u0131n t\u0131klama oran\u0131 ve ard\u0131ndan kay\u0131t tamamlama oran\u0131"),
+    recommendation: "Tek bir birincil eylemi, di\u011Ferleri g\xF6rsel olarak ikincil d\xFCzeye indirilmi\u015F h\xE2lde test edin."
+  },
+  "conv/unclear-value-proposition": {
+    title: "Ana ba\u015Fl\u0131k yok ya da bir de\u011Fer \xF6nerisi sunmuyor",
+    impact: hypothesis2(
+      "a\xE7\u0131l\u0131\u015F sayfas\u0131nda hemen \xE7\u0131kma oran\u0131 ve kayd\u0131rma derinli\u011Fi, ayr\u0131ca birincil eylem \xE7a\u011Fr\u0131s\u0131n\u0131n t\u0131klama oran\u0131"
+    ),
+    recommendation: "Belirli bir kitle i\xE7in elde edilecek sonucu anlatan bir ba\u015Fl\u0131\u011F\u0131, destekleyici bir alt ba\u015Fl\u0131kla birlikte test edin."
+  },
+  "conv/vague-cta-label": {
+    title: "Belirsiz eylem \xE7a\u011Fr\u0131s\u0131 etiketi",
+    impact: hypothesis2("bu kontrol\xFCn t\u0131klama oran\u0131"),
+    recommendation: 'Sonucu adland\u0131ran bir etiket test edin ("Hesab\u0131m\u0131 olu\u015Ftur", "Raporu al").'
+  },
+  "conv/no-trust-signals": {
+    title: "Ki\u015Fisel veya \xF6deme bilgisi isteyen formun yak\u0131n\u0131nda g\xFCven sinyali yok",
+    impact: hypothesis2("formu ba\u015Flatanlar\u0131n g\xF6nderimi tamamlama oran\u0131"),
+    recommendation: "Formun yan\u0131na konuyla ilgili ve do\u011Fru g\xFCvenceler eklemeyi test edin (gizlilik notu, ger\xE7ekten sahip oldu\u011Funuz bir g\xFCvenlik rozeti, iptal ko\u015Fullar\u0131, ger\xE7ek kullan\u0131c\u0131 yorumlar\u0131)."
+  },
+  "conv/pricing-period-unclear": {
+    title: "Fiyatlar faturalama d\xF6nemi belirtilmeden g\xF6steriliyor",
+    impact: hypothesis2(
+      "fiyatland\u0131rma sayfas\u0131ndan \xF6deme veya kayda ge\xE7i\u015F oran\u0131 ve fiyatla ilgili destek sorular\u0131"
+    ),
+    recommendation: 'Her fiyat\u0131n yan\u0131nda faturalama d\xF6nemini ve birimi belirtin (\xF6r. "ayl\u0131k", "kullan\u0131c\u0131 ba\u015F\u0131na").'
+  },
+  "conv/signup-friction": {
+    title: "Kay\u0131t formu gerekenden fazla bilgi istiyor",
+    impact: hypothesis2("kay\u0131t formunu ba\u015Flatanlar\u0131n tamamlama oran\u0131"),
+    recommendation: "Daha k\u0131sa bir form (e-posta ve parola ya da SSO) test edin, iste\u011Fe ba\u011Fl\u0131 profil sorular\u0131n\u0131 ilk kullan\u0131m ad\u0131mlar\u0131na b\u0131rak\u0131n ve parola onay alan\u0131n\u0131n yerine parolay\u0131 g\xF6sterme d\xFC\u011Fmesi koyun."
+  },
+  "conv/forced-account-checkout": {
+    title: "\xD6deme i\xE7in hesap olu\u015Fturmak zorunlu g\xF6r\xFCn\xFCyor",
+    impact: hypothesis2("\xF6demeyi ba\u015Flatanlar\u0131n sipari\u015Fi tamamlama oran\u0131"),
+    recommendation: "Sat\u0131n almadan sonra iste\u011Fe ba\u011Fl\u0131 hesap olu\u015Fturmayla birlikte misafir olarak \xF6demeyi test edin."
+  },
+  "design/off-brand-cta-color": {
+    title: "Birincil d\xFC\u011Fmelerde marka paleti d\u0131\u015F\u0131nda renkler kullan\u0131l\u0131yor",
+    impact: "Tutars\u0131z eylem renkleri neyin t\u0131klanabilir oldu\u011Funun tan\u0131nmas\u0131n\u0131 zorla\u015Ft\u0131r\u0131r ve markay\u0131 zay\u0131flat\u0131r.",
+    recommendation: "Birincil d\xFC\u011Fmelerde, ama\xE7lanan role en yak\u0131n marka renk token'\u0131n\u0131 kullan\u0131n; kan\u0131ttaki renkleri marka paletiyle kar\u015F\u0131la\u015Ft\u0131r\u0131n."
+  },
+  "design/off-brand-font": {
+    title: "Metinde marka tipografisinde olmayan yaz\u0131 tipleri kullan\u0131l\u0131yor",
+    impact: "\xDCr\xFCn markayla tutars\u0131z g\xF6r\xFCn\xFCr; y\xFCklenemeyen bir web yaz\u0131 tipi ayr\u0131ca d\xFCzen kaymas\u0131na yol a\xE7abilir.",
+    recommendation: "Marka yaz\u0131 tipini ortak tipografi token'lar\u0131 \xFCzerinden y\xFCkleyip uygulay\u0131n; a\u011F panelinde yaz\u0131 tipi iste\u011Fini kontrol edin."
+  }
+};
+
 // src/report/trends.ts
 init_trend_run();
 var metric = (p, name) => p.metrics.find((m) => m.name === name)?.value ?? null;
@@ -50458,6 +50766,11 @@ function attrs(map, vars) {
   const pairs = Object.entries(map);
   const v = vars ? ` data-i18n-v="${esc(JSON.stringify(vars))}"` : "";
   return `${pairs.map(([a, k]) => ` ${a}="${esc(fill(I18N.en[k], vars))}"`).join("")} data-i18n-attr="${pairs.map(([a, k]) => `${a}=${k}`).join(";")}"${v}`;
+}
+function ruleText(f, field) {
+  const en = esc(f[field]);
+  const tr = Object.hasOwn(RULE_TEXT_TR, f.ruleId) ? RULE_TEXT_TR[f.ruleId]?.[field] : void 0;
+  return tr ? `<span lang="en" data-rl="en">${en}</span><span lang="tr" data-rl="tr" hidden>${esc(tr)}</span>` : `<span lang="en">${en}</span>`;
 }
 function pathname(u) {
   try {
@@ -50592,10 +50905,10 @@ function groupHtml(run, g, status, base2) {
   const data = base2 ? "" : ` data-kind="${f.kind}" data-sev="${f.severity}" data-cat="${esc(f.category)}" data-path="${g.path}" data-pages="${esc(g.pages.join(" "))}" data-n="${g.members.length}"`;
   return `<article class="rc sev-${f.severity} k-${f.kind}${status ? ` st-${esc(status)}` : ""}" id="${base2 ? "fixed-" : ""}${g.id}"${data}>
 ${base2 ? "<span></span>" : pick(g)}
-<details><summary>${chipsHtml(g, status)}<span class="t" lang="en">${esc(f.title)}</span><span class="where">${whereHtml(g)}</span></summary>
+<details><summary>${chipsHtml(g, status)}<span class="t">${ruleText(f, "title")}</span><span class="where">${whereHtml(g)}</span></summary>
 <div class="body">
 <p lang="en">${esc(f.description)}</p>
-<dl class="facts"><dt>${T("fd.why")}</dt><dd lang="en">${esc(f.impact)}</dd><dt>${T("fd.fix")}</dt><dd lang="en">${esc(f.recommendation)}</dd>
+<dl class="facts"><dt>${T("fd.why")}</dt><dd>${ruleText(f, "impact")}</dd><dt>${T("fd.fix")}</dt><dd>${ruleText(f, "recommendation")}</dd>
 <dt>${T("fd.basis")}</dt><dd><span class="chip">${T(`prov.${f.provenance}`)}</span> <span class="chip">${T(`conf.${f.confidence}`)}</span> ${T("fd.rule")} <code>${esc(f.ruleId)}</code> \xB7 ${T("fd.id")} <code>${esc(f.fingerprint)}</code></dd>
 ${stds ? `<dt>${T("fd.standards")}</dt><dd><ul class="stds">${stds}</ul></dd>` : ""}
 <dt>${T("fd.repro")}</dt><dd><ol lang="en">${f.reproduction.map((r) => `<li>${esc(r)}</li>`).join("")}</ol></dd></dl>
@@ -50607,7 +50920,7 @@ function cardHtml(run, g) {
   const f = g.lead;
   const src = f.sources?.[0];
   return `<article class="rc-card sev-${f.severity}"><div class="vis">${visualOf(run, f, { minW: 520, ratio: 0.5 })}</div>
-<div class="in">${chipsHtml(g)}<h3><a href="#${g.id}" lang="en">${esc(f.title)}</a></h3>
+<div class="in">${chipsHtml(g)}<h3><a href="#${g.id}">${ruleText(f, "title")}</a></h3>
 <div class="where">${whereHtml(g)}</div>
 ${src ? `<div class="src">${T("fd.sources")}: <code>${esc(src.file)}:${src.line}</code></div>` : ""}
 ${pick(g, "rc.select", true)}</div></article>`;
