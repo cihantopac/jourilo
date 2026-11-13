@@ -51217,6 +51217,16 @@ init_fs_safety();
 import { existsSync as existsSync15, readdirSync as readdirSync11, readFileSync as readFileSync14, statSync as statSync6 } from "node:fs";
 import { basename as basename5, dirname as dirname8, join as join21, relative as relative5 } from "node:path";
 
+// src/discovery/ast/load.ts
+async function loadTsParser() {
+  try {
+    const parser = await import("./ts-parser.mjs");
+    return { parser };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 // src/discovery/laravel.ts
 init_fs_safety();
 import { existsSync as existsSync14, readdirSync as readdirSync10, readFileSync as readFileSync13, statSync as statSync5 } from "node:fs";
@@ -51579,7 +51589,9 @@ function roleOf(path2) {
   for (const [re, r] of table) if (re.test(p)) return r;
   return "page";
 }
-function fileRoutes(appRoot, files, frameworks) {
+var AST_FILE = /\.(tsx?|jsx?|mjs|vue|svelte)$/;
+var MAY_DECLARE_ROUTES = /<Route\b|\bpath\s*:/;
+function fileRoutes(appRoot, files, frameworks, ast) {
   const routes = [];
   const add = (path2, file2, kind, framework, dynamic) => {
     if (routes.some((r) => r.path === path2 && r.kind === kind && r.framework === framework)) return;
@@ -51652,6 +51664,22 @@ function fileRoutes(appRoot, files, frameworks) {
     [/\.dart$/, /['"](\/[a-z0-9/_-]*)['"]\s*:\s*\(\s*context\s*\)/gi, "Flutter routes"]
   ];
   for (const f of files) {
+    if (AST_FILE.test(f)) {
+      const text = read2(join21(appRoot, f));
+      if (!MAY_DECLARE_ROUTES.test(text)) continue;
+      const sf = ast.parser?.parseSource(f, text);
+      if (sf) {
+        for (const r of ast.parser.astRoutes(f, sf)) {
+          if (!r.path || r.path.includes("*") || r.path.length > 120) continue;
+          add(r.path, f, "page", r.router ?? "Router config", /[:{]/.test(r.path));
+        }
+        continue;
+      }
+      if (ast.parser)
+        ast.limitations.push(
+          `${f}: the bundled TypeScript parser could not parse this file (broken or newer syntax); its routes were read with the regex fallback, which can include routes in comments or strings.`
+        );
+    }
     for (const [fileRe, re, label] of codeRoute) {
       if (!fileRe.test(f)) continue;
       const text = read2(join21(appRoot, f));
@@ -51708,7 +51736,7 @@ function devCommand(appRoot, pkg, frameworks, rel) {
     };
   return null;
 }
-function profileApp(repoRoot, appRoot, files) {
+function profileApp(repoRoot, appRoot, files, ast) {
   const rel = toPosix(relative5(repoRoot, appRoot));
   const pkgFile = join21(appRoot, "package.json");
   const pkg = existsSync15(pkgFile) ? readJson2(pkgFile) : null;
@@ -51736,7 +51764,7 @@ function profileApp(repoRoot, appRoot, files) {
   if (/go_router/.test(pubspec)) frameworks.push(fact("go_router", `${rel || "."}/pubspec.yaml`));
   const names = frameworks.map((f) => f.value);
   const appFiles = files.filter((f) => !rel || f.startsWith(`${rel}/`)).map((f) => rel ? f.slice(rel.length + 1) : f);
-  const routes = fileRoutes(appRoot, appFiles, names).map((r) => ({
+  const routes = fileRoutes(appRoot, appFiles, names, ast).map((r) => ({
     ...r,
     file: rel ? `${rel}/${r.file}` : r.file
   }));
@@ -51755,9 +51783,19 @@ function profileApp(repoRoot, appRoot, files) {
     }
   };
 }
-function discoverRepository(root) {
+async function discoverRepository(root) {
   const files = walk(root);
   const gaps = [];
+  const limitations = [];
+  const ast = { parser: null, limitations };
+  if (files.some((f) => AST_FILE.test(f) && MAY_DECLARE_ROUTES.test(read2(join21(root, f))))) {
+    const loaded = await loadTsParser();
+    if ("parser" in loaded) ast.parser = loaded.parser;
+    else
+      limitations.push(
+        `The bundled TypeScript parser could not be loaded (${loaded.error}); routes in code were read with the regex fallback.`
+      );
+  }
   const rootPkg = existsSync15(join21(root, "package.json")) ? readJson2(join21(root, "package.json")) : null;
   let monorepo = null;
   const appRoots = [];
@@ -51779,10 +51817,10 @@ function discoverRepository(root) {
         if (existsSync15(join21(dir, n, "package.json"))) appRoots.push(join21(dir, n));
     } else if (existsSync15(join21(root, base2, "package.json"))) appRoots.push(join21(root, base2));
   }
-  const apps = (appRoots.length ? appRoots : [root]).map((r) => profileApp(root, r, files)).filter(
+  const apps = (appRoots.length ? appRoots : [root]).map((r) => profileApp(root, r, files, ast)).filter(
     (a, _, all) => all.length === 1 || a.routes.length > 0 || a.frameworks.some((f) => !["React", "Vue", "Svelte", "Vite"].includes(f.value))
   );
-  if (!apps.length) apps.push(profileApp(root, root, files));
+  if (!apps.length) apps.push(profileApp(root, root, files, ast));
   const laravelRoles = [];
   const allPkgs = files.filter((f) => f.endsWith("package.json")).slice(0, 60);
   const signals = /* @__PURE__ */ new Map();
@@ -51948,7 +51986,8 @@ function discoverRepository(root) {
     roles,
     candidateJourneys,
     integrations: { markilo, searvex },
-    gaps
+    gaps,
+    limitations: [...new Set(limitations)]
   };
 }
 
@@ -52066,7 +52105,8 @@ function repoText(p) {
     p.integrations.markilo ? `  Markilo brand data: ${p.integrations.markilo}` : "",
     p.integrations.searvex ? `  Searvex data: ${p.integrations.searvex}` : "",
     "  Gaps:",
-    ...p.gaps.map((g) => `    - ${g}`)
+    ...p.gaps.map((g) => `    - ${g}`),
+    ...p.limitations.length ? ["  Limitations:", ...p.limitations.map((l) => `    - ${l}`)] : []
   );
   return lines.filter(Boolean).join("\n");
 }
@@ -52111,7 +52151,7 @@ ${networkOptionsHelp(22)}`,
     const target = requirePositional(ctx, 0, "path|url", discover.usage);
     ctx.ws.ensure();
     if (!target.includes("://") && existsSync16(target) && statSync7(target).isDirectory()) {
-      const profile2 = discoverRepository(resolve8(target));
+      const profile2 = await discoverRepository(resolve8(target));
       const file3 = join22(ctx.ws.root, "product.json");
       writeFileSync11(file3, `${JSON.stringify(profile2, null, 2)}
 `);
