@@ -241,6 +241,7 @@ export const router = createBrowserRouter([
     vi.mocked(loadTsParser).mockResolvedValueOnce({
       parser: {
         parseSource: real.parseSource,
+        componentIndex: real.componentIndex,
         astRoutes: () => {
           throw new RangeError('Maximum call stack size exceeded');
         },

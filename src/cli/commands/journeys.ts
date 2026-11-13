@@ -413,7 +413,7 @@ async function runCmd(ctx: Context) {
       ...(guarded.blocked.length || guarded.escaped.length ? { network: guarded } : {}),
     };
     const repo = str(ctx, 'repo') ?? (isDir ? resolve(baseArg) : undefined);
-    if (repo) locateFindings(run, repo);
+    if (repo) await locateFindings(run, repo);
     ctx.ws.saveRun(run);
     const reports = writeReports(runDir, run, undefined, { history: ctx.ws.listRuns() });
     const failed = journeys.filter((j) => j.status === 'failed').length;

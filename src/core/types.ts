@@ -84,6 +84,8 @@ export interface SourceLocation {
   /** Why this location is a candidate (matched text, id, class, component name...). */
   reason: string;
   confidence: Confidence;
+  /** The shared component this location is in, when more than one route renders it (one root cause for all). */
+  component?: { name: string; file: string; usedBy: number };
 }
 
 export interface Finding {

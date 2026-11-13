@@ -47116,6 +47116,18 @@ async function serveStatic(root, port = 0, opts = {}) {
 init_fs_safety();
 import { readdirSync as readdirSync4, readFileSync as readFileSync6, statSync as statSync3 } from "node:fs";
 import { extname as extname2, join as join13, relative as relative3 } from "node:path";
+
+// src/discovery/ast/load.ts
+async function loadTsParser() {
+  try {
+    const parser = await import("./ts-parser.mjs");
+    return { parser };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// src/repair/locate.ts
 var SOURCE_EXT = /* @__PURE__ */ new Set([
   ".html",
   ".htm",
@@ -47507,7 +47519,64 @@ function locate(f, files, max = 3) {
     };
   });
 }
-function locateFindings(run, repoRoot) {
+var COMPONENT_FILE = /\.(tsx?|jsx?|mjs|vue|svelte)$/;
+var isMinified = (rel, lines) => /\.min\.[cm]?js$/.test(rel) || lines.some((l) => l.length >= 2e3);
+function componentAt(byFile, file2, line) {
+  let best;
+  for (const c of byFile.get(file2) ?? [])
+    if (c.line <= line && line <= c.endLine && (!best || c.line >= best.line)) best = c;
+  return best;
+}
+async function addComponents(run, files) {
+  const best = run.findings.map((f) => f.sources?.[0]).filter((s) => !!s && s.confidence !== "low" && COMPONENT_FILE.test(s.file));
+  if (!best.length) return;
+  const loaded = await loadTsParser();
+  if (!("parser" in loaded)) {
+    run.limitations.push(
+      `The bundled TypeScript parser could not be loaded (${loaded.error}), so findings in shared components are grouped per source line instead of per component.`
+    );
+    return;
+  }
+  const { parser } = loaded;
+  const parsed = /* @__PURE__ */ new Map();
+  const texts = /* @__PURE__ */ new Map();
+  const skipped = [];
+  for (const file2 of files) {
+    if (!COMPONENT_FILE.test(file2.rel) || file2.rel.endsWith(".d.ts")) continue;
+    if (isMinified(file2.rel, file2.lines)) continue;
+    const text = file2.lines.join("\n");
+    const sf = parser.parseSource(file2.rel, text);
+    if (!sf) {
+      skipped.push(file2.rel);
+      continue;
+    }
+    parsed.set(file2.rel, sf);
+    texts.set(file2.rel, text);
+  }
+  let byFile;
+  try {
+    const index = parser.componentIndex(parsed, texts);
+    byFile = index.byFile;
+    skipped.push(...index.failed);
+  } catch {
+    run.limitations.push(
+      "The component graph could not be built, so findings in shared components are grouped per source line instead of per component."
+    );
+    return;
+  }
+  for (const src of best) {
+    const c = componentAt(byFile, src.file, src.line);
+    if (!c || c.usedBy < 2) continue;
+    src.component = { name: c.name, file: c.file, usedBy: c.usedBy };
+    src.reason += `; in component ${c.name}, used by ${c.usedBy} routes`;
+  }
+  const unread = [...new Set(skipped)].sort();
+  if (unread.length)
+    run.limitations.push(
+      `${unread.length} code file(s) were left out of the component graph (broken or newer syntax, or code the parser could not walk), so findings in them are grouped per source line: ${unread.slice(0, 3).join(", ")}${unread.length > 3 ? ` and ${unread.length - 3} more` : ""}.`
+    );
+}
+async function locateFindings(run, repoRoot) {
   const files = indexRepository(repoRoot);
   let n = 0;
   for (const f of run.findings) {
@@ -47516,6 +47585,10 @@ function locateFindings(run, repoRoot) {
       f.sources = src;
       n++;
     }
+  }
+  try {
+    await addComponents(run, files);
+  } catch {
   }
   return n;
 }
@@ -49051,6 +49124,7 @@ function fixPathOf(f) {
 }
 function rootCauseKey(f) {
   const src = f.sources?.[0];
+  if (src?.component) return `${f.ruleId}|component|${src.component.file}#${src.component.name}`;
   if (src && src.confidence !== "low") return `${f.ruleId}|src|${src.file}:${src.line}`;
   const sel = f.evidence.find((e) => e.selector)?.selector;
   if (sel && !f.journey && /[#.[>:]/.test(sel)) return `${f.ruleId}|sel|${sel}`;
@@ -50682,7 +50756,7 @@ async function runCmd(ctx) {
       ...guarded.blocked.length || guarded.escaped.length ? { network: guarded } : {}
     };
     const repo = str(ctx, "repo") ?? (isDir ? resolve5(baseArg) : void 0);
-    if (repo) locateFindings(run, repo);
+    if (repo) await locateFindings(run, repo);
     ctx.ws.saveRun(run);
     const reports = writeReports(runDir, run, void 0, { history: ctx.ws.listRuns() });
     const failed = journeys2.filter((j) => j.status === "failed").length;
@@ -50943,7 +51017,7 @@ async function auditCommand(ctx, usage2, categories) {
     }
     if (repo) run.settings.repo = repo;
     if (repo) {
-      const located = locateFindings(run, repo);
+      const located = await locateFindings(run, repo);
       ctx.progress({
         phase: "report",
         message: `Mapped ${located} finding(s) to likely source locations in ${repo}`
@@ -51119,7 +51193,7 @@ async function benchFixture(dir, wsRoot) {
       mode: "repository",
       context: loadContext(dir)
     });
-    locateFindings(run, dir);
+    await locateFindings(run, dir);
     const evidenceOk = (f, e) => {
       if (!e.evidenceExactly) return true;
       const texts = f.evidence.map((ev) => `${ev.snippet ?? ""} ${ev.selector ?? ""}`);
@@ -51241,16 +51315,6 @@ import { join as join22, resolve as resolve8 } from "node:path";
 init_fs_safety();
 import { existsSync as existsSync15, readdirSync as readdirSync11, readFileSync as readFileSync14, statSync as statSync6 } from "node:fs";
 import { basename as basename5, dirname as dirname8, join as join21, relative as relative5 } from "node:path";
-
-// src/discovery/ast/load.ts
-async function loadTsParser() {
-  try {
-    const parser = await import("./ts-parser.mjs");
-    return { parser };
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : String(err) };
-  }
-}
 
 // src/discovery/laravel.ts
 init_fs_safety();
@@ -51616,9 +51680,9 @@ function roleOf(path2) {
 }
 var AST_FILE = /\.(tsx?|jsx?|mjs|vue|svelte)$/;
 var MAY_DECLARE_ROUTES = /<Route\b|\bpath\s*:/;
-var isMinified = (file2, text) => /\.min\.[cm]?js$/.test(file2) || /^.{2000}/m.test(text);
+var isMinified2 = (file2, text) => /\.min\.[cm]?js$/.test(file2) || /^.{2000}/m.test(text);
 function astFileRoutes(ast, file2, text) {
-  if (!ast.parser || isMinified(file2, text)) return null;
+  if (!ast.parser || isMinified2(file2, text)) return null;
   try {
     const sf = ast.parser.parseSource(file2, text);
     return sf ? ast.parser.astRoutes(file2, sf) : null;
@@ -53037,7 +53101,7 @@ Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
     const { run, dir } = ctx.ws.loadRun(ctx.positionals[0] ?? "latest");
     const repo = resolve9(str(ctx, "repo") ?? run.settings.repo ?? ".");
     if (!existsSync19(repo)) throw new JouriloError("NOT_FOUND", `Repository not found: ${repo}`);
-    if (run.findings.every((f) => !f.sources)) locateFindings(run, repo);
+    if (run.findings.every((f) => !f.sources)) await locateFindings(run, repo);
     const rules2 = list(ctx, "rule");
     const only = list(ctx, "finding");
     const selected = run.findings.filter(
@@ -53260,7 +53324,7 @@ ${networkOptionsHelp(25)}
       }
       if (repo) {
         run.settings.repo = repo;
-        locateFindings(run, repo);
+        await locateFindings(run, repo);
       }
       run.settings.baseline = base2.id;
       run.outcome = runOutcome(run);

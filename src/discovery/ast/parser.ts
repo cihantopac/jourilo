@@ -3,6 +3,7 @@
 // (`typescript-js`, an npm alias): TypeScript 7 is the native port and has no JavaScript compiler API.
 import ts from 'typescript-js';
 
+export { componentIndex } from './components.js';
 export { astRoutes } from './routes.js';
 
 const KINDS: Record<string, ts.ScriptKind> = {

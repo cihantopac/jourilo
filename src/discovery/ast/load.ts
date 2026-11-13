@@ -3,7 +3,7 @@
 // completes) without loading the parser; under Vitest it resolves to the source.
 import type * as ParserModule from './parser.js';
 
-export type TsParser = Pick<typeof ParserModule, 'parseSource' | 'astRoutes'>;
+export type TsParser = Pick<typeof ParserModule, 'parseSource' | 'astRoutes' | 'componentIndex'>;
 
 export async function loadTsParser(): Promise<{ parser: TsParser } | { error: string }> {
   try {

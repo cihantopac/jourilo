@@ -299,7 +299,16 @@
         "column": { "type": "integer" },
         "excerpt": { "type": "string" },
         "reason": { "type": "string" },
-        "confidence": { "$ref": "#/$defs/confidence" }
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "component": {
+          "type": "object",
+          "required": ["name", "file", "usedBy"],
+          "properties": {
+            "name": { "type": "string" },
+            "file": { "type": "string" },
+            "usedBy": { "type": "integer" }
+          }
+        }
       }
     },
     "finding": {

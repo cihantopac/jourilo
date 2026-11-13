@@ -21,11 +21,13 @@ export function fixPathOf(f: Finding): FixPath {
 }
 
 /**
- * Root-cause key: the same rule traced to the same source line is one fix, however many pages show it. Without a
+ * Root-cause key: the same rule traced to the same shared component (one that several routes render) is one fix,
+ * however many pages and lines show it; otherwise the same rule traced to the same source line is. Without a
  * confident source location, the same rule on the same element (a shared header, footer or component) is one cause.
  */
 export function rootCauseKey(f: Finding): string {
   const src = f.sources?.[0];
+  if (src?.component) return `${f.ruleId}|component|${src.component.file}#${src.component.name}`;
   if (src && src.confidence !== 'low') return `${f.ruleId}|src|${src.file}:${src.line}`;
   const sel = f.evidence.find((e) => e.selector)?.selector;
   // A bare tag name ("img", "a") says nothing about the element being shared; only specific selectors group.

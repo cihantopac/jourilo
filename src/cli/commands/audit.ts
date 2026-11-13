@@ -220,7 +220,7 @@ export async function auditCommand(
     }
     if (repo) run.settings.repo = repo;
     if (repo) {
-      const located = locateFindings(run, repo);
+      const located = await locateFindings(run, repo);
       ctx.progress({
         phase: 'report',
         message: `Mapped ${located} finding(s) to likely source locations in ${repo}`,

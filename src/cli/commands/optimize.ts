@@ -69,7 +69,7 @@ Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
     const { run, dir } = ctx.ws.loadRun(ctx.positionals[0] ?? 'latest');
     const repo = resolve(str(ctx, 'repo') ?? (run.settings.repo as string | undefined) ?? '.');
     if (!existsSync(repo)) throw new JouriloError('NOT_FOUND', `Repository not found: ${repo}`);
-    if (run.findings.every((f) => !f.sources)) locateFindings(run, repo);
+    if (run.findings.every((f) => !f.sources)) await locateFindings(run, repo);
     const rules = list(ctx, 'rule');
     const only = list(ctx, 'finding');
     const selected = run.findings.filter(
@@ -314,7 +314,7 @@ ${networkOptionsHelp(25)}
       }
       if (repo) {
         run.settings.repo = repo;
-        locateFindings(run, repo);
+        await locateFindings(run, repo);
       }
       run.settings.baseline = base.id;
       run.outcome = runOutcome(run);

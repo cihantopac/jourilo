@@ -94,7 +94,7 @@ export async function benchFixture(dir: string, wsRoot: string): Promise<Fixture
       mode: 'repository',
       context: loadContext(dir),
     });
-    locateFindings(run, dir);
+    await locateFindings(run, dir);
     const evidenceOk = (f: Finding, e: Expectation) => {
       if (!e.evidenceExactly) return true;
       const texts = f.evidence.map((ev) => `${ev.snippet ?? ''} ${ev.selector ?? ''}`);
