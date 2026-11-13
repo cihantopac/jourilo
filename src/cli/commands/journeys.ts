@@ -4,7 +4,8 @@ import { runAudit, summarize } from '../../audit/engine.js';
 import { pruneJourneyScreenshots } from '../../audit/evidence.js';
 import { makeFinding, mergeFindings } from '../../audit/finding.js';
 import type { BrowserName } from '../../browser/runtime.js';
-import { networkLimitations, openGuardedBrowser } from '../../browser/session.js';
+import { networkLimitations, openGuardedBrowser, proxyLimitation } from '../../browser/session.js';
+import { requestLimitations, targetHeaders } from '../../browser/target-headers.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { applyDismissals, loadDismissals } from '../../core/dismissals.js';
 import { JouriloError } from '../../core/errors.js';
@@ -13,7 +14,7 @@ import { newRunId } from '../../core/hash.js';
 import { isDirectoryTarget, servedPort, serveStatic } from '../../core/static-server.js';
 import type { Finding, JourneyResult, Run } from '../../core/types.js';
 import { RUN_SCHEMA_VERSION } from '../../core/types.js';
-import { checkTarget, parseTargetUrl } from '../../core/url-safety.js';
+import { checkTarget, hostListsFor, parseTargetUrl, upstreamLabel } from '../../core/url-safety.js';
 import { VERSION } from '../../core/version.js';
 import type { Workspace } from '../../core/workspace.js';
 import { runJourney } from '../../journeys/runner.js';
@@ -26,9 +27,13 @@ import { writeReports } from '../../report/index.js';
 import {
   type Command,
   type Context,
+  chromiumSandboxFrom,
   denyLocalFrom,
   flag,
   list,
+  NETWORK_OPTIONS,
+  networkFrom,
+  networkOptionsHelp,
   num,
   pagesOption,
   parseEvidence,
@@ -91,7 +96,10 @@ async function suggest(ctx: Context) {
     const isDir = isDirectoryTarget(target);
     const server = isDir ? await serveStatic(resolve(target)) : undefined;
     try {
-      ctx.log('Discovering pages to derive journeys (no audit rules applied) …');
+      ctx.progress({
+        phase: 'discover',
+        message: 'Discovering pages to derive journeys (no audit rules applied) …',
+      });
       run = (
         await runAudit(ctx.ws, {
           target: server?.url ?? target,
@@ -105,13 +113,15 @@ async function suggest(ctx: Context) {
           ...(denyLocalFrom(ctx)
             ? { denyLocal: true, ...(server ? { servedPort: servedPort(server) } : {}) }
             : {}),
+          ...networkFrom(ctx, server?.url ?? target),
+          ...(chromiumSandboxFrom(ctx, 'chromium') ? { chromiumSandbox: true } : {}),
           keyboard: false,
           throttle: false,
           timeoutMs: 30_000,
           mask: [],
           forms: false,
           mode: isDir ? 'repository' : 'website',
-          onProgress: ctx.log,
+          onProgress: ctx.progress,
         })
       ).run;
     } finally {
@@ -219,18 +229,46 @@ async function runCmd(ctx: Context) {
       allowPrivate: flag(ctx, 'allow-private'),
       denyLocal: denyLocal && !server,
     });
+    const network = networkFrom(ctx, base.toString());
+    // An --allow-origin the journey may navigate to is allowed by --allow-hosts too.
+    const hostLists = hostListsFor(
+      base,
+      network.allowHosts
+        ? [...network.allowHosts, ...list(ctx, 'allow-origin').map((o) => parseTargetUrl(o).hostname)]
+        : [],
+      network.blockHosts ?? [],
+    );
+    // A Playwright trace records request headers, values included.
+    if (network.extraHeaders && flag(ctx, 'trace'))
+      throw new JouriloError(
+        'USAGE',
+        '--trace cannot be combined with --extra-header: a Playwright trace records request headers, values included.',
+        'Run without --trace, or without --extra-header.',
+      );
+    const headers = network.extraHeaders ? targetHeaders(base.origin, network.extraHeaders) : undefined;
     const id = newRunId();
     const runDir = ctx.ws.createRunDir(id);
     const browserName = (str(ctx, 'browser') ?? 'chromium') as BrowserName;
-    const session = await openGuardedBrowser(browserName, flag(ctx, 'headed'), {
-      target: hostClass,
-      allowPrivate: flag(ctx, 'allow-private'),
-      ...(denyLocal
-        ? { denyLocal: true, ...(server ? { allowLoopbackPorts: [servedPort(server)] } : {}) }
-        : {}),
-    });
+    const sandbox = chromiumSandboxFrom(ctx, browserName);
+    const session = await openGuardedBrowser(
+      browserName,
+      flag(ctx, 'headed'),
+      {
+        target: hostClass,
+        allowPrivate: flag(ctx, 'allow-private'),
+        ...(denyLocal
+          ? { denyLocal: true, ...(server ? { allowLoopbackPorts: [servedPort(server)] } : {}) }
+          : {}),
+        ...hostLists,
+        ...(network.upstream ? { upstream: network.upstream } : {}),
+      },
+      false,
+      { ...(sandbox ? { sandbox: true } : {}), runDir },
+    );
     const browser = session.browser;
     const browserVersion = browser.version();
+    // The header route tells the guard's own CONNECT failures from pages by this token.
+    if (headers) headers.guardToken = session.guard.token;
     const startedAt = new Date().toISOString();
     const journeys: JourneyResult[] = [];
     let findings: Finding[] = [];
@@ -296,6 +334,9 @@ async function runCmd(ctx: Context) {
               ...(vp ? { viewportOverride: vp } : {}),
               ...(str(ctx, 'auth') ? { storageState: str(ctx, 'auth')! } : {}),
               ...state,
+              ...(network.userAgent ? { userAgent: network.userAgent } : {}),
+              ...(headers ? { extraHeaders: headers } : {}),
+              ...(network.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}),
               ...(evidence ? { evidence } : {}),
               ...(repeat > 1 ? { attempt: k + 1 } : {}),
               ...(saveAuth ? { saveAuth } : {}),
@@ -322,8 +363,15 @@ async function runCmd(ctx: Context) {
     } finally {
       await session.close();
     }
-    const network = session.report();
-    limitations.push(...networkLimitations(network));
+    const guarded = session.report();
+    limitations.push(
+      ...proxyLimitation(network.upstream),
+      ...networkLimitations(guarded),
+      ...requestLimitations({
+        ...(network.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}),
+        ...(headers ? { headers } : {}),
+      }),
+    );
     findings = mergeFindings(findings);
     const { kept, dismissed } = applyDismissals(findings, dismissals);
     findings = kept;
@@ -344,6 +392,14 @@ async function runCmd(ctx: Context) {
         hostClass,
         ...state,
         ...(evidence === 'minimal' ? { evidence } : {}),
+        ...(network.upstream ? { proxy: upstreamLabel(network.upstream) } : {}),
+        ...(network.allowHosts ? { allowHosts: network.allowHosts } : {}),
+        ...(network.blockHosts ? { blockHosts: network.blockHosts } : {}),
+        // The user agent as given; of the extra headers only the names, never their values.
+        ...(network.userAgent ? { userAgent: network.userAgent } : {}),
+        ...(network.extraHeaders ? { extraHeaders: Object.keys(network.extraHeaders) } : {}),
+        ...(network.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}),
+        ...(sandbox ? { chromiumSandbox: true } : {}),
       },
       pages: [],
       journeys,
@@ -354,7 +410,7 @@ async function runCmd(ctx: Context) {
         ...limitations,
         'Journeys prove that a scripted path works (or not) in one browser; they do not measure how real people choose paths.',
       ],
-      ...(network.blocked.length || network.escaped.length ? { network } : {}),
+      ...(guarded.blocked.length || guarded.escaped.length ? { network: guarded } : {}),
     };
     const repo = str(ctx, 'repo') ?? (isDir ? resolve(baseArg) : undefined);
     if (repo) locateFindings(run, repo);
@@ -418,6 +474,7 @@ export const journeys: Command = {
     timezone: { type: 'string' },
     clock: { type: 'string' },
     evidence: { type: 'string' },
+    ...NETWORK_OPTIONS,
   },
   details: `Subcommands:
   suggest [url|dir|run]  Derive journeys from a site (or an existing run) into .jourilo/journeys/*.json
@@ -431,6 +488,7 @@ Suggest options:
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
   --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                          JOURILO_DENY_LOCAL=1 does the same
+${networkOptionsHelp(25)}
 
 Run options:
   --base URL|DIR         The site or static build to run against (required)
@@ -443,7 +501,8 @@ Run options:
   --allow-submit         Allow form submission on non-local hosts (authorized test environments only)
   --allow-destructive    Allow irreversible/payment actions — local hosts with sandbox data only
   --allow-origin ORIGIN  Let the page navigate to another origin you are authorized to test (e.g. a test IdP)
-  --trace                Record a Playwright trace per journey (contains typed values; keep private)
+  --trace                Record a Playwright trace per journey (contains typed values; keep private);
+                         refused with --extra-header, since a trace records header values
   --auth FILE            Playwright storage state for signed-in journeys
   --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
   --timezone ZONE        IANA time zone for the page (e.g. Europe/Istanbul)
@@ -453,6 +512,7 @@ Run options:
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
   --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                          JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3)
+${networkOptionsHelp(25)}
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission

@@ -10,9 +10,10 @@ import {
   writeFileSync,
 } from 'node:fs';
 import http from 'node:http';
+import https from 'node:https';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Run } from '../../src/core/types.js';
 
 const root = join(import.meta.dirname, '..', '..');
@@ -196,7 +197,103 @@ describe('cli', () => {
   });
 });
 
+describe('cli --budget', () => {
+  const site = [
+    'audit',
+    'fixtures/sites/acme-saas',
+    '--pages',
+    '1',
+    '--viewports',
+    'mobile',
+    '--no-forms',
+    '-q',
+  ];
+  const runOf = (json: string) => {
+    const out = JSON.parse(json);
+    return JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8')) as Run;
+  };
+  it('an exceeded budget exits 1 and names it', () => {
+    const text = jourilo(...site, '--budget', 'LCP=1');
+    expect(text.status).toBe(1);
+    expect(text.stdout).toContain('Budget exceeded: LCP');
+    const r = jourilo(...site, '--budget', 'LCP=1', '--json');
+    expect(r.status).toBe(1);
+    // The --json stdout carries the budgets itself, not only run.json.
+    expect(JSON.parse(r.stdout).budgets[0]).toMatchObject({ metric: 'LCP', limit: 1, ok: false });
+    const run = runOf(r.stdout);
+    expect(run.budgets?.[0]).toMatchObject({ metric: 'LCP', limit: 1, ok: false, viewport: 'mobile' });
+    expect(run.budgets?.[0]?.worst).toBeGreaterThan(1);
+  }, 240_000);
+  it('a met budget exits 0', () => {
+    const r = jourilo(...site, '--budget', 'LCP=600000', '--json');
+    expect(r.status).toBe(0);
+    expect(runOf(r.stdout).budgets?.[0]).toMatchObject({ metric: 'LCP', limit: 600000, ok: true });
+  }, 120_000);
+  it('a budget on a metric that was not measured is ok: null with a limitation, exit unchanged', () => {
+    const r = jourilo(...site, '--budget', 'INP=200', '--json');
+    expect(r.status).toBe(0);
+    expect(JSON.parse(r.stdout).budgets[0]).toMatchObject({ metric: 'INP', worst: null, ok: null });
+    const run = runOf(r.stdout);
+    expect(run.budgets?.[0]).toEqual({
+      metric: 'INP',
+      limit: 200,
+      worst: null,
+      url: null,
+      viewport: null,
+      ok: null,
+    });
+    expect(run.limitations.join(' ')).toContain('Budget INP=200 was not checked');
+  }, 120_000);
+  it('an unknown metric is a usage error', () => {
+    expect(jourilo(...site, '--budget', 'FOO=1').status).toBe(2);
+  }, 60_000);
+  it('a budget failure and --fail-on each give exit 1 on their own (clean-shop has no defects)', () => {
+    const clean = [
+      'audit',
+      'fixtures/sites/clean-shop',
+      '--pages',
+      '1',
+      '--viewports',
+      'mobile',
+      '--no-forms',
+      '-q',
+    ];
+    // --fail-on minor reaches nothing here, so exit 1 can only come from the budget.
+    const failed = jourilo(...clean, '--budget', 'LCP=1', '--fail-on', 'minor', '--json');
+    expect(failed.status).toBe(1);
+    expect(JSON.parse(failed.stdout).gateFailed).toBe(true);
+    const met = jourilo(...clean, '--budget', 'LCP=600000', '--fail-on', 'minor', '--json');
+    expect(met.status).toBe(0);
+    expect(JSON.parse(met.stdout).gateFailed).toBe(false);
+    // The other way: a met budget does not hide a --fail-on failure.
+    expect(jourilo(...site, '--budget', 'LCP=600000', '--fail-on', 'serious').status).toBe(1);
+  }, 360_000);
+});
+
 describe('cli no page loaded', () => {
+  it('never writes a token from a failing target URL to the run, stdout or stderr', async () => {
+    const srv = http.createServer();
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+    const port = (srv.address() as AddressInfo).port;
+    await new Promise((r) => srv.close(r));
+    const r = jourilo(
+      'audit',
+      `http://127.0.0.1:${port}/?access_token=s3cret&code=abc`,
+      '--pages',
+      '1',
+      '--viewports',
+      'desktop',
+      '--json',
+    );
+    expect(r.status).toBe(5);
+    const out = JSON.parse(r.stdout);
+    const runJson = readFileSync(join(out.runDir, 'run.json'), 'utf8');
+    for (const text of [r.stdout, r.stderr, runJson]) {
+      expect(text).not.toContain('s3cret');
+      expect(text).not.toMatch(/code=abc/);
+    }
+    expect(runJson).toContain('page-unreachable');
+  }, 120_000);
   it('an unresolvable host exits 5 and still writes the run', () => {
     const r = jourilo(
       'audit',
@@ -273,6 +370,45 @@ describe('cli verify against an unreachable target', () => {
     expect(text.status).toBe(5);
     expect(text.stdout).toMatch(/no comparison was possible/i);
     expect(text.stdout).not.toMatch(/fixed \d/);
+  });
+  it('verify refuses a baseline scope whose query values were redacted, naming the path only (exit 2)', () => {
+    const vws = join(root, 'tests', '.tmp', 'cli-verify-redacted-ws');
+    rmSync(vws, { recursive: true, force: true });
+    mkdirSync(join(vws, 'runs', 'base-2'), { recursive: true });
+    writeFileSync(
+      join(vws, 'runs', 'base-2', 'run.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        id: 'base-2',
+        mode: 'website',
+        target: 'http://127.0.0.1:1/',
+        startedAt: '2026-11-12T00:00:00.000Z',
+        browser: { name: 'chromium', version: 'x' },
+        viewports: [],
+        settings: {
+          scope: {
+            urls: ['http://127.0.0.1:1/', 'http://127.0.0.1:1/x?access_token=redacted&lang=de'],
+            viewports: ['desktop'],
+          },
+        },
+        pages: [],
+        journeys: [],
+        findings: [],
+        limitations: [],
+      }),
+    );
+    const r = spawnSync(process.execPath, [cli, 'verify', 'base-2', '--json', '--workspace', vws], {
+      encoding: 'utf8',
+      cwd: root,
+    });
+    expect(r.status, r.stderr).toBe(2);
+    const err = JSON.parse(r.stderr.trim().split('\n').pop()!).error;
+    expect(err.code).toBe('USAGE');
+    expect(err.message).toContain('/x');
+    expect(err.message).toContain('cannot be replayed');
+    expect(err.message).not.toContain('lang=de');
+    expect(existsSync(join(vws, 'runs', 'base-2', 'report.html'))).toBe(false);
+    expect(readdirSync(join(vws, 'runs'))).toEqual(['base-2']);
   });
   it('verify --target that is neither a path nor an http(s) URL is INVALID_INPUT', () => {
     const vws = join(root, 'tests', '.tmp', 'cli-verify-ws');
@@ -473,6 +609,435 @@ describe('cli state options', () => {
       await new Promise((r) => server.close(r));
     }
   }, 120_000);
+});
+
+/** Runs `jourilo audit … --json -q` without blocking this process (the test's own servers must keep answering). */
+async function auditAsync(args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  const child = spawn(process.execPath, [cli, 'audit', ...args, '--json', '-q', '--workspace', ws], {
+    cwd: root,
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (d) => {
+    stdout += d;
+  });
+  child.stderr.on('data', (d) => {
+    stderr += d;
+  });
+  const code = await new Promise<number | null>((r) => child.on('close', r));
+  return { code, stdout, stderr };
+}
+
+/** Every file of a run directory, as text (screenshots are skipped). */
+function runFilesText(runDir: string): string {
+  const out: string[] = [];
+  const walk = (dir: string) => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name);
+      if (statSync(p).isDirectory()) walk(p);
+      else if (!/\.(jpe?g|png|zip)$/i.test(name)) out.push(readFileSync(p, 'utf8'));
+    }
+  };
+  walk(runDir);
+  return out.join('\n');
+}
+
+describe('cli request options (F16)', () => {
+  const SECRET = 'Bearer s3cret-header-value';
+  const UA = 'JouriloFieldTest/1.0 (+staging)';
+  const targetSeen: { url: string; xTest?: string; auth?: string; ua?: string }[] = [];
+  const otherSeen: { url: string; xTest?: string; auth?: string }[] = [];
+  let target: http.Server;
+  let other: http.Server;
+  let result: { code: number | null; stdout: string; stderr: string };
+  let run: Run;
+  let runDir: string;
+
+  beforeAll(async () => {
+    other = http.createServer((req, res) => {
+      otherSeen.push({
+        url: req.url ?? '',
+        xTest: req.headers['x-test'] as string | undefined,
+        auth: req.headers.authorization,
+      });
+      if (req.url === '/s.js') res.writeHead(200, { 'content-type': 'text/javascript' }).end('void 0;');
+      else res.writeHead(200, { 'content-type': 'image/gif' }).end();
+    });
+    await new Promise<void>((r) => other.listen(0, '127.0.0.1', () => r()));
+    // Another origin: same host, another port.
+    const otherOrigin = `http://127.0.0.1:${(other.address() as AddressInfo).port}`;
+    target = http.createServer((req, res) => {
+      targetSeen.push({
+        url: req.url ?? '',
+        xTest: req.headers['x-test'] as string | undefined,
+        auth: req.headers.authorization,
+        ua: req.headers['user-agent'],
+      });
+      // A request to the target that redirects to another origin must not carry the headers there.
+      if (req.url === '/away.gif') return res.writeHead(302, { location: `${otherOrigin}/landed.gif` }).end();
+      // A redirect within the origin is followed too, without the headers, and listed in the limitations.
+      if (req.url === '/hop.gif') return res.writeHead(302, { location: '/hop-landed.gif' }).end();
+      if (req.url!.endsWith('.gif')) return res.writeHead(200, { 'content-type': 'image/gif' }).end();
+      res
+        .writeHead(200, { 'content-type': 'text/html' })
+        .end(`<!doctype html><html lang="en"><title>Headers</title><main><h1>Headers</h1>
+<img src="/away.gif" alt="" width="1" height="1"><img src="/hop.gif" alt="" width="1" height="1">
+<script src="${otherOrigin}/s.js"></script>
+<script>document.title = navigator.userAgent;</script></main>`);
+    });
+    await new Promise<void>((r) => target.listen(0, '127.0.0.1', () => r()));
+    result = await auditAsync([
+      `http://127.0.0.1:${(target.address() as AddressInfo).port}/`,
+      '--pages',
+      '1',
+      '--viewports',
+      'desktop',
+      '--no-keyboard',
+      '--no-forms',
+      '--user-agent',
+      UA,
+      '--extra-header',
+      'X-Test: 1',
+      '--extra-header',
+      `Authorization: ${SECRET}`,
+    ]);
+    runDir = JSON.parse(result.stdout).runDir;
+    run = JSON.parse(readFileSync(join(runDir, 'run.json'), 'utf8')) as Run;
+  }, 180_000);
+
+  afterAll(async () => {
+    await new Promise((r) => target.close(r));
+    await new Promise((r) => other.close(r));
+  });
+
+  it('extra headers reach only the target origin', () => {
+    expect(result.code, result.stderr).toBe(0);
+    const page = targetSeen.find((s) => s.url === '/');
+    expect(page?.xTest).toBe('1');
+    expect(page?.auth).toBe(SECRET);
+    expect(targetSeen.find((s) => s.url === '/away.gif')?.xTest).toBe('1');
+    // The script from the other origin, and the redirect from the target to it.
+    expect(otherSeen.map((s) => s.url).sort()).toEqual(['/landed.gif', '/s.js']);
+    for (const s of otherSeen) {
+      expect(s.xTest, s.url).toBeUndefined();
+      expect(s.auth, s.url).toBeUndefined();
+    }
+    expect(targetSeen.find((s) => s.url === '/hop.gif')?.xTest).toBe('1');
+    expect(targetSeen.find((s) => s.url === '/hop-landed.gif')?.xTest).toBeUndefined();
+    expect(
+      run.limitations.some((l) => /redirect\(s\) within .*\/hop\.gif → .*\/hop-landed\.gif/.test(l)),
+    ).toBe(true);
+  });
+
+  it('--user-agent is sent and recorded', () => {
+    expect(targetSeen.find((s) => s.url === '/')?.ua).toBe(UA);
+    expect(run.pages[0]!.title).toBe(UA);
+    expect(run.settings.userAgent).toBe(UA);
+  });
+
+  it('header values are redacted in run.json settings', () => {
+    expect(run.settings.extraHeaders).toEqual(['X-Test', 'Authorization']);
+    expect(run.limitations.some((l) => l.includes('X-Test') && l.includes('Authorization'))).toBe(true);
+    // Not in run.json, the manifest, the reports, or anything printed.
+    const text = `${runFilesText(runDir)}\n${result.stdout}\n${result.stderr}`;
+    expect(text).not.toContain('s3cret-header-value');
+    expect(readFileSync(join(runDir, 'manifest.json'), 'utf8')).not.toContain('s3cret');
+  });
+
+  it('verify asks for the headers again: their values were never stored', () => {
+    const r = jourilo('verify', run.id, '--json');
+    expect(r.status).toBe(2);
+    const err = JSON.parse(r.stderr.trim().split('\n').pop()!).error;
+    expect(err.code).toBe('USAGE');
+    expect(err.message).toContain('X-Test, Authorization');
+    expect(r.stderr).not.toContain('s3cret');
+  });
+});
+
+describe('cli --extra-header against an unreachable target (F16)', () => {
+  it('an unreachable target with --extra-header exits 5 with no-page-loaded, not a "loaded" 502', async () => {
+    // A port that was open a moment ago and is closed now: the guard's connection is refused.
+    const probe = http.createServer();
+    await new Promise<void>((r) => probe.listen(0, '127.0.0.1', () => r()));
+    const port = (probe.address() as AddressInfo).port;
+    await new Promise((r) => probe.close(r));
+    for (const scheme of ['https', 'http']) {
+      const r = await auditAsync([
+        `${scheme}://127.0.0.1:${port}/`,
+        '--pages',
+        '1',
+        '--viewports',
+        'desktop',
+        '--no-keyboard',
+        '--no-forms',
+        '--extra-header',
+        'X-Test: s3cret-unreachable',
+      ]);
+      expect(r.code, `${scheme}: ${r.stderr}`).toBe(5);
+      const out = JSON.parse(r.stdout);
+      expect(out.outcome, scheme).toBe('no-page-loaded');
+      const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8')) as Run;
+      expect(
+        run.pages.every((p) => p.status === null || p.status < 400),
+        scheme,
+      ).toBe(true);
+      expect(`${r.stdout}${r.stderr}${runFilesText(out.runDir)}`).not.toContain('s3cret-unreachable');
+    }
+  }, 240_000);
+});
+
+describe('cli --ignore-https-errors (F16)', () => {
+  it('--ignore-https-errors audits a self-signed local https server and adds a limitation', async () => {
+    const certs = join(root, 'tests', 'certs');
+    const server = https.createServer(
+      {
+        key: readFileSync(join(certs, 'localhost-key.pem')),
+        cert: readFileSync(join(certs, 'localhost-cert.pem')),
+      },
+      (_req, res) => {
+        res
+          .writeHead(200, { 'content-type': 'text/html' })
+          .end('<!doctype html><html lang="en"><title>TLS</title><main><h1>Self-signed</h1></main>');
+      },
+    );
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    try {
+      const url = `https://127.0.0.1:${(server.address() as AddressInfo).port}/`;
+      const args = [url, '--pages', '1', '--viewports', 'desktop', '--no-keyboard', '--no-forms'];
+      // Without the flag the certificate is refused: no page loaded.
+      const refused = await auditAsync(args);
+      expect(refused.code, refused.stderr).toBe(5);
+      expect(JSON.parse(refused.stdout).outcome).toBe('no-page-loaded');
+
+      const accepted = await auditAsync([...args, '--ignore-https-errors']);
+      expect(accepted.code, accepted.stderr).toBe(0);
+      const out = JSON.parse(accepted.stdout);
+      expect(out.outcome).toBe('complete');
+      const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8')) as Run;
+      expect(run.pages[0]!.title).toBe('TLS');
+      expect(run.settings.ignoreHttpsErrors).toBe(true);
+      expect(run.limitations.some((l) => /--ignore-https-errors/.test(l) && /certificate/i.test(l))).toBe(
+        true,
+      );
+    } finally {
+      await new Promise((r) => server.close(r));
+    }
+  }, 240_000);
+});
+
+describe('cli --chromium-sandbox and browser.pids (F21)', () => {
+  const posix = process.platform !== 'win32';
+  const sandboxWs = join(root, 'tests', '.tmp', 'sandbox-ws');
+  let site: http.Server;
+  let release: () => void = () => undefined;
+  let held: Promise<void>;
+  let pageRequested: () => void = () => undefined;
+  let url: string;
+
+  beforeAll(async () => {
+    rmSync(sandboxWs, { recursive: true, force: true });
+    site = http.createServer((req, res) => {
+      if (req.url === '/') pageRequested();
+      const send = () =>
+        res
+          .writeHead(200, { 'content-type': 'text/html' })
+          .end('<!doctype html><html lang="en"><title>Held</title><main><h1>Held</h1></main>');
+      // The page answers only when the test lets it, so the browser is alive while the test looks at it.
+      if (req.url === '/') void held.then(send);
+      else res.writeHead(404).end();
+    });
+    await new Promise<void>((r) => site.listen(0, '127.0.0.1', () => r()));
+    url = `http://127.0.0.1:${(site.address() as AddressInfo).port}/`;
+  });
+  afterAll(async () => {
+    release();
+    await new Promise((r) => site.close(r));
+  });
+
+  const commandLine = (pid: number) =>
+    execFileSync('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' }).trim();
+  const alive = (pid: number) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  /** Child processes can outlive close() by a moment on a slow runner: poll for up to 2 s. */
+  async function expectDead(pids: number[]) {
+    const deadline = Date.now() + 2000;
+    let live = pids.filter(alive);
+    while (live.length && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 100));
+      live = pids.filter(alive);
+    }
+    expect(live, 'pids still alive').toEqual([]);
+  }
+
+  /** Starts an audit (or, with `argv`, any command) held at its first page; returns the browser's pids once the file appears. */
+  async function holdAudit(extra: string[], argv?: string[]) {
+    held = new Promise<void>((r) => {
+      release = r;
+    });
+    const requested = new Promise<void>((r) => {
+      pageRequested = r;
+    });
+    const child = spawn(
+      process.execPath,
+      [
+        cli,
+        ...(argv ?? [
+          'audit',
+          url,
+          '--pages',
+          '1',
+          '--viewports',
+          'desktop',
+          '--no-keyboard',
+          '--no-forms',
+          '--json',
+          '-q',
+          '--workspace',
+          sandboxWs,
+        ]),
+        ...extra,
+      ],
+      { cwd: root },
+    );
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => {
+      stdout += d;
+    });
+    child.stderr.on('data', (d) => {
+      stderr += d;
+    });
+    const closed = new Promise<number | null>((r) => child.on('close', r));
+    const runs = join(sandboxWs, 'runs');
+    const deadline = Date.now() + 90_000;
+    let file = '';
+    while (!file && Date.now() < deadline) {
+      for (const id of existsSync(runs) ? readdirSync(runs) : []) {
+        const f = join(runs, id, 'browser.pids');
+        if (existsSync(f)) file = f;
+      }
+      if (!file) await new Promise((r) => setTimeout(r, 100));
+    }
+    if (!file) {
+      child.kill('SIGKILL');
+      throw new Error(`browser.pids never appeared: ${stderr}`);
+    }
+    const pids = readFileSync(file, 'utf8').split('\n').filter(Boolean).map(Number);
+    return { child, file, pids, closed, requested, result: () => ({ stdout, stderr }) };
+  }
+
+  it.skipIf(!posix)(
+    '--chromium-sandbox launches without --no-sandbox; the default keeps it',
+    async (t) => {
+      // Some Linux CI kernels deny unprivileged user namespaces, so Chromium cannot start sandboxed there:
+      // detect that by launching it, instead of assuming a platform.
+      const { chromium } = await import('playwright-core');
+      const probe = await chromium.launch({ chromiumSandbox: true }).catch(() => undefined);
+      if (!probe) return t.skip();
+      await probe.close();
+      const plain = await holdAudit([]);
+      expect(commandLine(plain.pids[0]!)).toContain('--no-sandbox');
+      release();
+      expect(await plain.closed, plain.result().stderr).toBe(0);
+
+      const sandboxed = await holdAudit(['--chromium-sandbox']);
+      const line = commandLine(sandboxed.pids[0]!);
+      release();
+      const code = await sandboxed.closed;
+      expect(line).not.toContain('--no-sandbox');
+      expect(code, sandboxed.result().stderr).toBe(0);
+      const out = JSON.parse(sandboxed.result().stdout);
+      const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8')) as Run;
+      expect(run.settings.chromiumSandbox).toBe(true);
+    },
+    240_000,
+  );
+
+  it('--chromium-sandbox with Firefox is a usage error', () => {
+    const r = jourilo('audit', url, '--browser', 'firefox', '--chromium-sandbox', '--json');
+    expect(r.status).toBe(2);
+    expect(JSON.parse(r.stderr.trim().split('\n').pop()!).error.message).toContain('--chromium-sandbox');
+  });
+
+  it('browser.pids lists live browser processes during the run and is gone after it', async () => {
+    const live = await holdAudit([]);
+    expect(live.pids.length).toBeGreaterThan(0);
+    if (posix) for (const pid of live.pids) expect(alive(pid), `pid ${pid}`).toBe(true);
+    release();
+    expect(await live.closed, live.result().stderr).toBe(0);
+    const out = JSON.parse(live.result().stdout);
+    expect(existsSync(live.file)).toBe(false);
+    const manifest = JSON.parse(readFileSync(join(out.runDir, 'manifest.json'), 'utf8')) as {
+      files: { path: string }[];
+    };
+    expect(manifest.files.some((f) => f.path === 'browser.pids')).toBe(false);
+    if (posix) await expectDead(live.pids);
+  }, 240_000);
+
+  it.skipIf(!posix)(
+    'a second signal (exit 130) leaves no browser.pids behind',
+    async () => {
+      const held2 = await holdAudit([]);
+      // browser.pids appears at launch, before the capture: signal only once the page request is held, so the
+      // first SIGTERM cannot finish the run cleanly (exit 6) before the second one arrives.
+      await held2.requested;
+      held2.child.kill('SIGTERM');
+      await new Promise((r) => setTimeout(r, 1500));
+      held2.child.kill('SIGTERM');
+      const code = await held2.closed;
+      release();
+      expect(code, held2.result().stderr).toBe(130);
+      expect(existsSync(held2.file)).toBe(false);
+      await expectDead(held2.pids);
+    },
+    240_000,
+  );
+
+  it.skipIf(!posix)(
+    'journeys run interrupted with SIGINT leaves no browser.pids behind',
+    async () => {
+      const dir = join(sandboxWs, 'journeys');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        join(dir, 'held.json'),
+        JSON.stringify({
+          version: 1,
+          id: 'held',
+          name: 'Held',
+          start: '/',
+          steps: [{ action: 'click', target: { role: 'link', name: 'Home' } }],
+          success: [{ description: 'Stays home', url: '/' }],
+        }),
+      );
+      const j = await holdAudit(
+        [],
+        [
+          'journeys',
+          'run',
+          'held',
+          '--base',
+          url.replace(/\/$/, ''),
+          '--json',
+          '-q',
+          '--workspace',
+          sandboxWs,
+        ],
+      );
+      j.child.kill('SIGINT');
+      await j.closed;
+      release();
+      expect(existsSync(j.file)).toBe(false);
+      await expectDead(j.pids);
+    },
+    240_000,
+  );
 });
 
 /** Spawns an audit with --json, sends `signal` once a progress line matches `when`, and returns the outcome. */
@@ -820,5 +1385,334 @@ describe('cli --evidence minimal', () => {
       files: { path: string }[];
     };
     for (const a of manifest.files) expect(existsSync(join(min.runDir, a.path))).toBe(true);
+  }, 240_000);
+});
+
+describe('cli --wait-for (F31)', () => {
+  /** A client-rendered page: its only heading appears after a fixed delay in the page script. */
+  async function lateHeadingSite() {
+    const srv = http.createServer((_req, res) => {
+      res
+        .writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store' })
+        .end(`<!doctype html><html lang="en"><head><title>Late</title></head><body><main id="app"><p>Loading…</p></main>
+<script>setTimeout(() => { document.getElementById('app').innerHTML = '<h1 id="ready">Ready</h1><p>Content</p>'; }, 1500);</script></body></html>`);
+    });
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+    return {
+      url: `http://127.0.0.1:${(srv.address() as AddressInfo).port}/`,
+      close: () =>
+        new Promise((r) => {
+          srv.closeAllConnections();
+          srv.close(r);
+        }),
+    };
+  }
+  const base = ['--pages', '1', '--viewports', 'desktop', '--no-keyboard', '--no-forms'];
+  const loadRun = (stdout: string): Run => {
+    const out = JSON.parse(stdout);
+    return JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8')) as Run;
+  };
+
+  it('captures after the element appears', async () => {
+    const site = await lateHeadingSite();
+    try {
+      const withFlag = await auditAsync([site.url, ...base, '--wait-for', '#ready']);
+      expect(withFlag.code, withFlag.stderr).toBe(0);
+      const run = loadRun(withFlag.stdout);
+      expect(run.findings.some((f) => f.ruleId === 'axe/page-has-heading-one')).toBe(false);
+      expect(run.pages[0]!.load).toMatchObject({ waitedFor: '#ready', found: true });
+      expect(run.settings.waitFor).toBe('#ready');
+
+      const without = await auditAsync([site.url, ...base]);
+      const plain = loadRun(without.stdout);
+      expect(plain.findings.some((f) => f.ruleId === 'axe/page-has-heading-one')).toBe(true);
+      expect(plain.pages[0]!.load?.waitedFor).toBeUndefined();
+      expect(typeof plain.pages[0]!.load?.networkIdle).toBe('boolean');
+    } finally {
+      await site.close();
+    }
+  }, 240_000);
+
+  it('a selector that never appears still audits the page with a limitation', async () => {
+    const site = await lateHeadingSite();
+    try {
+      const r = await auditAsync([site.url, ...base, '--wait-for', '#never-there', '--timeout', '4']);
+      expect(r.code, r.stderr).toBe(0);
+      const run = loadRun(r.stdout);
+      expect(run.pages[0]!.load).toMatchObject({ waitedFor: '#never-there', found: false });
+      expect(run.pages[0]!.status).toBe(200);
+      expect(run.outcome).toBe('complete');
+      expect(run.limitations.join('\n')).toContain('#never-there');
+    } finally {
+      await site.close();
+    }
+  }, 240_000);
+
+  it('rejects an invalid selector as a usage error', async () => {
+    const site = await lateHeadingSite();
+    try {
+      const r = await auditAsync([site.url, ...base, '--wait-for', 'div[[']);
+      expect(r.code).toBe(2);
+      expect(r.stderr).toContain('not a valid selector');
+    } finally {
+      await site.close();
+    }
+  }, 120_000);
+
+  it('rejects an invalid selector without leaving a run directory, and a retry with the same --run-id works', async () => {
+    const site = await lateHeadingSite();
+    try {
+      const runDir = join(ws, 'runs', 'bad-selector-retry');
+      rmSync(runDir, { recursive: true, force: true });
+      const bad = await auditAsync([
+        site.url,
+        ...base,
+        '--wait-for',
+        'div[[',
+        '--run-id',
+        'bad-selector-retry',
+      ]);
+      expect(bad.code).toBe(2);
+      expect(bad.stderr).toContain('not a valid selector');
+      expect(existsSync(runDir)).toBe(false);
+      const retry = await auditAsync([
+        site.url,
+        ...base,
+        '--wait-for',
+        '#ready',
+        '--run-id',
+        'bad-selector-retry',
+      ]);
+      expect(retry.code, retry.stderr).toBe(0);
+      expect(existsSync(join(runDir, 'run.json'))).toBe(true);
+    } finally {
+      await site.close();
+    }
+  }, 240_000);
+
+  it('form-validation probes wait for the element too (a form rendered late)', async () => {
+    const srv = http.createServer((_req, res) => {
+      res
+        .writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store' })
+        .end(`<!doctype html><html lang="en"><head><title>Late form</title></head><body><main id="app"><p>Loading…</p></main>
+<script>setTimeout(() => { document.getElementById('app').innerHTML = '<h1>Contact</h1><form id="late" novalidate><label>Email <input name="email" type="email" required></label><button type="submit">Send</button></form>'; }, 1500);</script></body></html>`);
+    });
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+    const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}/`;
+    try {
+      const args = ['--pages', '1', '--viewports', 'desktop', '--no-keyboard', '--wait-for', '#late'];
+      const r = await auditAsync([url, ...args]);
+      expect(r.code, r.stderr).toBe(0);
+      const run = loadRun(r.stdout);
+      expect(run.pages[0]!.load).toMatchObject({ waitedFor: '#late', found: true });
+      // The probe reached the form on its own fresh load (it would be skipped as "form not found" otherwise).
+      expect(run.findings.some((f) => f.ruleId === 'ux/no-validation-feedback')).toBe(true);
+    } finally {
+      srv.closeAllConnections();
+      await new Promise((r) => srv.close(r));
+    }
+  }, 240_000);
+
+  it('skips a form probe when the element does not appear on its fresh load, with a limitation', async () => {
+    // The capture's load renders the element; every later load of the page does not, so the probe cannot reach
+    // the state the audit captured and must not report a validation result for it.
+    const paths: string[] = [];
+    const srv = http.createServer((req, res) => {
+      if (req.url !== '/') return res.writeHead(404).end();
+      paths.push(req.url);
+      const ready = paths.length === 1 ? '<p id="ready">Ready</p>' : '';
+      res
+        .writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store' })
+        .end(
+          `<!doctype html><html lang="en"><head><title>Once</title></head><body><main><h1>Contact</h1>${ready}<form id="f" novalidate><label>Email <input name="email" type="email" required></label><button type="submit">Send</button></form></main></body></html>`,
+        );
+    });
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+    const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}/`;
+    try {
+      const args = [
+        '--pages',
+        '1',
+        '--viewports',
+        'desktop',
+        '--no-keyboard',
+        '--timeout',
+        '4',
+        '--wait-for',
+        '#ready',
+      ];
+      const r = await auditAsync([url, ...args]);
+      expect(r.code, r.stderr).toBe(0);
+      const run = loadRun(r.stdout);
+      expect(run.pages[0]!.load).toMatchObject({ waitedFor: '#ready', found: true });
+      expect(run.findings.some((f) => f.ruleId === 'ux/no-validation-feedback')).toBe(false);
+      expect(
+        run.limitations.some((l) => l.includes('#f') && /not probed/.test(l) && l.includes('#ready')),
+      ).toBe(true);
+    } finally {
+      srv.closeAllConnections();
+      await new Promise((r) => srv.close(r));
+    }
+  }, 240_000);
+});
+
+describe('cli structured progress (F35)', () => {
+  interface ProgressLine {
+    type: string;
+    phase?: string;
+    message: string;
+    done?: number;
+    total?: number;
+    url?: string;
+    viewport?: string;
+  }
+
+  it('audit progress lines carry phase, done and total; manifest.json carries versions and scope', async () => {
+    const srv = http.createServer((req, res) => {
+      const page = (body: string) =>
+        res
+          .writeHead(200, { 'content-type': 'text/html', 'cache-control': 'no-store' })
+          .end(
+            `<!doctype html><html lang="en"><head><title>P</title></head><body><main>${body}</main></body></html>`,
+          );
+      if (req.url === '/') page('<h1>Home</h1><a href="/b">B</a>');
+      else if (req.url?.startsWith('/b'))
+        page(`<h1>Sign in</h1><form action="/login" method="post">
+<label>Email <input type="email" name="email" autocomplete="email" required></label>
+<label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+<button type="submit">Sign in</button></form>`);
+      else res.writeHead(404).end();
+    });
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+    const origin = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
+    try {
+      const child = spawn(
+        process.execPath,
+        [
+          cli,
+          'audit',
+          `${origin}/`,
+          '--url',
+          '/',
+          '--url',
+          '/b?token=s3cret-query',
+          '--viewports',
+          'desktop,mobile',
+          '--runs',
+          '2',
+          '--no-keyboard',
+          '--extra-header',
+          'X-Key: s3cret-header',
+          '--json',
+          '--workspace',
+          ws,
+        ],
+        { cwd: root },
+      );
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', (d) => {
+        stdout += d;
+      });
+      child.stderr.on('data', (d) => {
+        stderr += d;
+      });
+      const code = await new Promise<number | null>((r) => child.on('close', r));
+      expect(code, stderr).toBe(0);
+      expect(stderr).not.toContain('s3cret');
+      const lines = stderr
+        .split('\n')
+        .filter(Boolean)
+        .map((l) => JSON.parse(l) as ProgressLine)
+        .filter((l) => l.type === 'progress');
+      const phases = ['launch', 'discover', 'setup', 'capture', 'metrics', 'forms', 'rules', 'report'];
+      for (const l of lines) expect(phases, l.message).toContain(l.phase);
+      expect(lines[0]).toMatchObject({ phase: 'launch', message: 'Starting chromium …' });
+
+      // The plan line, then one line per capture: done counts the captures finished before it.
+      const plan = lines.find((l) => l.message.startsWith('Auditing '));
+      expect(plan).toMatchObject({ phase: 'capture', done: 0, total: 4 });
+      const captures = lines.filter((l) => l.phase === 'capture' && l.url);
+      const b = `${origin}/b?token=[redacted]`;
+      expect(captures.map((l) => [l.done, l.total, l.viewport, l.url])).toEqual([
+        [0, 4, 'desktop', `${origin}/`],
+        [1, 4, 'desktop', b],
+        [2, 4, 'mobile', `${origin}/`],
+        [3, 4, 'mobile', b],
+      ]);
+      // The message text is unchanged: the viewport padded to 8, then the redacted URL.
+      expect(captures[1]!.message).toBe(`desktop  ${b}`);
+
+      // One extra metrics visit per capture (--runs 2).
+      const metrics = lines.filter((l) => l.phase === 'metrics');
+      expect(metrics.map((l) => [l.done, l.total])).toEqual([
+        [0, 4],
+        [1, 4],
+        [2, 4],
+        [3, 4],
+      ]);
+      expect(metrics[1]).toMatchObject({
+        viewport: 'desktop',
+        url: b,
+        message: `metrics  desktop  ${b} (run 2/2)`,
+      });
+
+      // The sign-in form on /b, probed once in the desktop viewport.
+      const forms = lines.filter((l) => l.phase === 'forms');
+      expect(forms).toHaveLength(1);
+      expect(forms[0]).toMatchObject({ done: 0, total: 1, viewport: 'desktop', url: b });
+
+      const out = JSON.parse(stdout) as { runDir: string };
+      const run = JSON.parse(readFileSync(join(out.runDir, 'run.json'), 'utf8')) as Run;
+      const manifestText = readFileSync(join(out.runDir, 'manifest.json'), 'utf8');
+      expect(manifestText).not.toContain('s3cret');
+      const manifest = JSON.parse(manifestText);
+      expect(manifest.tool).toEqual(run.tool);
+      expect(manifest.browser).toEqual(run.browser);
+      expect(manifest.browser.version).not.toBe('unknown');
+      expect(manifest.axe).toEqual({ version: run.settings.axe });
+      expect(manifest.scope).toEqual({
+        target: `${origin}/`,
+        urls: [`${origin}/`, b],
+        viewports: ['desktop', 'mobile'],
+      });
+      expect(manifest.files.some((f: { path: string }) => f.path === 'browser.pids')).toBe(false);
+    } finally {
+      srv.closeAllConnections();
+      await new Promise((r) => srv.close(r));
+    }
+  }, 240_000);
+});
+
+describe('screenshot file names', () => {
+  it('the same fixture served on two ports gives the same screenshot file names', async () => {
+    const html = `<!doctype html><html lang="en"><title>Names</title><main><h1>Names</h1><p>Same page, any origin.</p></main>`;
+    const names: string[][] = [];
+    for (let i = 0; i < 2; i++) {
+      const server = http.createServer((_req, res) => {
+        res.writeHead(200, { 'content-type': 'text/html' }).end(html);
+      });
+      await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+      try {
+        const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/pricing?plan=pro`;
+        const { code, stdout } = await auditAsync([
+          url,
+          '--pages',
+          '1',
+          '--viewports',
+          'desktop',
+          '--no-keyboard',
+          '--no-forms',
+        ]);
+        expect(code).toBe(0);
+        const out = JSON.parse(stdout) as { runDir: string };
+        names.push(readdirSync(join(out.runDir, 'screenshots')).sort());
+      } finally {
+        server.closeAllConnections();
+        await new Promise((r) => server.close(r));
+      }
+    }
+    expect(names[0]?.length).toBeGreaterThan(0);
+    expect(names[1]).toEqual(names[0]);
   }, 240_000);
 });

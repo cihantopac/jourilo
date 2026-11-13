@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Cookie wall – Overlay lab</title>
+<style>
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: #111827; background: #fff; }
+  main { max-width: 720px; margin: 0 auto; padding: 24px 16px; }
+  a { color: #1d4ed8; }
+  a:focus-visible, button:focus-visible { outline: 3px solid #1d4ed8; outline-offset: 2px; }
+  .wall { position: fixed; inset: 0; z-index: 10; background: rgba(17, 24, 39, 0.6); display: flex; align-items: center; justify-content: center; }
+  .wall-box { background: #fff; color: #111827; max-width: 480px; margin: 16px; padding: 24px; }
+  .wall-box button { font: inherit; padding: 10px 16px; margin: 4px 8px 4px 0; border: 1px solid #1f2937; background: #fff; color: #111827; }
+  .wall-box .primary { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+</style></head>
+<body>
+<!-- A cookie wall built as role="dialog" without aria-modal: it keeps focus among its own controls until a choice is
+     made and Escape does nothing. That is a modal dialog doing its job, not a keyboard trap. -->
+<div class="wall" role="dialog" aria-labelledby="wall-title">
+  <div class="wall-box">
+    <h2 id="wall-title">Your privacy choices</h2>
+    <p>We use cookies to run this site and, with your consent, to measure how it is used.
+      Read the <a href="/controls">cookie policy</a>.</p>
+    <button type="button" class="primary">Accept all</button>
+    <button type="button">Reject all</button>
+    <button type="button">Manage choices</button>
+  </div>
+</div>
+<main><h1>Cookie wall</h1>
+<p>The page behind the wall: <a href="/">Overlay lab</a>, <a href="/shutter">Shutter</a>, <a href="/controls">Controls</a>.</p>
+</main>
+<script>
+  var wall = document.querySelector('.wall');
+  var inside = Array.prototype.slice.call(wall.querySelectorAll('a, button'));
+  function close() { wall.remove(); }
+  inside.forEach(function (el) { if (el.tagName === 'BUTTON') el.addEventListener('click', close); });
+  // A focus-trap library: Tab and Shift+Tab cycle among the wall's controls; Escape is ignored.
+  document.addEventListener('keydown', function (e) {
+    if (!wall.isConnected || e.key !== 'Tab') return;
+    e.preventDefault();
+    var i = inside.indexOf(document.activeElement);
+    var next = e.shiftKey ? (i <= 0 ? inside.length - 1 : i - 1) : (i + 1) % inside.length;
+    inside[next].focus();
+  });
+</script>
+</body>
+</html>

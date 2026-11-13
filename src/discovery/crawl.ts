@@ -55,6 +55,10 @@ export interface CrawlResult {
   robotsOverridden: string[];
   robots: RobotsRules | null;
   sitemapUrls: number;
+  /** Pages the crawl could have audited (allowed by robots.txt), before `maxPages` chose among them. */
+  discovered: number;
+  /** Ranked pages that were not chosen (redacted), best first. */
+  leftOut: string[];
   /** The sitemap's own origin when its URLs were mapped onto a local target. */
   sitemapRebasedFrom: string | null;
 }
@@ -232,6 +236,8 @@ export async function crawl(ctx: BrowserContext, start: string, opts: CrawlOptio
     robotsOverridden: auditedOverrides,
     robots,
     sitemapUrls: fromSitemap.urls.length,
+    discovered: ranked.length,
+    leftOut: ranked.filter((p) => !picked.includes(p)).map((p) => redactUrl(p.url)),
     sitemapRebasedFrom: fromSitemap.rebasedFrom,
   };
 }

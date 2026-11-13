@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sign-up – Overlay lab</title>
+<style>body{font:16px/1.5 system-ui,sans-serif;color:#111827;margin:0}main{max-width:720px;margin:0 auto;padding:24px 16px}label{display:block;margin-top:12px}input{font:inherit;padding:8px}input:focus-visible{outline:3px solid #1d4ed8}</style></head>
+<body>
+<!-- Only a focus trap and nothing else to reach: Tab and Shift+Tab move focus between the two fields and never let it
+     leave, so focus never returns to the page or the browser (Frameva, field item F23). -->
+<main><h1>Sign up</h1>
+<label for="first">First name</label><input id="first" name="first" autocomplete="given-name">
+<label for="last">Last name</label><input id="last" name="last" autocomplete="family-name">
+</main>
+<script>
+  var pair = [document.getElementById('first'), document.getElementById('last')];
+  pair.forEach(function (el, i) {
+    el.addEventListener('keydown', function (e) {
+      if (e.key === 'Tab') { e.preventDefault(); pair[1 - i].focus(); }
+    });
+  });
+</script>
+</body>
+</html>

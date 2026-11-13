@@ -44,6 +44,20 @@ describe('fixture benchmark', () => {
     expect(r.falsePositives).toEqual([]);
     expect(r.excessDefects).toEqual([]);
   });
+  it('decides contrast over images from the rendered pixels (F8)', async () => {
+    const r = await benchFixture(join(import.meta.dirname, '../../fixtures/sites/contrast-lab'), ws);
+    expect(r.missed).toEqual([]);
+    expect(r.falsePositives).toEqual([]);
+    expect(r.excessDefects).toEqual([]);
+    const { run } = new Workspace(ws).loadRun('latest');
+    const at = (path: string) =>
+      run.findings.find((f) => f.ruleId === 'jourilo/contrast-over-image' && f.url.endsWith(path))
+        ?.evidence[0]?.data as { worstRatio: number; bestRatio: number; required: number } | undefined;
+    expect(at('/light')!.worstRatio).toBeLessThan(3);
+    // Review Focus 1: the dark half passes, the light half does not; the worst case decides.
+    expect(at('/mixed')!.worstRatio).toBeLessThan(3);
+    expect(at('/mixed')!.bestRatio).toBeGreaterThanOrEqual(7);
+  });
   it('reports no moderate-or-worse defects on the clean control site', async () => {
     const r = await benchFixture(join(import.meta.dirname, '../../fixtures/sites/clean-shop'), ws);
     expect(r.excessDefects).toEqual([]);

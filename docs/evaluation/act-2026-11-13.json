@@ -1,0 +1,3631 @@
+{
+ "date": "2026-11-13",
+ "corpus": {
+  "source": "https://www.w3.org/WAI/standards-guidelines/act/rules/",
+  "license": "https://act-rules.github.io/pages/license/",
+  "cases": 1195,
+  "scored": 955,
+  "rules": 63
+ },
+ "jourilo": {
+  "version": "1.3.0",
+  "browser": {
+   "name": "chromium",
+   "version": "156.0.8078.4"
+  },
+  "seconds": 1889,
+  "total": {
+   "tp": 170,
+   "fn": 133,
+   "fp": 12,
+   "tn": 640,
+   "precision": 93.4,
+   "recall": 56.1
+  },
+  "perRule": [
+   {
+    "rule": "09o5cg",
+    "name": "Text has enhanced contrast",
+    "criteria": [
+     "1.4.6"
+    ],
+    "tp": 0,
+    "fn": 13,
+    "fp": 0,
+    "tn": 22,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "0ssw9k",
+    "name": "Scrollable content can be reached with sequential focus navigation",
+    "criteria": [
+     "2.1.1",
+     "2.1.3"
+    ],
+    "tp": 2,
+    "fn": 0,
+    "fp": 0,
+    "tn": 13,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "0va7u6",
+    "name": "HTML images contain no text",
+    "criteria": [
+     "1.4.5",
+     "1.4.9"
+    ],
+    "tp": 0,
+    "fn": 5,
+    "fp": 0,
+    "tn": 10,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "1a02b0",
+    "name": "Audio and visuals of video element have transcript",
+    "criteria": [
+     "1.2.8"
+    ],
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 5,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "1ec09b",
+    "name": "Video element visual content has strict accessible alternative",
+    "criteria": [
+     "1.2.5"
+    ],
+    "tp": 0,
+    "fn": 3,
+    "fp": 0,
+    "tn": 4,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "23a2a8",
+    "name": "Image has non-empty accessible name",
+    "criteria": [
+     "1.1.1"
+    ],
+    "tp": 5,
+    "fn": 0,
+    "fp": 0,
+    "tn": 13,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "24afc2",
+    "name": "Important letter spacing in style attributes is wide enough",
+    "criteria": [
+     "1.4.12"
+    ],
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 14,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "2779a5",
+    "name": "HTML page has non-empty title",
+    "criteria": [
+     "2.4.2"
+    ],
+    "tp": 6,
+    "fn": 0,
+    "fp": 0,
+    "tn": 6,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "2ee8b8",
+    "name": "Visible label is part of accessible name",
+    "criteria": [
+     "2.5.3"
+    ],
+    "tp": 16,
+    "fn": 0,
+    "fp": 0,
+    "tn": 20,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "2t702h",
+    "name": "Summary element has non-empty accessible name",
+    "criteria": [
+     "4.1.2"
+    ],
+    "tp": 3,
+    "fn": 0,
+    "fp": 0,
+    "tn": 9,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "307n5z",
+    "name": "Element with presentational children has no focusable content",
+    "criteria": [
+     "4.1.2"
+    ],
+    "tp": 5,
+    "fn": 0,
+    "fp": 0,
+    "tn": 7,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "36b590",
+    "name": "Error message describes invalid form field value",
+    "criteria": [
+     "3.3.1"
+    ],
+    "tp": 0,
+    "fn": 5,
+    "fp": 0,
+    "tn": 4,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "4b1c6c",
+    "name": "Iframe elements with identical accessible names have equivalent purpose",
+    "criteria": [
+     "4.1.2"
+    ],
+    "tp": 1,
+    "fn": 3,
+    "fp": 3,
+    "tn": 16,
+    "precision": 25,
+    "recall": 25
+   },
+   {
+    "rule": "59796f",
+    "name": "Image button has non-empty accessible name",
+    "criteria": [
+     "1.1.1",
+     "4.1.2"
+    ],
+    "tp": 3,
+    "fn": 0,
+    "fp": 0,
+    "tn": 9,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "59br37",
+    "name": "Zoomed text node is not clipped with CSS overflow",
+    "criteria": [
+     "1.4.4"
+    ],
+    "tp": 0,
+    "fn": 5,
+    "fp": 0,
+    "tn": 9,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "5effbb",
+    "name": "Link in context is descriptive",
+    "criteria": [
+     "2.4.4"
+    ],
+    "tp": 0,
+    "fn": 6,
+    "fp": 0,
+    "tn": 12,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "6cfa84",
+    "name": "Element with aria-hidden has no content in sequential focus navigation",
+    "criteria": [
+     "4.1.2"
+    ],
+    "tp": 5,
+    "fn": 1,
+    "fp": 1,
+    "tn": 8,
+    "precision": 83.3,
+    "recall": 83.3
+   },
+   {
+    "rule": "73f2c2",
+    "name": "`autocomplete` attribute has valid value",
+    "criteria": [
+     "1.3.5"
+    ],
+    "tp": 10,
+    "fn": 0,
+    "fp": 0,
+    "tn": 20,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "7677a9",
+    "name": "Device motion based changes to the content can also be created from the user interface",
+    "criteria": [
+     "2.5.4"
+    ],
+    "tp": 0,
+    "fn": 1,
+    "fp": 0,
+    "tn": 5,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "78fd32",
+    "name": "Important line height in style attributes is wide enough",
+    "criteria": [
+     "1.4.12"
+    ],
+    "tp": 5,
+    "fn": 1,
+    "fp": 0,
+    "tn": 17,
+    "precision": 100,
+    "recall": 83.3
+   },
+   {
+    "rule": "7d6734",
+    "name": "SVG element with explicit role has non-empty accessible name",
+    "criteria": [
+     "1.1.1"
+    ],
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 6,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "80af7b",
+    "name": "Focusable element has no keyboard trap",
+    "criteria": [
+     "2.1.2"
+    ],
+    "tp": 5,
+    "fn": 0,
+    "fp": 1,
+    "tn": 10,
+    "precision": 83.3,
+    "recall": 100
+   },
+   {
+    "rule": "80f0bf",
+    "name": "Audio or video element avoids automatically playing audio",
+    "criteria": [
+     "1.4.2"
+    ],
+    "tp": 0,
+    "fn": 2,
+    "fp": 0,
+    "tn": 6,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "8fc3b6",
+    "name": "Object element rendering non-text content has non-empty accessible name",
+    "criteria": [
+     "1.1.1"
+    ],
+    "tp": 6,
+    "fn": 0,
+    "fp": 0,
+    "tn": 12,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "97a4e1",
+    "name": "Button has non-empty accessible name",
+    "criteria": [
+     "4.1.2"
+    ],
+    "tp": 5,
+    "fn": 0,
+    "fp": 0,
+    "tn": 12,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "9bd38c",
+    "name": "Content has alternative for visual reference",
+    "criteria": [
+     "1.3.3"
+    ],
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 17,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "9e45ec",
+    "name": "Important word spacing in style attributes is wide enough",
+    "criteria": [
+     "1.4.12"
+    ],
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 14,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "a25f45",
+    "name": "Headers attribute specified on a cell refers to cells in the same table element",
+    "criteria": [
+     "1.3.1"
+    ],
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 15,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "afw4f7",
+    "name": "Text has minimum contrast",
+    "criteria": [
+     "1.4.3"
+    ],
+    "tp": 10,
+    "fn": 1,
+    "fp": 0,
+    "tn": 23,
+    "precision": 100,
+    "recall": 90.9
+   },
+   {
+    "rule": "aizyf1",
+    "name": "Link is descriptive",
+    "criteria": [
+     "2.4.9"
+    ],
+    "tp": 0,
+    "fn": 5,
+    "fp": 0,
+    "tn": 7,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "akn7bn",
+    "name": "Iframe with interactive elements is not excluded from tab-order",
+    "criteria": [
+     "2.1.1"
+    ],
+    "tp": 0,
+    "fn": 1,
+    "fp": 0,
+    "tn": 9,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "b20e66",
+    "name": "Links with identical accessible names have equivalent purpose",
+    "criteria": [
+     "2.4.9"
+    ],
+    "tp": 0,
+    "fn": 6,
+    "fp": 0,
+    "tn": 15,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "b33eff",
+    "name": "Orientation of the page is not restricted using CSS transforms",
+    "criteria": [
+     "1.3.4"
+    ],
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 9,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "b49b2e",
+    "name": "Heading is descriptive",
+    "criteria": [
+     "2.4.6"
+    ],
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 8,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "b4f0c3",
+    "name": "Meta viewport allows for zoom",
+    "criteria": [
+     "1.4.4"
+    ],
+    "tp": 5,
+    "fn": 2,
+    "fp": 0,
+    "tn": 9,
+    "precision": 100,
+    "recall": 71.4
+   },
+   {
+    "rule": "b5c3f8",
+    "name": "HTML page has lang attribute",
+    "criteria": [
+     "3.1.1"
+    ],
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 1,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "bc4a75",
+    "name": "ARIA required owned elements",
+    "criteria": [
+     "1.3.1"
+    ],
+    "tp": 10,
+    "fn": 0,
+    "fp": 0,
+    "tn": 14,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "bc659a",
+    "name": "Meta element has no refresh delay",
+    "criteria": [
+     "2.2.1",
+     "2.2.4",
+     "3.2.5"
+    ],
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 11,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "bf051a",
+    "name": "HTML page `lang` attribute has valid language tag",
+    "criteria": [
+     "3.1.1"
+    ],
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 2,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "bisz58",
+    "name": "Meta element has no refresh delay (no exception)",
+    "criteria": [
+     "2.2.4",
+     "3.2.5"
+    ],
+    "tp": 0,
+    "fn": 3,
+    "fp": 0,
+    "tn": 10,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "c249d5",
+    "name": "Device motion based changes to the content can be disabled",
+    "criteria": [
+     "2.5.4"
+    ],
+    "tp": 0,
+    "fn": 1,
+    "fp": 0,
+    "tn": 4,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "c3232f",
+    "name": "Video element visual-only content has accessible alternative",
+    "criteria": [
+     "1.2.1"
+    ],
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 5,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "c487ae",
+    "name": "Link has non-empty accessible name",
+    "criteria": [
+     "4.1.2",
+     "2.4.4",
+     "2.4.9"
+    ],
+    "tp": 11,
+    "fn": 0,
+    "fp": 1,
+    "tn": 16,
+    "precision": 91.7,
+    "recall": 100
+   },
+   {
+    "rule": "c4a8a4",
+    "name": "HTML page title is descriptive",
+    "criteria": [
+     "2.4.2"
+    ],
+    "tp": 0,
+    "fn": 3,
+    "fp": 0,
+    "tn": 3,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "c5a4ea",
+    "name": "Video element visual content has accessible alternative",
+    "criteria": [
+     "1.2.3"
+    ],
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 5,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "cae760",
+    "name": "Iframe element has non-empty accessible name",
+    "criteria": [
+     "4.1.2"
+    ],
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 7,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "cc0f0a",
+    "name": "Form field label is descriptive",
+    "criteria": [
+     "2.4.6"
+    ],
+    "tp": 0,
+    "fn": 6,
+    "fp": 0,
+    "tn": 10,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "cf77f2",
+    "name": "Bypass Blocks of Repeated Content",
+    "criteria": [
+     "2.4.1"
+    ],
+    "tp": 0,
+    "fn": 1,
+    "fp": 0,
+    "tn": 12,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "d0f69e",
+    "name": "Table header cell has assigned cells",
+    "criteria": [
+     "1.3.1"
+    ],
+    "tp": 0,
+    "fn": 3,
+    "fp": 0,
+    "tn": 13,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "de46e4",
+    "name": "Element with lang attribute has valid language tag",
+    "criteria": [
+     "3.1.2"
+    ],
+    "tp": 9,
+    "fn": 0,
+    "fp": 0,
+    "tn": 10,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "e086e5",
+    "name": "Form field has non-empty accessible name",
+    "criteria": [
+     "4.1.2"
+    ],
+    "tp": 9,
+    "fn": 0,
+    "fp": 2,
+    "tn": 11,
+    "precision": 81.8,
+    "recall": 100
+   },
+   {
+    "rule": "e7aa44",
+    "name": "Audio element content has text alternative",
+    "criteria": [
+     "1.2.1"
+    ],
+    "tp": 0,
+    "fn": 2,
+    "fp": 0,
+    "tn": 6,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "e88epe",
+    "name": "Image not in the accessibility tree is decorative",
+    "criteria": [
+     "1.1.1"
+    ],
+    "tp": 0,
+    "fn": 5,
+    "fp": 0,
+    "tn": 15,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "eac66b",
+    "name": "Video element auditory content has accessible alternative",
+    "criteria": [
+     "1.2.2"
+    ],
+    "tp": 0,
+    "fn": 2,
+    "fp": 0,
+    "tn": 4,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "efbfc7",
+    "name": "Text content that changes automatically can be paused, stopped or hidden",
+    "criteria": [
+     "2.2.2"
+    ],
+    "tp": 0,
+    "fn": 1,
+    "fp": 0,
+    "tn": 10,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "fd3a94",
+    "name": "Links with identical accessible names and same context serve equivalent purpose",
+    "criteria": [
+     "2.4.4"
+    ],
+    "tp": 0,
+    "fn": 8,
+    "fp": 0,
+    "tn": 16,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "ff89c9",
+    "name": "ARIA required context role",
+    "criteria": [
+     "1.3.1"
+    ],
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 11,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "ffbc54",
+    "name": "No keyboard shortcut uses only printable characters",
+    "criteria": [
+     "2.1.4"
+    ],
+    "tp": 0,
+    "fn": 2,
+    "fp": 0,
+    "tn": 8,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "m6b1q3",
+    "name": "Menuitem has non-empty accessible name",
+    "criteria": [
+     "4.1.2"
+    ],
+    "tp": 2,
+    "fn": 0,
+    "fp": 0,
+    "tn": 6,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "off6ek",
+    "name": "HTML element language subtag matches language",
+    "criteria": [
+     "3.1.2"
+    ],
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 9,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "oj04fd",
+    "name": "Element in sequential focus order has visible focus",
+    "criteria": [
+     "2.4.7"
+    ],
+    "tp": 1,
+    "fn": 0,
+    "fp": 0,
+    "tn": 8,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "qt1vmo",
+    "name": "Image accessible name is descriptive",
+    "criteria": [
+     "1.1.1"
+    ],
+    "tp": 0,
+    "fn": 3,
+    "fp": 0,
+    "tn": 13,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "ucwvc8",
+    "name": "HTML page language subtag matches default language",
+    "criteria": [
+     "3.1.1"
+    ],
+    "tp": 0,
+    "fn": 5,
+    "fp": 4,
+    "tn": 5,
+    "precision": 0,
+    "recall": 0
+   }
+  ],
+  "perSc": [
+   {
+    "sc": "1.1.1",
+    "tp": 18,
+    "fn": 8,
+    "fp": 0,
+    "tn": 68,
+    "precision": 100,
+    "recall": 69.2
+   },
+   {
+    "sc": "1.2.1",
+    "tp": 0,
+    "fn": 6,
+    "fp": 0,
+    "tn": 11,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.2.2",
+    "tp": 0,
+    "fn": 2,
+    "fp": 0,
+    "tn": 4,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.2.3",
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 5,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.2.5",
+    "tp": 0,
+    "fn": 3,
+    "fp": 0,
+    "tn": 4,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.2.8",
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 5,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.3.1",
+    "tp": 18,
+    "fn": 3,
+    "fp": 0,
+    "tn": 53,
+    "precision": 100,
+    "recall": 85.7
+   },
+   {
+    "sc": "1.3.3",
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 17,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.3.4",
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 9,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.3.5",
+    "tp": 10,
+    "fn": 0,
+    "fp": 0,
+    "tn": 20,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "sc": "1.4.2",
+    "tp": 0,
+    "fn": 2,
+    "fp": 0,
+    "tn": 6,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.4.3",
+    "tp": 10,
+    "fn": 1,
+    "fp": 0,
+    "tn": 23,
+    "precision": 100,
+    "recall": 90.9
+   },
+   {
+    "sc": "1.4.4",
+    "tp": 5,
+    "fn": 7,
+    "fp": 0,
+    "tn": 18,
+    "precision": 100,
+    "recall": 41.7
+   },
+   {
+    "sc": "1.4.5",
+    "tp": 0,
+    "fn": 5,
+    "fp": 0,
+    "tn": 10,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.4.6",
+    "tp": 0,
+    "fn": 13,
+    "fp": 0,
+    "tn": 22,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.4.9",
+    "tp": 0,
+    "fn": 5,
+    "fp": 0,
+    "tn": 10,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.4.12",
+    "tp": 13,
+    "fn": 1,
+    "fp": 0,
+    "tn": 45,
+    "precision": 100,
+    "recall": 92.9
+   },
+   {
+    "sc": "2.1.1",
+    "tp": 2,
+    "fn": 1,
+    "fp": 0,
+    "tn": 22,
+    "precision": 100,
+    "recall": 66.7
+   },
+   {
+    "sc": "2.1.2",
+    "tp": 5,
+    "fn": 0,
+    "fp": 1,
+    "tn": 10,
+    "precision": 83.3,
+    "recall": 100
+   },
+   {
+    "sc": "2.1.3",
+    "tp": 2,
+    "fn": 0,
+    "fp": 0,
+    "tn": 14,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "sc": "2.1.4",
+    "tp": 0,
+    "fn": 2,
+    "fp": 0,
+    "tn": 8,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "2.2.1",
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 11,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "sc": "2.2.2",
+    "tp": 0,
+    "fn": 1,
+    "fp": 0,
+    "tn": 10,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "2.2.4",
+    "tp": 4,
+    "fn": 3,
+    "fp": 0,
+    "tn": 21,
+    "precision": 100,
+    "recall": 57.1
+   },
+   {
+    "sc": "2.4.1",
+    "tp": 0,
+    "fn": 1,
+    "fp": 0,
+    "tn": 12,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "2.4.2",
+    "tp": 6,
+    "fn": 3,
+    "fp": 0,
+    "tn": 9,
+    "precision": 100,
+    "recall": 66.7
+   },
+   {
+    "sc": "2.4.4",
+    "tp": 11,
+    "fn": 14,
+    "fp": 1,
+    "tn": 44,
+    "precision": 91.7,
+    "recall": 44
+   },
+   {
+    "sc": "2.4.6",
+    "tp": 0,
+    "fn": 10,
+    "fp": 0,
+    "tn": 18,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "2.4.7",
+    "tp": 1,
+    "fn": 0,
+    "fp": 0,
+    "tn": 8,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "sc": "2.4.9",
+    "tp": 11,
+    "fn": 11,
+    "fp": 1,
+    "tn": 38,
+    "precision": 91.7,
+    "recall": 50
+   },
+   {
+    "sc": "2.5.3",
+    "tp": 16,
+    "fn": 0,
+    "fp": 0,
+    "tn": 20,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "sc": "2.5.4",
+    "tp": 0,
+    "fn": 2,
+    "fp": 0,
+    "tn": 9,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "3.1.1",
+    "tp": 8,
+    "fn": 5,
+    "fp": 4,
+    "tn": 8,
+    "precision": 66.7,
+    "recall": 61.5
+   },
+   {
+    "sc": "3.1.2",
+    "tp": 9,
+    "fn": 4,
+    "fp": 0,
+    "tn": 19,
+    "precision": 100,
+    "recall": 69.2
+   },
+   {
+    "sc": "3.2.5",
+    "tp": 4,
+    "fn": 3,
+    "fp": 0,
+    "tn": 21,
+    "precision": 100,
+    "recall": 57.1
+   },
+   {
+    "sc": "3.3.1",
+    "tp": 0,
+    "fn": 5,
+    "fp": 0,
+    "tn": 4,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "4.1.2",
+    "tp": 48,
+    "fn": 4,
+    "fp": 7,
+    "tn": 101,
+    "precision": 87.3,
+    "recall": 92.3
+   }
+  ],
+  "misses": [
+   {
+    "rule": "akn7bn",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/akn7bn/62673162e22ee1e95e962522b1d1c3b549dbfc49.html"
+   },
+   {
+    "rule": "78fd32",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/78fd32/67159173d21bc9cf00d1bb5a7ec817696ccee05c.html"
+   },
+   {
+    "rule": "6cfa84",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/6cfa84/9812d828fef2da32081f4c0acce0c58912f071cb.html"
+   },
+   {
+    "rule": "c4a8a4",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c4a8a4/2c1397032aad720fe43dee2be0d326be56957320.html"
+   },
+   {
+    "rule": "c4a8a4",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c4a8a4/1844d7bce889d85a80b620468baa804eab3ff2c8.html"
+   },
+   {
+    "rule": "c4a8a4",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c4a8a4/4c72b3b9b06bf1edc3c959070731b65871ee0c8f.html"
+   },
+   {
+    "rule": "qt1vmo",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/qt1vmo/485f10faf222cd48fea2ab3ee79c2d354e51ea33.html"
+   },
+   {
+    "rule": "qt1vmo",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/qt1vmo/2f7d82593e287df64b7459695e355a840254255c.html"
+   },
+   {
+    "rule": "qt1vmo",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/qt1vmo/bac67a5a2ada971100bbec89961ad3e6c869f268.html"
+   },
+   {
+    "rule": "afw4f7",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/afw4f7/bf47c65f2854b6ac100a6f700d354b243b069231.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/67fe402a5de9743bf9882d7d52deb9749005d16c.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/c318e865be58b889fb35b875c76759928082b548.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/04344f745bd9bad51292748e7893f146c045aae4.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/eaf0a926896f045a498073da42ea6263a4d6d36c.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/aed692e9f0a1be5c87ef1de56afa8e23e14cc3ba.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/6f14b150aab632c7656450b3a6dc44ad28cf6cce.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/4e1ec35a2908dbb52d9d50bb60b9110316584799.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/d5e21eae8aa28290befa06cfe68b5032ed05b7a5.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/4c47eeaeb5dd826b90c8a9efb081962f04f5d339.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/1882d796de0dcb4b85924f3abfbf565eeef2d963.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/a34d15d4bb754339339996802d1bc32d464643da.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/316b0c7fccdbe8a47716447a9fe2ca197c8358af.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/2e81c3e60722202d2e92089a0695d74e8b49cdaa.html"
+   },
+   {
+    "rule": "0va7u6",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/0va7u6/80ff3d6a9f2de0b2b9f179a13d91d47ce8c9ab26.html"
+   },
+   {
+    "rule": "0va7u6",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/0va7u6/45041ac39ebf8f9d8ff642ea0bb56e947f0ac76e.html"
+   },
+   {
+    "rule": "0va7u6",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/0va7u6/bf023941401d04f61ce739ee10fcc15f87d298a7.html"
+   },
+   {
+    "rule": "0va7u6",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/0va7u6/e1d4ed7556dabfcfde47aaf4cd0861e0fdf585d9.html"
+   },
+   {
+    "rule": "0va7u6",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/0va7u6/6a7f199a37309ccab08941b0bc64e182770c29ac.html"
+   },
+   {
+    "rule": "bisz58",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/bisz58/ecc787569c06640f3748ae90e2b57fb51c1e22d8.html"
+   },
+   {
+    "rule": "bisz58",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/bisz58/d0672e81d17313f7ef156f3bc6e43c68143a5f45.html"
+   },
+   {
+    "rule": "bisz58",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/bisz58/b8aad77e3ff2fa8d0272fac5362566ff79afad7f.html"
+   },
+   {
+    "rule": "b33eff",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b33eff/3b2f386c66ccb9c1a9a848017dab9b074afbf858.html"
+   },
+   {
+    "rule": "b33eff",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b33eff/388f97562ae3b7e3aec7ad6305df36a91b68cf77.html"
+   },
+   {
+    "rule": "b33eff",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b33eff/93ad10ce32325be5b7c8cbaec7254d55e8fb577c.html"
+   },
+   {
+    "rule": "b33eff",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b33eff/8f341a73c698daf157613c32a521878ed5aa7310.html"
+   },
+   {
+    "rule": "80f0bf",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/80f0bf/968b12b14eb008b424f050ab74277426b2ea81bf.html"
+   },
+   {
+    "rule": "80f0bf",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/80f0bf/b712209d068fff2878cceadf40efe21a3ec4f6d8.html"
+   },
+   {
+    "rule": "e7aa44",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/e7aa44/97850b2083474a9c7b9585c2a1cb16b85b370032.html"
+   },
+   {
+    "rule": "e7aa44",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/e7aa44/ef13bb60f3547081df4e6e0e668ef5497644a734.html"
+   },
+   {
+    "rule": "efbfc7",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/efbfc7/8f0a05348afb0a218f3934157dad1b4d1673ea6a.html"
+   },
+   {
+    "rule": "cf77f2",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/cf77f2/55a6cc3efc35180844d75a9f207b456373b1435c.html"
+   },
+   {
+    "rule": "c249d5",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c249d5/86eae98d063a0e3c7ed92d2708b1c8e29ae3e8e9.html"
+   },
+   {
+    "rule": "7677a9",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/7677a9/66dc2996d42b9dc2a5488716d8505186272d2a5b.html"
+   },
+   {
+    "rule": "off6ek",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/off6ek/5b88bdc5f7d936eaa1fdd2f5f8fdd4022548d5ac.html"
+   },
+   {
+    "rule": "off6ek",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/off6ek/ffcbd35493c91b4d8ee42c3a7fba9c2356144257.html"
+   },
+   {
+    "rule": "off6ek",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/off6ek/d00a83015b309b51bebfc2c85f62488daec3a5d1.html"
+   },
+   {
+    "rule": "off6ek",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/off6ek/895a754e85f4fbc8e11cea52295381f41eb384ca.html"
+   },
+   {
+    "rule": "cc0f0a",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/cc0f0a/9b967559ff2691dc30436766f53feea55447b348.html"
+   },
+   {
+    "rule": "cc0f0a",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/cc0f0a/1e52060759a535934176a5a981446066aad6b31f.html"
+   },
+   {
+    "rule": "cc0f0a",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/cc0f0a/fa5104f9bd07fe52813d7e511c3cc87c4c1cf232.html"
+   },
+   {
+    "rule": "cc0f0a",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/cc0f0a/649946098faf6f36b8232ea74fc3bae3cf8997e7.html"
+   },
+   {
+    "rule": "cc0f0a",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/cc0f0a/2f1d964151ff5269a6027371956ee3b4a4a23fe7.html"
+   },
+   {
+    "rule": "cc0f0a",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/cc0f0a/3ee841b7513a315f4f5161893d1333386f0f1d21.html"
+   },
+   {
+    "rule": "b49b2e",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b49b2e/79cce8d89309bea03e122d2917d340a525db4de0.html"
+   },
+   {
+    "rule": "b49b2e",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b49b2e/acae544ba63bf9c71988fb67d491c7d404164f52.html"
+   },
+   {
+    "rule": "b49b2e",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b49b2e/6000a70ba2da9a828fa9c817ae6a0d2c092522fb.html"
+   },
+   {
+    "rule": "b49b2e",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b49b2e/d76e8834b616356b2803586a8fbd0825a84e3fc8.html"
+   },
+   {
+    "rule": "ucwvc8",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ucwvc8/b1a2ce0c3435765e96d31a3262f1ed8c1d92f817.html"
+   },
+   {
+    "rule": "ucwvc8",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ucwvc8/6616b9ffd712e7789c50b01da8420fd665786677.html"
+   },
+   {
+    "rule": "ucwvc8",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ucwvc8/61b97f487132c7aca3dd9787e9ff1454903d45fb.html"
+   },
+   {
+    "rule": "ucwvc8",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ucwvc8/c4eaf50df4fa37f931374c74ac369a018b780ec6.html"
+   },
+   {
+    "rule": "ucwvc8",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ucwvc8/864ccfb9bdb2c7f797602c5e4f25d1a0ad2aad7c.html"
+   },
+   {
+    "rule": "4b1c6c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/4b1c6c/c1cc2a71e88c5fec2bc41175d63339404747bf00.html"
+   },
+   {
+    "rule": "4b1c6c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/4b1c6c/ac65ce86f38bce79d12b797567bb8d85875aab88.html"
+   },
+   {
+    "rule": "4b1c6c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/4b1c6c/4d33680e81b31e47fc46d3b6543cc050e369525b.html"
+   },
+   {
+    "rule": "e88epe",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/e88epe/e5b8fa7ab66409e7b52b335a8b6aebe11fd78635.html"
+   },
+   {
+    "rule": "e88epe",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/e88epe/5d0c52f3b06b60f712efaa08eb6947f18494c241.html"
+   },
+   {
+    "rule": "e88epe",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/e88epe/9ff50232e74195770418bcfb23c1508dfcef639a.html"
+   },
+   {
+    "rule": "e88epe",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/e88epe/0d0061ffdf406f0d9b21aaa00f5d557e4137e0b2.html"
+   },
+   {
+    "rule": "e88epe",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/e88epe/6d108d00cc7a54f66547f02d7e7606342b11f801.html"
+   },
+   {
+    "rule": "36b590",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/36b590/3bb6b76d2dd823e02cace7c6be2a7ebe535d1d97.html"
+   },
+   {
+    "rule": "36b590",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/36b590/a51e05dc7b64d927ff25bc493bb0aa069c963d29.html"
+   },
+   {
+    "rule": "36b590",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/36b590/e76345ab4164567a24c0dc9dece56cee1794dc0c.html"
+   },
+   {
+    "rule": "36b590",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/36b590/ddcd6a3065a711139251df4ab4777ae096856c58.html"
+   },
+   {
+    "rule": "36b590",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/36b590/d7863608ff2aab99c43663cb3701c65c28b75c23.html"
+   },
+   {
+    "rule": "aizyf1",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/aizyf1/b2a671d96ac510ccc6e34dd58a141d13bb196508.html"
+   },
+   {
+    "rule": "aizyf1",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/aizyf1/bf3ba787eb7a6819ea1a6adccdfd1f30842ed788.html"
+   },
+   {
+    "rule": "aizyf1",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/aizyf1/e6a7c924092d2351c3a5b4361ccde7917ad23c66.html"
+   },
+   {
+    "rule": "aizyf1",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/aizyf1/771c36b9967faec9926af86041d834b4a108a52e.html"
+   },
+   {
+    "rule": "aizyf1",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/aizyf1/b130285915a8ca42926a11553a5791f44b65d487.html"
+   },
+   {
+    "rule": "5effbb",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/5effbb/b2a671d96ac510ccc6e34dd58a141d13bb196508.html"
+   },
+   {
+    "rule": "5effbb",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/5effbb/bf3ba787eb7a6819ea1a6adccdfd1f30842ed788.html"
+   },
+   {
+    "rule": "5effbb",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/5effbb/e6a7c924092d2351c3a5b4361ccde7917ad23c66.html"
+   },
+   {
+    "rule": "5effbb",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/5effbb/98f0638a038a244b0bde70ff316cde1be7ce9a3b.html"
+   },
+   {
+    "rule": "5effbb",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/5effbb/43730455b69439980b95151be477ca594e0d7556.html"
+   },
+   {
+    "rule": "5effbb",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/5effbb/45d884e81c4ef8234cfbd85d259dd6a64685c9d2.html"
+   },
+   {
+    "rule": "b20e66",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b20e66/f34241fb3e5b4e23fa3813f2f29ddb7227a79c65.html"
+   },
+   {
+    "rule": "b20e66",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b20e66/2bb9bd2d4cc0781427cb9ebaed949695a016afc0.html"
+   },
+   {
+    "rule": "b20e66",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b20e66/578b693f3a1818b17b0bd678b75750e2824dff09.html"
+   },
+   {
+    "rule": "b20e66",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b20e66/71d6745fb37e3348784179c751be9af0b997fa5b.html"
+   },
+   {
+    "rule": "b20e66",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b20e66/a9c292b40ed314545cf73b58a2496f47a268592e.html"
+   },
+   {
+    "rule": "b20e66",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b20e66/a67cf3bac5c43ae2c280736f9c86f57457c35537.html"
+   },
+   {
+    "rule": "fd3a94",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/fd3a94/9ceacbea5df44a14dc17df2089edb134f22decd3.html"
+   },
+   {
+    "rule": "fd3a94",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/fd3a94/8dc58c481c594488a331cd267974a324b97c9c98.html"
+   },
+   {
+    "rule": "fd3a94",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/fd3a94/ef75d42424140b163d7939aacc6a80c8dbc8816a.html"
+   },
+   {
+    "rule": "fd3a94",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/fd3a94/f92350be3a294ad1a41de6d7202f09bdd4e5d6c0.html"
+   },
+   {
+    "rule": "fd3a94",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/fd3a94/0b01e772dff47d4fd971ca4cfda2a9810843c10a.html"
+   },
+   {
+    "rule": "fd3a94",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/fd3a94/dddcd76a61f61fa6652f847b66cd77fdcf7724cf.html"
+   },
+   {
+    "rule": "fd3a94",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/fd3a94/7ebe961dbb4fb0e259fc3bc98a8f048170b063af.html"
+   },
+   {
+    "rule": "fd3a94",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/fd3a94/1379913f0770843f89d37ceaad3a63e36f07924e.html"
+   },
+   {
+    "rule": "b4f0c3",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b4f0c3/c94a59f8c3b17d722781af36da3556ff4b418776.html"
+   },
+   {
+    "rule": "b4f0c3",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b4f0c3/9f288c284df9ade53aa33e50ec50c879d5aba4ef.html"
+   },
+   {
+    "rule": "9bd38c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/9bd38c/e25c4256ff639ea16f196a9b9fedcdabba540125.html"
+   },
+   {
+    "rule": "9bd38c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/9bd38c/83cffb1ea6a8411d7c4a021e64f4dead893f4875.html"
+   },
+   {
+    "rule": "9bd38c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/9bd38c/1527ef77130c2971dc36758bdc903e4f469715a5.html"
+   },
+   {
+    "rule": "9bd38c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/9bd38c/b98e3574a99c86e8cc5b63c6f85868ab4427f4e9.html"
+   },
+   {
+    "rule": "ffbc54",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ffbc54/5824a1b3c92824e9ac93f1ca91e743deb6ca795e.html"
+   },
+   {
+    "rule": "ffbc54",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ffbc54/bd5c8ee943fe77cf5cd46ce0e810bd949b537050.html"
+   },
+   {
+    "rule": "d0f69e",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/d0f69e/664972feaac1097f9365d73aac844c81fa927fa2.html"
+   },
+   {
+    "rule": "d0f69e",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/d0f69e/6bb6ca5dcdbd1fef063561f61de88740db24bd5d.html"
+   },
+   {
+    "rule": "d0f69e",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/d0f69e/1a0ee1b5549d2f1eebd337e85cae8487331ab723.html"
+   },
+   {
+    "rule": "eac66b",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/eac66b/67da88481f2c979c57d48e085146a39938d6221a.html"
+   },
+   {
+    "rule": "eac66b",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/eac66b/4b86a2baaa324f721a4bf646b87993be599b82a1.html"
+   },
+   {
+    "rule": "c5a4ea",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c5a4ea/4095c53d7b6550e5af6a9edf43ec7c803bc1e462.html"
+   },
+   {
+    "rule": "c5a4ea",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c5a4ea/366b3437e37e58175a9edba0ce28a37e25d82902.html"
+   },
+   {
+    "rule": "c5a4ea",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c5a4ea/4b86a2baaa324f721a4bf646b87993be599b82a1.html"
+   },
+   {
+    "rule": "c5a4ea",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c5a4ea/92f8362bf7b6778410dd0a0f660918794c85df27.html"
+   },
+   {
+    "rule": "c3232f",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c3232f/5ed3a98f771c2069c1d4581ff5f85cc38d9b5ec0.html"
+   },
+   {
+    "rule": "c3232f",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c3232f/2e9bff37ba69e76a995b6339748eaad2f7a30aca.html"
+   },
+   {
+    "rule": "c3232f",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c3232f/0f884e5935b0e6b1bd809d550738772e32f439c5.html"
+   },
+   {
+    "rule": "c3232f",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c3232f/91f0cca7d0cc5c6a757f72dbeed84bcc1b79625b.html"
+   },
+   {
+    "rule": "1ec09b",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/1ec09b/4095c53d7b6550e5af6a9edf43ec7c803bc1e462.html"
+   },
+   {
+    "rule": "1ec09b",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/1ec09b/5168368fb6d8cc4ea41b679e312c84e283baea9f.html"
+   },
+   {
+    "rule": "1ec09b",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/1ec09b/92f8362bf7b6778410dd0a0f660918794c85df27.html"
+   },
+   {
+    "rule": "1a02b0",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/1a02b0/5f361cfcf29c6c37a88c0fcdb4246fd8ec0a65c1.html"
+   },
+   {
+    "rule": "1a02b0",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/1a02b0/50ee346de986982007936f25602b28bf6929ea5d.html"
+   },
+   {
+    "rule": "1a02b0",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/1a02b0/58833c5284a944298827df756cc31d10cea1f58f.html"
+   },
+   {
+    "rule": "1a02b0",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/1a02b0/9f640c8743b6ebee3942fc833f106984b5ee49bb.html"
+   },
+   {
+    "rule": "59br37",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/59br37/c5cd793a4f7c929182a1302f1bb8c1e43508de1b.html"
+   },
+   {
+    "rule": "59br37",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/59br37/758faeb173a6796691843ae93839928b23ae6378.html"
+   },
+   {
+    "rule": "59br37",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/59br37/ef39fe61d9b0093a3a886c3482d69adc7aeabd52.html"
+   },
+   {
+    "rule": "59br37",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/59br37/fc598e8d60950941aae5070b17eb4ca1d4bd3bdf.html"
+   },
+   {
+    "rule": "59br37",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/59br37/3665c0599c286b1b3060aee795009ab5b8942a14.html"
+   }
+  ],
+  "falseFlags": [
+   {
+    "rule": "e086e5",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/e086e5/ca41ec5f1dba602b8b6e332ad524cbfc5cd1505e.html",
+    "by": [
+     "axe/aria-required-attr"
+    ]
+   },
+   {
+    "rule": "e086e5",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/e086e5/09ea6ee13f7f26b0d6e3103946209ea0726876de.html",
+    "by": [
+     "axe/aria-required-attr"
+    ]
+   },
+   {
+    "rule": "c487ae",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c487ae/bd0d0d0cda19a4d58dfe311cd7c8de34093ad590.html",
+    "by": [
+     "axe/aria-hidden-focus"
+    ]
+   },
+   {
+    "rule": "6cfa84",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/6cfa84/4d71a1ad253efab083f05dc558656d94eb430ca7.html",
+    "by": [
+     "axe/aria-valid-attr-value"
+    ]
+   },
+   {
+    "rule": "80af7b",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/80af7b/d2f5325f3fd5ddde38cd677a5ca36ba0d762fb84.html",
+    "by": [
+     "jourilo/keyboard-trap"
+    ]
+   },
+   {
+    "rule": "ucwvc8",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ucwvc8/941efb7368e46b27b937d34b07fc4d41da01b002.html",
+    "by": [
+     "axe/html-has-lang"
+    ]
+   },
+   {
+    "rule": "ucwvc8",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ucwvc8/dbc6a8459d78e618aab31e7051b4ce69b59c7f2f.html",
+    "by": [
+     "axe/html-has-lang"
+    ]
+   },
+   {
+    "rule": "ucwvc8",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ucwvc8/0f73e7179e17f050380f0ea350d2551611820fd5.html",
+    "by": [
+     "axe/html-lang-valid"
+    ]
+   },
+   {
+    "rule": "ucwvc8",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ucwvc8/b64d767d873269ff00966630e34ab198fc24368f.html",
+    "by": [
+     "axe/html-lang-valid"
+    ]
+   },
+   {
+    "rule": "4b1c6c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/4b1c6c/21d4d4b931e9f06b5c4a008cb1989aa195c107b6.html",
+    "by": [
+     "axe/frame-title"
+    ]
+   },
+   {
+    "rule": "4b1c6c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/4b1c6c/497ad0044eedbb3a36326f153147a271f1619c71.html",
+    "by": [
+     "axe/frame-title"
+    ]
+   },
+   {
+    "rule": "4b1c6c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/4b1c6c/8f35b76114d0dd59fcd78d46c7af113838cc99ea.html",
+    "by": [
+     "axe/frame-title"
+    ]
+   }
+  ]
+ },
+ "axe": {
+  "version": "4.14.0",
+  "seconds": 170,
+  "total": {
+   "tp": 162,
+   "fn": 141,
+   "fp": 11,
+   "tn": 641,
+   "precision": 93.6,
+   "recall": 53.5
+  },
+  "perRule": [
+   {
+    "rule": "09o5cg",
+    "name": "Text has enhanced contrast",
+    "criteria": [
+     "1.4.6"
+    ],
+    "tp": 0,
+    "fn": 13,
+    "fp": 0,
+    "tn": 22,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "0ssw9k",
+    "name": "Scrollable content can be reached with sequential focus navigation",
+    "criteria": [
+     "2.1.1",
+     "2.1.3"
+    ],
+    "tp": 2,
+    "fn": 0,
+    "fp": 0,
+    "tn": 13,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "0va7u6",
+    "name": "HTML images contain no text",
+    "criteria": [
+     "1.4.5",
+     "1.4.9"
+    ],
+    "tp": 0,
+    "fn": 5,
+    "fp": 0,
+    "tn": 10,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "1a02b0",
+    "name": "Audio and visuals of video element have transcript",
+    "criteria": [
+     "1.2.8"
+    ],
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 5,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "1ec09b",
+    "name": "Video element visual content has strict accessible alternative",
+    "criteria": [
+     "1.2.5"
+    ],
+    "tp": 0,
+    "fn": 3,
+    "fp": 0,
+    "tn": 4,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "23a2a8",
+    "name": "Image has non-empty accessible name",
+    "criteria": [
+     "1.1.1"
+    ],
+    "tp": 5,
+    "fn": 0,
+    "fp": 0,
+    "tn": 13,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "24afc2",
+    "name": "Important letter spacing in style attributes is wide enough",
+    "criteria": [
+     "1.4.12"
+    ],
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 14,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "2779a5",
+    "name": "HTML page has non-empty title",
+    "criteria": [
+     "2.4.2"
+    ],
+    "tp": 6,
+    "fn": 0,
+    "fp": 0,
+    "tn": 6,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "2ee8b8",
+    "name": "Visible label is part of accessible name",
+    "criteria": [
+     "2.5.3"
+    ],
+    "tp": 16,
+    "fn": 0,
+    "fp": 0,
+    "tn": 20,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "2t702h",
+    "name": "Summary element has non-empty accessible name",
+    "criteria": [
+     "4.1.2"
+    ],
+    "tp": 3,
+    "fn": 0,
+    "fp": 0,
+    "tn": 9,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "307n5z",
+    "name": "Element with presentational children has no focusable content",
+    "criteria": [
+     "4.1.2"
+    ],
+    "tp": 5,
+    "fn": 0,
+    "fp": 0,
+    "tn": 7,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "36b590",
+    "name": "Error message describes invalid form field value",
+    "criteria": [
+     "3.3.1"
+    ],
+    "tp": 0,
+    "fn": 5,
+    "fp": 0,
+    "tn": 4,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "4b1c6c",
+    "name": "Iframe elements with identical accessible names have equivalent purpose",
+    "criteria": [
+     "4.1.2"
+    ],
+    "tp": 1,
+    "fn": 3,
+    "fp": 3,
+    "tn": 16,
+    "precision": 25,
+    "recall": 25
+   },
+   {
+    "rule": "59796f",
+    "name": "Image button has non-empty accessible name",
+    "criteria": [
+     "1.1.1",
+     "4.1.2"
+    ],
+    "tp": 3,
+    "fn": 0,
+    "fp": 0,
+    "tn": 9,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "59br37",
+    "name": "Zoomed text node is not clipped with CSS overflow",
+    "criteria": [
+     "1.4.4"
+    ],
+    "tp": 0,
+    "fn": 5,
+    "fp": 0,
+    "tn": 9,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "5effbb",
+    "name": "Link in context is descriptive",
+    "criteria": [
+     "2.4.4"
+    ],
+    "tp": 0,
+    "fn": 6,
+    "fp": 0,
+    "tn": 12,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "6cfa84",
+    "name": "Element with aria-hidden has no content in sequential focus navigation",
+    "criteria": [
+     "4.1.2"
+    ],
+    "tp": 5,
+    "fn": 1,
+    "fp": 1,
+    "tn": 8,
+    "precision": 83.3,
+    "recall": 83.3
+   },
+   {
+    "rule": "73f2c2",
+    "name": "`autocomplete` attribute has valid value",
+    "criteria": [
+     "1.3.5"
+    ],
+    "tp": 10,
+    "fn": 0,
+    "fp": 0,
+    "tn": 20,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "7677a9",
+    "name": "Device motion based changes to the content can also be created from the user interface",
+    "criteria": [
+     "2.5.4"
+    ],
+    "tp": 0,
+    "fn": 1,
+    "fp": 0,
+    "tn": 5,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "78fd32",
+    "name": "Important line height in style attributes is wide enough",
+    "criteria": [
+     "1.4.12"
+    ],
+    "tp": 5,
+    "fn": 1,
+    "fp": 0,
+    "tn": 17,
+    "precision": 100,
+    "recall": 83.3
+   },
+   {
+    "rule": "7d6734",
+    "name": "SVG element with explicit role has non-empty accessible name",
+    "criteria": [
+     "1.1.1"
+    ],
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 6,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "80af7b",
+    "name": "Focusable element has no keyboard trap",
+    "criteria": [
+     "2.1.2"
+    ],
+    "tp": 0,
+    "fn": 5,
+    "fp": 0,
+    "tn": 11,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "80f0bf",
+    "name": "Audio or video element avoids automatically playing audio",
+    "criteria": [
+     "1.4.2"
+    ],
+    "tp": 0,
+    "fn": 2,
+    "fp": 0,
+    "tn": 6,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "8fc3b6",
+    "name": "Object element rendering non-text content has non-empty accessible name",
+    "criteria": [
+     "1.1.1"
+    ],
+    "tp": 6,
+    "fn": 0,
+    "fp": 0,
+    "tn": 12,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "97a4e1",
+    "name": "Button has non-empty accessible name",
+    "criteria": [
+     "4.1.2"
+    ],
+    "tp": 5,
+    "fn": 0,
+    "fp": 0,
+    "tn": 12,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "9bd38c",
+    "name": "Content has alternative for visual reference",
+    "criteria": [
+     "1.3.3"
+    ],
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 17,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "9e45ec",
+    "name": "Important word spacing in style attributes is wide enough",
+    "criteria": [
+     "1.4.12"
+    ],
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 14,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "a25f45",
+    "name": "Headers attribute specified on a cell refers to cells in the same table element",
+    "criteria": [
+     "1.3.1"
+    ],
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 15,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "afw4f7",
+    "name": "Text has minimum contrast",
+    "criteria": [
+     "1.4.3"
+    ],
+    "tp": 8,
+    "fn": 3,
+    "fp": 0,
+    "tn": 23,
+    "precision": 100,
+    "recall": 72.7
+   },
+   {
+    "rule": "aizyf1",
+    "name": "Link is descriptive",
+    "criteria": [
+     "2.4.9"
+    ],
+    "tp": 0,
+    "fn": 5,
+    "fp": 0,
+    "tn": 7,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "akn7bn",
+    "name": "Iframe with interactive elements is not excluded from tab-order",
+    "criteria": [
+     "2.1.1"
+    ],
+    "tp": 0,
+    "fn": 1,
+    "fp": 0,
+    "tn": 9,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "b20e66",
+    "name": "Links with identical accessible names have equivalent purpose",
+    "criteria": [
+     "2.4.9"
+    ],
+    "tp": 0,
+    "fn": 6,
+    "fp": 0,
+    "tn": 15,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "b33eff",
+    "name": "Orientation of the page is not restricted using CSS transforms",
+    "criteria": [
+     "1.3.4"
+    ],
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 9,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "b49b2e",
+    "name": "Heading is descriptive",
+    "criteria": [
+     "2.4.6"
+    ],
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 8,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "b4f0c3",
+    "name": "Meta viewport allows for zoom",
+    "criteria": [
+     "1.4.4"
+    ],
+    "tp": 5,
+    "fn": 2,
+    "fp": 0,
+    "tn": 9,
+    "precision": 100,
+    "recall": 71.4
+   },
+   {
+    "rule": "b5c3f8",
+    "name": "HTML page has lang attribute",
+    "criteria": [
+     "3.1.1"
+    ],
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 1,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "bc4a75",
+    "name": "ARIA required owned elements",
+    "criteria": [
+     "1.3.1"
+    ],
+    "tp": 10,
+    "fn": 0,
+    "fp": 0,
+    "tn": 14,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "bc659a",
+    "name": "Meta element has no refresh delay",
+    "criteria": [
+     "2.2.1",
+     "2.2.4",
+     "3.2.5"
+    ],
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 11,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "bf051a",
+    "name": "HTML page `lang` attribute has valid language tag",
+    "criteria": [
+     "3.1.1"
+    ],
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 2,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "bisz58",
+    "name": "Meta element has no refresh delay (no exception)",
+    "criteria": [
+     "2.2.4",
+     "3.2.5"
+    ],
+    "tp": 0,
+    "fn": 3,
+    "fp": 0,
+    "tn": 10,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "c249d5",
+    "name": "Device motion based changes to the content can be disabled",
+    "criteria": [
+     "2.5.4"
+    ],
+    "tp": 0,
+    "fn": 1,
+    "fp": 0,
+    "tn": 4,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "c3232f",
+    "name": "Video element visual-only content has accessible alternative",
+    "criteria": [
+     "1.2.1"
+    ],
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 5,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "c487ae",
+    "name": "Link has non-empty accessible name",
+    "criteria": [
+     "4.1.2",
+     "2.4.4",
+     "2.4.9"
+    ],
+    "tp": 11,
+    "fn": 0,
+    "fp": 1,
+    "tn": 16,
+    "precision": 91.7,
+    "recall": 100
+   },
+   {
+    "rule": "c4a8a4",
+    "name": "HTML page title is descriptive",
+    "criteria": [
+     "2.4.2"
+    ],
+    "tp": 0,
+    "fn": 3,
+    "fp": 0,
+    "tn": 3,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "c5a4ea",
+    "name": "Video element visual content has accessible alternative",
+    "criteria": [
+     "1.2.3"
+    ],
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 5,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "cae760",
+    "name": "Iframe element has non-empty accessible name",
+    "criteria": [
+     "4.1.2"
+    ],
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 7,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "cc0f0a",
+    "name": "Form field label is descriptive",
+    "criteria": [
+     "2.4.6"
+    ],
+    "tp": 0,
+    "fn": 6,
+    "fp": 0,
+    "tn": 10,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "cf77f2",
+    "name": "Bypass Blocks of Repeated Content",
+    "criteria": [
+     "2.4.1"
+    ],
+    "tp": 0,
+    "fn": 1,
+    "fp": 0,
+    "tn": 12,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "d0f69e",
+    "name": "Table header cell has assigned cells",
+    "criteria": [
+     "1.3.1"
+    ],
+    "tp": 0,
+    "fn": 3,
+    "fp": 0,
+    "tn": 13,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "de46e4",
+    "name": "Element with lang attribute has valid language tag",
+    "criteria": [
+     "3.1.2"
+    ],
+    "tp": 9,
+    "fn": 0,
+    "fp": 0,
+    "tn": 10,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "e086e5",
+    "name": "Form field has non-empty accessible name",
+    "criteria": [
+     "4.1.2"
+    ],
+    "tp": 9,
+    "fn": 0,
+    "fp": 2,
+    "tn": 11,
+    "precision": 81.8,
+    "recall": 100
+   },
+   {
+    "rule": "e7aa44",
+    "name": "Audio element content has text alternative",
+    "criteria": [
+     "1.2.1"
+    ],
+    "tp": 0,
+    "fn": 2,
+    "fp": 0,
+    "tn": 6,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "e88epe",
+    "name": "Image not in the accessibility tree is decorative",
+    "criteria": [
+     "1.1.1"
+    ],
+    "tp": 0,
+    "fn": 5,
+    "fp": 0,
+    "tn": 15,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "eac66b",
+    "name": "Video element auditory content has accessible alternative",
+    "criteria": [
+     "1.2.2"
+    ],
+    "tp": 0,
+    "fn": 2,
+    "fp": 0,
+    "tn": 4,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "efbfc7",
+    "name": "Text content that changes automatically can be paused, stopped or hidden",
+    "criteria": [
+     "2.2.2"
+    ],
+    "tp": 0,
+    "fn": 1,
+    "fp": 0,
+    "tn": 10,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "fd3a94",
+    "name": "Links with identical accessible names and same context serve equivalent purpose",
+    "criteria": [
+     "2.4.4"
+    ],
+    "tp": 0,
+    "fn": 8,
+    "fp": 0,
+    "tn": 16,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "ff89c9",
+    "name": "ARIA required context role",
+    "criteria": [
+     "1.3.1"
+    ],
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 11,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "ffbc54",
+    "name": "No keyboard shortcut uses only printable characters",
+    "criteria": [
+     "2.1.4"
+    ],
+    "tp": 0,
+    "fn": 2,
+    "fp": 0,
+    "tn": 8,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "m6b1q3",
+    "name": "Menuitem has non-empty accessible name",
+    "criteria": [
+     "4.1.2"
+    ],
+    "tp": 2,
+    "fn": 0,
+    "fp": 0,
+    "tn": 6,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "rule": "off6ek",
+    "name": "HTML element language subtag matches language",
+    "criteria": [
+     "3.1.2"
+    ],
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 9,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "oj04fd",
+    "name": "Element in sequential focus order has visible focus",
+    "criteria": [
+     "2.4.7"
+    ],
+    "tp": 0,
+    "fn": 1,
+    "fp": 0,
+    "tn": 8,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "qt1vmo",
+    "name": "Image accessible name is descriptive",
+    "criteria": [
+     "1.1.1"
+    ],
+    "tp": 0,
+    "fn": 3,
+    "fp": 0,
+    "tn": 13,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "rule": "ucwvc8",
+    "name": "HTML page language subtag matches default language",
+    "criteria": [
+     "3.1.1"
+    ],
+    "tp": 0,
+    "fn": 5,
+    "fp": 4,
+    "tn": 5,
+    "precision": 0,
+    "recall": 0
+   }
+  ],
+  "perSc": [
+   {
+    "sc": "1.1.1",
+    "tp": 18,
+    "fn": 8,
+    "fp": 0,
+    "tn": 68,
+    "precision": 100,
+    "recall": 69.2
+   },
+   {
+    "sc": "1.2.1",
+    "tp": 0,
+    "fn": 6,
+    "fp": 0,
+    "tn": 11,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.2.2",
+    "tp": 0,
+    "fn": 2,
+    "fp": 0,
+    "tn": 4,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.2.3",
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 5,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.2.5",
+    "tp": 0,
+    "fn": 3,
+    "fp": 0,
+    "tn": 4,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.2.8",
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 5,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.3.1",
+    "tp": 18,
+    "fn": 3,
+    "fp": 0,
+    "tn": 53,
+    "precision": 100,
+    "recall": 85.7
+   },
+   {
+    "sc": "1.3.3",
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 17,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.3.4",
+    "tp": 0,
+    "fn": 4,
+    "fp": 0,
+    "tn": 9,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.3.5",
+    "tp": 10,
+    "fn": 0,
+    "fp": 0,
+    "tn": 20,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "sc": "1.4.2",
+    "tp": 0,
+    "fn": 2,
+    "fp": 0,
+    "tn": 6,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.4.3",
+    "tp": 8,
+    "fn": 3,
+    "fp": 0,
+    "tn": 23,
+    "precision": 100,
+    "recall": 72.7
+   },
+   {
+    "sc": "1.4.4",
+    "tp": 5,
+    "fn": 7,
+    "fp": 0,
+    "tn": 18,
+    "precision": 100,
+    "recall": 41.7
+   },
+   {
+    "sc": "1.4.5",
+    "tp": 0,
+    "fn": 5,
+    "fp": 0,
+    "tn": 10,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.4.6",
+    "tp": 0,
+    "fn": 13,
+    "fp": 0,
+    "tn": 22,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.4.9",
+    "tp": 0,
+    "fn": 5,
+    "fp": 0,
+    "tn": 10,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "1.4.12",
+    "tp": 13,
+    "fn": 1,
+    "fp": 0,
+    "tn": 45,
+    "precision": 100,
+    "recall": 92.9
+   },
+   {
+    "sc": "2.1.1",
+    "tp": 2,
+    "fn": 1,
+    "fp": 0,
+    "tn": 22,
+    "precision": 100,
+    "recall": 66.7
+   },
+   {
+    "sc": "2.1.2",
+    "tp": 0,
+    "fn": 5,
+    "fp": 0,
+    "tn": 11,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "2.1.3",
+    "tp": 2,
+    "fn": 0,
+    "fp": 0,
+    "tn": 14,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "sc": "2.1.4",
+    "tp": 0,
+    "fn": 2,
+    "fp": 0,
+    "tn": 8,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "2.2.1",
+    "tp": 4,
+    "fn": 0,
+    "fp": 0,
+    "tn": 11,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "sc": "2.2.2",
+    "tp": 0,
+    "fn": 1,
+    "fp": 0,
+    "tn": 10,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "2.2.4",
+    "tp": 4,
+    "fn": 3,
+    "fp": 0,
+    "tn": 21,
+    "precision": 100,
+    "recall": 57.1
+   },
+   {
+    "sc": "2.4.1",
+    "tp": 0,
+    "fn": 1,
+    "fp": 0,
+    "tn": 12,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "2.4.2",
+    "tp": 6,
+    "fn": 3,
+    "fp": 0,
+    "tn": 9,
+    "precision": 100,
+    "recall": 66.7
+   },
+   {
+    "sc": "2.4.4",
+    "tp": 11,
+    "fn": 14,
+    "fp": 1,
+    "tn": 44,
+    "precision": 91.7,
+    "recall": 44
+   },
+   {
+    "sc": "2.4.6",
+    "tp": 0,
+    "fn": 10,
+    "fp": 0,
+    "tn": 18,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "2.4.7",
+    "tp": 0,
+    "fn": 1,
+    "fp": 0,
+    "tn": 8,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "2.4.9",
+    "tp": 11,
+    "fn": 11,
+    "fp": 1,
+    "tn": 38,
+    "precision": 91.7,
+    "recall": 50
+   },
+   {
+    "sc": "2.5.3",
+    "tp": 16,
+    "fn": 0,
+    "fp": 0,
+    "tn": 20,
+    "precision": 100,
+    "recall": 100
+   },
+   {
+    "sc": "2.5.4",
+    "tp": 0,
+    "fn": 2,
+    "fp": 0,
+    "tn": 9,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "3.1.1",
+    "tp": 8,
+    "fn": 5,
+    "fp": 4,
+    "tn": 8,
+    "precision": 66.7,
+    "recall": 61.5
+   },
+   {
+    "sc": "3.1.2",
+    "tp": 9,
+    "fn": 4,
+    "fp": 0,
+    "tn": 19,
+    "precision": 100,
+    "recall": 69.2
+   },
+   {
+    "sc": "3.2.5",
+    "tp": 4,
+    "fn": 3,
+    "fp": 0,
+    "tn": 21,
+    "precision": 100,
+    "recall": 57.1
+   },
+   {
+    "sc": "3.3.1",
+    "tp": 0,
+    "fn": 5,
+    "fp": 0,
+    "tn": 4,
+    "precision": null,
+    "recall": 0
+   },
+   {
+    "sc": "4.1.2",
+    "tp": 48,
+    "fn": 4,
+    "fp": 7,
+    "tn": 101,
+    "precision": 87.3,
+    "recall": 92.3
+   }
+  ],
+  "misses": [
+   {
+    "rule": "akn7bn",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/akn7bn/62673162e22ee1e95e962522b1d1c3b549dbfc49.html"
+   },
+   {
+    "rule": "78fd32",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/78fd32/67159173d21bc9cf00d1bb5a7ec817696ccee05c.html"
+   },
+   {
+    "rule": "6cfa84",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/6cfa84/9812d828fef2da32081f4c0acce0c58912f071cb.html"
+   },
+   {
+    "rule": "c4a8a4",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c4a8a4/2c1397032aad720fe43dee2be0d326be56957320.html"
+   },
+   {
+    "rule": "c4a8a4",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c4a8a4/1844d7bce889d85a80b620468baa804eab3ff2c8.html"
+   },
+   {
+    "rule": "c4a8a4",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c4a8a4/4c72b3b9b06bf1edc3c959070731b65871ee0c8f.html"
+   },
+   {
+    "rule": "qt1vmo",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/qt1vmo/485f10faf222cd48fea2ab3ee79c2d354e51ea33.html"
+   },
+   {
+    "rule": "qt1vmo",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/qt1vmo/2f7d82593e287df64b7459695e355a840254255c.html"
+   },
+   {
+    "rule": "qt1vmo",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/qt1vmo/bac67a5a2ada971100bbec89961ad3e6c869f268.html"
+   },
+   {
+    "rule": "oj04fd",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/oj04fd/f1c9efb4c8d1b5f7870c693bce2e6ca046dd768d.html"
+   },
+   {
+    "rule": "afw4f7",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/afw4f7/e8f3acb1dc814b8b815c69b7150cdea67d5bd98e.html"
+   },
+   {
+    "rule": "afw4f7",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/afw4f7/41afaa9b33287aba9c608c3466e2b164f57a02ed.html"
+   },
+   {
+    "rule": "afw4f7",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/afw4f7/bf47c65f2854b6ac100a6f700d354b243b069231.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/67fe402a5de9743bf9882d7d52deb9749005d16c.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/c318e865be58b889fb35b875c76759928082b548.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/04344f745bd9bad51292748e7893f146c045aae4.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/eaf0a926896f045a498073da42ea6263a4d6d36c.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/aed692e9f0a1be5c87ef1de56afa8e23e14cc3ba.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/6f14b150aab632c7656450b3a6dc44ad28cf6cce.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/4e1ec35a2908dbb52d9d50bb60b9110316584799.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/d5e21eae8aa28290befa06cfe68b5032ed05b7a5.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/4c47eeaeb5dd826b90c8a9efb081962f04f5d339.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/1882d796de0dcb4b85924f3abfbf565eeef2d963.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/a34d15d4bb754339339996802d1bc32d464643da.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/316b0c7fccdbe8a47716447a9fe2ca197c8358af.html"
+   },
+   {
+    "rule": "09o5cg",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/09o5cg/2e81c3e60722202d2e92089a0695d74e8b49cdaa.html"
+   },
+   {
+    "rule": "0va7u6",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/0va7u6/80ff3d6a9f2de0b2b9f179a13d91d47ce8c9ab26.html"
+   },
+   {
+    "rule": "0va7u6",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/0va7u6/45041ac39ebf8f9d8ff642ea0bb56e947f0ac76e.html"
+   },
+   {
+    "rule": "0va7u6",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/0va7u6/bf023941401d04f61ce739ee10fcc15f87d298a7.html"
+   },
+   {
+    "rule": "0va7u6",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/0va7u6/e1d4ed7556dabfcfde47aaf4cd0861e0fdf585d9.html"
+   },
+   {
+    "rule": "0va7u6",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/0va7u6/6a7f199a37309ccab08941b0bc64e182770c29ac.html"
+   },
+   {
+    "rule": "bisz58",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/bisz58/ecc787569c06640f3748ae90e2b57fb51c1e22d8.html"
+   },
+   {
+    "rule": "bisz58",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/bisz58/d0672e81d17313f7ef156f3bc6e43c68143a5f45.html"
+   },
+   {
+    "rule": "bisz58",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/bisz58/b8aad77e3ff2fa8d0272fac5362566ff79afad7f.html"
+   },
+   {
+    "rule": "b33eff",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b33eff/3b2f386c66ccb9c1a9a848017dab9b074afbf858.html"
+   },
+   {
+    "rule": "b33eff",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b33eff/388f97562ae3b7e3aec7ad6305df36a91b68cf77.html"
+   },
+   {
+    "rule": "b33eff",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b33eff/93ad10ce32325be5b7c8cbaec7254d55e8fb577c.html"
+   },
+   {
+    "rule": "b33eff",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b33eff/8f341a73c698daf157613c32a521878ed5aa7310.html"
+   },
+   {
+    "rule": "80f0bf",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/80f0bf/968b12b14eb008b424f050ab74277426b2ea81bf.html"
+   },
+   {
+    "rule": "80f0bf",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/80f0bf/b712209d068fff2878cceadf40efe21a3ec4f6d8.html"
+   },
+   {
+    "rule": "e7aa44",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/e7aa44/97850b2083474a9c7b9585c2a1cb16b85b370032.html"
+   },
+   {
+    "rule": "e7aa44",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/e7aa44/ef13bb60f3547081df4e6e0e668ef5497644a734.html"
+   },
+   {
+    "rule": "efbfc7",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/efbfc7/8f0a05348afb0a218f3934157dad1b4d1673ea6a.html"
+   },
+   {
+    "rule": "cf77f2",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/cf77f2/55a6cc3efc35180844d75a9f207b456373b1435c.html"
+   },
+   {
+    "rule": "c249d5",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c249d5/86eae98d063a0e3c7ed92d2708b1c8e29ae3e8e9.html"
+   },
+   {
+    "rule": "7677a9",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/7677a9/66dc2996d42b9dc2a5488716d8505186272d2a5b.html"
+   },
+   {
+    "rule": "off6ek",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/off6ek/5b88bdc5f7d936eaa1fdd2f5f8fdd4022548d5ac.html"
+   },
+   {
+    "rule": "off6ek",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/off6ek/ffcbd35493c91b4d8ee42c3a7fba9c2356144257.html"
+   },
+   {
+    "rule": "off6ek",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/off6ek/d00a83015b309b51bebfc2c85f62488daec3a5d1.html"
+   },
+   {
+    "rule": "off6ek",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/off6ek/895a754e85f4fbc8e11cea52295381f41eb384ca.html"
+   },
+   {
+    "rule": "80af7b",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/80af7b/f5ea9fd3b681971b2af4953fae9bb2d319a203c6.html"
+   },
+   {
+    "rule": "80af7b",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/80af7b/0ec0e93e7f8ffca39e1eb58a4a8503f1bd4cb145.html"
+   },
+   {
+    "rule": "80af7b",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/80af7b/7dcc4ae00712889d448ecbcba200e032dca59bf0.html"
+   },
+   {
+    "rule": "80af7b",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/80af7b/8fba3918b361f251dab4c19bec8eddc5624218ee.html"
+   },
+   {
+    "rule": "80af7b",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/80af7b/62fd24e73ea55f55ad45de392128a816a6f03526.html"
+   },
+   {
+    "rule": "cc0f0a",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/cc0f0a/9b967559ff2691dc30436766f53feea55447b348.html"
+   },
+   {
+    "rule": "cc0f0a",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/cc0f0a/1e52060759a535934176a5a981446066aad6b31f.html"
+   },
+   {
+    "rule": "cc0f0a",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/cc0f0a/fa5104f9bd07fe52813d7e511c3cc87c4c1cf232.html"
+   },
+   {
+    "rule": "cc0f0a",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/cc0f0a/649946098faf6f36b8232ea74fc3bae3cf8997e7.html"
+   },
+   {
+    "rule": "cc0f0a",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/cc0f0a/2f1d964151ff5269a6027371956ee3b4a4a23fe7.html"
+   },
+   {
+    "rule": "cc0f0a",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/cc0f0a/3ee841b7513a315f4f5161893d1333386f0f1d21.html"
+   },
+   {
+    "rule": "b49b2e",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b49b2e/79cce8d89309bea03e122d2917d340a525db4de0.html"
+   },
+   {
+    "rule": "b49b2e",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b49b2e/acae544ba63bf9c71988fb67d491c7d404164f52.html"
+   },
+   {
+    "rule": "b49b2e",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b49b2e/6000a70ba2da9a828fa9c817ae6a0d2c092522fb.html"
+   },
+   {
+    "rule": "b49b2e",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b49b2e/d76e8834b616356b2803586a8fbd0825a84e3fc8.html"
+   },
+   {
+    "rule": "ucwvc8",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ucwvc8/b1a2ce0c3435765e96d31a3262f1ed8c1d92f817.html"
+   },
+   {
+    "rule": "ucwvc8",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ucwvc8/6616b9ffd712e7789c50b01da8420fd665786677.html"
+   },
+   {
+    "rule": "ucwvc8",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ucwvc8/61b97f487132c7aca3dd9787e9ff1454903d45fb.html"
+   },
+   {
+    "rule": "ucwvc8",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ucwvc8/c4eaf50df4fa37f931374c74ac369a018b780ec6.html"
+   },
+   {
+    "rule": "ucwvc8",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ucwvc8/864ccfb9bdb2c7f797602c5e4f25d1a0ad2aad7c.html"
+   },
+   {
+    "rule": "4b1c6c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/4b1c6c/c1cc2a71e88c5fec2bc41175d63339404747bf00.html"
+   },
+   {
+    "rule": "4b1c6c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/4b1c6c/ac65ce86f38bce79d12b797567bb8d85875aab88.html"
+   },
+   {
+    "rule": "4b1c6c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/4b1c6c/4d33680e81b31e47fc46d3b6543cc050e369525b.html"
+   },
+   {
+    "rule": "e88epe",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/e88epe/e5b8fa7ab66409e7b52b335a8b6aebe11fd78635.html"
+   },
+   {
+    "rule": "e88epe",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/e88epe/5d0c52f3b06b60f712efaa08eb6947f18494c241.html"
+   },
+   {
+    "rule": "e88epe",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/e88epe/9ff50232e74195770418bcfb23c1508dfcef639a.html"
+   },
+   {
+    "rule": "e88epe",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/e88epe/0d0061ffdf406f0d9b21aaa00f5d557e4137e0b2.html"
+   },
+   {
+    "rule": "e88epe",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/e88epe/6d108d00cc7a54f66547f02d7e7606342b11f801.html"
+   },
+   {
+    "rule": "36b590",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/36b590/3bb6b76d2dd823e02cace7c6be2a7ebe535d1d97.html"
+   },
+   {
+    "rule": "36b590",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/36b590/a51e05dc7b64d927ff25bc493bb0aa069c963d29.html"
+   },
+   {
+    "rule": "36b590",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/36b590/e76345ab4164567a24c0dc9dece56cee1794dc0c.html"
+   },
+   {
+    "rule": "36b590",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/36b590/ddcd6a3065a711139251df4ab4777ae096856c58.html"
+   },
+   {
+    "rule": "36b590",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/36b590/d7863608ff2aab99c43663cb3701c65c28b75c23.html"
+   },
+   {
+    "rule": "aizyf1",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/aizyf1/b2a671d96ac510ccc6e34dd58a141d13bb196508.html"
+   },
+   {
+    "rule": "aizyf1",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/aizyf1/bf3ba787eb7a6819ea1a6adccdfd1f30842ed788.html"
+   },
+   {
+    "rule": "aizyf1",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/aizyf1/e6a7c924092d2351c3a5b4361ccde7917ad23c66.html"
+   },
+   {
+    "rule": "aizyf1",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/aizyf1/771c36b9967faec9926af86041d834b4a108a52e.html"
+   },
+   {
+    "rule": "aizyf1",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/aizyf1/b130285915a8ca42926a11553a5791f44b65d487.html"
+   },
+   {
+    "rule": "5effbb",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/5effbb/b2a671d96ac510ccc6e34dd58a141d13bb196508.html"
+   },
+   {
+    "rule": "5effbb",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/5effbb/bf3ba787eb7a6819ea1a6adccdfd1f30842ed788.html"
+   },
+   {
+    "rule": "5effbb",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/5effbb/e6a7c924092d2351c3a5b4361ccde7917ad23c66.html"
+   },
+   {
+    "rule": "5effbb",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/5effbb/98f0638a038a244b0bde70ff316cde1be7ce9a3b.html"
+   },
+   {
+    "rule": "5effbb",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/5effbb/43730455b69439980b95151be477ca594e0d7556.html"
+   },
+   {
+    "rule": "5effbb",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/5effbb/45d884e81c4ef8234cfbd85d259dd6a64685c9d2.html"
+   },
+   {
+    "rule": "b20e66",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b20e66/f34241fb3e5b4e23fa3813f2f29ddb7227a79c65.html"
+   },
+   {
+    "rule": "b20e66",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b20e66/2bb9bd2d4cc0781427cb9ebaed949695a016afc0.html"
+   },
+   {
+    "rule": "b20e66",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b20e66/578b693f3a1818b17b0bd678b75750e2824dff09.html"
+   },
+   {
+    "rule": "b20e66",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b20e66/71d6745fb37e3348784179c751be9af0b997fa5b.html"
+   },
+   {
+    "rule": "b20e66",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b20e66/a9c292b40ed314545cf73b58a2496f47a268592e.html"
+   },
+   {
+    "rule": "b20e66",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b20e66/a67cf3bac5c43ae2c280736f9c86f57457c35537.html"
+   },
+   {
+    "rule": "fd3a94",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/fd3a94/9ceacbea5df44a14dc17df2089edb134f22decd3.html"
+   },
+   {
+    "rule": "fd3a94",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/fd3a94/8dc58c481c594488a331cd267974a324b97c9c98.html"
+   },
+   {
+    "rule": "fd3a94",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/fd3a94/ef75d42424140b163d7939aacc6a80c8dbc8816a.html"
+   },
+   {
+    "rule": "fd3a94",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/fd3a94/f92350be3a294ad1a41de6d7202f09bdd4e5d6c0.html"
+   },
+   {
+    "rule": "fd3a94",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/fd3a94/0b01e772dff47d4fd971ca4cfda2a9810843c10a.html"
+   },
+   {
+    "rule": "fd3a94",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/fd3a94/dddcd76a61f61fa6652f847b66cd77fdcf7724cf.html"
+   },
+   {
+    "rule": "fd3a94",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/fd3a94/7ebe961dbb4fb0e259fc3bc98a8f048170b063af.html"
+   },
+   {
+    "rule": "fd3a94",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/fd3a94/1379913f0770843f89d37ceaad3a63e36f07924e.html"
+   },
+   {
+    "rule": "b4f0c3",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b4f0c3/c94a59f8c3b17d722781af36da3556ff4b418776.html"
+   },
+   {
+    "rule": "b4f0c3",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/b4f0c3/9f288c284df9ade53aa33e50ec50c879d5aba4ef.html"
+   },
+   {
+    "rule": "9bd38c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/9bd38c/e25c4256ff639ea16f196a9b9fedcdabba540125.html"
+   },
+   {
+    "rule": "9bd38c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/9bd38c/83cffb1ea6a8411d7c4a021e64f4dead893f4875.html"
+   },
+   {
+    "rule": "9bd38c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/9bd38c/1527ef77130c2971dc36758bdc903e4f469715a5.html"
+   },
+   {
+    "rule": "9bd38c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/9bd38c/b98e3574a99c86e8cc5b63c6f85868ab4427f4e9.html"
+   },
+   {
+    "rule": "ffbc54",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ffbc54/5824a1b3c92824e9ac93f1ca91e743deb6ca795e.html"
+   },
+   {
+    "rule": "ffbc54",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ffbc54/bd5c8ee943fe77cf5cd46ce0e810bd949b537050.html"
+   },
+   {
+    "rule": "d0f69e",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/d0f69e/664972feaac1097f9365d73aac844c81fa927fa2.html"
+   },
+   {
+    "rule": "d0f69e",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/d0f69e/6bb6ca5dcdbd1fef063561f61de88740db24bd5d.html"
+   },
+   {
+    "rule": "d0f69e",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/d0f69e/1a0ee1b5549d2f1eebd337e85cae8487331ab723.html"
+   },
+   {
+    "rule": "eac66b",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/eac66b/67da88481f2c979c57d48e085146a39938d6221a.html"
+   },
+   {
+    "rule": "eac66b",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/eac66b/4b86a2baaa324f721a4bf646b87993be599b82a1.html"
+   },
+   {
+    "rule": "c5a4ea",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c5a4ea/4095c53d7b6550e5af6a9edf43ec7c803bc1e462.html"
+   },
+   {
+    "rule": "c5a4ea",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c5a4ea/366b3437e37e58175a9edba0ce28a37e25d82902.html"
+   },
+   {
+    "rule": "c5a4ea",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c5a4ea/4b86a2baaa324f721a4bf646b87993be599b82a1.html"
+   },
+   {
+    "rule": "c5a4ea",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c5a4ea/92f8362bf7b6778410dd0a0f660918794c85df27.html"
+   },
+   {
+    "rule": "c3232f",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c3232f/5ed3a98f771c2069c1d4581ff5f85cc38d9b5ec0.html"
+   },
+   {
+    "rule": "c3232f",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c3232f/2e9bff37ba69e76a995b6339748eaad2f7a30aca.html"
+   },
+   {
+    "rule": "c3232f",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c3232f/0f884e5935b0e6b1bd809d550738772e32f439c5.html"
+   },
+   {
+    "rule": "c3232f",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c3232f/91f0cca7d0cc5c6a757f72dbeed84bcc1b79625b.html"
+   },
+   {
+    "rule": "1ec09b",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/1ec09b/4095c53d7b6550e5af6a9edf43ec7c803bc1e462.html"
+   },
+   {
+    "rule": "1ec09b",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/1ec09b/5168368fb6d8cc4ea41b679e312c84e283baea9f.html"
+   },
+   {
+    "rule": "1ec09b",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/1ec09b/92f8362bf7b6778410dd0a0f660918794c85df27.html"
+   },
+   {
+    "rule": "1a02b0",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/1a02b0/5f361cfcf29c6c37a88c0fcdb4246fd8ec0a65c1.html"
+   },
+   {
+    "rule": "1a02b0",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/1a02b0/50ee346de986982007936f25602b28bf6929ea5d.html"
+   },
+   {
+    "rule": "1a02b0",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/1a02b0/58833c5284a944298827df756cc31d10cea1f58f.html"
+   },
+   {
+    "rule": "1a02b0",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/1a02b0/9f640c8743b6ebee3942fc833f106984b5ee49bb.html"
+   },
+   {
+    "rule": "59br37",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/59br37/c5cd793a4f7c929182a1302f1bb8c1e43508de1b.html"
+   },
+   {
+    "rule": "59br37",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/59br37/758faeb173a6796691843ae93839928b23ae6378.html"
+   },
+   {
+    "rule": "59br37",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/59br37/ef39fe61d9b0093a3a886c3482d69adc7aeabd52.html"
+   },
+   {
+    "rule": "59br37",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/59br37/fc598e8d60950941aae5070b17eb4ca1d4bd3bdf.html"
+   },
+   {
+    "rule": "59br37",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/59br37/3665c0599c286b1b3060aee795009ab5b8942a14.html"
+   }
+  ],
+  "falseFlags": [
+   {
+    "rule": "e086e5",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/e086e5/ca41ec5f1dba602b8b6e332ad524cbfc5cd1505e.html",
+    "by": [
+     "aria-required-attr"
+    ]
+   },
+   {
+    "rule": "e086e5",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/e086e5/09ea6ee13f7f26b0d6e3103946209ea0726876de.html",
+    "by": [
+     "aria-required-attr"
+    ]
+   },
+   {
+    "rule": "c487ae",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/c487ae/bd0d0d0cda19a4d58dfe311cd7c8de34093ad590.html",
+    "by": [
+     "aria-hidden-focus"
+    ]
+   },
+   {
+    "rule": "6cfa84",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/6cfa84/4d71a1ad253efab083f05dc558656d94eb430ca7.html",
+    "by": [
+     "aria-valid-attr-value"
+    ]
+   },
+   {
+    "rule": "ucwvc8",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ucwvc8/941efb7368e46b27b937d34b07fc4d41da01b002.html",
+    "by": [
+     "html-has-lang"
+    ]
+   },
+   {
+    "rule": "ucwvc8",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ucwvc8/dbc6a8459d78e618aab31e7051b4ce69b59c7f2f.html",
+    "by": [
+     "html-has-lang"
+    ]
+   },
+   {
+    "rule": "ucwvc8",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ucwvc8/0f73e7179e17f050380f0ea350d2551611820fd5.html",
+    "by": [
+     "html-lang-valid"
+    ]
+   },
+   {
+    "rule": "ucwvc8",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/ucwvc8/b64d767d873269ff00966630e34ab198fc24368f.html",
+    "by": [
+     "html-lang-valid"
+    ]
+   },
+   {
+    "rule": "4b1c6c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/4b1c6c/21d4d4b931e9f06b5c4a008cb1989aa195c107b6.html",
+    "by": [
+     "frame-title"
+    ]
+   },
+   {
+    "rule": "4b1c6c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/4b1c6c/497ad0044eedbb3a36326f153147a271f1619c71.html",
+    "by": [
+     "frame-title"
+    ]
+   },
+   {
+    "rule": "4b1c6c",
+    "path": "/WAI/content-assets/wcag-act-rules/testcases/4b1c6c/8f35b76114d0dd59fcd78d46c7af113838cc99ea.html",
+    "by": [
+     "frame-title"
+    ]
+   }
+  ]
+ }
+}

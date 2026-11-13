@@ -21,7 +21,7 @@ export function renderMarkdown(run: Run, cmp?: RunComparison, limit = 25): strin
   const lines = [
     `# Jourilo report — ${run.target}`,
     '',
-    `Run \`${run.id}\` · ${run.mode} mode · ${run.browser.name} ${run.browser.version} · viewports: ${run.viewports.map((v) => v.name).join(', ')} · ${s.pages} page capture(s), ${s.journeys} journey(s)`,
+    `Run \`${run.id}\` · ${run.mode} mode · ${run.browser.name} ${run.browser.version} · viewports: ${run.viewports.map((v) => v.name).join(', ')} · ${s.urls === undefined ? `${s.pages} page capture(s)` : `${s.urls} page${s.urls === 1 ? '' : 's'}, ${s.pages} capture${s.pages === 1 ? '' : 's'}`}, ${s.journeys} journey(s)`,
     '',
     `**${s.byKind.defect} defects** (critical ${s.findings.critical}, serious ${s.findings.serious}, moderate ${s.findings.moderate}, minor ${s.findings.minor}) · **${s.byKind.hypothesis} conversion hypotheses** · **${s.byKind['needs-review']} need manual review**`,
     '',
@@ -52,6 +52,16 @@ export function renderMarkdown(run: Run, cmp?: RunComparison, limit = 25): strin
         '',
       );
     }
+  }
+  // Only captures that waited for an element or never reached network idle: the rest loaded the ordinary way.
+  const loads = run.pages.filter((p) => p.load && (p.load.waitedFor || !p.load.networkIdle));
+  if (loads.length) {
+    lines.push('## Captured after', '');
+    for (const p of loads)
+      lines.push(
+        `- \`${md(path(p.url))}\` (${p.viewport}): load, network idle (${p.load!.networkIdle ? 'yes' : 'no'})${p.load!.waitedFor ? `, \`${md(p.load!.waitedFor)}\` (${p.load!.found ? 'found' : 'not found'})` : ''}`,
+      );
+    lines.push('');
   }
   const sorted = [...run.findings].sort(
     (a, b) => severityRank(a.severity) - severityRank(b.severity) || b.occurrences - a.occurrences,

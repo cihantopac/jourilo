@@ -5,6 +5,7 @@ import { exitCodeForOutcome, runOutcome } from '../../audit/outcome.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { JouriloError } from '../../core/errors.js';
 import { displayPath } from '../../core/fs-safety.js';
+import { redactedQueryPaths } from '../../core/redact.js';
 import { isDirectoryTarget, servedPort, serveStatic } from '../../core/static-server.js';
 import { loadContext } from '../../integrations/context.js';
 import type { JourneySpec } from '../../journeys/schema.js';
@@ -27,7 +28,18 @@ import {
 } from '../../repair/transaction.js';
 import { compareRuns, type MetricDelta } from '../../report/compare.js';
 import { writeReports } from '../../report/index.js';
-import { type Command, denyLocalFrom, flag, list, refuseDenyLocalWebkit, str } from '../framework.js';
+import {
+  type Command,
+  chromiumSandboxFrom,
+  denyLocalFrom,
+  flag,
+  list,
+  NETWORK_OPTIONS,
+  networkFrom,
+  networkOptionsHelp,
+  refuseDenyLocalWebkit,
+  str,
+} from '../framework.js';
 import { loadJourneys } from './journeys.js';
 
 export const optimize: Command = {
@@ -181,12 +193,17 @@ export const verify: Command = {
     'fail-on-regression': { type: 'boolean' },
     'deny-local': { type: 'boolean' },
     repo: { type: 'string' },
+    ...NETWORK_OPTIONS,
   },
   details: `Options:
   --target URL|DIR       Where to repeat the audit (default: the baseline run's target)
   --repo PATH            Repository for source mapping (default: the baseline run's repo)
   --deny-local           Refuse a local target (localhost, 127.0.0.1, [::1], *.localhost, *.test) with exit 3; a redirect to one is blocked by the network guard and listed in the limitations;
                          JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3)
+${networkOptionsHelp(25)}
+                         Without --allow-hosts / --block-hosts, the baseline run's lists are used again; so are its
+                         --user-agent and --ignore-https-errors. Header values are never stored: a baseline that sent
+                         --extra-header needs the headers again (exit 2 without them)
   --fail-on-regression   Exit 1 when new serious or critical defects appear`,
   async run(ctx) {
     // An explicit --target replaces the baseline's served directory, so a URL target is not ignored.
@@ -200,6 +217,12 @@ export const verify: Command = {
       throw new JouriloError(
         'INVALID_INPUT',
         `Run ${base.id} has no recorded scope (created by an older version or by journeys).`,
+      );
+    const unreplayable = redactedQueryPaths(scope.urls);
+    if (unreplayable.length)
+      throw new JouriloError(
+        'USAGE',
+        `The baseline run's scope contains URLs whose query values were redacted (${unreplayable.map((p) => `${p}?…`).join(', ')}); they cannot be replayed. Run a new audit of those pages and verify against it.`,
       );
     const servedDir =
       target !== undefined
@@ -215,6 +238,25 @@ export const verify: Command = {
         return `${x.pathname}${x.search}`;
       });
       const repo = str(ctx, 'repo') ?? (base.settings.repo as string | undefined);
+      // The same host lists as the baseline unless given again; the proxy comes from --proxy or the environment.
+      const network = networkFrom(ctx, origin);
+      const recorded = (key: string) =>
+        Array.isArray(base.settings[key]) ? (base.settings[key] as string[]) : undefined;
+      const allowHosts = network.allowHosts ?? recorded('allowHosts');
+      const blockHosts = network.blockHosts ?? recorded('blockHosts');
+      // The baseline's user agent and certificate setting are replayed; header values were never stored, so headers
+      // the baseline sent must be given again, or the pages compared would not be the same (e.g. a gated staging site).
+      const userAgent =
+        network.userAgent ??
+        (typeof base.settings.userAgent === 'string' ? base.settings.userAgent : undefined);
+      const ignoreHttpsErrors = network.ignoreHttpsErrors ?? base.settings.ignoreHttpsErrors === true;
+      const baselineHeaders = recorded('extraHeaders');
+      if (baselineHeaders?.length && !network.extraHeaders)
+        throw new JouriloError(
+          'USAGE',
+          `Run ${base.id} sent extra headers (${baselineHeaders.join(', ')}); their values are not stored, so give them again with --extra-header.`,
+          `Example: --extra-header "${baselineHeaders[0]}: <value>"`,
+        );
       // Replay the state the baseline was audited in, or the comparison would be against the default state.
       const setupId = base.settings.setupJourney as string | undefined;
       let setupJourney: JourneySpec | undefined;
@@ -242,6 +284,15 @@ export const verify: Command = {
         ...(denyLocalFrom(ctx)
           ? { denyLocal: true, ...(server ? { servedPort: servedPort(server) } : {}) }
           : {}),
+        ...(network.upstream ? { upstream: network.upstream } : {}),
+        ...(allowHosts ? { allowHosts } : {}),
+        ...(blockHosts ? { blockHosts } : {}),
+        ...(userAgent ? { userAgent } : {}),
+        ...(network.extraHeaders ? { extraHeaders: network.extraHeaders } : {}),
+        ...(ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}),
+        ...(chromiumSandboxFrom(ctx, String(base.browser.name ?? 'chromium'))
+          ? { chromiumSandbox: true }
+          : {}),
         keyboard: base.settings.keyboard !== false,
         throttle: base.settings.throttle === true,
         // Same number of visits as the baseline, so medians are compared with medians.
@@ -250,11 +301,12 @@ export const verify: Command = {
         mask: [],
         mode: base.mode,
         ...(typeof base.settings.timezoneId === 'string' ? { timezoneId: base.settings.timezoneId } : {}),
+        ...(typeof base.settings.waitFor === 'string' ? { waitFor: base.settings.waitFor } : {}),
         ...(typeof base.settings.clock === 'string' ? { clock: base.settings.clock } : {}),
         ...(base.settings.evidence === 'minimal' ? { evidence: 'minimal' as const } : {}),
         ...(setupJourney ? { setupJourney } : {}),
         ...(repo ? { context: loadContext(repo) } : {}),
-        onProgress: ctx.log,
+        onProgress: ctx.progress,
       });
       if (servedDir) {
         run.target = `${displayPath(servedDir)} (served at ${server!.url})`;

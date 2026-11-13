@@ -127,6 +127,103 @@ export interface AddressPolicy {
   denyLocal?: boolean;
   /** With denyLocal: the only loopback ports that stay reachable (Jourilo's own static server for a directory target). */
   allowLoopbackPorts?: number[];
+  /** `--allow-hosts`: only these hosts (and the target's own host, see `hostListsFor`) may be reached. */
+  allowHosts?: string[];
+  /** `--block-hosts`: these hosts are refused by name, before any lookup. */
+  blockHosts?: string[];
+  /**
+   * `--proxy` / `HTTPS_PROXY`: the guard checks every destination first, then opens a CONNECT tunnel through this
+   * proxy to the checked address (for plain HTTP too). `auth` is `user:password` and is never written anywhere.
+   */
+  upstream?: Upstream;
+}
+
+/** An upstream HTTP proxy (`http://[user:password@]host:port`). */
+export interface Upstream {
+  host: string;
+  port: number;
+  auth?: string;
+  /** NO_PROXY as given: the hosts it matches are reached directly, decided per destination (see `noProxyMatches`). */
+  noProxy?: string;
+}
+
+/** The proxy as recorded in a run: scheme, host and port, never the credentials. */
+export function upstreamLabel(up: Upstream): string {
+  return `http://${isIP(up.host) === 6 ? `[${up.host}]` : up.host}:${up.port}`;
+}
+
+const normalizeHost = (h: string) =>
+  h
+    .replace(/^\[|\]$/g, '')
+    .toLowerCase()
+    .replace(/\.$/, '');
+
+/** `pattern` is a host name (exact match) or `*.suffix` (any subdomain of suffix, not suffix itself). */
+export function hostMatches(host: string, pattern: string): boolean {
+  const h = normalizeHost(host);
+  const p = normalizeHost(pattern);
+  if (p.startsWith('*.')) return h.endsWith(p.slice(1)) && h.length > p.length - 1;
+  return h === p;
+}
+
+/** Whether `--allow-hosts` / `--block-hosts` let the browser (or Jourilo) reach this host name. */
+export function hostVerdict(
+  host: string,
+  policy: AddressPolicy,
+): { ok: true } | { ok: false; reason: string } {
+  const h = normalizeHost(host);
+  const blocked = policy.blockHosts?.find((p) => hostMatches(h, p));
+  if (blocked) return { ok: false, reason: `${h} is blocked by --block-hosts (${blocked}).` };
+  if (policy.allowHosts?.length && !policy.allowHosts.some((p) => hostMatches(h, p)))
+    return { ok: false, reason: `${h} is not in --allow-hosts.` };
+  return { ok: true };
+}
+
+/**
+ * The host lists of a run's policy. The target's own host is always allowed, so `--allow-hosts` names only the
+ * third-party hosts to keep; a block list that matches the target itself is a usage error.
+ */
+export function hostListsFor(
+  target: URL,
+  allowHosts: string[],
+  blockHosts: string[],
+): Pick<AddressPolicy, 'allowHosts' | 'blockHosts'> {
+  const own = normalizeHost(target.hostname);
+  const hit = blockHosts.find((p) => hostMatches(own, p));
+  if (hit)
+    throw new JouriloError(
+      'USAGE',
+      `--block-hosts ${hit} blocks the target itself (${own}).`,
+      'Remove that pattern, or audit another target.',
+    );
+  return {
+    ...(allowHosts.length ? { allowHosts: [...new Set([...allowHosts, own])] } : {}),
+    ...(blockHosts.length ? { blockHosts } : {}),
+  };
+}
+
+/**
+ * Whether NO_PROXY lets `host` bypass the proxy. The common convention: comma- (or space-) separated entries, each a
+ * host name or suffix (`example.com`, `.example.com` and `*.example.com` all match example.com and its subdomains),
+ * an IP address (exact), optionally with `:port`; `*` alone matches every host. CIDR ranges are not supported.
+ */
+export function noProxyMatches(host: string, port: number, noProxy: string): boolean {
+  const h = normalizeHost(host);
+  for (const raw of noProxy.split(/[\s,]+/)) {
+    const entry = raw.trim().toLowerCase();
+    if (!entry) continue;
+    if (entry === '*') return true;
+    if (isIP(entry)) {
+      if (h === entry) return true;
+      continue;
+    }
+    const m = entry.match(/^(\[[^\]]+\]|[^:]+)(?::(\d+))?$/);
+    if (!m) continue;
+    if (m[2] && Number(m[2]) !== port) continue;
+    const name = normalizeHost(m[1]!).replace(/^\*?\./, '');
+    if (h === name || h.endsWith(`.${name}`)) return true;
+  }
+  return false;
 }
 
 /** Whether the browser (or Jourilo itself) may connect to this address while auditing a target. */

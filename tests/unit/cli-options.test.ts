@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { budgetCoverageLimitations, evaluateBudgets, parseBudgets } from '../../src/audit/budget.js';
 import {
   type Command,
   type Context,
+  chromiumSandboxFrom,
+  extraHeadersFrom,
   maxDurationOption,
+  type ProgressEvent,
   pagesOption,
   parse,
   parseStateOptions,
@@ -67,6 +71,97 @@ describe('limits', () => {
   });
 });
 
+describe('request options', () => {
+  it('--extra-header parses "Name: value", rejects a malformed or hop-by-hop header with USAGE', () => {
+    expect(extraHeadersFrom(ctxWith({}))).toBeUndefined();
+    expect(
+      extraHeadersFrom(
+        ctxWith({ 'extra-header': ['X-Test: 1', 'Authorization:Bearer abc def', 'X-Spaced:   v  '] }),
+      ),
+    ).toEqual({ 'X-Test': '1', Authorization: 'Bearer abc def', 'X-Spaced': 'v' });
+    const secret = 's3cret-v4lue';
+    for (const raw of [
+      `NoColon ${secret}`,
+      `: ${secret}`,
+      `Bad Name: ${secret}`,
+      'X-Empty:',
+      `X-Ctl: a\r\nInjected: ${secret}`,
+      `X-Nul: a\u0000${secret}`,
+      // Outside Latin-1: a browser cannot send it, and Node refuses it as a header value.
+      `X-Token: ${secret}\u2014`,
+      `X-Emoji: ${secret}\u{1F600}`,
+      // Hop-by-hop headers, and headers the browser's network stack owns.
+      `Connection: ${secret}`,
+      `Keep-Alive: ${secret}`,
+      `Proxy-Authenticate: ${secret}`,
+      `proxy-authorization: ${secret}`,
+      `Proxy-Connection: ${secret}`,
+      `TE: ${secret}`,
+      `Trailer: ${secret}`,
+      `Transfer-Encoding: ${secret}`,
+      `Upgrade: ${secret}`,
+      `Host: ${secret}`,
+      `Content-Length: ${secret}`,
+      `Cookie: ${secret}`,
+    ]) {
+      const err = thrown(() => extraHeadersFrom(ctxWith({ 'extra-header': [raw] })));
+      expect(err.code, raw).toBe('USAGE');
+      expect(err.message, raw).toContain('--extra-header');
+      // A header value may be a credential: it is never repeated.
+      expect(`${err.message} ${err.hint ?? ''}`, raw).not.toContain(secret);
+    }
+    // Latin-1 letters and a tab are valid header bytes.
+    expect(extraHeadersFrom(ctxWith({ 'extra-header': ['X-Name: Jos\u00e9\tM\u00fcller'] }))).toEqual({
+      'X-Name': 'Jos\u00e9\tM\u00fcller',
+    });
+    const dup = thrown(() => extraHeadersFrom(ctxWith({ 'extra-header': ['X-A: 1', 'x-a: 2'] })));
+    expect(dup.code).toBe('USAGE');
+  });
+});
+
+describe('chromium sandbox option (F21)', () => {
+  const logged: string[] = [];
+  const ctx = (values: Context['values']): Context =>
+    ({ values, positionals: [], json: false, log: (m: string) => logged.push(m) }) as unknown as Context;
+  const withEnv = (value: string | undefined, fn: () => void) => {
+    const before = process.env.JOURILO_CHROMIUM_SANDBOX;
+    if (value === undefined) delete process.env.JOURILO_CHROMIUM_SANDBOX;
+    else process.env.JOURILO_CHROMIUM_SANDBOX = value;
+    try {
+      fn();
+    } finally {
+      if (before === undefined) delete process.env.JOURILO_CHROMIUM_SANDBOX;
+      else process.env.JOURILO_CHROMIUM_SANDBOX = before;
+    }
+  };
+  it('is off by default and on with --chromium-sandbox or JOURILO_CHROMIUM_SANDBOX', () => {
+    withEnv(undefined, () => {
+      expect(chromiumSandboxFrom(ctx({}), 'chromium')).toBe(false);
+      expect(chromiumSandboxFrom(ctx({ 'chromium-sandbox': true }), 'chromium')).toBe(true);
+      expect(chromiumSandboxFrom(ctx({ 'chromium-sandbox': true }), 'chrome')).toBe(true);
+    });
+    for (const v of ['1', 'true', 'YES', ' on '])
+      withEnv(v, () => expect(chromiumSandboxFrom(ctx({}), 'chromium')).toBe(true));
+    for (const v of ['', '0', 'false', 'no', 'off'])
+      withEnv(v, () => expect(chromiumSandboxFrom(ctx({}), 'chromium')).toBe(false));
+  });
+  it('an unrecognised environment value fails closed (sandbox on) with a warning', () => {
+    logged.length = 0;
+    withEnv('sometimes', () => expect(chromiumSandboxFrom(ctx({}), 'chromium')).toBe(true));
+    expect(logged.join('\n')).toContain('JOURILO_CHROMIUM_SANDBOX=sometimes');
+  });
+  it('--chromium-sandbox with Firefox or WebKit is a usage error; the environment variable is ignored there with a warning', () => {
+    for (const b of ['firefox', 'webkit'] as const) {
+      const err = thrown(() => chromiumSandboxFrom(ctx({ 'chromium-sandbox': true }), b));
+      expect(err.code).toBe('USAGE');
+      expect(err.message).toContain('--chromium-sandbox');
+    }
+    logged.length = 0;
+    withEnv('1', () => expect(chromiumSandboxFrom(ctx({}), 'firefox')).toBe(false));
+    expect(logged.join('\n')).toContain('only affects Chromium');
+  });
+});
+
 describe('progress lines', () => {
   const cmd: Command = {
     name: 'x',
@@ -94,5 +189,132 @@ describe('progress lines', () => {
   it('stay plain text without --json and silent with --quiet', () => {
     expect(captured([])).toBe('  desktop  http://127.0.0.1/\n');
     expect(captured(['--json', '-q'])).toBe('');
+  });
+
+  const captureEvent: ProgressEvent = {
+    phase: 'capture',
+    message: '  desktop  http://127.0.0.1/a',
+    done: 2,
+    total: 6,
+    url: 'http://127.0.0.1/a',
+    viewport: 'desktop',
+  };
+  function progressed(argv: string[], event: ProgressEvent): string {
+    let out = '';
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      out += String(chunk);
+      return true;
+    });
+    parse(cmd, argv).progress(event);
+    return out;
+  }
+
+  it('capture progress lines carry phase, done, total, url and viewport', () => {
+    const raw = progressed(['--json'], captureEvent);
+    const line = JSON.parse(raw);
+    // The message text is the one of the plain line, trimmed as before; the new fields are additive.
+    expect(line).toEqual({
+      type: 'progress',
+      phase: 'capture',
+      message: 'desktop  http://127.0.0.1/a',
+      done: 2,
+      total: 6,
+      url: 'http://127.0.0.1/a',
+      viewport: 'desktop',
+      at: expect.any(String),
+    });
+    expect(Object.keys(line)[0]).toBe('type');
+    expect(Object.keys(line).at(-1)).toBe('at');
+    // A count the engine cannot know is left out, never guessed.
+    expect(JSON.parse(progressed(['--json'], { phase: 'launch', message: 'Starting chromium …' }))).toEqual({
+      type: 'progress',
+      phase: 'launch',
+      message: 'Starting chromium …',
+      at: expect.any(String),
+    });
+  });
+
+  it('text mode output is unchanged', () => {
+    expect(progressed([], captureEvent)).toBe('  desktop  http://127.0.0.1/a\n');
+    expect(progressed(['-q'], captureEvent)).toBe('');
+    expect(progressed(['--json', '-q'], captureEvent)).toBe('');
+  });
+
+  it('the url of a progress event is redacted like the message', () => {
+    const line = JSON.parse(
+      progressed(['--json'], {
+        phase: 'capture',
+        message: 'desktop  x',
+        url: 'http://user:pw@127.0.0.1/a?token=s3cret&page=2',
+      }),
+    );
+    expect(line.url).toBe('http://redacted@127.0.0.1/a?token=[redacted]&page=2');
+    expect(JSON.stringify(line)).not.toContain('s3cret');
+  });
+});
+
+describe('--budget', () => {
+  it('parses known metrics and rejects unknown names or non-numbers with USAGE', () => {
+    expect(parseBudgets(undefined)).toEqual([]);
+    expect(parseBudgets('LCP=2000,CLS=0.05, tbt=300')).toEqual([
+      { metric: 'LCP', limit: 2000 },
+      { metric: 'CLS', limit: 0.05 },
+      { metric: 'TBT', limit: 300 },
+    ]);
+    for (const bad of [
+      '',
+      'LCP',
+      'LCP=',
+      'LCP=fast',
+      'LCP=-1',
+      'LCP=Infinity',
+      'FOO=1',
+      'LCP=1,LCP=2',
+      'LCP=1,',
+    ]) {
+      const err = thrown(() => parseBudgets(bad));
+      expect(err.code, bad).toBe('USAGE');
+      expect(err.message, bad).toContain('--budget');
+    }
+  });
+});
+
+describe('evaluateBudgets', () => {
+  const page = (url: string, viewport: string, lcp?: number) =>
+    ({
+      url,
+      viewport,
+      metrics: lcp === undefined ? [] : [{ name: 'LCP', value: lcp, unit: 'ms', source: 'lab' }],
+    }) as never;
+  it('the worst capture decides; a limit equal to the worst value is met', () => {
+    const pages = [page('http://a/', 'desktop', 900), page('http://a/x', 'mobile', 2600)];
+    expect(evaluateBudgets(pages, [{ metric: 'LCP', limit: 2000 }])).toEqual([
+      { metric: 'LCP', limit: 2000, worst: 2600, url: 'http://a/x', viewport: 'mobile', ok: false },
+    ]);
+    expect(evaluateBudgets(pages, [{ metric: 'LCP', limit: 2600 }])[0]?.ok).toBe(true);
+  });
+  it('a metric nobody measured is ok: null, never a pass or a fail', () => {
+    const pages = [page('http://a/', 'desktop')];
+    expect(evaluateBudgets(pages, [{ metric: 'INP', limit: 200 }])).toEqual([
+      { metric: 'INP', limit: 200, worst: null, url: null, viewport: null, ok: null },
+    ]);
+  });
+});
+
+describe('budgetCoverageLimitations', () => {
+  const cap = (status: number | null, lcp?: number) =>
+    ({
+      status,
+      metrics: lcp === undefined ? [] : [{ name: 'LCP', value: lcp, unit: 'ms', source: 'lab' }],
+    }) as never;
+  const decided = { metric: 'LCP', limit: 2000, worst: 900, url: 'http://a/', viewport: 'desktop', ok: true };
+  it('says so when a decided budget was checked on only some of the loaded captures', () => {
+    expect(
+      budgetCoverageLimitations([cap(200, 900), cap(200), cap(200, 800), cap(200, 700)], [decided]),
+    ).toEqual(['Budget LCP=2000 was checked on 3 of 4 captures; the others did not measure it.']);
+  });
+  it('is silent when every loaded capture measured it, ignoring captures that never loaded, and for ok: null', () => {
+    expect(budgetCoverageLimitations([cap(200, 900), cap(null)], [decided])).toEqual([]);
+    expect(budgetCoverageLimitations([cap(200)], [{ ...decided, worst: null, ok: null }])).toEqual([]);
   });
 });

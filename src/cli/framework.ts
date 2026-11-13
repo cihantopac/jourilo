@@ -1,8 +1,12 @@
 import { type ParseArgsConfig, parseArgs } from 'node:util';
 import { JouriloError } from '../core/errors.js';
+import type { ProgressEvent } from '../core/progress.js';
+import { redactUrl } from '../core/redact.js';
+import type { AddressPolicy, Upstream } from '../core/url-safety.js';
 import { Workspace } from '../core/workspace.js';
 
 export type OptionSpec = NonNullable<ParseArgsConfig['options']>;
+export type { ProgressEvent, ProgressPhase } from '../core/progress.js';
 
 export interface Context {
   values: Record<string, string | boolean | string[] | undefined>;
@@ -14,6 +18,11 @@ export interface Context {
    * `{"type":"progress","message":...,"at":ISO}`.
    */
   log: (msg: string) => void;
+  /**
+   * A progress line with its phase and counts (F35): plain text prints only `message`, exactly as `log` would; with
+   * --json the line is `{"type":"progress","phase":...,"message":...,"done"?,"total"?,"url"?,"viewport"?,"at":ISO}`.
+   */
+  progress: (event: ProgressEvent) => void;
 }
 
 export interface CommandResult {
@@ -56,19 +65,22 @@ export function parse(cmd: Command, argv: string[]): Context {
   const values = parsed.values as Context['values'];
   const quiet = Boolean(values.quiet);
   const json = Boolean(values.json);
+  // The message keeps its place after the event's own fields; `at` is always last.
+  const write = (fields: Partial<ProgressEvent>, msg: string) => {
+    if (quiet) return;
+    process.stderr.write(
+      json
+        ? `${JSON.stringify({ type: 'progress', ...fields, message: msg.trim(), at: new Date().toISOString() })}\n`
+        : `${msg}\n`,
+    );
+  };
   return {
     values,
     positionals: parsed.positionals,
     json,
     ws: new Workspace(values.workspace as string | undefined),
-    log: (msg) => {
-      if (quiet) return;
-      process.stderr.write(
-        json
-          ? `${JSON.stringify({ type: 'progress', message: msg.trim(), at: new Date().toISOString() })}\n`
-          : `${msg}\n`,
-      );
-    },
+    log: (msg) => write({}, msg),
+    progress: (event) => write(event.url ? { ...event, url: redactUrl(event.url) } : event, event.message),
   };
 }
 
@@ -185,6 +197,41 @@ export function denyLocalFrom(ctx: Context): boolean {
 }
 let warnedDenyLocal = false;
 
+/**
+ * `--chromium-sandbox`, or `JOURILO_CHROMIUM_SANDBOX`: keep Chromium's process sandbox, which Playwright turns off by
+ * default. Environment values are parsed like JOURILO_DENY_LOCAL (1/true/yes/on enable, 0/false/no/off or empty
+ * disable, anything else fails closed to enabled with a warning). The flag is Chromium-only: with Firefox or WebKit it
+ * is a usage error; the environment variable, which may be set for every command, is ignored there with a warning.
+ */
+export function chromiumSandboxFrom(ctx: Context, browser: string): boolean {
+  const chromium = browser === 'chromium' || browser === 'chrome' || browser === 'msedge';
+  if (flag(ctx, 'chromium-sandbox')) {
+    if (!chromium)
+      throw new JouriloError(
+        'USAGE',
+        `--chromium-sandbox only affects Chromium, Chrome and Edge, not --browser ${browser}.`,
+        'Use --browser chromium, or drop --chromium-sandbox.',
+      );
+    return true;
+  }
+  const raw = process.env.JOURILO_CHROMIUM_SANDBOX ?? '';
+  const v = raw.trim().toLowerCase();
+  if (!v || ['0', 'false', 'no', 'off'].includes(v)) return false;
+  const known = ['1', 'true', 'yes', 'on'].includes(v);
+  if (!known && !warnedSandbox) {
+    warnedSandbox = true;
+    ctx.log(
+      `JOURILO_CHROMIUM_SANDBOX=${raw} is not recognised (use 1, true, yes or on to enable, 0, false, no or off to disable); the Chromium sandbox is on.`,
+    );
+  }
+  if (!chromium) {
+    ctx.log(`JOURILO_CHROMIUM_SANDBOX only affects Chromium; it is ignored with --browser ${browser}.`);
+    return false;
+  }
+  return true;
+}
+let warnedSandbox = false;
+
 /** WebKit sends HTTPS redirects outside the proxy, so the redirect protection of --deny-local cannot hold there. */
 export function refuseDenyLocalWebkit(denyLocal: boolean, browser: string): void {
   if (denyLocal && browser === 'webkit')
@@ -193,6 +240,254 @@ export function refuseDenyLocalWebkit(denyLocal: boolean, browser: string): void
       '--deny-local cannot be combined with --browser webkit: WebKit sends HTTPS redirects outside the network guard, so a redirect to a local address could not be blocked.',
       'Use --browser chromium or firefox.',
     );
+}
+
+/**
+ * Options every browsing command shares: the upstream proxy and the host lists (F15), and the user agent, extra
+ * headers and certificate checking of the browser (F16).
+ */
+export const NETWORK_OPTIONS: OptionSpec = {
+  proxy: { type: 'string' },
+  'allow-hosts': { type: 'string', multiple: true },
+  'block-hosts': { type: 'string', multiple: true },
+  'user-agent': { type: 'string' },
+  'extra-header': { type: 'string', multiple: true },
+  'ignore-https-errors': { type: 'boolean' },
+  'chromium-sandbox': { type: 'boolean' },
+};
+
+/** The `details` lines for NETWORK_OPTIONS, indented to a command's option column. */
+export function networkOptionsHelp(column: number): string {
+  const pad = (flag: string) => `  ${flag.padEnd(column - 2)}`;
+  const cont = ' '.repeat(column);
+  return [
+    `${pad('--proxy URL')}Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;`,
+    `${cont}default HTTPS_PROXY / HTTP_PROXY (either case; prefer the variable for credentials, argv shows`,
+    `${cont}in ps). NO_PROXY is decided per destination host (NO_PROXY=* = no proxy). The guard resolves and`,
+    `${cont}checks every destination itself, then tunnels to the checked address (CONNECT ip:443, and ip:80`,
+    `${cont}for plain HTTP; a proxy that refuses port 80 fails those requests: give an https:// target);`,
+    `${cont}loopback connects directly. The run records the proxy without its credentials`,
+    `${pad('--allow-hosts LIST')}Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);`,
+    `${cont}the target's own host is always allowed. Other hosts are refused and listed in the limitations`,
+    `${pad('--block-hosts LIST')}Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations`,
+    `${pad('--user-agent UA')}Send this User-Agent (also navigator.userAgent) instead of the browser's own; recorded in the run`,
+    `${pad('--extra-header H')}Add a request header "Name: value" (repeatable), sent only to the target's origin, never`,
+    `${cont}to other hosts: Jourilo makes those requests itself, so the headers cannot follow a redirect`,
+    `${cont}elsewhere (a redirect is followed without them). The run records the names, never the values`,
+    `  --ignore-https-errors`,
+    `${cont}Accept invalid or self-signed certificates in the browser (test environments only); the network`,
+    `${cont}guard still checks every destination, and the run lists it in the limitations`,
+    `  --chromium-sandbox`,
+    `${cont}Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1`,
+    `${cont}does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch`,
+    `${cont}where the system denies the sandbox (containers, some Linux CI kernels)`,
+  ].join('\n');
+}
+
+/** RFC 9110 field-name token. */
+const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+/**
+ * Headers an `--extra-header` may not set: hop-by-hop headers (RFC 9110 7.6.1, plus Proxy-Connection), which belong to
+ * one connection and not to the request, and headers the browser's network stack owns (Host, Content-Length, and
+ * Cookie, which `--auth` sets).
+ */
+const REFUSED_HEADERS = new Set([
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'proxy-connection',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+  'host',
+  'content-length',
+  'cookie',
+]);
+
+/**
+ * `--extra-header "Name: value"` (repeatable). A malformed, duplicate or refused header is a usage error that names
+ * the header but never repeats its value, which may be a credential.
+ */
+export function extraHeadersFrom(ctx: Context): Record<string, string> | undefined {
+  // Not `list`: a header value may contain commas.
+  const given = ctx.values['extra-header'];
+  const raws = Array.isArray(given) ? given : typeof given === 'string' ? [given] : [];
+  if (!raws.length) return undefined;
+  const usage = (why: string, hint = 'Example: --extra-header "X-Staging-Access: <token>"') =>
+    new JouriloError('USAGE', `--extra-header: ${why}`, hint);
+  const out: Record<string, string> = {};
+  const seen = new Set<string>();
+  raws.forEach((raw, i) => {
+    const colon = raw.indexOf(':');
+    const name = colon < 0 ? '' : raw.slice(0, colon).trim();
+    if (colon < 0 || !name) throw usage(`header ${i + 1} is not "Name: value" (the value is not shown).`);
+    if (!HEADER_NAME.test(name))
+      throw usage(`header ${i + 1} has an invalid name (letters, digits and !#$%&'*+.^_\`|~- only).`);
+    const value = raw.slice(colon + 1).trim();
+    // Control characters (CR/LF above all) could split one header into several; a header value is Latin-1 bytes,
+    // so anything outside it cannot be sent (Node refuses it later, mid-run).
+    if (!value || /[^\t\x20-\x7e\x80-\xff]/.test(value))
+      throw usage(
+        `${name} has an empty value, or one with control characters or characters outside Latin-1 (the value is not shown).`,
+      );
+    const key = name.toLowerCase();
+    if (REFUSED_HEADERS.has(key))
+      throw usage(
+        `${name} cannot be set: it belongs to the connection or to the browser's network stack.`,
+        key === 'cookie'
+          ? 'Use --auth FILE (a Playwright storage state) for cookies.'
+          : 'Remove it; hop-by-hop headers, Host and Content-Length are set by the browser.',
+      );
+    if (seen.has(key)) throw usage(`${name} is given twice.`);
+    seen.add(key);
+    out[name] = value;
+  });
+  return out;
+}
+
+/** `--user-agent UA`: any printable text; empty or with control characters is a usage error. */
+export function userAgentFrom(ctx: Context): string | undefined {
+  const ua = str(ctx, 'user-agent');
+  if (ua === undefined) return undefined;
+  const v = ua.trim();
+  if (!v || /[\u0000-\u001f\u007f]/.test(v))
+    throw new JouriloError(
+      'USAGE',
+      '--user-agent is empty or has control characters.',
+      'Example: --user-agent "Mozilla/5.0 (compatible; MyAudit/1.0)"',
+    );
+  return v;
+}
+
+/** The browser's request options: user agent, extra headers (target origin only) and certificate checking (F16). */
+export function requestOptionsFrom(ctx: Context): {
+  userAgent?: string;
+  extraHeaders?: Record<string, string>;
+  ignoreHttpsErrors?: boolean;
+} {
+  const userAgent = userAgentFrom(ctx);
+  const extraHeaders = extraHeadersFrom(ctx);
+  return {
+    ...(userAgent ? { userAgent } : {}),
+    ...(extraHeaders ? { extraHeaders } : {}),
+    ...(flag(ctx, 'ignore-https-errors') ? { ignoreHttpsErrors: true } : {}),
+  };
+}
+
+const HOST_PATTERN = /^(\*\.)?[a-z0-9_]([a-z0-9_-]*[a-z0-9_])?(\.[a-z0-9_]([a-z0-9_-]*[a-z0-9_])?)*\.?$/i;
+const IP_PATTERN = /^\[?[0-9a-f:.]+\]?$/i;
+
+/** `--allow-hosts` and `--block-hosts`: lower-case host names or `*.suffix` patterns; anything else is a usage error. */
+export function hostListsFrom(ctx: Context): { allowHosts: string[]; blockHosts: string[] } {
+  const read = (key: string) =>
+    list(ctx, key).map((p) => {
+      if (!HOST_PATTERN.test(p) && !IP_PATTERN.test(p))
+        throw new JouriloError(
+          'USAGE',
+          `--${key} ${p} is not a host name or a *.domain pattern.`,
+          'Example: --allow-hosts example.com,*.cdn.example.com',
+        );
+      return p.toLowerCase().replace(/^\[|\]$/g, '');
+    });
+  return { allowHosts: read('allow-hosts'), blockHosts: read('block-hosts') };
+}
+
+function envValue(...names: string[]): { name: string; value: string } | undefined {
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (!value) continue;
+    // Windows environment names are case-insensitive: `https_proxy` finds `HTTPS_PROXY`. Name the variable as it is
+    // actually spelled, so a message that says "unset X" names the variable the user set.
+    const keys = Object.keys(process.env);
+    const actual = keys.includes(name)
+      ? name
+      : (keys.find((k) => k.toLowerCase() === name.toLowerCase()) ?? name);
+    return { name: actual, value };
+  }
+  return undefined;
+}
+
+/**
+ * The upstream proxy for a run against `target`: `--proxy URL`, else HTTPS_PROXY / HTTP_PROXY (lower case first,
+ * the variable for the target's scheme first). NO_PROXY (either case) travels with the proxy and is decided per
+ * destination by the guard, as curl and browsers do; `NO_PROXY=*` means no proxy at all. Only plain `http://` proxies
+ * are supported (a scheme-less value means http). An invalid value is a usage error that never repeats the value,
+ * since it may hold credentials.
+ */
+export function proxyFrom(ctx: Context, target: URL): AddressPolicy['upstream'] {
+  const flagValue = str(ctx, 'proxy');
+  const https = target.protocol === 'https:';
+  const env = https
+    ? envValue('https_proxy', 'HTTPS_PROXY', 'http_proxy', 'HTTP_PROXY')
+    : envValue('http_proxy', 'HTTP_PROXY', 'https_proxy', 'HTTPS_PROXY');
+  const source = flagValue !== undefined ? { name: '--proxy', value: flagValue } : env;
+  if (!source) return undefined;
+  const noProxy = envValue('no_proxy', 'NO_PROXY')?.value.trim() ?? '';
+  // `*` matches every host, whatever the port: no proxy at all.
+  if (noProxy.split(/[\s,]+/).includes('*')) return undefined;
+  const expected =
+    'Expected http://host:port or http://user:password@host:port (the value is not shown, it may hold credentials).';
+  const usage = (why: string) =>
+    new JouriloError(
+      'USAGE',
+      `${source.name}: ${why}`,
+      source.name === '--proxy'
+        ? expected
+        : `${expected} To go direct instead, set NO_PROXY=* or unset ${source.name}.`,
+    );
+  let url: URL;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(source.value) ? source.value : `http://${source.value}`);
+  } catch {
+    throw usage('not a valid proxy URL.');
+  }
+  if (url.protocol !== 'http:')
+    throw usage(`only http:// proxies are supported (got ${url.protocol.replace(/:$/, '')}).`);
+  if (!url.hostname) throw usage('the proxy URL has no host.');
+  let auth: string | undefined;
+  try {
+    auth =
+      url.username || url.password
+        ? `${decodeURIComponent(url.username)}:${decodeURIComponent(url.password)}`
+        : undefined;
+  } catch {
+    throw usage('the credentials in the proxy URL are not valid percent-encoding.');
+  }
+  const up: Upstream = { host: url.hostname.replace(/^\[|\]$/g, ''), port: Number(url.port || 80) };
+  return { ...up, ...(auth ? { auth } : {}), ...(noProxy ? { noProxy } : {}) };
+}
+
+/**
+ * Proxy, host lists and request options for a browsing command, ready to spread into its audit options. The target's
+ * own host joins `--allow-hosts` later (`hostListsFor`), when the target is known for certain.
+ */
+export function networkFrom(
+  ctx: Context,
+  target: string,
+): {
+  upstream?: Upstream;
+  allowHosts?: string[];
+  blockHosts?: string[];
+  userAgent?: string;
+  extraHeaders?: Record<string, string>;
+  ignoreHttpsErrors?: boolean;
+} {
+  const { allowHosts, blockHosts } = hostListsFrom(ctx);
+  let url: URL | undefined;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(target) ? target : `https://${target}`);
+  } catch {
+    url = undefined; // the audit itself reports an invalid target
+  }
+  const upstream = url ? proxyFrom(ctx, url) : undefined;
+  return {
+    ...(upstream ? { upstream } : {}),
+    ...(allowHosts.length ? { allowHosts } : {}),
+    ...(blockHosts.length ? { blockHosts } : {}),
+    ...requestOptionsFrom(ctx),
+  };
 }
 
 export function requirePositional(ctx: Context, index: number, name: string, usage: string): string {

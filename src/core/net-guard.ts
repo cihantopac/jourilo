@@ -5,18 +5,31 @@
 //
 // HTTPS and WebSockets are tunnelled with CONNECT (the proxy never sees or alters their content); plain HTTP is
 // forwarded. Node-side fetches (robots.txt, sitemaps) use `guardedFetchText` with the same policy per redirect hop.
+//
+// With an upstream proxy (`--proxy`, HTTPS_PROXY), the guard still resolves and checks every destination itself, then
+// asks the proxy for a CONNECT tunnel to the checked address (`CONNECT 93.184.216.34:443`), never to the name, so the
+// proxy's own DNS cannot send a request somewhere the guard did not check. Plain HTTP takes the same tunnel
+// (`CONNECT 93.184.216.34:80`), and the original request, Host header included, is sent inside it: an absolute-URI
+// request would make the proxy rebuild Host from the address (RFC 9112 3.2.2), so a name-based site would answer as
+// its default host. A proxy that refuses tunnels to port 80 (a 4xx other than 407) fails the request with the guard's
+// own 502, never its page; a 5xx means the proxy could not reach the site. Loopback addresses a local target may reach, and hosts NO_PROXY matches, connect directly (the proxy's
+// loopback is another machine).
 import { randomBytes } from 'node:crypto';
 import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import https from 'node:https';
 import net, { isIP, type Socket } from 'node:net';
 import type { Duplex } from 'node:stream';
+import tls from 'node:tls';
 import {
   type AddressPolicy,
   addressVerdict,
   classifyIp,
+  hostVerdict,
   isLocalHostname,
+  noProxyMatches,
   RESOLVE_TIMEOUT_MS,
+  type Upstream,
   withTimeout,
 } from './url-safety.js';
 
@@ -63,6 +76,9 @@ export async function resolveAllowed(
   deps: GuardDeps = {},
 ): Promise<{ address: string; family: number } | { blocked: string }> {
   const h = host.replace(/^\[|\]$/g, '');
+  // --allow-hosts / --block-hosts decide by name, before the name is even looked up.
+  const named = hostVerdict(h, policy);
+  if (!named.ok) return { blocked: named.reason };
   const verdict = deps.verdict ?? ((ip: string, port: number) => addressVerdict(ip, policy, port));
   let addrs: LookupAddress[];
   if (isIP(h)) addrs = [{ address: h, family: isIP(h) }];
@@ -99,6 +115,91 @@ export function guardedLookup(policy: AddressPolicy, port: number, deps: GuardDe
       (err: Error) => callback(err as NodeJS.ErrnoException, wantAll ? [] : '', 0),
     );
   };
+}
+
+/** How long the upstream proxy may take to open a tunnel. */
+const TUNNEL_TIMEOUT_MS = 30_000;
+
+/**
+ * Whether a destination is reached through the upstream proxy: everything but this machine and the hosts NO_PROXY
+ * matches, decided per destination (`host` is the name the request asked for, `address` the checked IP).
+ */
+export function viaUpstream(
+  policy: AddressPolicy,
+  host: string,
+  address: string,
+  port: number,
+): Upstream | undefined {
+  const up = policy.upstream;
+  if (!up || classifyIp(address) === 'loopback') return undefined;
+  if (up.noProxy && noProxyMatches(host, port, up.noProxy)) return undefined;
+  return up;
+}
+
+/** `ip:port`, with brackets for IPv6. */
+const authorityOf = (address: string, port: number) =>
+  `${isIP(address) === 6 ? `[${address}]` : address}:${port}`;
+
+/** The Proxy-Authorization header for an upstream proxy with credentials. */
+const proxyAuthorization = (up: Upstream): Record<string, string> =>
+  up.auth ? { 'proxy-authorization': `Basic ${Buffer.from(up.auth).toString('base64')}` } : {};
+
+/**
+ * Opens a CONNECT tunnel through the upstream proxy to an address the guard already checked. The request names the
+ * address, never a host name. Errors name the proxy step but never its credentials. `onSocket` sees the socket as soon
+ * as it exists, so its owner can destroy it while the handshake is still pending.
+ */
+export function openTunnel(
+  upstream: Upstream,
+  address: string,
+  port: number,
+  timeoutMs = TUNNEL_TIMEOUT_MS,
+  onSocket?: (s: Socket) => void,
+): Promise<Socket> {
+  return new Promise((resolve, reject) => {
+    const authority = authorityOf(address, port);
+    const sock = net.connect({ host: upstream.host, port: upstream.port });
+    let settled = false;
+    const fail = (message: string) => {
+      if (settled) return;
+      settled = true;
+      sock.destroy();
+      reject(new Error(`upstream proxy: ${message}`));
+    };
+    sock.setTimeout(timeoutMs, () => fail('timed out'));
+    sock.once('error', (err: NodeJS.ErrnoException) => fail(err.code ?? 'connection failed'));
+    sock.once('close', () => fail('closed the connection'));
+    sock.once('connect', () => {
+      const lines = [`CONNECT ${authority} HTTP/1.1`, `Host: ${authority}`];
+      for (const [k, v] of Object.entries(proxyAuthorization(upstream))) lines.push(`${k}: ${v}`);
+      sock.write(`${lines.join('\r\n')}\r\n\r\n`);
+    });
+    let buf = Buffer.alloc(0);
+    const onData = (chunk: Buffer) => {
+      buf = Buffer.concat([buf, chunk]);
+      const end = buf.indexOf('\r\n\r\n');
+      if (end < 0) {
+        if (buf.length > 16_384) fail('answered with an oversized header');
+        return;
+      }
+      sock.off('data', onData);
+      const status = Number(/^HTTP\/1\.[01] (\d{3})/.exec(buf.subarray(0, end).toString('latin1'))?.[1] ?? 0);
+      if (status !== 200) return fail(`answered ${status || 'without a status'}`);
+      settled = true;
+      sock.setTimeout(0);
+      sock.removeAllListeners('close');
+      sock.removeAllListeners('error');
+      // The tunnel's user adds its own handlers; an error before then must not crash the process.
+      sock.on('error', () => undefined);
+      // Nothing is read until the tunnel's user attaches; bytes after the header (none in practice) are kept.
+      sock.pause();
+      const rest = buf.subarray(end + 4);
+      if (rest.length) sock.unshift(rest);
+      resolve(sock);
+    };
+    sock.on('data', onData);
+    onSocket?.(sock);
+  });
 }
 
 function splitHostPort(authority: string, defaultPort: number): { host: string; port: number } | null {
@@ -182,9 +283,15 @@ export interface NetGuard {
 
 /** Set on the guard's own 502 so a page that never reached the server is not mistaken for an HTTP error page. */
 export const GUARD_UPSTREAM_ERROR_HEADER = 'x-jourilo-guard-upstream-error';
+/** The signal's wording for a destination the guard refused (a failed CONNECT answered 403). */
+export const GUARD_REFUSED_WORDING = 'the network guard refused the destination';
 
 /** Fixed wording for a connection failure; the raw error can carry resolved IP addresses and must not be reported. */
 export function upstreamFailureWording(message: string): string {
+  if (/upstream proxy: answered 407/.test(message)) return 'the upstream proxy asked for credentials (407)';
+  const port = /upstream proxy: refuses tunnels to port (\d+)/.exec(message)?.[1];
+  if (port) return `the upstream proxy refuses tunnels to port ${port}; give the target's https:// URL`;
+  if (/upstream proxy:/.test(message)) return 'the upstream proxy could not open the connection';
   if (/DNS lookup failed|ENOTFOUND|EAI_AGAIN/i.test(message)) return 'the host name could not be resolved';
   if (/ECONNREFUSED/i.test(message)) return 'the connection was refused';
   if (/ETIMEDOUT|timed out/i.test(message)) return 'the connection timed out';
@@ -204,19 +311,25 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
     blocked.push({ host, port, reason });
   };
   const sockets = new Set<Duplex>();
+  // Set by close(): a socket that appears afterwards (a DNS answer or a tunnel that came late) is destroyed at once.
+  let closed = false;
   // Idempotent: a kept-alive upstream socket is reported again for every request it carries.
   const track = <T extends Duplex>(s: T): T => {
+    if (closed) {
+      s.destroy();
+      return s;
+    }
     if (sockets.has(s)) return s;
     sockets.add(s);
     s.once('close', () => sockets.delete(s));
     return s;
   };
 
-  /** Resolves under the policy and opens a TCP connection to the allowed address itself. */
-  const connectUpstream = (
+  /** Resolves under the policy; `onAllowed` gets the checked address and the upstream proxy to reach it through. */
+  const checkDestination = (
     host: string,
     port: number,
-    onReady: (s: Socket) => void,
+    onAllowed: (address: string, proxy: Upstream | undefined) => void,
     onFail: (status: number, reason: string) => void,
   ) => {
     resolveAllowed(host, port, policy, deps).then(
@@ -225,11 +338,35 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
           record(host, port, r.blocked);
           return onFail(403, r.blocked);
         }
-        const upstream = track(net.connect({ host: r.address, port }));
+        onAllowed(r.address, viaUpstream(policy, host, r.address, port));
+      },
+      (err: Error) => onFail(502, err.message),
+    );
+  };
+
+  /** Opens a TCP connection to the checked address itself, or a CONNECT tunnel to it through the upstream proxy. */
+  const connectUpstream = (
+    host: string,
+    port: number,
+    onReady: (s: Socket) => void,
+    onFail: (status: number, reason: string) => void,
+  ) => {
+    checkDestination(
+      host,
+      port,
+      (address, proxy) => {
+        if (proxy) {
+          openTunnel(proxy, address, port, TUNNEL_TIMEOUT_MS, track).then(
+            (tunnel) => onReady(track(tunnel)),
+            (err: Error) => onFail(502, err.message),
+          );
+          return;
+        }
+        const upstream = track(net.connect({ host: address, port }));
         upstream.once('connect', () => onReady(upstream));
         upstream.once('error', (err) => onFail(502, err.message));
       },
-      (err: Error) => onFail(502, err.message),
+      onFail,
     );
   };
 
@@ -255,9 +392,10 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
     }
     const host = target.hostname.replace(/^\[|\]$/g, '');
     const port = Number(target.port || 80);
+    // The browser's own Proxy-* headers are meant for this guard, never for the next hop.
     const headers: Record<string, string | string[]> = {};
     for (const [k, v] of Object.entries(req.headers))
-      if (v !== undefined && !HOP_BY_HOP.has(k.toLowerCase())) headers[k] = v;
+      if (v !== undefined && !HOP_BY_HOP.has(k.toLowerCase()) && !/^proxy-/i.test(k)) headers[k] = v;
     const fail = (status: number, reason: string) => {
       if (res.headersSent) return void res.destroy();
       res
@@ -269,21 +407,23 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
         })
         .end(status === 403 ? `Blocked by Jourilo network guard: ${reason}` : 'Bad gateway');
     };
-    resolveAllowed(host, port, policy, deps).then(
-      (r) => {
-        if ('blocked' in r) {
-          record(host, port, r.blocked);
-          req.resume();
-          return fail(403, r.blocked);
-        }
+    // A chunked body on a method Node does not chunk by default (GET, HEAD, DELETE, OPTIONS) keeps its framing.
+    if (req.headers['transfer-encoding'] && req.headers['content-length'] === undefined)
+      headers['transfer-encoding'] = 'chunked';
+    // One path for direct connections and the upstream proxy's tunnel (CONNECT to the checked address): the socket
+    // comes from connectUpstream, and the request inside it keeps its own Host header.
+    connectUpstream(
+      host,
+      port,
+      (socket) => {
         const upstream = http.request({
-          host: r.address,
-          port,
           method: req.method,
           path: `${target.pathname}${target.search}`,
           headers,
           setHost: false,
+          createConnection: () => socket,
         });
+        socket.resume();
         upstream.on('response', (up) => {
           // WebKit follows redirects to loopback hosts outside the proxy, so a forbidden redirect target is
           // refused here, while the proxy can still see it (plain HTTP only; see redirectEscape for HTTPS).
@@ -306,7 +446,6 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
           res.writeHead(up.statusCode ?? 502, up.statusMessage, out);
           up.pipe(res);
         });
-        upstream.on('socket', (s) => track(s));
         // A request the browser gave up on (its page closed, an abandoned page) ends upstream too: a server that never
         // answers would otherwise keep the connection, and so Jourilo's process, alive after the audit.
         res.on('close', () => {
@@ -317,7 +456,15 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
         });
         req.pipe(upstream);
       },
-      (err: Error) => fail(502, err.message),
+      (status, reason) => {
+        req.resume();
+        // A proxy that answers a plain-HTTP tunnel with a 4xx other than 407 refuses that port (403/405 for a
+        // non-SSL port is common): say so in fixed wording, the proxy's page is never shown. A 5xx means the proxy
+        // could not reach the site, which is not a policy refusal, so it keeps the "could not open" wording.
+        const answered = /^upstream proxy: answered (\d{3})/.exec(reason)?.[1];
+        const refusesPort = answered?.startsWith('4') && answered !== '407';
+        fail(status, refusesPort ? `upstream proxy: refuses tunnels to port ${port}` : reason);
+      },
     );
   });
 
@@ -337,9 +484,11 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
         client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
         pipeBoth(client, upstream, head);
       },
+      // Browsers ignore a failed CONNECT's headers. Jourilo's own fetches through the guard (route.fetch for
+      // --extra-header) read the reply as the response, so it carries the token signal too, in fixed wording.
       (status, reason) =>
         client.end(
-          `HTTP/1.1 ${status} ${status === 403 ? 'Forbidden' : 'Bad Gateway'}\r\ncontent-type: text/plain\r\n\r\n${status === 403 ? `Blocked by Jourilo network guard: ${reason}` : ''}`,
+          `HTTP/1.1 ${status} ${status === 403 ? 'Forbidden' : 'Bad Gateway'}\r\ncontent-type: text/plain\r\n${GUARD_UPSTREAM_ERROR_HEADER}: ${token} ${status === 403 ? GUARD_REFUSED_WORDING : upstreamFailureWording(reason)}\r\n\r\n${status === 403 ? `Blocked by Jourilo network guard: ${reason}` : ''}`,
         ),
     );
   });
@@ -386,6 +535,7 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
     blocked,
     close: () =>
       new Promise<void>((resolve) => {
+        closed = true;
         for (const s of sockets) s.destroy();
         server.close(() => resolve());
       }),
@@ -409,15 +559,38 @@ export async function guardedFetchText(
     // Node skips `lookup` for literal IPs, so every hop is checked here as well.
     const pre = await resolveAllowed(current.hostname, port, policy, opts.deps).catch(() => null);
     if (!pre || 'blocked' in pre) return null;
+    // Through the upstream proxy: a CONNECT tunnel to the checked address (HTTPS with TLS to the host name inside it,
+    // plain HTTP with its own Host header), as the guard does.
+    const servername = current.hostname.replace(/^\[|\]$/g, '');
+    const proxy = viaUpstream(policy, servername, pre.address, port);
+    const secure = current.protocol === 'https:';
+    let tunnel: Socket | undefined;
+    if (proxy) {
+      tunnel = await openTunnel(proxy, pre.address, port, opts.timeoutMs).catch(() => undefined);
+      if (!tunnel) return null;
+    }
+    const headers = { 'user-agent': opts.userAgent, accept: 'text/plain, application/xml, text/xml, */*' };
     const res = await new Promise<{ status: number; location?: string; body?: string } | null>((resolve) => {
-      const mod = current.protocol === 'https:' ? https : http;
+      const mod = secure ? https : http;
       const req = mod.get(
         current,
         {
-          headers: { 'user-agent': opts.userAgent, accept: 'text/plain, application/xml, text/xml, */*' },
-          lookup: guardedLookup(policy, port, opts.deps) as never,
+          headers,
           timeout: opts.timeoutMs,
-          agent: false,
+          ...(tunnel
+            ? {
+                createConnection: () => {
+                  tunnel!.resume();
+                  return secure
+                    ? tls.connect({
+                        socket: tunnel!,
+                        host: servername,
+                        ...(isIP(servername) ? {} : { servername }),
+                      })
+                    : tunnel!;
+                },
+              }
+            : { lookup: guardedLookup(policy, port, opts.deps) as never, agent: false }),
         },
         (r) => {
           const status = r.statusCode ?? 0;

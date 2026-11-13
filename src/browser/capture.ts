@@ -8,12 +8,19 @@ import { toPosix } from '../core/fs-safety.js';
 import { shortHash, slug } from '../core/hash.js';
 import { lexiconSources } from '../core/lexicon.js';
 import { GUARD_UPSTREAM_ERROR_HEADER } from '../core/net-guard.js';
-import { excerpt, redactText, redactUrl } from '../core/redact.js';
+import { excerpt, redactText, redactUrl, redactUrlsIn } from '../core/redact.js';
 import type { PageInventory, Rect, Viewport } from '../core/types.js';
 import { type BlockedRequest, installRequestGuard } from '../journeys/request-guard.js';
+import {
+  CONTRAST_SAMPLE_CAP,
+  type ContrastSample,
+  SAMPLED_REASONS,
+  sampleContrast,
+} from './contrast-sample.js';
 import PROBE_SOURCE from './inpage/probe.js?raw';
 import { type KeyboardWalk, keyboardWalk } from './keyboard.js';
 import { watchContext } from './session.js';
+import { sendTargetHeaders, type TargetHeaders } from './target-headers.js';
 import { type RawVitals, READ_VITALS_SCRIPT, VITALS_INIT_SCRIPT } from './vitals.js';
 import { checkWidgets, type WidgetCheck } from './widgets.js';
 
@@ -51,6 +58,8 @@ export interface AxeNode {
   summary: string;
   rect?: Rect;
   data?: Record<string, unknown>;
+  /** Contrast measured from the rendered pixels, for incomplete color-contrast nodes over images (F8). */
+  contrast?: ContrastSample;
 }
 
 export interface AxeIssue {
@@ -130,7 +139,9 @@ export interface PageObservation {
   widgets?: WidgetCheck | null;
   /** Requests the read-only guard aborted while keys were pressed and widgets operated. */
   blockedActions?: BlockedRequest[];
-  /** Main-frame redirect hops seen before a navigation error (at most 10; internal). */
+  /** How the page was captured: whether the network went idle, and the `--wait-for` element if one was given. */
+  load?: { networkIdle: boolean; waitedFor?: string; found?: boolean };
+  /** Main-frame redirect hops of the navigation to the page, whether it loaded or failed (at most 10; internal). */
   redirects?: { status: number; from: string; to: string }[];
   /** Steps that could not run, with the reason; becomes run limitations. */
   errors: string[];
@@ -138,6 +149,8 @@ export interface PageObservation {
 
 export interface CaptureOptions {
   runDir: string;
+  /** Origin of the run's first page; pages on another origin get an origin tag in their screenshot names. */
+  primaryOrigin?: string;
   /** Token of the network guard in front of the browser; only its own upstream-error signal is trusted. */
   guardToken?: string;
   timeoutMs?: number;
@@ -155,6 +168,14 @@ export interface CaptureOptions {
   throttle?: boolean;
   /** `minimal`: JPEG quality 55 and full-page height capped at 6000 px (default `full`). */
   evidence?: EvidenceMode;
+  /** `--user-agent`: the User-Agent header and navigator.userAgent. */
+  userAgent?: string;
+  /** `--extra-header`: headers sent only with requests to the target's origin (see target-headers.ts). */
+  extraHeaders?: TargetHeaders;
+  /** `--ignore-https-errors`: the browser accepts invalid certificates; the network guard still checks destinations. */
+  ignoreHttpsErrors?: boolean;
+  /** `--wait-for`: capture only once this selector's first match is visible (or `timeoutMs` has passed). */
+  waitFor?: string;
 }
 
 export async function newContext(
@@ -169,12 +190,17 @@ export async function newContext(
     ...(browser.browserType().name() === 'firefox' ? {} : { isMobile: vp.isMobile }),
     hasTouch: vp.hasTouch,
     locale: opts.locale ?? 'en-US',
-    ignoreHTTPSErrors: false,
+    // Certificate checking only: the network guard sees every CONNECT and still checks its destination.
+    ignoreHTTPSErrors: opts.ignoreHttpsErrors === true,
     serviceWorkers: 'block',
+    ...(opts.userAgent ? { userAgent: opts.userAgent } : {}),
     ...(opts.timezoneId ? { timezoneId: opts.timezoneId } : {}),
     ...(opts.storageState ? { storageState: opts.storageState } : {}),
   });
   watchContext(browser, ctx);
+  // First route of the context, so later ones (the request guard) run before it. None without extra headers.
+  if (opts.extraHeaders && Object.keys(opts.extraHeaders.headers).length)
+    await sendTargetHeaders(ctx, opts.extraHeaders, opts.timeoutMs ?? 30_000);
   // Freezes Date only; timers and animations keep running.
   if (opts.clock) await ctx.clock.setFixedTime(new Date(opts.clock));
   await ctx.addInitScript({ content: NAME_SHIM });
@@ -247,14 +273,29 @@ export function observe(
   };
 }
 
-async function settle(page: Page, timeoutMs: number): Promise<void> {
-  await page.waitForLoadState('networkidle', { timeout: Math.min(timeoutMs, 5000) }).catch(() => undefined);
+/** Returns whether the network went idle within the settle window. */
+async function settle(page: Page, timeoutMs: number): Promise<boolean> {
+  const networkIdle = await page
+    .waitForLoadState('networkidle', { timeout: Math.min(timeoutMs, 5000) })
+    .then(() => true)
+    .catch(() => false);
   // Fonts and late layout: give the page a short, fixed moment so repeat runs see the same state.
   await page.evaluate('document.fonts ? document.fonts.ready.then(() => true) : true').catch(() => undefined);
   await page.waitForTimeout(300);
+  return networkIdle;
 }
 
-const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
+/** `--wait-for`: true when the selector's first match became visible within `timeoutMs`. */
+export async function waitForElement(page: Page, selector: string, timeoutMs: number): Promise<boolean> {
+  try {
+    await page.locator(selector).first().waitFor({ state: 'visible', timeout: timeoutMs });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
 
 const HIDDEN_SKIP_RULES = new Set(['color-contrast', 'color-contrast-enhanced']);
 
@@ -335,6 +376,19 @@ async function runAxe(page: Page): Promise<PageObservation['axe']> {
     incomplete: raw.incomplete.map(map),
     version: raw.testEngine.version,
   };
+  // Contrast axe could not decide because of a background image, gradient or overlapping element: measure it from
+  // the rendered pixels (F8). A node that cannot be measured stays a manual-review item.
+  let sampled = 0;
+  for (const issue of result.incomplete) {
+    if (issue.id !== 'color-contrast') continue;
+    for (const n of issue.nodes) {
+      if (sampled >= CONTRAST_SAMPLE_CAP) break;
+      if (!SAMPLED_REASONS.has(String(n.data?.messageKey))) continue;
+      sampled++;
+      const s = await sampleContrast(page, n.target);
+      if (s) n.contrast = s;
+    }
+  }
   // Element boxes so the report can draw each node on the screenshot.
   const targets = [...result.violations, ...result.incomplete].flatMap((i) => i.nodes.map((n) => n.target));
   const rects = (await page.evaluate(
@@ -402,9 +456,24 @@ async function applyThrottle(page: Page): Promise<boolean> {
   }
 }
 
+/**
+ * The name part that identifies a location without its origin: the same site served on another host or port keeps its
+ * file names. A URL on a different origin than `primaryOrigin` (the run's first page) adds a short origin tag, so two
+ * origins that serve the same path in one run never share a file.
+ */
+export function originFreeName(url: string, primaryOrigin?: string): string {
+  const u = new URL(url);
+  const tag = primaryOrigin && u.origin !== primaryOrigin ? `\u0000${u.origin}` : '';
+  return shortHash(`${u.pathname}${u.search}${tag}`);
+}
+
 /** The screenshots a capture of `url` in `vp` writes, relative to the run directory. */
-export function captureScreenshotFiles(url: string, vp: Viewport): { full: string; fold: string } {
-  const base = `${slug(new URL(url).pathname.replace(/^\/$/, 'home'), 40)}-${shortHash(url).slice(0, 6)}-${vp.name}`;
+export function captureScreenshotFiles(
+  url: string,
+  vp: Viewport,
+  primaryOrigin?: string,
+): { full: string; fold: string } {
+  const base = `${slug(new URL(url).pathname.replace(/^\/$/, 'home'), 40)}-${originFreeName(url, primaryOrigin).slice(0, 6)}-${vp.name}`;
   return { full: join('screenshots', `${base}.jpg`), fold: join('screenshots', `${base}-fold.jpg`) };
 }
 
@@ -456,20 +525,32 @@ export async function capturePage(
     try {
       response = await page.goto(url, { waitUntil: 'load', timeout: timeoutMs });
     } catch (err) {
-      obs.errors.push(`navigation: ${(err as Error).message.split('\n')[0]}`);
+      obs.errors.push(`navigation: ${redactUrlsIn((err as Error).message.split('\n')[0] ?? '')}`);
       if (redirects.length) obs.redirects = redirects;
       return obs;
     }
     // The network guard answers 502 itself when DNS or the connection fails: nothing was loaded.
     const signal = response?.headers()[GUARD_UPSTREAM_ERROR_HEADER];
     if (opts.guardToken && signal?.startsWith(`${opts.guardToken} `) && new URL(url).protocol === 'http:') {
-      obs.errors.push(`navigation: could not connect: ${signal.slice(opts.guardToken.length + 1)}`);
+      obs.errors.push(
+        `navigation: could not connect: ${redactUrlsIn(signal.slice(opts.guardToken.length + 1))}`,
+      );
       return obs;
     }
+    // A copy: the listener keeps recording navigations that happen later (keys pressed, widgets operated).
+    if (redirects.length) obs.redirects = [...redirects];
     obs.loadMs = Date.now() - t0;
     obs.status = response?.status() ?? null;
     obs.finalUrl = redactUrl(page.url());
-    await settle(page, timeoutMs);
+    let networkIdle = await settle(page, timeoutMs);
+    obs.load = { networkIdle };
+    if (opts.waitFor) {
+      const found = await waitForElement(page, opts.waitFor, timeoutMs);
+      // Late content may bring late layout: let it settle the same way before anything is measured. The page is
+      // audited in the state of this last settle, so that is the one recorded.
+      if (found) networkIdle = await settle(page, timeoutMs);
+      obs.load = { networkIdle, waitedFor: opts.waitFor, found };
+    }
     obs.title = excerpt(await page.title(), 160);
 
     obs.vitals = (await page.evaluate(READ_VITALS_SCRIPT).catch((e: Error) => {
@@ -497,7 +578,7 @@ export async function capturePage(
     if (opts.screenshots !== false) {
       const mask = [...DEFAULT_MASK, ...(opts.mask ?? [])].map((s) => page.locator(s));
       const mode = opts.evidence ?? 'full';
-      const { full, fold } = captureScreenshotFiles(url, vp);
+      const { full, fold } = captureScreenshotFiles(url, vp, opts.primaryOrigin);
       try {
         const height = Math.min(obs.probe?.scroll.height ?? vp.height, FULL_PAGE_MAX_HEIGHT[mode]);
         if (mode === 'minimal' && height <= vp.height) {
@@ -585,6 +666,7 @@ export async function measureVitals(
     if (opts.throttle) await applyThrottle(page);
     await page.goto(url, { waitUntil: 'load', timeout: opts.timeoutMs ?? 30_000 });
     await settle(page, opts.timeoutMs ?? 30_000);
+    if (opts.waitFor) await waitForElement(page, opts.waitFor, opts.timeoutMs ?? 30_000);
     return (await page.evaluate(READ_VITALS_SCRIPT)) as RawVitals;
   } catch {
     return null;

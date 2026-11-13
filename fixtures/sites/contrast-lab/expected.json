@@ -1,0 +1,54 @@
+{
+  "description": "Text over background images and gradients: pixel sampling decides what axe leaves for manual review (F8).",
+  "mustFind": [
+    {
+      "rule": "jourilo/contrast-over-image",
+      "path": "/light",
+      "kind": "defect",
+      "evidenceExactly": [
+        "bad-light"
+      ],
+      "why": "white text over a light photo, worst case under 3:1"
+    },
+    {
+      "rule": "jourilo/contrast-over-image",
+      "path": "/mixed",
+      "kind": "defect",
+      "evidenceExactly": [
+        "bad-mixed"
+      ],
+      "why": "white text over a half-light, half-dark photo: the worst case decides, not the best (Review Focus 1)"
+    }
+  ],
+  "mustNotFind": [
+    {
+      "rule": "jourilo/contrast-over-image",
+      "path": "/dark",
+      "why": "white text over a dark photo and a dark gradient, worst case 7:1 or more"
+    },
+    {
+      "rule": "axe-review/color-contrast",
+      "path": "/dark",
+      "why": "sampling decides the dark photo and gradient as passing, so nothing is left for manual review"
+    },
+    {
+      "rule": "jourilo/contrast-over-image",
+      "path": "/sun",
+      "why": "a bright sun in the padding of a dark hero is not behind any text; only the line boxes are judged"
+    },
+    {
+      "rule": "axe-review/color-contrast",
+      "path": "/sun",
+      "why": "sampling decides the text over the dark photo as passing"
+    }
+  ],
+  "maxDefects": {
+    "minSeverity": "moderate",
+    "count": 0,
+    "paths": [
+      "/",
+      "/dark",
+      "/sun"
+    ]
+  }
+}

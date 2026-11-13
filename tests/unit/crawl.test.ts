@@ -121,3 +121,23 @@ describe('explicit pages and robots.txt', () => {
     );
   });
 });
+
+describe('crawl: what a sample leaves out', () => {
+  it('a sampled crawl records what it left out', async () => {
+    const o = await origin(null);
+    const links = Array.from({ length: 9 }, (_, i) => `/p${i}`);
+    const r = await crawl(fakeContext({ '/': links }), `${o}/`, opts({ maxPages: 4 }));
+    expect(r.discovered).toBe(10);
+    expect(r.pages).toHaveLength(4);
+    expect(r.leftOut).toHaveLength(6);
+    const audited = new Set(r.pages.map((p) => p.url));
+    for (const u of r.leftOut) expect(audited.has(u)).toBe(false);
+  });
+
+  it('leaves nothing out when every discovered page is audited', async () => {
+    const o = await origin(null);
+    const r = await crawl(fakeContext({ '/': ['/a', '/b'] }), `${o}/`, opts({ maxPages: 10 }));
+    expect(r.discovered).toBe(3);
+    expect(r.leftOut).toEqual([]);
+  });
+});

@@ -220,6 +220,59 @@ describe('static server', () => {
   });
 });
 
+describe('static server redirects', () => {
+  it('answers the redirects a fixture declares with 301 and serves everything else as before', async () => {
+    const { serveStatic } = await import('../../src/core/static-server.js');
+    const dir = mkdtempSync(join(tmpdir(), 'jourilo-redirects-'));
+    writeFileSync(join(dir, 'index.html'), '<h1>x</h1>');
+    writeFileSync(join(dir, 'new.html'), '<h1>new</h1>');
+    writeFileSync(join(dir, 'jourilo-fixture.json'), JSON.stringify({ redirects: { '/old': '/new' } }));
+    const s = await serveStatic(dir);
+    try {
+      for (const p of ['/old', '/old/']) {
+        const r = await fetch(`${s.url}${p}`, { redirect: 'manual' });
+        expect([r.status, r.headers.get('location')], p).toEqual([301, '/new']);
+      }
+      expect(await (await fetch(`${s.url}/old`)).text()).toContain('<h1>new</h1>');
+      expect((await fetch(`${s.url}/new`, { redirect: 'manual' })).status).toBe(200);
+    } finally {
+      await s.close();
+    }
+  });
+
+  it('ignores a redirect value that is not a same-origin path, without crashing on CR/LF', async () => {
+    const { serveStatic } = await import('../../src/core/static-server.js');
+    const dir = mkdtempSync(join(tmpdir(), 'jourilo-redirects-bad-'));
+    writeFileSync(join(dir, 'index.html'), '<h1>x</h1>');
+    writeFileSync(join(dir, 'new.html'), '<h1>new</h1>');
+    writeFileSync(
+      join(dir, 'jourilo-fixture.json'),
+      JSON.stringify({
+        redirects: {
+          '/crlf': '/new\r\nSet-Cookie: x=1',
+          '/proto': '//evil.test/',
+          '/back': '/\\evil.test/',
+          '/abs': 'https://evil.test/',
+          '/num': 5,
+          '/ok': '/new',
+        },
+      }),
+    );
+    const s = await serveStatic(dir);
+    try {
+      for (const p of ['/crlf', '/proto', '/back', '/abs', '/num']) {
+        const r = await fetch(`${s.url}${p}`, { redirect: 'manual' });
+        expect(r.status, p).toBe(404);
+        expect(r.headers.get('location'), p).toBeNull();
+      }
+      const ok = await fetch(`${s.url}/ok`, { redirect: 'manual' });
+      expect([ok.status, ok.headers.get('location')]).toEqual([301, '/new']);
+    } finally {
+      await s.close();
+    }
+  });
+});
+
 describe('static server and secrets', () => {
   it('does not serve hidden files that exist in the served directory', async () => {
     const { serveStatic } = await import('../../src/core/static-server.js');

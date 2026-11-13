@@ -149,6 +149,8 @@ export interface PageCapture {
   metrics: MetricValue[];
   consoleErrors: number;
   failedRequests: number;
+  /** How the page was captured (`--wait-for`): `found` is false when the element never appeared within `--timeout`. */
+  load?: { networkIdle: boolean; waitedFor?: string; found?: boolean };
   /** Product-facing inventory used by the conversion and journey engines. */
   inventory: PageInventory;
 }
@@ -250,7 +252,12 @@ export interface JourneyResult {
 export type RunMode = 'website' | 'repository';
 
 export interface RunSummary {
+  /** Page captures (URL × viewport). Kept under this name within schema version 1; see `urls` and `captures`. */
   pages: number;
+  /** Distinct page URLs that were audited. */
+  urls?: number;
+  /** Page captures; equal to `pages`. */
+  captures?: number;
   journeys: number;
   /** Defects by severity (hypotheses and needs-review items are only counted in byKind). */
   findings: Record<Severity, number>;
@@ -288,6 +295,20 @@ export interface Run {
   outcome?: 'complete' | 'no-page-loaded' | 'partial';
   /** Why a `partial` run stopped: a SIGINT/SIGTERM, or the `--max-duration` budget ran out. */
   stoppedBy?: 'signal' | 'max-duration';
+  /**
+   * `--budget` results: per metric, the worst capture's value (the median with `--runs N`). `ok` is null when no
+   * capture measured the metric (neither a pass nor a fail).
+   */
+  budgets?: {
+    metric: string;
+    limit: number;
+    worst: number | null;
+    url: string | null;
+    viewport: string | null;
+    ok: boolean | null;
+  }[];
+  /** Set when discovery found more pages than were audited: how many, and (at most 20) which were left out. */
+  sample?: { discovered: number; audited: number; leftOut: string[] };
   /** Findings kept out of `findings` because a person or agent dismissed them (not counted in the summary). */
   dismissed?: (Finding & { dismissal: import('./dismissals.js').Dismissal })[];
 }

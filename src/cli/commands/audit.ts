@@ -1,5 +1,13 @@
 import { existsSync, writeSync } from 'node:fs';
 import { resolve } from 'node:path';
+import {
+  budgetCoverageLimitations,
+  budgetFailed,
+  budgetLimitation,
+  budgetLine,
+  evaluateBudgets,
+  parseBudgets,
+} from '../../audit/budget.js';
 import { type AuditOptions, runAudit, STOP_GRACE_MS } from '../../audit/engine.js';
 import { severityRank } from '../../audit/finding.js';
 import { exitCodeForOutcome, runOutcome } from '../../audit/outcome.js';
@@ -16,10 +24,14 @@ import {
   type Command,
   type CommandResult,
   type Context,
+  chromiumSandboxFrom,
   denyLocalFrom,
   flag,
   list,
   maxDurationOption,
+  NETWORK_OPTIONS,
+  networkFrom,
+  networkOptionsHelp,
   num,
   type OptionSpec,
   pagesOption,
@@ -51,6 +63,7 @@ export const AUDIT_OPTIONS: OptionSpec = {
   clock: { type: 'string' },
   'setup-journey': { type: 'string' },
   timeout: { type: 'string' },
+  'wait-for': { type: 'string' },
   repo: { type: 'string' },
   sarif: { type: 'boolean' },
   'no-forms': { type: 'boolean' },
@@ -58,9 +71,11 @@ export const AUDIT_OPTIONS: OptionSpec = {
   brand: { type: 'string' },
   runs: { type: 'string' },
   'fail-on': { type: 'string' },
+  budget: { type: 'string' },
   'max-duration': { type: 'string' },
   'run-id': { type: 'string' },
   evidence: { type: 'string' },
+  ...NETWORK_OPTIONS,
 };
 
 const SEVERITIES: Severity[] = ['critical', 'serious', 'moderate', 'minor'];
@@ -131,6 +146,7 @@ export async function auditCommand(
   const failOn = str(ctx, 'fail-on') as Severity | undefined;
   if (failOn && !SEVERITIES.includes(failOn))
     throw new JouriloError('USAGE', `--fail-on must be one of ${SEVERITIES.join(', ')}.`);
+  const budgetSpecs = parseBudgets(str(ctx, 'budget'));
   const state = parseStateOptions(ctx);
   const auth = str(ctx, 'auth');
   if (auth && !existsSync(auth)) throw new JouriloError('NOT_FOUND', `Auth state file not found: ${auth}`);
@@ -138,6 +154,9 @@ export async function auditCommand(
   const maxDuration = maxDurationOption(ctx);
   const maxPages = pagesOption(ctx, 6);
 
+  const waitFor = str(ctx, 'wait-for')?.trim();
+  if (str(ctx, 'wait-for') !== undefined && !waitFor)
+    throw new JouriloError('USAGE', '--wait-for is empty.', 'Example: --wait-for "main h1"');
   const evidence = parseEvidence(ctx);
   const setupRef = str(ctx, 'setup-journey');
   const setupJourney = setupRef ? loadJourneys(ctx.ws, [setupRef])[0] : undefined;
@@ -148,8 +167,9 @@ export async function auditCommand(
     const isDir = isDirectoryTarget(targetArg);
     server = isDir ? await serveStatic(resolve(targetArg)) : undefined;
     const repo = str(ctx, 'repo') ?? (isDir ? resolve(targetArg) : undefined);
+    const auditTarget = server ? server.url : targetArg;
     const opts: AuditOptions = {
-      target: server ? server.url : targetArg,
+      target: auditTarget,
       viewports: parseViewports(str(ctx, 'viewports')),
       maxPages,
       maxDepth: num(ctx, 'depth', 3),
@@ -160,11 +180,14 @@ export async function auditCommand(
       ...(denyLocalFrom(ctx)
         ? { denyLocal: true, ...(server ? { servedPort: servedPort(server) } : {}) }
         : {}),
+      ...networkFrom(ctx, auditTarget),
+      ...(chromiumSandboxFrom(ctx, browser) ? { chromiumSandbox: true } : {}),
       keyboard: !flag(ctx, 'no-keyboard'),
       throttle: flag(ctx, 'throttle'),
       runs: num(ctx, 'runs', 1),
       timeoutMs: num(ctx, 'timeout', 30) * 1000,
       mask: list(ctx, 'mask'),
+      ...(waitFor ? { waitFor } : {}),
       urls: list(ctx, 'url'),
       include: list(ctx, 'include'),
       ...(auth ? { storageState: auth } : {}),
@@ -178,7 +201,7 @@ export async function auditCommand(
       mode: repo ? 'repository' : 'website',
       forms: !flag(ctx, 'no-forms'),
       allowSubmit: flag(ctx, 'allow-submit'),
-      onProgress: ctx.log,
+      onProgress: ctx.progress,
       signal: stop.signal,
     };
     if (
@@ -198,17 +221,26 @@ export async function auditCommand(
     if (repo) run.settings.repo = repo;
     if (repo) {
       const located = locateFindings(run, repo);
-      ctx.log(`Mapped ${located} finding(s) to likely source locations in ${repo}`);
+      ctx.progress({
+        phase: 'report',
+        message: `Mapped ${located} finding(s) to likely source locations in ${repo}`,
+      });
     }
     run.outcome = runOutcome(run);
+    if (budgetSpecs.length) {
+      run.budgets = evaluateBudgets(run.pages, budgetSpecs);
+      for (const b of run.budgets) if (b.ok === null) run.limitations.push(budgetLimitation(b));
+      run.limitations.push(...budgetCoverageLimitations(run.pages, run.budgets));
+    }
     ctx.ws.saveRun(run);
     const reports = writeReports(runDir, run, undefined, {
       sarif: flag(ctx, 'sarif'),
       history: ctx.ws.listRuns(),
     });
-    const gate = failOn
+    const severityGate = failOn
       ? run.findings.some((f) => f.kind === 'defect' && severityRank(f.severity) <= severityRank(failOn))
       : false;
+    const gate = severityGate || budgetFailed(run.budgets);
     return {
       data: {
         runId: run.id,
@@ -219,6 +251,7 @@ export async function auditCommand(
         summary: run.summary,
         findings: run.findings,
         limitations: run.limitations,
+        ...(run.budgets ? { budgets: run.budgets } : {}),
         gateFailed: gate,
       },
       text: summaryText(run, reports.html),
@@ -255,6 +288,7 @@ export function summaryText(run: Run, reportPath: string): string {
     );
   }
   if (run.findings.filter((f) => f.kind === 'defect').length > top.length) lines.push('  …');
+  if (run.budgets?.length) lines.push('', ...run.budgets.map((b) => `  ${budgetLine(b)}`));
   lines.push('', `  Report: ${reportPath}`, `  Run id: ${run.id}`, '');
   return lines.join('\n');
 }
@@ -277,7 +311,7 @@ export const audit: Command = {
   summary:
     'Audit a website URL or a static build directory in a real browser (accessibility, UX, responsive, performance, reliability, conversion).',
   usage:
-    'jourilo audit <url|dir> [--pages 6] [--viewports desktop,mobile] [--url /path ...] [--repo .] [--fail-on serious]',
+    'jourilo audit <url|dir> [--pages 6] [--viewports desktop,mobile] [--url /path ...] [--repo .] [--fail-on serious] [--budget LCP=2000]',
   options: AUDIT_OPTIONS,
   details: `Options:
   --pages N            Pages to audit after discovery (default 6; 1 = only the target; 0 is a usage error)
@@ -289,6 +323,8 @@ export const audit: Command = {
   --headed             Show the browser window instead of running headless
   --locale TAG         Browser locale for every page (e.g. tr-TR); sets Accept-Language and navigator.language
   --timeout SECS       Per-page navigation timeout in seconds (default 30)
+  --wait-for SELECTOR  Capture each page only once this element is visible (client-rendered pages); if it never appears within
+                       --timeout the page is still audited, with a limitation. Each capture records how it loaded
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
@@ -304,6 +340,7 @@ export const audit: Command = {
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
   --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                        JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3). For hosted integrations; a directory target is still served
+${networkOptionsHelp(23)}
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -312,6 +349,9 @@ export const audit: Command = {
                        also lets a --setup-journey submit forms
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
+  --budget LIST        Exit 1 when a lab metric exceeds its limit, e.g. LCP=2000,CLS=0.05,TBT=300 (LCP, CLS, INP, FCP,
+                       TTFB, TBT; ms, CLS unitless). Each capture's median is compared and the worst capture decides;
+                       a metric no page measured (INP) is reported as not measured, not as a pass. Combines with --fail-on
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
   --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused (exit 2) if its
                        directory exists, even without a run.json (left by a crashed run)

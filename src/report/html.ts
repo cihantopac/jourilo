@@ -2,6 +2,7 @@
 // Every string that came from a page is escaped: page content is untrusted and must never execute in the report.
 // The report is complete without JavaScript; the inline client only adds language, theme, filters and the repair
 // prompt, and a strict CSP keeps it offline.
+import { budgetLine } from '../audit/budget.js';
 import { severityRank } from '../audit/finding.js';
 import { MANUAL_REVIEW } from '../audit/standards.js';
 import type { Evidence, Finding, FindingKind, JourneyResult, Run, Severity } from '../core/types.js';
@@ -107,6 +108,9 @@ function cropAt(run: Run, vpName: string, e: Pick<Evidence, 'file' | 'rect'>, o:
   return `<div class="crop" style="aspect-ratio:${Math.round(rw)}/${Math.round(rh)}"><img loading="lazy" alt="" src="${src}" style="width:${pct(vp.width, rw)};left:-${pct(x0, rw)};top:-${pct(y0, rh)}"><div class="box" style="${box}"></div></div>`;
 }
 
+/** A page's screenshot, or its fold screenshot (`--evidence minimal` keeps only that for a one-screen page). */
+const shotOf = (p: { screenshot?: string; foldScreenshot?: string }) => p.screenshot ?? p.foldScreenshot;
+
 /** The best picture for a finding: an outlined element, a screenshot it carries, or its page. */
 function visualOf(run: Run, f: Finding, o: CropOpts = {}): string {
   for (const e of f.evidence) {
@@ -116,9 +120,9 @@ function visualOf(run: Run, f: Finding, o: CropOpts = {}): string {
   const shot = f.evidence.find((e) => e.type === 'screenshot' && e.file)?.file;
   const vp = (f.viewport ?? '').split(', ')[0];
   const page =
-    run.pages.find((p) => p.url === f.url && p.viewport === vp && p.screenshot) ??
-    run.pages.find((p) => p.url === f.url && p.screenshot);
-  const file = shot ?? page?.screenshot;
+    run.pages.find((p) => p.url === f.url && p.viewport === vp && shotOf(p)) ??
+    run.pages.find((p) => p.url === f.url && shotOf(p));
+  const file = shot ?? (page ? shotOf(page) : undefined);
   const src = runFile(file, o.base);
   if (src === '#') return '';
   return `<img class="cover" loading="lazy" alt="" src="${src}">`;
@@ -463,18 +467,31 @@ function metricCell(p: Run['pages'][number], name: string): string {
   return `<td class="${m.rating ?? ''}">${esc(v)}</td>`;
 }
 
+/** "Captured after: load, network idle (yes/no), <selector> (found / not found)" for one capture. */
+function loadLine(p: Run['pages'][number]): string {
+  if (!p.load) return '';
+  const wait = p.load.waitedFor
+    ? `, <code lang="en">${esc(p.load.waitedFor)}</code> (${T(p.load.found ? 'pages.found' : 'pages.notFound')})`
+    : '';
+  return `<div class="muted">${T(p.load.networkIdle ? 'pages.loadIdle' : 'pages.loadBusy')}${wait}</div>`;
+}
+
 function pagesHtml(run: Run): string {
   const rows = run.pages
     .map(
       (
         p,
-      ) => `<tr><td>${p.screenshot ? `<a href="${runFile(p.screenshot)}" target="_blank" rel="noopener"${attrs({ 'aria-label': 'shot.open' })}><img class="mini" loading="lazy" alt="" src="${runFile(p.screenshot)}"></a>` : `<span class="muted">${T('pages.noShot')}</span>`}</td>
-<td><a href="${safeHref(p.url)}" target="_blank" rel="noopener">${esc(pathname(p.url))}</a><div class="muted" lang="en">${esc(p.title)}</div></td><td>${esc(p.viewport)}</td><td>${p.status ?? '–'}</td>
+      ) => `<tr><td>${shotOf(p) ? `<a href="${runFile(shotOf(p))}" target="_blank" rel="noopener"${attrs({ 'aria-label': 'shot.open' })}><img class="mini" loading="lazy" alt="" src="${runFile(shotOf(p))}"></a>` : `<span class="muted">${T('pages.noShot')}</span>`}</td>
+<td><a href="${safeHref(p.url)}" target="_blank" rel="noopener">${esc(pathname(p.url))}</a><div class="muted" lang="en">${esc(p.title)}</div>${loadLine(p)}</td><td>${esc(p.viewport)}</td><td>${p.status ?? '–'}</td>
 ${metricCell(p, 'LCP')}${metricCell(p, 'CLS')}${metricCell(p, 'TBT')}${metricCell(p, 'Transfer')}<td>${p.consoleErrors}</td><td>${p.failedRequests}</td></tr>`,
     )
     .join('');
   return `<div class="tablewrap" tabindex="0" role="region"${attrs({ 'aria-label': 'pages.table' })}><table class="pages"><thead><tr><th><span class="sr">Screenshot</span></th><th>${T('th.page')}</th><th>${T('th.viewport')}</th><th>${T('th.http')}</th><th>LCP</th><th>CLS</th><th>TBT</th><th>Transfer</th><th>${T('th.jserr')}</th><th>${T('th.failedReq')}</th></tr></thead><tbody>${rows}</tbody></table></div>
-<p class="muted">${T('pages.note', { t: run.settings.throttle ? I18N.en['pages.throttled'] : I18N.en['pages.unthrottled'] })}</p>`;
+<p class="muted">${T('pages.note', { t: run.settings.throttle ? I18N.en['pages.throttled'] : I18N.en['pages.unthrottled'] })}</p>${
+    run.budgets?.length
+      ? `<ul class="muted" lang="en">${run.budgets.map((b) => `<li>${esc(budgetLine(b))}</li>`).join('')}</ul>`
+      : ''
+  }`;
 }
 
 function compareHtml(cmp: RunComparison): string {
@@ -704,7 +721,7 @@ ${cmp ? `<button type="button" role="tab" id="tab-compare" aria-controls="compar
 <div class="hero"><p class="eyebrow"><span class="diamond" aria-hidden="true"></span>${T(!run.pages.length && run.journeys.length ? 'mode.journeys' : (`mode.${run.mode}` as MsgKey))} · <time datetime="${esc(run.startedAt)}" data-date="${esc(run.startedAt)}">${esc(new Date(run.startedAt).toUTCString())}</time></p>
 <h1 class="serif">${esc(run.target)}</h1>
 <p class="lede">${lede}</p>
-<p class="scope">${uniquePages ? `<span>${T('scope.pages', { n: uniquePages })}</span>` : ''}<span>${T('scope.viewports', { n: run.viewports.length })} · ${run.viewports.map((v) => `${esc(v.name)} ${v.width}×${v.height}`).join(', ')}</span>${run.journeys.length ? `<span>${T('scope.journeys', { n: run.journeys.length })}</span>` : ''}<span>${esc(run.browser.name)} ${esc(run.browser.version)}</span><span>Jourilo ${esc(run.tool.version)}</span></p></div>
+<p class="scope">${uniquePages ? `<span>${T('scope.pages', { n: uniquePages })}, ${T('scope.captures', { n: run.pages.length })}</span>` : ''}<span>${T('scope.viewports', { n: run.viewports.length })} · ${run.viewports.map((v) => `${esc(v.name)} ${v.width}×${v.height}`).join(', ')}</span>${run.journeys.length ? `<span>${T('scope.journeys', { n: run.journeys.length })}</span>` : ''}<span>${esc(run.browser.name)} ${esc(run.browser.version)}</span><span>Jourilo ${esc(run.tool.version)}</span></p></div>
 <div class="kpis">${kpis}</div>
 <p class="noscore"><span class="diamond" aria-hidden="true"></span>${T('noscore')}</p>
 ${blockedHtml(run, groups)}

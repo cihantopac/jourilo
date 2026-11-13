@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/cihantopac/jourilo/v1.2.1/docs/assets/brand/jourilo-wordmark-reversed.svg">
-    <img src="https://raw.githubusercontent.com/cihantopac/jourilo/v1.2.1/docs/assets/brand/jourilo-wordmark.svg" alt="Jourilo" width="260">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/cihantopac/jourilo/v1.3.0/docs/assets/brand/jourilo-wordmark-reversed.svg">
+    <img src="https://raw.githubusercontent.com/cihantopac/jourilo/v1.3.0/docs/assets/brand/jourilo-wordmark.svg" alt="Jourilo" width="260">
   </picture>
 </p>
 
@@ -30,8 +30,8 @@
 </p>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/cihantopac/jourilo/v1.2.1/docs/assets/report-overview-dark.png">
-  <img src="https://raw.githubusercontent.com/cihantopac/jourilo/v1.2.1/docs/assets/report-overview.png" alt="The Jourilo report: verified defects, root causes, automatic fixes, manual review and conversion hypotheses as separate counts, then the highest-impact root causes with their screenshots">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/cihantopac/jourilo/v1.3.0/docs/assets/report-overview-dark.png">
+  <img src="https://raw.githubusercontent.com/cihantopac/jourilo/v1.3.0/docs/assets/report-overview.png" alt="The Jourilo report: verified defects, root causes, automatic fixes, manual review and conversion hypotheses as separate counts, then the highest-impact root causes with their screenshots">
 </picture>
 
 ## It walks the journey, step by step
@@ -39,7 +39,7 @@
 Jourilo signs up, checks out and follows calls to action like a person would, with a real screenshot of every step.
 When a journey breaks, you see exactly where.
 
-<img src="https://raw.githubusercontent.com/cihantopac/jourilo/v1.2.1/docs/assets/report-journeys.png" alt="A sign-up journey on mobile: the form is filled in, Submit is clicked, the page resets, and the goal 'leaves the form page' is not met">
+<img src="https://raw.githubusercontent.com/cihantopac/jourilo/v1.3.0/docs/assets/report-journeys.png" alt="A sign-up journey on mobile: the form is filled in, Submit is clicked, the page resets, and the goal 'leaves the form page' is not met">
 
 ## Evidence you can see
 
@@ -47,11 +47,11 @@ Every finding comes with the element outlined on its screenshot, the measured va
 steps and the likely source line. Findings with one cause are grouped into one fix. Verified defects, items that need a
 person and conversion hypotheses are always kept apart, and there is no made-up overall score.
 
-<img src="https://raw.githubusercontent.com/cihantopac/jourilo/v1.2.1/docs/assets/report-finding.png" alt="A finding: the page scrolls sideways at 390 px, with the measured widths, WCAG 1.4.10, the CSS rule that causes it and the element highlighted on the mobile screenshot">
+<img src="https://raw.githubusercontent.com/cihantopac/jourilo/v1.3.0/docs/assets/report-finding.png" alt="A finding: the page scrolls sideways at 390 px, with the measured widths, WCAG 1.4.10, the CSS rule that causes it and the element highlighted on the mobile screenshot">
 
 ## Audit → Understand → Fix → Verify
 
-<img src="https://raw.githubusercontent.com/cihantopac/jourilo/v1.2.1/docs/assets/workflow.png" alt="Four steps: audit in a real browser, understand by root cause, fix with approved patches or a repair prompt, verify with a before/after run">
+<img src="https://raw.githubusercontent.com/cihantopac/jourilo/v1.3.0/docs/assets/workflow.png" alt="Four steps: audit in a real browser, understand by root cause, fix with approved patches or a repair prompt, verify with a before/after run">
 
 ## Fix it yourself, automatically or with your agent
 
@@ -64,21 +64,21 @@ person and conversion hypotheses are always kept apart, and there is no made-up 
   verify with Jourilo.
 - **Experiment briefs** for conversion hypotheses, never code changes or promised lifts.
 
-<img src="https://raw.githubusercontent.com/cihantopac/jourilo/v1.2.1/docs/assets/report-prompt.png" alt="The repair prompt dialog: an editable Markdown brief with copy and download buttons, generated from three selected findings">
+<img src="https://raw.githubusercontent.com/cihantopac/jourilo/v1.3.0/docs/assets/report-prompt.png" alt="The repair prompt dialog: an editable Markdown brief with copy and download buttons, generated from three selected findings">
 
 ## Prove it
 
 `jourilo verify` repeats the same pages, viewports and journeys and shows what is fixed, new or still present, with the
 same region of the page before and after.
 
-<img src="https://raw.githubusercontent.com/cihantopac/jourilo/v1.2.1/docs/assets/report-before-after.png" alt="Before / after: 14 fixed, 0 new, 18 still present, with before and after crops of each fixed problem">
+<img src="https://raw.githubusercontent.com/cihantopac/jourilo/v1.3.0/docs/assets/report-before-after.png" alt="Before / after: 14 fixed, 0 new, 18 still present, with before and after crops of each fixed problem">
 
 ## One file, any screen, two languages
 
 The report is a single offline HTML file. It follows the browser's language and theme, and you can switch between
 English and Turkish and between light, dark and system appearance.
 
-<img src="https://raw.githubusercontent.com/cihantopac/jourilo/v1.2.1/docs/assets/report-mobile.png" alt="The report on two phones: English in the light theme and Turkish in the dark theme">
+<img src="https://raw.githubusercontent.com/cihantopac/jourilo/v1.3.0/docs/assets/report-mobile.png" alt="The report on two phones: English in the light theme and Turkish in the dark theme">
 
 ## Install
 
@@ -113,11 +113,11 @@ the report. All commands: [docs/PLUGIN.md](docs/PLUGIN.md).
 ## Benchmarks
 
 On the 955 [W3C ACT Rules](https://www.w3.org/WAI/standards-guidelines/act/rules/) test cases that map to WCAG criteria,
-written by the ACT Rules Community Group and not for Jourilo (measured again on 2026-11-12 for 1.2.1, with the same result):
+written by the ACT Rules Community Group and not for Jourilo (measured again on 2026-11-13 for 1.3.0):
 
 |                       | Precision | Recall | False positives |
 | --------------------- | --------- | ------ | --------------- |
-| Jourilo 1.2.1         | 93.9 %    | 55.4 % | 11              |
+| Jourilo 1.3.0         | 93.4 %    | 56.1 % | 12              |
 | axe-core 4.14.0 alone | 93.6 %    | 53.5 % | 11              |
 
 Jourilo runs axe-core and adds its own keyboard-trap and focus-indicator checks. Many misses are criteria only a person
@@ -144,7 +144,7 @@ Jourilo works on its own and pairs with its siblings through a small, optional c
 
 [Guide](docs/WORKFLOW.md) · [CLI](docs/CLI.md) · [Plugin](docs/PLUGIN.md) · [Journeys](docs/JOURNEYS.md) · [Run format](docs/RUN-FORMAT.md) ·
 [Evaluation](docs/EVALUATION.md) · [Limitations](docs/LIMITATIONS.md) · [Architecture](docs/ARCHITECTURE.md) ·
-[Decisions](docs/DECISIONS.md) · [Roadmap](docs/ROADMAP.md) · [Changelog](CHANGELOG.md) · [1.2 release notes](docs/RELEASE-1.2.md)
+[Decisions](docs/DECISIONS.md) · [Roadmap](docs/ROADMAP.md) · [Changelog](CHANGELOG.md) · [1.3 release notes](docs/RELEASE-1.3.md) · [1.2 release notes](docs/RELEASE-1.2.md)
 
 Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Every rule needs a fixture that proves it fires and a
 control that proves it does not.

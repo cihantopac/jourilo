@@ -125,6 +125,15 @@ export const CWV = {
   },
 } satisfies Record<string, StandardRef>;
 
+export const LIGHTHOUSE = {
+  redirects: {
+    standard: 'Lighthouse',
+    id: 'redirects',
+    title: 'Avoid multiple page redirects',
+    url: 'https://developer.chrome.com/docs/lighthouse/performance/redirects',
+  },
+} satisfies Record<string, StandardRef>;
+
 const NN_HEURISTICS = [
   'Visibility of system status',
   'Match between system and the real world',

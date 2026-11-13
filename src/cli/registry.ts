@@ -6,6 +6,7 @@ import { experiment } from './commands/experiment.js';
 import { finding } from './commands/finding.js';
 import { journeys } from './commands/journeys.js';
 import { checkpoint, optimize, rollbackCmd, verify } from './commands/optimize.js';
+import { rules } from './commands/rules.js';
 import { compare, report, runs } from './commands/runs.js';
 import { doctor, serve, setup } from './commands/system.js';
 import type { Command } from './framework.js';
@@ -27,6 +28,7 @@ export const COMMANDS: Command[] = [
   runs,
   bench,
   agent,
+  rules,
   serve,
   setup,
   doctor,
@@ -39,7 +41,7 @@ export const GROUPS: [string, string[]][] = [
   ['Experiment', ['experiment']],
   ['Improve', ['optimize', 'verify', 'checkpoint', 'rollback']],
   ['Results', ['report', 'compare', 'runs', 'finding']],
-  ['System', ['agent', 'bench', 'serve', 'setup', 'doctor']],
+  ['System', ['agent', 'bench', 'rules', 'serve', 'setup', 'doctor']],
 ];
 
 export function cliMarkdown(): string {
@@ -54,7 +56,13 @@ export function cliMarkdown(): string {
     '6 stopped early by SIGINT/SIGTERM or `--max-duration` (a partial run is still written; a second signal exits 130).',
     '',
     'Global options: `--json`, `--workspace DIR` (default `.jourilo`, or `JOURILO_WORKSPACE`), `--quiet`. With `--json`,',
-    'progress lines on stderr are JSON too: `{"type":"progress","message":"…","at":"<ISO time>"}`.',
+    'progress lines on stderr are JSON too: `{"type":"progress","message":"…","at":"<ISO time>"}`. Lines from the audit',
+    'pipeline also carry `phase` (launch, discover, setup, capture, metrics, forms or report; `rules` is reserved and not',
+    'emitted yet) and, where known exactly, `done`, `total`, `url` and `viewport`. `done` counts the steps of that phase',
+    'finished before this step started, so the last line of a phase has `done` = `total` − 1; the phase is over when the',
+    "next phase's first line arrives or the run ends. `url` is redacted like the message, and the `message` text is the",
+    'same as the plain line (see docs/RUN-FORMAT.md). `--workspace` is also the output directory: every run is written',
+    'to `DIR/runs/<id>/` (there is no separate `--output-dir`).',
     '',
   ];
   for (const [title, names] of GROUPS) {

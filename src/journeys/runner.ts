@@ -7,6 +7,7 @@ import { EVIDENCE_QUALITY, type EvidenceMode } from '../audit/evidence.js';
 import { makeFinding } from '../audit/finding.js';
 import { CWV, nielsen } from '../audit/standards.js';
 import { DEFAULT_MASK, newContext, observe } from '../browser/capture.js';
+import type { TargetHeaders } from '../browser/target-headers.js';
 import { parseViewports } from '../browser/viewports.js';
 import { type RawVitals, READ_VITALS_SCRIPT, rate } from '../browser/vitals.js';
 import { toPosix, writeFileSafe } from '../core/fs-safety.js';
@@ -28,6 +29,10 @@ export interface JourneyRunOptions {
   storageState?: string;
   timezoneId?: string;
   clock?: string;
+  /** `--user-agent`, `--extra-header` (target origin only) and `--ignore-https-errors` (F16). */
+  userAgent?: string;
+  extraHeaders?: TargetHeaders;
+  ignoreHttpsErrors?: boolean;
   stepTimeoutMs: number;
   viewportOverride?: string;
   /** Save the browser's storage state (cookies, localStorage) after the journey, for signed-in audits. */
@@ -273,6 +278,9 @@ export async function runJourney(
     ...(opts.storageState ? { storageState: opts.storageState } : {}),
     ...(opts.timezoneId ? { timezoneId: opts.timezoneId } : {}),
     ...(opts.clock ? { clock: opts.clock } : {}),
+    ...(opts.userAgent ? { userAgent: opts.userAgent } : {}),
+    ...(opts.extraHeaders ? { extraHeaders: opts.extraHeaders } : {}),
+    ...(opts.ignoreHttpsErrors ? { ignoreHttpsErrors: true } : {}),
   });
   const tracePath = opts.trace ? join('traces', `${spec.id}-${vp.name}.zip`) : undefined;
   if (tracePath) await ctx.tracing.start({ screenshots: true, snapshots: true, title: spec.name });

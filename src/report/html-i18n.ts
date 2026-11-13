@@ -25,6 +25,7 @@ const EN = {
   'mode.repository': 'Repository audit',
   'mode.journeys': 'Journey run',
   'scope.pages': '{n} page{n:s}',
+  'scope.captures': '{n} capture{n:s}',
   'scope.viewports': '{n} viewport{n:s}',
   'scope.journeys': '{n} journey{n:s}',
   'lede.found':
@@ -187,6 +188,10 @@ const EN = {
   'j.stoppedHere': 'Stopped here',
   'j.noShot': 'No screenshot',
   'pages.noShot': 'No screenshot kept',
+  'pages.loadIdle': 'Captured after: load, network idle (yes)',
+  'pages.loadBusy': 'Captured after: load, network idle (no)',
+  'pages.found': 'found',
+  'pages.notFound': 'not found',
   'j.lastStep': 'Last step',
   'j.goal': 'Goal',
 
@@ -266,6 +271,7 @@ const TR: Record<MsgKey, string> = {
   'mode.repository': 'Depo denetimi',
   'mode.journeys': 'Yolculuk çalıştırması',
   'scope.pages': '{n} sayfa',
+  'scope.captures': '{n} yakalama',
   'scope.viewports': '{n} görünüm alanı',
   'scope.journeys': '{n} yolculuk',
   'lede.found':
@@ -428,6 +434,10 @@ const TR: Record<MsgKey, string> = {
   'j.stoppedHere': 'Burada durdu',
   'j.noShot': 'Ekran görüntüsü yok',
   'pages.noShot': 'Ekran görüntüsü saklanmadı',
+  'pages.loadIdle': 'Şundan sonra yakalandı: yükleme, ağ boşta (evet)',
+  'pages.loadBusy': 'Şundan sonra yakalandı: yükleme, ağ boşta (hayır)',
+  'pages.found': 'bulundu',
+  'pages.notFound': 'bulunamadı',
   'j.lastStep': 'Son adım',
   'j.goal': 'Hedef',
 

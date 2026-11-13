@@ -107,6 +107,72 @@ describe('accessibility rules', () => {
     ]);
   });
 
+  it('decides sampled contrast over images and keeps unsampled nodes for review (F8)', () => {
+    // axe-core 4.14 incomplete data for text over a background image, as recorded in a real run.
+    const node = (id: string, contrast?: { worst: number; best: number; large: boolean }) => ({
+      target: `#${id}`,
+      html: `<p class="hero" id="${id}">Text</p>`,
+      summary:
+        "Fix any of the following:\n  Element's background color could not be determined due to a background image",
+      rect,
+      data: {
+        fgColor: '#ffffff',
+        contrastRatio: 0,
+        fontSize: '15.0pt (20px)',
+        fontWeight: 'normal',
+        messageKey: 'bgImage',
+        expectedContrastRatio: '4.5:1',
+      },
+      ...(contrast ? { contrast } : {}),
+    });
+    const f = axeFindings(
+      obs({
+        screenshot: 'screenshots/a.jpg',
+        axe: {
+          version: '4.14.0',
+          violations: [],
+          incomplete: [
+            {
+              id: 'color-contrast',
+              impact: 'serious',
+              help: 'Elements must meet minimum color contrast ratio thresholds',
+              helpUrl: 'https://x',
+              description: 'd',
+              tags: ['cat.color', 'wcag2aa', 'wcag143'],
+              nodes: [
+                node('bad-light', { worst: 1.0712, best: 1.17, large: false }),
+                node('bad-mixed', { worst: 1.1, best: 17.85, large: false }),
+                node('ok-dark', { worst: 10.47, best: 17.85, large: false }),
+                node('ok-large', { worst: 3.4, best: 5.2, large: true }),
+                node('unsampled'),
+              ],
+            },
+          ],
+        },
+      }),
+    );
+    const defect = f.find((x) => x.ruleId === 'jourilo/contrast-over-image')!;
+    expect(defect).toMatchObject({
+      kind: 'defect',
+      severity: 'serious',
+      confidence: 'medium',
+      provenance: 'measured',
+      occurrences: 2,
+    });
+    expect(defect.standards.map((s) => s.id)).toEqual(['1.4.3']);
+    expect(defect.evidence.map((e) => e.selector)).toEqual(['#bad-light', '#bad-mixed']);
+    expect(defect.evidence[0]!.data).toEqual({
+      worstRatio: 1.07,
+      bestRatio: 1.17,
+      required: 4.5,
+      large: false,
+    });
+    // Passing nodes (3:1 is enough for large text) are dropped; the unsampled one stays for manual review.
+    const review = f.find((x) => x.ruleId === 'axe-review/color-contrast')!;
+    expect(review.evidence.map((e) => e.selector)).toEqual(['#unsampled']);
+    expect(review.occurrences).toBe(1);
+  });
+
   it('reports invisible focus, obscured focus and traps from the keyboard walk', () => {
     const stop = (i: number, changes: string[], obscured = false) => ({
       index: i,
@@ -161,6 +227,26 @@ describe('accessibility rules', () => {
       }),
     );
     expect(trap[0]!.severity).toBe('critical');
+    // F23: focus held where nothing else is focusable is still a trap, described as what was pressed.
+    const alone = keyboardFindings(
+      obs({
+        keyboard: {
+          stops: [],
+          focusableCount: 2,
+          completedCycle: false,
+          trap: { selectors: ['#first', '#last'], held: 12 },
+          pressed: 14,
+        },
+      }),
+    );
+    expect([alone[0]!.ruleId, alone[0]!.kind, alone[0]!.severity]).toEqual([
+      'jourilo/keyboard-trap',
+      'defect',
+      'critical',
+    ]);
+    expect(alone[0]!.description).toBe(
+      'Focus stayed among 2 element(s) outside any modal dialog through 12 presses of Tab, 12 of Shift+Tab and 12 of Tab after Escape; it never returned to the page or the browser.',
+    );
   });
 
   it('flags personal-data fields without autocomplete and placeholder-only labels', () => {
@@ -352,6 +438,52 @@ describe('experience rules', () => {
       'secret',
     );
   });
+  it('reports a chain of three or more redirects before the page, not one or two', () => {
+    // As capture records them: redacted absolute URLs, main-frame navigation hops only.
+    const hops = [
+      { status: 301, from: 'http://127.0.0.1:41234/old', to: 'http://127.0.0.1:41234/older' },
+      { status: 302, from: 'http://127.0.0.1:41234/older', to: 'http://127.0.0.1:41234/oldest' },
+      { status: 301, from: 'http://127.0.0.1:41234/oldest', to: 'https://cdn.example.test/new?token=secret' },
+    ];
+    const page = {
+      url: 'http://127.0.0.1:41234/old',
+      finalUrl: 'https://cdn.example.test/new?token=REDACTED',
+    };
+    const chain = performanceFindings(obs({ ...page, redirects: hops })).filter(
+      (f) => f.ruleId === 'jourilo/redirect-chain',
+    );
+    expect(chain).toHaveLength(1);
+    const f = chain[0]!;
+    expect([f.kind, f.severity, f.category]).toEqual(['defect', 'minor', 'performance']);
+    expect(f.standards.length).toBeGreaterThan(0);
+    expect(f.title).toBe('Page is reached through 3 redirects');
+    expect(f.description).toContain('301 /old → /older');
+    expect(f.description).toContain('https://cdn.example.test/new');
+    expect(JSON.stringify(f)).not.toContain('secret');
+    // Network evidence only: there is no element or source line to point at.
+    expect(f.evidence.every((e) => e.type === 'network' && !e.selector)).toBe(true);
+    for (const n of [1, 2])
+      expect(
+        performanceFindings(obs({ ...page, redirects: hops.slice(0, n) })).some(
+          (x) => x.ruleId === 'jourilo/redirect-chain',
+        ),
+      ).toBe(false);
+  });
+  it('does not report a redirect chain on top of a redirect loop', () => {
+    const loop = [0, 1, 2, 3].map((i) => ({
+      status: 302,
+      from: `https://example.test/${i % 2 ? 'b' : 'a'}`,
+      to: `https://example.test/${i % 2 ? 'a' : 'b'}`,
+    }));
+    const o = obs({
+      errors: ['navigation: net::ERR_TOO_MANY_REDIRECTS at https://example.test/a'],
+      redirects: loop,
+      status: null,
+      probe: null,
+    });
+    const all = [...reliabilityFindings(o), ...performanceFindings(o)].map((f) => f.ruleId);
+    expect(all).toEqual(['jourilo/page-unreachable']);
+  });
   it('labels lab metrics and ignores good values', () => {
     const vitals = {
       lcp: 4300,
@@ -372,6 +504,104 @@ describe('experience rules', () => {
     const f = performanceFindings(obs({ vitals }));
     expect(f.map((x) => x.ruleId).sort()).toEqual(['perf/fcp', 'perf/lcp']);
     expect(f.find((x) => x.ruleId === 'perf/lcp')!.title).toContain('lab');
+  });
+});
+
+describe('performance evidence for snapshot consumers', () => {
+  const vit = (lcp: number, cls = 0.02) => ({
+    lcp,
+    lcpElement: 'h1',
+    cls,
+    clsEntries: [],
+    fcp: 100,
+    ttfb: 30,
+    tbt: 0,
+    inp: null,
+    interactions: 0,
+    domContentLoaded: 100,
+    load: 200,
+    transferBytes: 1000,
+    requests: 3,
+    domNodes: 50,
+  });
+  const lcpItems = (f: ReturnType<typeof mergeFindings>) =>
+    f
+      .filter((x) => x.ruleId === 'perf/lcp')
+      .flatMap((x) => x.evidence.filter((e) => e.type === 'metric' && e.data?.name === 'LCP'));
+  const both = (a: number, b: number) =>
+    mergeFindings([
+      ...performanceFindings(obs({ vitals: vit(a), viewport: VIEWPORTS.desktop! })),
+      ...performanceFindings(obs({ vitals: vit(b), viewport: VIEWPORTS.mobile! })),
+    ]);
+  it('two viewports with the same LCP give two evidence items', () => {
+    const items = lcpItems(both(4300, 4300));
+    expect(items.map((e) => e.data?.viewport).sort()).toEqual(['desktop', 'mobile']);
+  });
+  it('two viewports with different LCP give two evidence items', () => {
+    const items = lcpItems(both(4300, 5200));
+    expect(items.map((e) => e.data?.viewport).sort()).toEqual(['desktop', 'mobile']);
+  });
+  it('evidence values are rounded and the fingerprint does not depend on them', () => {
+    const a = performanceFindings(obs({ vitals: vit(4347, 0.31449) })).find((x) => x.ruleId === 'perf/lcp')!;
+    const b = performanceFindings(obs({ vitals: vit(4352, 0.31449) })).find((x) => x.ruleId === 'perf/lcp')!;
+    expect(a.evidence[0]!.data?.value).toBe(4350);
+    expect(b.evidence[0]!.data?.value).toBe(4350);
+    expect(a.fingerprint).toBe(b.fingerprint);
+    const cls = performanceFindings(obs({ vitals: vit(100, 0.31449) })).find((x) => x.ruleId === 'perf/cls')!;
+    expect(cls.evidence[0]!.data?.value).toBe(0.314);
+  });
+  it('three viewports keep every metric and CLS shift item, each with its viewport', () => {
+    // A real run.json: five CLS entries per capture (the cap), so three viewports hold 18 items.
+    const shifts = [0.1, 0.05, 0.04, 0.03, 0.02].map((value, i) => ({
+      value,
+      t: 300 + i * 100,
+      sources: ['img#hero'],
+    }));
+    const merged = mergeFindings(
+      ['desktop', 'tablet', 'mobile'].flatMap((v) =>
+        performanceFindings(
+          obs({ vitals: { ...vit(100, 0.24), clsEntries: shifts }, viewport: VIEWPORTS[v]! }),
+        ),
+      ),
+    ).find((x) => x.ruleId === 'perf/cls')!;
+    const byViewport = (v: string) => merged.evidence.filter((e) => e.data?.viewport === v);
+    for (const v of ['desktop', 'tablet', 'mobile']) {
+      expect(
+        byViewport(v).filter((e) => e.data?.name === 'CLS'),
+        v,
+      ).toHaveLength(1);
+      expect(
+        byViewport(v).filter((e) => 'shift' in (e.data ?? {})),
+        v,
+      ).toHaveLength(5);
+    }
+    expect(merged.evidence).toHaveLength(18);
+  });
+  it('merging dedupes network evidence by snippet', () => {
+    const chain = {
+      type: 'network' as const,
+      snippet: 'GET http://a.test/ → 301\nGET https://a.test/ → 200',
+    };
+    const f = (viewport: string) =>
+      makeFinding({
+        ruleId: 'jourilo/redirect-chain',
+        title: 't',
+        category: 'performance',
+        kind: 'defect',
+        severity: 'minor',
+        confidence: 'high',
+        provenance: 'observed',
+        url: 'https://a.test/',
+        viewport,
+        description: 'd',
+        impact: 'i',
+        recommendation: 'r',
+        standards: [],
+        evidence: [chain],
+      });
+    const merged = mergeFindings([f('desktop'), f('tablet'), f('mobile')]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]!.evidence).toEqual([chain]);
   });
 });
 

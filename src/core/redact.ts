@@ -51,6 +51,37 @@ export function redactUrl(raw: string): string {
   return redactText(url.toString()).replace(/redacted%5D/g, 'redacted]');
 }
 
+/**
+ * Redacts every http(s) URL inside free text (an error message) with `redactUrl`, then the rest as text. A token in a
+ * query string (`code=`, `sig=`) is not a key=value pair `redactText` knows, so the URL must be parsed.
+ */
+export function redactUrlsIn(input: string): string {
+  const out = input.replace(/\bhttps?:\/\/[^\s"'<>]+/gi, (m) => {
+    const trail = /[.,;:!?)\]}]+$/.exec(m)?.[0] ?? '';
+    return redactUrl(trail ? m.slice(0, -trail.length) : m) + trail;
+  });
+  return redactText(out);
+}
+
+/**
+ * Paths of URLs whose query holds a value that `redactUrl` replaced: a sensitive key set to "redacted", or to
+ * "[redacted]" when `redactText` rewrote the pair afterwards (`token=`, `password=`, `secret=`, `api_key=`).
+ */
+export function redactedQueryPaths(urls: string[]): string[] {
+  const paths = new Set<string>();
+  for (const raw of urls) {
+    try {
+      const u = new URL(raw);
+      for (const [k, v] of u.searchParams) {
+        if (/^\[?redacted\]?$/.test(v) && SENSITIVE_PARAM.test(k)) paths.add(u.pathname);
+      }
+    } catch {
+      // not a URL: nothing to replay either
+    }
+  }
+  return [...paths];
+}
+
 /** Short excerpt of untrusted page content, redacted and length-limited. */
 export function excerpt(input: string | null | undefined, max = 240): string {
   if (!input) return '';

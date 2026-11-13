@@ -8,7 +8,13 @@ Every command prints human-readable text, or JSON with `--json`. Errors go to st
 6 stopped early by SIGINT/SIGTERM or `--max-duration` (a partial run is still written; a second signal exits 130).
 
 Global options: `--json`, `--workspace DIR` (default `.jourilo`, or `JOURILO_WORKSPACE`), `--quiet`. With `--json`,
-progress lines on stderr are JSON too: `{"type":"progress","message":"…","at":"<ISO time>"}`.
+progress lines on stderr are JSON too: `{"type":"progress","message":"…","at":"<ISO time>"}`. Lines from the audit
+pipeline also carry `phase` (launch, discover, setup, capture, metrics, forms or report; `rules` is reserved and not
+emitted yet) and, where known exactly, `done`, `total`, `url` and `viewport`. `done` counts the steps of that phase
+finished before this step started, so the last line of a phase has `done` = `total` − 1; the phase is over when the
+next phase's first line arrives or the run ends. `url` is redacted like the message, and the `message` text is the
+same as the plain line (see docs/RUN-FORMAT.md). `--workspace` is also the output directory: every run is written
+to `DIR/runs/<id>/` (there is no separate `--output-dir`).
 
 ## Understand
 
@@ -22,11 +28,31 @@ jourilo discover <path|url> [--pages 10] [--ignore-robots] [--allow-private] [--
 
 ```
 Options:
-  --pages N         Pages to read when mapping a website (default 10)
-  --ignore-robots   Ignore robots.txt (only for sites you own or are authorized to test)
-  --allow-private   Allow private-network hosts (10.x, 192.168.x, ...)
-  --deny-local      Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
-                    JOURILO_DENY_LOCAL=1 does the same
+  --pages N           Pages to read when mapping a website (default 10)
+  --ignore-robots     Ignore robots.txt (only for sites you own or are authorized to test)
+  --allow-private     Allow private-network hosts (10.x, 192.168.x, ...)
+  --deny-local        Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
+                      JOURILO_DENY_LOCAL=1 does the same
+  --proxy URL         Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
+                      default HTTPS_PROXY / HTTP_PROXY (either case; prefer the variable for credentials, argv shows
+                      in ps). NO_PROXY is decided per destination host (NO_PROXY=* = no proxy). The guard resolves and
+                      checks every destination itself, then tunnels to the checked address (CONNECT ip:443, and ip:80
+                      for plain HTTP; a proxy that refuses port 80 fails those requests: give an https:// target);
+                      loopback connects directly. The run records the proxy without its credentials
+  --allow-hosts LIST  Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
+                      the target's own host is always allowed. Other hosts are refused and listed in the limitations
+  --block-hosts LIST  Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
+  --user-agent UA     Send this User-Agent (also navigator.userAgent) instead of the browser's own; recorded in the run
+  --extra-header H    Add a request header "Name: value" (repeatable), sent only to the target's origin, never
+                      to other hosts: Jourilo makes those requests itself, so the headers cannot follow a redirect
+                      elsewhere (a redirect is followed without them). The run records the names, never the values
+  --ignore-https-errors
+                      Accept invalid or self-signed certificates in the browser (test environments only); the network
+                      guard still checks every destination, and the run lists it in the limitations
+  --chromium-sandbox
+                      Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1
+                      does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch
+                      where the system denies the sandbox (containers, some Linux CI kernels)
 ```
 
 ## Audit
@@ -36,7 +62,7 @@ Options:
 Audit a website URL or a static build directory in a real browser (accessibility, UX, responsive, performance, reliability, conversion).
 
 ```
-jourilo audit <url|dir> [--pages 6] [--viewports desktop,mobile] [--url /path ...] [--repo .] [--fail-on serious]
+jourilo audit <url|dir> [--pages 6] [--viewports desktop,mobile] [--url /path ...] [--repo .] [--fail-on serious] [--budget LCP=2000]
 ```
 
 ```
@@ -50,6 +76,8 @@ Options:
   --headed             Show the browser window instead of running headless
   --locale TAG         Browser locale for every page (e.g. tr-TR); sets Accept-Language and navigator.language
   --timeout SECS       Per-page navigation timeout in seconds (default 30)
+  --wait-for SELECTOR  Capture each page only once this element is visible (client-rendered pages); if it never appears within
+                       --timeout the page is still audited, with a limitation. Each capture records how it loaded
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
@@ -65,6 +93,26 @@ Options:
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
   --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                        JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3). For hosted integrations; a directory target is still served
+  --proxy URL          Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
+                       default HTTPS_PROXY / HTTP_PROXY (either case; prefer the variable for credentials, argv shows
+                       in ps). NO_PROXY is decided per destination host (NO_PROXY=* = no proxy). The guard resolves and
+                       checks every destination itself, then tunnels to the checked address (CONNECT ip:443, and ip:80
+                       for plain HTTP; a proxy that refuses port 80 fails those requests: give an https:// target);
+                       loopback connects directly. The run records the proxy without its credentials
+  --allow-hosts LIST   Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
+                       the target's own host is always allowed. Other hosts are refused and listed in the limitations
+  --block-hosts LIST   Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
+  --user-agent UA      Send this User-Agent (also navigator.userAgent) instead of the browser's own; recorded in the run
+  --extra-header H     Add a request header "Name: value" (repeatable), sent only to the target's origin, never
+                       to other hosts: Jourilo makes those requests itself, so the headers cannot follow a redirect
+                       elsewhere (a redirect is followed without them). The run records the names, never the values
+  --ignore-https-errors
+                       Accept invalid or self-signed certificates in the browser (test environments only); the network
+                       guard still checks every destination, and the run lists it in the limitations
+  --chromium-sandbox
+                       Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1
+                       does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch
+                       where the system denies the sandbox (containers, some Linux CI kernels)
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -73,6 +121,9 @@ Options:
                        also lets a --setup-journey submit forms
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
+  --budget LIST        Exit 1 when a lab metric exceeds its limit, e.g. LCP=2000,CLS=0.05,TBT=300 (LCP, CLS, INP, FCP,
+                       TTFB, TBT; ms, CLS unitless). Each capture's median is compared and the worst capture decides;
+                       a metric no page measured (INP) is reported as not measured, not as a pass. Combines with --fail-on
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
   --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused (exit 2) if its
                        directory exists, even without a run.json (left by a crashed run)
@@ -100,6 +151,8 @@ Options:
   --headed             Show the browser window instead of running headless
   --locale TAG         Browser locale for every page (e.g. tr-TR); sets Accept-Language and navigator.language
   --timeout SECS       Per-page navigation timeout in seconds (default 30)
+  --wait-for SELECTOR  Capture each page only once this element is visible (client-rendered pages); if it never appears within
+                       --timeout the page is still audited, with a limitation. Each capture records how it loaded
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
@@ -115,6 +168,26 @@ Options:
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
   --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                        JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3). For hosted integrations; a directory target is still served
+  --proxy URL          Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
+                       default HTTPS_PROXY / HTTP_PROXY (either case; prefer the variable for credentials, argv shows
+                       in ps). NO_PROXY is decided per destination host (NO_PROXY=* = no proxy). The guard resolves and
+                       checks every destination itself, then tunnels to the checked address (CONNECT ip:443, and ip:80
+                       for plain HTTP; a proxy that refuses port 80 fails those requests: give an https:// target);
+                       loopback connects directly. The run records the proxy without its credentials
+  --allow-hosts LIST   Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
+                       the target's own host is always allowed. Other hosts are refused and listed in the limitations
+  --block-hosts LIST   Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
+  --user-agent UA      Send this User-Agent (also navigator.userAgent) instead of the browser's own; recorded in the run
+  --extra-header H     Add a request header "Name: value" (repeatable), sent only to the target's origin, never
+                       to other hosts: Jourilo makes those requests itself, so the headers cannot follow a redirect
+                       elsewhere (a redirect is followed without them). The run records the names, never the values
+  --ignore-https-errors
+                       Accept invalid or self-signed certificates in the browser (test environments only); the network
+                       guard still checks every destination, and the run lists it in the limitations
+  --chromium-sandbox
+                       Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1
+                       does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch
+                       where the system denies the sandbox (containers, some Linux CI kernels)
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -123,6 +196,9 @@ Options:
                        also lets a --setup-journey submit forms
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
+  --budget LIST        Exit 1 when a lab metric exceeds its limit, e.g. LCP=2000,CLS=0.05,TBT=300 (LCP, CLS, INP, FCP,
+                       TTFB, TBT; ms, CLS unitless). Each capture's median is compared and the worst capture decides;
+                       a metric no page measured (INP) is reported as not measured, not as a pass. Combines with --fail-on
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
   --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused (exit 2) if its
                        directory exists, even without a run.json (left by a crashed run)
@@ -150,6 +226,8 @@ Options:
   --headed             Show the browser window instead of running headless
   --locale TAG         Browser locale for every page (e.g. tr-TR); sets Accept-Language and navigator.language
   --timeout SECS       Per-page navigation timeout in seconds (default 30)
+  --wait-for SELECTOR  Capture each page only once this element is visible (client-rendered pages); if it never appears within
+                       --timeout the page is still audited, with a limitation. Each capture records how it loaded
   --throttle           Simulate a mid-range phone network and 4x CPU slowdown (Chromium)
   --runs N             Visits per page and viewport for lab metrics; reports the median and range (default 1, max 9)
   --no-keyboard        Skip the keyboard-only walk
@@ -165,6 +243,26 @@ Options:
   --allow-private      Allow private-network hosts (10.x, 192.168.x, ...)
   --deny-local         Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                        JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3). For hosted integrations; a directory target is still served
+  --proxy URL          Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
+                       default HTTPS_PROXY / HTTP_PROXY (either case; prefer the variable for credentials, argv shows
+                       in ps). NO_PROXY is decided per destination host (NO_PROXY=* = no proxy). The guard resolves and
+                       checks every destination itself, then tunnels to the checked address (CONNECT ip:443, and ip:80
+                       for plain HTTP; a proxy that refuses port 80 fails those requests: give an https:// target);
+                       loopback connects directly. The run records the proxy without its credentials
+  --allow-hosts LIST   Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
+                       the target's own host is always allowed. Other hosts are refused and listed in the limitations
+  --block-hosts LIST   Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
+  --user-agent UA      Send this User-Agent (also navigator.userAgent) instead of the browser's own; recorded in the run
+  --extra-header H     Add a request header "Name: value" (repeatable), sent only to the target's origin, never
+                       to other hosts: Jourilo makes those requests itself, so the headers cannot follow a redirect
+                       elsewhere (a redirect is followed without them). The run records the names, never the values
+  --ignore-https-errors
+                       Accept invalid or self-signed certificates in the browser (test environments only); the network
+                       guard still checks every destination, and the run lists it in the limitations
+  --chromium-sandbox
+                       Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1
+                       does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch
+                       where the system denies the sandbox (containers, some Linux CI kernels)
   --no-forms           Skip the form validation probe
                        (by default, on local hosts, an empty submission is simulated: nothing that sends data
                        leaves the browser, so no database is written; server-side feedback is reported as untested)
@@ -173,6 +271,9 @@ Options:
                        also lets a --setup-journey submit forms
   --sarif              Also write report.sarif for code scanning
   --fail-on SEVERITY   Exit 1 if a defect at or above this severity exists (CI gate)
+  --budget LIST        Exit 1 when a lab metric exceeds its limit, e.g. LCP=2000,CLS=0.05,TBT=300 (LCP, CLS, INP, FCP,
+                       TTFB, TBT; ms, CLS unitless). Each capture's median is compared and the worst capture decides;
+                       a metric no page measured (INP) is reported as not measured, not as a pass. Combines with --fail-on
   --evidence MODE      full (default) or minimal: keep first screens and only the full-page screenshots findings need; JPEG quality 55
   --run-id ID          Use this run id instead of a generated one (1-64 of A-Z a-z 0-9 _ -); refused (exit 2) if its
                        directory exists, even without a run.json (left by a crashed run)
@@ -204,6 +305,26 @@ Suggest options:
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
   --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                          JOURILO_DENY_LOCAL=1 does the same
+  --proxy URL            Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
+                         default HTTPS_PROXY / HTTP_PROXY (either case; prefer the variable for credentials, argv shows
+                         in ps). NO_PROXY is decided per destination host (NO_PROXY=* = no proxy). The guard resolves and
+                         checks every destination itself, then tunnels to the checked address (CONNECT ip:443, and ip:80
+                         for plain HTTP; a proxy that refuses port 80 fails those requests: give an https:// target);
+                         loopback connects directly. The run records the proxy without its credentials
+  --allow-hosts LIST     Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
+                         the target's own host is always allowed. Other hosts are refused and listed in the limitations
+  --block-hosts LIST     Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
+  --user-agent UA        Send this User-Agent (also navigator.userAgent) instead of the browser's own; recorded in the run
+  --extra-header H       Add a request header "Name: value" (repeatable), sent only to the target's origin, never
+                         to other hosts: Jourilo makes those requests itself, so the headers cannot follow a redirect
+                         elsewhere (a redirect is followed without them). The run records the names, never the values
+  --ignore-https-errors
+                         Accept invalid or self-signed certificates in the browser (test environments only); the network
+                         guard still checks every destination, and the run lists it in the limitations
+  --chromium-sandbox
+                         Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1
+                         does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch
+                         where the system denies the sandbox (containers, some Linux CI kernels)
 
 Run options:
   --base URL|DIR         The site or static build to run against (required)
@@ -216,7 +337,8 @@ Run options:
   --allow-submit         Allow form submission on non-local hosts (authorized test environments only)
   --allow-destructive    Allow irreversible/payment actions — local hosts with sandbox data only
   --allow-origin ORIGIN  Let the page navigate to another origin you are authorized to test (e.g. a test IdP)
-  --trace                Record a Playwright trace per journey (contains typed values; keep private)
+  --trace                Record a Playwright trace per journey (contains typed values; keep private);
+                         refused with --extra-header, since a trace records header values
   --auth FILE            Playwright storage state for signed-in journeys
   --save-auth FILE       After a passing sign-in journey (exactly one), save its session for --auth (test accounts only)
   --timezone ZONE        IANA time zone for the page (e.g. Europe/Istanbul)
@@ -226,6 +348,26 @@ Run options:
   --allow-private        Allow private-network hosts (10.x, 192.168.x, ...)
   --deny-local           Refuse local targets (localhost, 127.0.0.1, [::1], *.localhost, *.test) (exit 3); a redirect or request to one is blocked by the network guard and listed in the limitations;
                          JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3)
+  --proxy URL            Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
+                         default HTTPS_PROXY / HTTP_PROXY (either case; prefer the variable for credentials, argv shows
+                         in ps). NO_PROXY is decided per destination host (NO_PROXY=* = no proxy). The guard resolves and
+                         checks every destination itself, then tunnels to the checked address (CONNECT ip:443, and ip:80
+                         for plain HTTP; a proxy that refuses port 80 fails those requests: give an https:// target);
+                         loopback connects directly. The run records the proxy without its credentials
+  --allow-hosts LIST     Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
+                         the target's own host is always allowed. Other hosts are refused and listed in the limitations
+  --block-hosts LIST     Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
+  --user-agent UA        Send this User-Agent (also navigator.userAgent) instead of the browser's own; recorded in the run
+  --extra-header H       Add a request header "Name: value" (repeatable), sent only to the target's origin, never
+                         to other hosts: Jourilo makes those requests itself, so the headers cannot follow a redirect
+                         elsewhere (a redirect is followed without them). The run records the names, never the values
+  --ignore-https-errors
+                         Accept invalid or self-signed certificates in the browser (test environments only); the network
+                         guard still checks every destination, and the run lists it in the limitations
+  --chromium-sandbox
+                         Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1
+                         does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch
+                         where the system denies the sandbox (containers, some Linux CI kernels)
   --fail-on-failure      Exit 1 when a journey fails
 
 Safety: payment, purchase, delete and cancel actions are never performed on non-local hosts; form submission
@@ -293,6 +435,29 @@ Options:
   --repo PATH            Repository for source mapping (default: the baseline run's repo)
   --deny-local           Refuse a local target (localhost, 127.0.0.1, [::1], *.localhost, *.test) with exit 3; a redirect to one is blocked by the network guard and listed in the limitations;
                          JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3)
+  --proxy URL            Chain to an upstream HTTP proxy (http://[user:password@]host:port) behind the network guard;
+                         default HTTPS_PROXY / HTTP_PROXY (either case; prefer the variable for credentials, argv shows
+                         in ps). NO_PROXY is decided per destination host (NO_PROXY=* = no proxy). The guard resolves and
+                         checks every destination itself, then tunnels to the checked address (CONNECT ip:443, and ip:80
+                         for plain HTTP; a proxy that refuses port 80 fails those requests: give an https:// target);
+                         loopback connects directly. The run records the proxy without its credentials
+  --allow-hosts LIST     Only these hosts may be reached (comma-separated or repeated; *.example.com = its subdomains);
+                         the target's own host is always allowed. Other hosts are refused and listed in the limitations
+  --block-hosts LIST     Refuse these hosts (e.g. *.tracker.example); refused requests are listed in the limitations
+  --user-agent UA        Send this User-Agent (also navigator.userAgent) instead of the browser's own; recorded in the run
+  --extra-header H       Add a request header "Name: value" (repeatable), sent only to the target's origin, never
+                         to other hosts: Jourilo makes those requests itself, so the headers cannot follow a redirect
+                         elsewhere (a redirect is followed without them). The run records the names, never the values
+  --ignore-https-errors
+                         Accept invalid or self-signed certificates in the browser (test environments only); the network
+                         guard still checks every destination, and the run lists it in the limitations
+  --chromium-sandbox
+                         Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1
+                         does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch
+                         where the system denies the sandbox (containers, some Linux CI kernels)
+                         Without --allow-hosts / --block-hosts, the baseline run's lists are used again; so are its
+                         --user-agent and --ignore-https-errors. Header values are never stored: a baseline that sent
+                         --extra-header needs the headers again (exit 2 without them)
   --fail-on-regression   Exit 1 when new serious or critical defects appear
 ```
 
@@ -412,6 +577,23 @@ Benchmark detection quality on fixture sites with known defects (recall, false p
 
 ```
 jourilo bench [fixtures-dir=fixtures/sites] [--only name] [--record docs/evaluation/bench-history.jsonl]
+```
+
+### `jourilo rules`
+
+List every rule Jourilo can report, with category, severity and kind (machine-readable with --json).
+
+```
+jourilo rules list [--json]
+```
+
+```
+Subcommand:
+  list   Native rules (jourilo/…, perf/…, conv/…, ux/…, a11y/…, journey/…, design/…) and the axe/<id> and
+         axe-review/<id> rules a run enables from axe-core 4.14.0. Severity is "varies" when it depends on
+         what was measured; kind is "varies" for a rule that reports a defect or, when unsure, a needs-review
+         item. With --json: {"jourilo": <version>, "axe": <axe-core version>, "rules": [{id, category,
+         severity, kind, title, standards}, …]}.
 ```
 
 ### `jourilo serve`

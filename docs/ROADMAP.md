@@ -53,28 +53,44 @@ Field items F19, F20, F24, F25, F27, F28, F30, F32-F34, F37, F39, F40 and part o
   `verify --target` as usage errors, fast failure for unresolvable `*.test` names, redirect-loop explanation.
 - `foldScreenshot` for `--evidence minimal`; per-attempt journey screenshots; Turkish capitals in the lexicon.
 
-## Planned for 1.3.0
+## Done in 1.3.0
 
-[Plan](superpowers/plans/2026-11-11-jourilo-1.3.0.md). Open items from the list below plus the new features:
+Field items F8, F15, F16, F21, F22, F23, F26, F29, F31, F35, F36 and F38
+([FIELD-FEEDBACK.md](FIELD-FEEDBACK.md), [RELEASE-1.3.md](RELEASE-1.3.md)):
 
-- **F21** Chromium sandbox and process group, as an opt-in (test in containers first).
+- **F8** contrast over images, gradients and overlaps decided from the rendered pixels (`jourilo/contrast-over-image`).
+- **F15** `--proxy` / `HTTPS_PROXY` chained behind the network guard (checked addresses only, `NO_PROXY` per
+  destination), `--allow-hosts` and `--block-hosts`.
+- **F16** `--user-agent`, `--extra-header` (target origin only, values never stored) and `--ignore-https-errors`;
+  `--output-dir` is the existing `--workspace`.
+- **F21** the Chromium sandbox as an opt-in (`--chromium-sandbox`), and `browser.pids` for cleanup.
+- **F22** distinct pages and captures, and what a sample left out.
+- **F23** `jourilo/redirect-chain`, and keyboard traps found wherever focus starts.
 - **F26** `rules list --json`, a machine-readable rule registry.
 - **F29** budgets as arguments (`--budget LCP=2000,CLS=0.05`).
-- **F31** `--wait-for <selector>` and the load state in the report.
+- **F31** `--wait-for <selector>` and the load state of each capture.
 - **F35** structured progress (`phase`, `done`, `total`) and a richer `manifest.json`.
-- **F36** stable evidence for snapshot consumers.
+- **F36** stable performance evidence for snapshot consumers.
 - **F38** screenshot names independent of the audited origin.
-- Carried from 1.2.1 review: redact failed-navigation URLs with `redactUrl` (a token in a failing target URL can
-  appear in `page-unreachable` text today); Turkish capitals in the in-page probe lexicon (form purpose, trust and
-  pricing signals); a `setTimeout` fallback for the dialog wait (the 250 ms cap is checked only inside
-  `requestAnimationFrame`); the report's HTML falling back to `foldScreenshot`, so a minimal-evidence page does not
-  show "no screenshot".
+- Carried from the 1.2.1 review: failed-navigation URLs redacted with `redactUrl`, Turkish capitals in the in-page
+  probe lexicon, a timer fallback for the dialog wait, and the report's fallback to `foldScreenshot`.
+- F43 is documented: put runs outside an audited repository with `--workspace` ([WORKFLOW.md](WORKFLOW.md)).
+
+## Planned for 1.4.0
+
+The [1.4.0 plan](superpowers/plans/2026-11-11-jourilo-1.4.0.md) covers the "Next (1.x)" items below. Open intake,
+not yet decided for 1.4.0:
+
+- **F42** a stale dev server answering 5xx for every chunk is reported as site defects; proposed: one limitation
+  line that suggests a stale server, and a port check in the plugin before it starts a dev server.
+- **F44** findings whose evidence differs only in a volatile token (a CSP nonce) are reported once per page;
+  proposed: collapse them into one finding with the affected URLs.
 
 ## Deferred from 1.2.0
 
-Shipped in 1.2.1: F19, F20 and part of F22/F23. The rest is planned for
-[1.3.0](superpowers/plans/2026-11-11-jourilo-1.3.0.md). Each item has its number in [FIELD-FEEDBACK.md](FIELD-FEEDBACK.md). F10 (an overall score) stays declined
-([DECISIONS.md](DECISIONS.md) D3), and F17 is covered by `--auth` plus `--setup-journey`.
+Shipped in 1.2.1: F19, F20 and part of F22/F23; the rest shipped in 1.3.0 (see Done in 1.3.0). Each item has its
+number in [FIELD-FEEDBACK.md](FIELD-FEEDBACK.md). F10 (an overall score) stays declined ([DECISIONS.md](DECISIONS.md)
+D3), and F17 is covered by `--auth` plus `--setup-journey`.
 
 - **F8 pixel contrast.** Sample the rendered pixels behind the text for axe "incomplete" contrast nodes. An engine
   change: it needs a fixture, a control and a rerun of the ACT benchmark.
@@ -97,7 +113,8 @@ Shipped in 1.2.1: F19, F20 and part of F22/F23. The rest is planned for
 
 All five (the `verify --target` typo error, setup-state removal when the guard fails to close, the attempt index in
 `--repeat` file names, Turkish uppercase folding in the toggle lexicon, a `--run-id` directory left by a crashed run)
-shipped in 1.2.1, together with F24-F40 (see Done in 1.2.1). What remains is listed under 1.3.0.
+shipped in 1.2.1, together with F24-F40 (see Done in 1.2.1). The four review follow-ups carried to 1.3.0 shipped
+there.
 
 ## Next (1.x)
 

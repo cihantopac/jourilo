@@ -122,3 +122,28 @@ finding stay in the run that produced it, so the verdict can be audited and reve
 or the page changed), the finding comes back as new, because the verdict was about the thing that was seen. The
 alternative, an allow-list inside the audit options, would hide findings without a reason or an author. A dismissal
 is a judgment, and like other judgments it is never mixed with measurements (D4).
+
+## D19 · Extra headers go to the target origin only (2026-11-13)
+
+`--extra-header "Name: value"` exists for staging gates and test credentials (F16), so its value is often a secret. It
+is sent only with requests to the target's origin (scheme, host and port), never to third-party scripts, images or
+APIs on the page, and its value is never written to `run.json`, reports, progress lines or the manifest; only the
+names are recorded. Playwright 1.64.1 re-sends headers set with `route.fallback({ headers })` on every hop of a
+redirect chain, also when a hop goes to another origin, so a target that redirects elsewhere would leak the header.
+Jourilo therefore fetches each target-origin request itself through the network guard with `route.fetch` (no
+redirects followed) and hands the response to the browser with `route.fulfill`; a redirect is then followed by the
+browser without the headers. The cost is stated in the limitations: redirects, even within the origin, lose the
+headers, streaming responses arrive only when they end, `--throttle` does not slow those responses, and `verify`
+needs the headers again because it never stored them. The alternative, a browser-wide `extraHTTPHeaders`, sends the
+secret to every host the page touches.
+
+## D20 · The Chromium sandbox is opt-in (2026-11-13)
+
+Playwright starts Chromium with `--no-sandbox`, which is what lets it start in containers and on CI runners whose
+kernel denies unprivileged user namespaces. Turning the sandbox on by default would make Jourilo fail to start there
+(exit 4) for most container integrations, the people who asked for it (F21). It is opt-in instead:
+`--chromium-sandbox` or `JOURILO_CHROMIUM_SANDBOX=1` keeps the sandbox for Chromium, Chrome and Edge, and is a usage
+error with Firefox or WebKit. The network guard, not the sandbox, is what keeps an audited page away from the user's
+machine and network. For cleanup after a `SIGKILL`, a Chromium run writes the browser's process ids to
+`browser.pids` in its run directory and removes the file on every exit Jourilo itself handles. Jourilo does not move
+the browser into a process group of its own; the pid file is the cleanup path.
