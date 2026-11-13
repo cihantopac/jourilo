@@ -115,15 +115,29 @@ The verdict is stored in `<workspace>/dismissed.json` with the reason and who di
 finding as dismissed instead of reporting it again. Evidence is never deleted, a dismissed finding is not "fixed", and
 if the finding changes (a new fingerprint) it comes back as new ([DECISIONS.md](DECISIONS.md) D18).
 
+## Trends and live experiments
+
+```bash
+jourilo runs trend                                    # per page and viewport across the runs of one target
+jourilo experiment analyze --from posthog:checkout-test --metric signup      # read-only, sequential by default
+jourilo experiment analyze --from growthbook:exp_abc123 --fixed              # fixed-horizon test instead
+```
+
+`runs trend` shows defects per capture, critical and serious defects, LCP and CLS for every page and viewport, oldest
+run first; partial runs are left out and counted. The same table is in the report's history section. `--from` reads a
+live experiment from PostHog, GrowthBook or Amplitude with a key from the environment, never writes to the vendor, and
+refuses incomplete data ([INTEGRATIONS.md](INTEGRATIONS.md)). Sequential results may be checked after every batch:
+once a look says stop, act on it, because the CLI keeps no history between runs.
+
 ## What is checked
 
 | Area                        | What runs                                                                                                                                                                                                                                                        |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Understand**              | `discover` maps a repository (Next.js, Nuxt, SvelteKit, Astro, Remix, React/Vue Router, Laravel, Flutter web, static sites, monorepos) or a live site: routes, dev command, design system, i18n, auth, payments, analytics, roles and candidate journeys.        |
-| **Audit in a real browser** | Playwright + axe-core 4.14 (WCAG 2.0–2.2 A/AA), a keyboard-only walk (focus visible, focus obscured, traps), target size, reflow at 320 px, horizontal overflow, input purpose, paste blocking, form error feedback, lab Web Vitals, JS errors, failed requests. |
-| **Journeys**                | Reusable JSON scenarios with explicit success criteria ([JOURNEYS.md](JOURNEYS.md)). A safety policy never pays, deletes or cancels on non-local hosts.                                                                                                          |
+| **Audit in a real browser** | Playwright + axe-core 4.14 (WCAG 2.0–2.2 A/AA), a keyboard-only walk (focus visible, focus obscured, traps, menu-button keys), target size, reflow at 320 px, horizontal overflow, input purpose, paste blocking, form error feedback, lab Web Vitals, JS errors, failed requests. |
+| **Journeys**                | Reusable JSON scenarios with explicit success criteria ([JOURNEYS.md](JOURNEYS.md)). A safety policy never pays, deletes or cancels on non-local hosts; steps can follow popups and new tabs to a test identity provider you allow.                                                                                                          |
 | **Conversion**              | CTA prominence and clarity, value proposition, trust signals, signup and checkout friction, pricing clarity — always hypotheses, with experiment plans (`jourilo experiment`).                                                                                   |
-| **Fix and verify**          | Likely source lines, deterministic fixers for mechanical defects, one reversible change, and `verify` over the exact same scope.                                                                                                                                 |
+| **Fix and verify**          | Likely source lines, deterministic fixers for mechanical defects (nine, including `type="button"` and `scroll-padding`), one reversible change, and `verify` over the exact same scope.                                                                                                                                 |
 
 ## Reading the report
 
