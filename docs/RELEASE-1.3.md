@@ -30,17 +30,22 @@ F16, F21, F22, F23, F26, F29, F31, F35, F36 and F38 in [FIELD-FEEDBACK.md](FIELD
 
 ci, bench, smoke-pack and plugin validation measured on e5fde19 (the version commit).
 
-| Check                                                                           | Result                                                                                                                       |
-| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `npm run ci` (lint, typecheck, build, unit and browser tests, dist check)       | pass, 38 files, 468 tests (1.2.1: 32 files, 357 tests)                                                                       |
-| Fixture benchmark (`npm run bench`)                                             | 56 / 56 found (1.2.1: 52 / 52; 4 new must-find items from the new fixture pages), 0 false positives, source location 10 / 10 |
-| Independent W3C ACT benchmark, precision / recall / false positives             | TBD                                                                                                                          |
-| `scripts/smoke-pack.mjs` (clean install from the packed tarball, every command) | pass, 17 steps                                                                                                               |
-| `claude plugin validate` (marketplace and plugin, strict)                       | pass                                                                                                                         |
-| Real project (cihanca.com, read-only), F1                                       | TBD                                                                                                                          |
-| — F3                                                                            | TBD                                                                                                                          |
-| — F5                                                                            | TBD                                                                                                                          |
-| — F8: the inconclusive contrast nodes over images                               | TBD                                                                                                                          |
+| Check                                                                           | Result                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run ci` (lint, typecheck, build, unit and browser tests, dist check)       | pass, 38 files, 468 tests (1.2.1: 32 files, 357 tests)                                                                                                                                 |
+| Fixture benchmark (`npm run bench`)                                             | 56 / 56 found (1.2.1: 52 / 52; 4 new must-find items from the new fixture pages), 0 false positives, source location 10 / 10                                                           |
+| Independent W3C ACT benchmark, precision / recall / false positives             | 93.4 % / 56.1 % / 12 (1.2.1: 93.9 % / 55.4 % / 11), measured on 77ff6aa, `evaluation/act-2026-11-13.md`; recall +2 from F8 (rule afw4f7 8→10 of 11), +1 false positive explained below |
+| `scripts/smoke-pack.mjs` (clean install from the packed tarball, every command) | pass, 17 steps                                                                                                                                                                         |
+| `claude plugin validate` (marketplace and plugin, strict)                       | pass                                                                                                                                                                                   |
+| Real project (cihanca.com, read-only), F1                                       | still found: `jourilo/focus-obscured`, covered by `#kepenk`                                                                                                                            |
+| — F3                                                                            | still gone: 0 dialog findings                                                                                                                                                          |
+| — F5                                                                            | still locates `app/globals.css:351` first (high)                                                                                                                                       |
+| — F8: the inconclusive contrast nodes over images                               | not decided here: the 9 review nodes are "overlapped by another element" and the sampler made no decision for them; fingerprints identical to 1.2.1                                    |
+
+The one new ACT false positive is Passed Example 7 of rule 80af7b ("Focusable element has no keyboard trap"): two
+buttons send focus back to each other on blur, so Tab never reaches the third button. The new held-focus check reports
+it. ACT's companion rule for standard navigation lists the same page as a failure (its Failed Example 2), so the
+finding is right for a keyboard user; it counts as a false positive only because the scored rule is the general one.
 
 No automated run shows WCAG conformance.
 
