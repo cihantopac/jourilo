@@ -13,6 +13,7 @@ import http from 'node:http';
 import https from 'node:https';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Run } from '../../src/core/types.js';
 
@@ -555,6 +556,26 @@ describe('cli redirect loop', () => {
       expect(f.description).toContain('redirect loop');
       expect(f.description).toMatch(/307 \/ → \//);
       expect(f.recommendation).toMatch(/redirect|host/i);
+      // The report's TR switch shows the rule's Turkish title (src/report/rule-text-tr.ts) and sets the page language.
+      const { chromium } = await import('playwright-core');
+      const browser = await chromium.launch();
+      try {
+        const page = await browser.newPage({ locale: 'en-US' });
+        await page.goto(pathToFileURL(join(out.runDir, 'report.html')).href);
+        await page.click('#tab-findings');
+        const title = page.locator('.rc summary .t').first();
+        expect(await title.locator('[lang="en"]:visible').textContent()).toBe(
+          'Page redirects to itself in a loop',
+        );
+        await page.click('#lang [data-lang=tr]');
+        expect(await page.evaluate(() => document.documentElement.lang)).toBe('tr');
+        expect(await title.locator(':scope > :visible').count()).toBe(1);
+        expect(await title.locator('[lang="tr"]:visible').textContent()).toBe(
+          'Sayfa yüklenemiyor ya da kendine yönlendiren bir döngüye giriyor',
+        );
+      } finally {
+        await browser.close();
+      }
     } finally {
       srv.close();
     }

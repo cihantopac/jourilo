@@ -50449,7 +50449,7 @@ var RULE_TEXT_TR = {
   "jourilo/contrast-over-image": {
     title: "G\xF6rselin veya gradyan\u0131n \xFCzerindeki metnin kontrast\u0131 yetersiz",
     impact: "Az g\xF6ren ki\u015Filer ve parlak \u0131\u015F\u0131kta telefondan okuyanlar, metnin g\xF6rselin benzer tondaki b\xF6l\xFCm\xFCne denk gelen k\u0131s\u0131mlar\u0131n\u0131 okuyamaz.",
-    recommendation: "Metnin arkas\u0131na bir perde katman\u0131 (g\xF6rselle metin aras\u0131nda d\xFCz veya yar\u0131 saydam bir katman) ekleyin, metni g\xF6rselin daha sade bir b\xF6l\xFCm\xFCne ta\u015F\u0131y\u0131n ya da metin rengini de\u011Fi\u015Ftirin; arka plan\u0131n her noktas\u0131nda kontrast en az 4,5:1 olsun (b\xFCy\xFCk metinde 3:1: 24 px ya da kal\u0131n 18,66 px)."
+    recommendation: "Metnin arkas\u0131na bir perde katman\u0131 (g\xF6rselle metin aras\u0131nda d\xFCz veya yar\u0131 saydam bir katman) ekleyin, metni g\xF6rselin daha sade bir b\xF6l\xFCm\xFCne ta\u015F\u0131y\u0131n ya da metin rengini de\u011Fi\u015Ftirin; arka plan\u0131n her noktas\u0131nda kontrast en az 4,5:1, b\xFCy\xFCk metinde (24 px ya da kal\u0131n 18,66 px) 3:1 olsun."
   },
   "jourilo/focus-visible": {
     title: "Klavye oda\u011F\u0131 g\xF6r\xFCnm\xFCyor",
@@ -50462,6 +50462,7 @@ var RULE_TEXT_TR = {
     recommendation: "Odak geldi\u011Finde \xF6\u011Fenin \xFCst\xFCn\xFC kapatan i\xE7eri\u011Fi ba\u015Fka yere ta\u015F\u0131y\u0131n veya kapat\u0131n ya da yap\u0131\u015Fkan \xE7ubuklar\u0131n y\xFCksekli\u011Fi kadar scroll-padding (\xFCstte ve altta) verin."
   },
   "jourilo/button-implicit-submit": {
+    dynamic: ["title"],
     title: "T\xFCr\xFC belirtilmemi\u015F bir d\xFC\u011Fme, ad\u0131 g\xF6nderme anlam\u0131 ta\u015F\u0131mad\u0131\u011F\u0131 h\xE2lde formu g\xF6nderiyor",
     impact: "Ba\u015Fka bir i\u015F i\xE7in konmu\u015F bir kontrol (parolay\u0131 g\xF6stermek, men\xFC a\xE7mak, panel kapatmak) o ana kadar yaz\u0131lanlarla birlikte formu da g\xF6nderir.",
     recommendation: 'D\xFC\u011Fmeye type="button" verin. Formu g\xF6ndermesi gereken d\xFC\u011Fme type="submit" olarak kals\u0131n.'
@@ -50483,10 +50484,11 @@ var RULE_TEXT_TR = {
   },
   "jourilo/paste-blocked": {
     title: "Parola veya kod alanlar\u0131na yap\u0131\u015Ft\u0131rma engellenmi\u015F",
-    impact: "Parola y\xF6neticisi kullanan ya da parolay\u0131 ezberleyip yeniden yazamayan ki\u015Filer (bili\u015Fsel ve motor engelliler) giri\u015F yapamaz.",
+    impact: "Parola y\xF6neticisi kullananlar ve parolay\u0131 ezberleyip yeniden yazamayan, bili\u015Fsel veya motor engeli olan ki\u015Filer giri\u015F yapamaz.",
     recommendation: "Kimlik bilgisi alanlar\u0131ndaki yap\u0131\u015Ft\u0131rma engelini (onpaste i\u015Fleyicileri, paste olay\u0131nda preventDefault) kald\u0131r\u0131n."
   },
   "jourilo/input-purpose": {
+    dynamic: ["recommendation"],
     title: "Ki\u015Fisel veri alanlar\u0131nda autocomplete yok",
     impact: "Taray\u0131c\u0131lar ve parola y\xF6neticileri bu alanlar\u0131 dolduramaz; motor veya bili\u015Fsel engeli olan ki\u015Filer daha \xE7ok yazmak zorunda kal\u0131r.",
     recommendation: "Kullan\u0131c\u0131yla ilgili bilgi toplayan her alana amac\u0131na uygun bir autocomplete de\u011Feri ekleyin (\xF6r. e-posta i\xE7in email, telefon i\xE7in tel, ad soyad i\xE7in name, adres i\xE7in street-address)."
@@ -50509,7 +50511,7 @@ var RULE_TEXT_TR = {
   "jourilo/menu-arrow-keys": {
     title: "Ok tu\u015Flar\u0131 men\xFC \xF6\u011Feleri aras\u0131nda ge\xE7i\u015F yapm\u0131yor",
     impact: "Klavye ve ekran okuyucu kullan\u0131c\u0131lar\u0131 ilk \xF6\u011Feden sonraki men\xFC \xF6\u011Felerine ula\u015Famaz.",
-    recommendation: "APG men\xFC d\xFC\u011Fmesi deseninde anlat\u0131ld\u0131\u011F\u0131 gibi ArrowDown ve ArrowUp ile oda\u011F\u0131 sonraki veya \xF6nceki men\xFC \xF6\u011Fesine ta\u015F\u0131y\u0131n (u\xE7larda ba\u015Fa ve sona d\xF6nerek)."
+    recommendation: "APG men\xFC d\xFC\u011Fmesi deseninde anlat\u0131ld\u0131\u011F\u0131 gibi ArrowDown ve ArrowUp ile oda\u011F\u0131 sonraki veya \xF6nceki men\xFC \xF6\u011Fesine ta\u015F\u0131y\u0131n (sondan ba\u015Fa, ba\u015Ftan sona d\xF6nerek)."
   },
   "jourilo/menu-home-end": {
     title: "Home ve End tu\u015Flar\u0131 ilk ve son men\xFC \xF6\u011Fesine atlam\u0131yor",
@@ -50529,7 +50531,7 @@ var RULE_TEXT_TR = {
   "jourilo/dialog-escape": {
     title: "Escape diyalo\u011Fu kapatm\u0131yor",
     impact: "Klavye kullan\u0131c\u0131lar\u0131n\u0131n diyalogdan \xE7\u0131kmak i\xE7in h\u0131zl\u0131 ve beklenen bir yolu yok.",
-    recommendation: "Diyalo\u011Fu Escape ile kapat\u0131n (yerel <dialog> bunu kendisi yapar) ve oda\u011F\u0131 diyalo\u011Fu a\xE7an \xF6\u011Feye geri verin."
+    recommendation: "Diyalo\u011Fun Escape ile kapanmas\u0131n\u0131 sa\u011Flay\u0131n (yerel <dialog> bunu kendisi yapar) ve oda\u011F\u0131 diyalo\u011Fu a\xE7an \xF6\u011Feye geri verin."
   },
   "jourilo/dialog-focus-return": {
     title: "Diyalog kapan\u0131nca odak kayboluyor",
@@ -50577,6 +50579,7 @@ var RULE_TEXT_TR = {
     recommendation: 'Ge\xE7ersiz alanlara aria-invalid="true" ekleyin, her mesaj\u0131 aria-describedby ile alan\u0131na ba\u011Flay\u0131n ve hata \xF6zetini role="alert" b\xF6lgesinde duyurun ya da oda\u011F\u0131 \xF6zete ta\u015F\u0131y\u0131n.'
   },
   "jourilo/horizontal-overflow": {
+    dynamic: ["title"],
     title: "Sayfa yatay olarak kay\u0131yor",
     impact: "\u0130\xE7erik kesilir ya da iki y\xF6nl\xFC kayd\u0131rma gerektirir; telefonda sayfa kayd\u0131r\u0131l\u0131rken yana do\u011Fru oynar.",
     recommendation: "Ta\u015Fmaya neden olan \xF6\u011Feyi s\u0131n\u0131rlay\u0131n (max-width: 100%, flex-wrap, flex alt \xF6\u011Felerinde min-width: 0, uzun dizeler i\xE7in overflow-wrap: anywhere, tablolar i\xE7in kayd\u0131r\u0131labilir bir kapsay\u0131c\u0131)."
@@ -50607,21 +50610,25 @@ var RULE_TEXT_TR = {
     recommendation: "Ba\u015Far\u0131s\u0131z bir g\xF6nderimden sonra oda\u011F\u0131 hata \xF6zetine veya ilk ge\xE7ersiz alana ta\u015F\u0131y\u0131n."
   },
   "journey/failed": {
+    dynamic: ["title", "impact"],
     title: "Yolculuk hedefine ula\u015Fm\u0131yor",
     impact: "Ki\u015Filer bu g\xF6revi tamamlayam\u0131yor.",
     recommendation: "Ba\u015Far\u0131s\u0131z olan ad\u0131m\u0131 d\xFCzeltin ve yolculu\u011Fu yeniden \xE7al\u0131\u015Ft\u0131r\u0131n. Yolculuk Jourilo taraf\u0131ndan \xF6nerildiyse \xF6nce tan\u0131m\u0131n ama\xE7lanan ak\u0131\u015Fla e\u015Fle\u015Fti\u011Fini kontrol edin."
   },
   "journey/blocked-by-policy": {
+    dynamic: ["title"],
     title: "Yolculuk g\xFCvenlik politikas\u0131 taraf\u0131ndan durduruldu",
     impact: "Bu yolculu\u011Fun geri kalan\u0131 test edilmedi.",
     recommendation: "Bu yolculu\u011Fun kapsanmas\u0131 gerekiyorsa test hesaplar\u0131yla yerel veya sandbox bir ortamda \xE7al\u0131\u015Ft\u0131r\u0131n."
   },
   "journey/page-errors": {
+    dynamic: ["title"],
     title: "Yolculuk s\u0131ras\u0131nda yakalanmam\u0131\u015F istisnalar",
     impact: "Etkile\u015Fimli \xF6zellikler ger\xE7ek kullan\u0131c\u0131lar i\xE7in sessizce \xE7al\u0131\u015Fmayabilir.",
     recommendation: "Ad\u0131mlar\u0131 yeniden \xFCretin ve kan\u0131tta listelenen istisnalar\u0131 d\xFCzeltin."
   },
   "journey/flaky": {
+    dynamic: ["title"],
     title: "Yolculuk denemelerin yaln\u0131zca bir k\u0131sm\u0131nda ba\u015Far\u0131l\u0131 oldu",
     impact: "Aral\u0131kl\u0131 hatalar ger\xE7ek kullan\u0131c\u0131lara ula\u015F\u0131r ve \xF6nce/sonra kar\u015F\u0131la\u015Ft\u0131rmalar\u0131n\u0131 g\xFCvenilmez k\u0131lar.",
     recommendation: "Ba\u015Far\u0131s\u0131z denemeyi ba\u015Far\u0131l\u0131 bir denemeyle kar\u015F\u0131la\u015Ft\u0131r\u0131n: farkl\u0131 s\u0131rada tamamlanan isteklere, ge\xE7 olu\u015Fan \xF6\u011Felere veya \xF6nceki bir \xE7al\u0131\u015Fman\u0131n olu\u015Fturdu\u011Fu verilere bak\u0131n. Sorun bir yar\u0131\u015F durumuysa (race condition) \xFCr\xFCn\xFC d\xFCzeltin; de\u011Filse yolculu\u011Fun do\u011Fru durumu beklemesini sa\u011Flay\u0131n."
@@ -50632,6 +50639,7 @@ var RULE_TEXT_TR = {
     recommendation: "Bu URL i\xE7in sunucuyu, DNS'i ve y\xF6nlendirmeleri kontrol edin. Sayfa kendine y\xF6nlendiriyorsa sunucunun y\xF6nlendirme kurallar\u0131n\u0131 veya bar\u0131nd\u0131rma yap\u0131land\u0131rmas\u0131n\u0131 (HTTP/HTTPS, www ve sondaki e\u011Fik \xE7izgi y\xF6nlendirmeleri, proxy veya CDN y\xF6nlendirmesi) d\xFCzeltin."
   },
   "jourilo/http-error-page": {
+    dynamic: ["title"],
     title: "Sayfa HTTP hata koduyla yan\u0131t veriyor",
     impact: "Yolculukta \xE7\u0131kmaz sokak; ziyaret\xE7iler siteden ayr\u0131l\u0131r ya da siteye g\xFCvenlerini yitirir.",
     recommendation: "Bu URL'ye giden ba\u011Flant\u0131lar\u0131 d\xFCzeltin veya kald\u0131r\u0131n ya da URL'yi do\u011Fru sayfaya y\xF6nlendirin."
@@ -50652,6 +50660,7 @@ var RULE_TEXT_TR = {
     recommendation: "Her ba\u011F\u0131ml\u0131l\u0131\u011F\u0131n h\xE2l\xE2 gerekli ve ula\u015F\u0131labilir olup olmad\u0131\u011F\u0131n\u0131 kontrol edin."
   },
   "jourilo/redirect-chain": {
+    dynamic: ["title"],
     title: "Sayfaya birden \xE7ok y\xF6nlendirmeyle ula\u015F\u0131l\u0131yor",
     impact: "Her y\xF6nlendirme, sayfa y\xFCklenmeye ba\u015Flamadan \xF6nce bir istek ve bir gidi\u015F-d\xF6n\xFC\u015F daha ekler; yava\u015F mobil a\u011Flarda zincir fark edilir bir gecikme yarat\u0131r.",
     recommendation: "Do\u011Frudan son URL'ye ba\u011Flant\u0131 verin (i\xE7 ba\u011Flant\u0131lar, site haritas\u0131, canonical) ve her eski adresi tek ad\u0131mda ona y\xF6nlendirin; HTTP'den HTTPS'ye, www ve sondaki e\u011Fik \xE7izgi kurallar\u0131n\u0131 birle\u015Ftirin."
@@ -50662,36 +50671,43 @@ var RULE_TEXT_TR = {
     recommendation: "G\xF6rsellere width ve height \xF6znitelikleri (ya da aspect-ratio) ekleyin."
   },
   "perf/lcp": {
+    dynamic: ["title"],
     title: "Largest Contentful Paint (LCP) zay\u0131f veya iyile\u015Ftirilmeli (laboratuvar)",
     impact: SLOW_PAGE,
-    recommendation: "LCP \xF6\u011Fesini daha erken sunun: hero g\xF6rselini veya yaz\u0131 tipini \xF6nceden y\xFCkleyin (preload), tembel y\xFCklemeyin (lazy loading), s\u0131k\u0131\u015Ft\u0131r\u0131n; olu\u015Fturmay\u0131 engelleyen CSS/JS'yi ve sunucu s\xFCresini azalt\u0131n."
+    recommendation: "LCP \xF6\u011Fesini daha erken sunun: hero g\xF6rselini veya yaz\u0131 tipini \xF6nceden y\xFCkleyin (preload), lazy loading uygulamay\u0131n, s\u0131k\u0131\u015Ft\u0131r\u0131n; olu\u015Fturmay\u0131 engelleyen CSS/JS'yi ve sunucu s\xFCresini azalt\u0131n."
   },
   "perf/cls": {
+    dynamic: ["title"],
     title: "Cumulative Layout Shift (CLS) zay\u0131f veya iyile\u015Ftirilmeli (laboratuvar)",
     impact: "Ki\u015Filer okurken veya dokunmaya \xE7al\u0131\u015F\u0131rken i\xE7erik z\u0131plar ve yanl\u0131\u015F t\u0131klamalara yol a\xE7ar.",
     recommendation: "G\xF6rseller, reklamlar ve g\xF6m\xFCl\xFC i\xE7erikler i\xE7in yer ay\u0131r\u0131n (width/height ya da aspect-ratio), mevcut i\xE7eri\u011Fin \xFCst\xFCne yeni i\xE7erik eklemeyin, boyutu ayarlanm\u0131\u015F yedek yaz\u0131 tipleriyle font-display kullan\u0131n."
   },
   "perf/fcp": {
+    dynamic: ["title"],
     title: "First Contentful Paint (FCP) zay\u0131f veya iyile\u015Ftirilmeli (laboratuvar)",
     impact: SLOW_PAGE,
     recommendation: "Olu\u015Fturmay\u0131 engelleyen kaynaklar\u0131 ve sunucu yan\u0131t s\xFCresini azalt\u0131n; kritik CSS'i sat\u0131r i\xE7ine al\u0131n."
   },
   "perf/ttfb": {
+    dynamic: ["title"],
     title: "Time to First Byte (TTFB) zay\u0131f veya iyile\u015Ftirilmeli (laboratuvar)",
     impact: SLOW_PAGE,
     recommendation: "Sunucu yan\u0131t\u0131n\u0131 h\u0131zland\u0131r\u0131n: \xF6nbellekleme, CDN, daha az y\xF6nlendirme, daha h\u0131zl\u0131 arka u\xE7 sorgular\u0131."
   },
   "perf/tbt": {
+    dynamic: ["title"],
     title: "Total Blocking Time (TBT) zay\u0131f veya iyile\u015Ftirilmeli (laboratuvar)",
     impact: SLOW_PAGE,
     recommendation: "Ana i\u015F par\xE7ac\u0131\u011F\u0131ndaki uzun g\xF6revleri b\xF6l\xFCn: kodu par\xE7alara ay\u0131r\u0131n (code splitting), kritik olmayan betikleri erteleyin, i\u015Fi ana i\u015F par\xE7ac\u0131\u011F\u0131n\u0131n d\u0131\u015F\u0131na ta\u015F\u0131y\u0131n."
   },
   "perf/inp": {
+    dynamic: ["title"],
     title: "Yolculuk s\u0131ras\u0131nda etkile\u015Fime yava\u015F yan\u0131t (laboratuvar)",
     impact: "Aray\xFCz tepkisiz hissettirir; ki\u015Filer yeniden t\u0131klar ya da vazge\xE7er.",
     recommendation: "Etkile\u015Fimi DevTools Performance panelinde inceleyin; olay i\u015Fleyicilerindeki uzun g\xF6revleri b\xF6l\xFCn ve acil olmayan i\u015Fleri erteleyin."
   },
   "conv/no-primary-cta-above-fold": {
+    dynamic: ["title"],
     title: "\u0130lk ekranda belirgin bir eylem \xE7a\u011Fr\u0131s\u0131 yok",
     impact: hypothesis2("a\xE7\u0131l\u0131\u015F sayfas\u0131ndan huninin sonraki ad\u0131m\u0131na t\u0131klama oran\u0131"),
     recommendation: 'Hero alan\u0131nda tek ve y\xFCksek kontrastl\u0131 bir birincil eylemi (\xF6r. "\xDCcretsiz denemeyi ba\u015Flat") test edin.'
@@ -50709,11 +50725,13 @@ var RULE_TEXT_TR = {
     recommendation: "Belirli bir kitle i\xE7in elde edilecek sonucu anlatan bir ba\u015Fl\u0131\u011F\u0131, destekleyici bir alt ba\u015Fl\u0131kla birlikte test edin."
   },
   "conv/vague-cta-label": {
+    dynamic: ["title"],
     title: "Belirsiz eylem \xE7a\u011Fr\u0131s\u0131 etiketi",
     impact: hypothesis2("bu kontrol\xFCn t\u0131klama oran\u0131"),
     recommendation: 'Sonucu adland\u0131ran bir etiket test edin ("Hesab\u0131m\u0131 olu\u015Ftur", "Raporu al").'
   },
   "conv/no-trust-signals": {
+    dynamic: ["title"],
     title: "Ki\u015Fisel veya \xF6deme bilgisi isteyen formun yak\u0131n\u0131nda g\xFCven sinyali yok",
     impact: hypothesis2("formu ba\u015Flatanlar\u0131n g\xF6nderimi tamamlama oran\u0131"),
     recommendation: "Formun yan\u0131na konuyla ilgili ve do\u011Fru g\xFCvenceler eklemeyi test edin (gizlilik notu, ger\xE7ekten sahip oldu\u011Funuz bir g\xFCvenlik rozeti, iptal ko\u015Fullar\u0131, ger\xE7ek kullan\u0131c\u0131 yorumlar\u0131)."
@@ -50736,11 +50754,13 @@ var RULE_TEXT_TR = {
     recommendation: "Sat\u0131n almadan sonra iste\u011Fe ba\u011Fl\u0131 hesap olu\u015Fturmayla birlikte misafir olarak \xF6demeyi test edin."
   },
   "design/off-brand-cta-color": {
+    dynamic: ["recommendation"],
     title: "Birincil d\xFC\u011Fmelerde marka paleti d\u0131\u015F\u0131nda renkler kullan\u0131l\u0131yor",
     impact: "Tutars\u0131z eylem renkleri neyin t\u0131klanabilir oldu\u011Funun tan\u0131nmas\u0131n\u0131 zorla\u015Ft\u0131r\u0131r ve markay\u0131 zay\u0131flat\u0131r.",
     recommendation: "Birincil d\xFC\u011Fmelerde, ama\xE7lanan role en yak\u0131n marka renk token'\u0131n\u0131 kullan\u0131n; kan\u0131ttaki renkleri marka paletiyle kar\u015F\u0131la\u015Ft\u0131r\u0131n."
   },
   "design/off-brand-font": {
+    dynamic: ["recommendation"],
     title: "Metinde marka tipografisinde olmayan yaz\u0131 tipleri kullan\u0131l\u0131yor",
     impact: "\xDCr\xFCn markayla tutars\u0131z g\xF6r\xFCn\xFCr; y\xFCklenemeyen bir web yaz\u0131 tipi ayr\u0131ca d\xFCzen kaymas\u0131na yol a\xE7abilir.",
     recommendation: "Marka yaz\u0131 tipini ortak tipografi token'lar\u0131 \xFCzerinden y\xFCkleyip uygulay\u0131n; a\u011F panelinde yaz\u0131 tipi iste\u011Fini kontrol edin."
@@ -50818,8 +50838,10 @@ function attrs(map, vars) {
 }
 function ruleText(f, field) {
   const en = esc(f[field]);
-  const tr = Object.hasOwn(RULE_TEXT_TR, f.ruleId) ? RULE_TEXT_TR[f.ruleId]?.[field] : void 0;
-  return tr ? `<span lang="en" data-rl="en">${en}</span><span lang="tr" data-rl="tr" hidden>${esc(tr)}</span>` : `<span lang="en">${en}</span>`;
+  const entry = Object.hasOwn(RULE_TEXT_TR, f.ruleId) ? RULE_TEXT_TR[f.ruleId] : void 0;
+  if (!entry?.[field]) return `<span lang="en">${en}</span>`;
+  const keep = entry.dynamic?.includes(field) ? ` <span lang="en">(${en})</span>` : "";
+  return `<span lang="en" data-rl="en">${en}</span><span lang="tr" data-rl="tr" hidden>${esc(entry[field])}${keep}</span>`;
 }
 function pathname(u) {
   try {
@@ -50933,7 +50955,7 @@ function whereHtml(g) {
 }
 function pick(g, label = "rc.select", visible = false) {
   const ids = g.members.map((m) => esc(m.fingerprint)).join(" ");
-  return `<label class="pick"><input type="checkbox" class="sel" data-ids="${ids}"><span class="${visible ? "" : "sr"}">${T(label)}${visible ? "" : `: ${esc(g.lead.title)}`}</span></label>`;
+  return `<label class="pick"><input type="checkbox" class="sel" data-ids="${ids}"><span class="${visible ? "" : "sr"}">${T(label)}${visible ? "" : `: <span lang="en">${esc(g.lead.title)}</span>`}</span></label>`;
 }
 function groupHtml(run, g, status, base2) {
   const f = g.lead;
@@ -50949,7 +50971,7 @@ function groupHtml(run, g, status, base2) {
     (s) => `<li><code>${esc(s.file)}:${s.line}</code> <span class="chip">${T(`conf.${s.confidence}`)}</span> <span lang="en">${esc(s.reason)}</span>${s.excerpt ? `<pre>${esc(s.excerpt)}</pre>` : ""}</li>`
   ).join("")}</ul>` : "";
   const instances = g.members.length > 1 ? `<h4>${T("fd.instances")}</h4><ul class="instances">${g.members.map(
-    (m) => `<li>${base2 ? "" : `<label class="pick"><input type="checkbox" class="sel" data-ids="${esc(m.fingerprint)}"><span class="sr">${T("rc.selectOne")}: ${esc(m.title)} ${esc(pathname(m.url))}</span></label>`}<code>${esc(pathname(m.url))}</code> <span class="muted">${esc(m.viewport ?? "")}</span> <span class="chip sev sev-${m.severity}">${T(`sev.${m.severity}`)}</span> <span class="muted">${T("fd.id")} <code>${esc(m.fingerprint)}</code></span></li>`
+    (m) => `<li>${base2 ? "" : `<label class="pick"><input type="checkbox" class="sel" data-ids="${esc(m.fingerprint)}"><span class="sr">${T("rc.selectOne")}: <span lang="en">${esc(m.title)}</span> ${esc(pathname(m.url))}</span></label>`}<code>${esc(pathname(m.url))}</code> <span class="muted">${esc(m.viewport ?? "")}</span> <span class="chip sev sev-${m.severity}">${T(`sev.${m.severity}`)}</span> <span class="muted">${T("fd.id")} <code>${esc(m.fingerprint)}</code></span></li>`
   ).join("")}</ul>` : "";
   const data = base2 ? "" : ` data-kind="${f.kind}" data-sev="${f.severity}" data-cat="${esc(f.category)}" data-path="${g.path}" data-pages="${esc(g.pages.join(" "))}" data-n="${g.members.length}"`;
   return `<article class="rc sev-${f.severity} k-${f.kind}${status ? ` st-${esc(status)}` : ""}" id="${base2 ? "fixed-" : ""}${g.id}"${data}>
@@ -51015,7 +51037,7 @@ ${list2.length ? `<ul lang="en">${list2.reduce(
       },
       []
     ).slice(0, 4).map(
-      ({ g, n: n2 }) => `<li><a href="#${g.id}">${esc(g.lead.title)}</a>${n2 > 1 ? ` <span class="n">\xD7${n2}</span>` : ""}</li>`
+      ({ g, n: n2 }) => `<li><a href="#${g.id}">${ruleText(g.lead, "title")}</a>${n2 > 1 ? ` <span class="n">\xD7${n2}</span>` : ""}</li>`
     ).join("")}</ul>` : `<p>${T("sec.empty")}</p>`}</div>`;
   };
   return `<section class="block" aria-labelledby="h-lanes"><div class="block-h"><h2 id="h-lanes">${T("lanes.title")}</h2></div><div class="lanes">${KINDS.map(lane).join("")}</div></section>`;

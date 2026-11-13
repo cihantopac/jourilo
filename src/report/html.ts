@@ -14,7 +14,7 @@ import { fill, I18N, type MsgKey, type Vars } from './html-i18n.js';
 import { PROMPT_JS } from './html-prompt.js';
 import { REPORT_CSS } from './html-style.js';
 import { FIX_PATHS, type FixPath, fixPathOf, rootCauseKey } from './remediation.js';
-import { RULE_TEXT_TR } from './rule-text-tr.js';
+import { RULE_TEXT_TR, type RuleTextField } from './rule-text-tr.js';
 import { type TrendReport, trendReport, trendSlice } from './trends.js';
 
 export function esc(s: unknown): string {
@@ -60,13 +60,14 @@ function attrs(map: Record<string, MsgKey>, vars?: Vars): string {
  * A rule's title, impact or recommendation. English is the server text; when the rule has a Turkish text, it sits
  * next to it, hidden, and the client shows the one that matches the report language (data-rl). Without a Turkish
  * text only the English one is rendered, so a Turkish report falls back to English with lang="en", never to nothing.
+ * A field whose English names values of the finding (`dynamic`) keeps that English inside the Turkish copy.
  */
-function ruleText(f: Finding, field: 'title' | 'impact' | 'recommendation'): string {
+function ruleText(f: Finding, field: RuleTextField): string {
   const en = esc(f[field]);
-  const tr = Object.hasOwn(RULE_TEXT_TR, f.ruleId) ? RULE_TEXT_TR[f.ruleId]?.[field] : undefined;
-  return tr
-    ? `<span lang="en" data-rl="en">${en}</span><span lang="tr" data-rl="tr" hidden>${esc(tr)}</span>`
-    : `<span lang="en">${en}</span>`;
+  const entry = Object.hasOwn(RULE_TEXT_TR, f.ruleId) ? RULE_TEXT_TR[f.ruleId] : undefined;
+  if (!entry?.[field]) return `<span lang="en">${en}</span>`;
+  const keep = entry.dynamic?.includes(field) ? ` <span lang="en">(${en})</span>` : '';
+  return `<span lang="en" data-rl="en">${en}</span><span lang="tr" data-rl="tr" hidden>${esc(entry[field])}${keep}</span>`;
 }
 
 function pathname(u: string): string {
@@ -234,7 +235,7 @@ function whereHtml(g: Group): string {
 
 function pick(g: Group, label: MsgKey = 'rc.select', visible = false): string {
   const ids = g.members.map((m) => esc(m.fingerprint)).join(' ');
-  return `<label class="pick"><input type="checkbox" class="sel" data-ids="${ids}"><span class="${visible ? '' : 'sr'}">${T(label)}${visible ? '' : `: ${esc(g.lead.title)}`}</span></label>`;
+  return `<label class="pick"><input type="checkbox" class="sel" data-ids="${ids}"><span class="${visible ? '' : 'sr'}">${T(label)}${visible ? '' : `: <span lang="en">${esc(g.lead.title)}</span>`}</span></label>`;
 }
 
 function groupHtml(run: Run, g: Group, status?: string, base?: string): string {
@@ -267,7 +268,7 @@ function groupHtml(run: Run, g: Group, status?: string, base?: string): string {
       ? `<h4>${T('fd.instances')}</h4><ul class="instances">${g.members
           .map(
             (m) =>
-              `<li>${base ? '' : `<label class="pick"><input type="checkbox" class="sel" data-ids="${esc(m.fingerprint)}"><span class="sr">${T('rc.selectOne')}: ${esc(m.title)} ${esc(pathname(m.url))}</span></label>`}<code>${esc(pathname(m.url))}</code> <span class="muted">${esc(m.viewport ?? '')}</span> <span class="chip sev sev-${m.severity}">${T(`sev.${m.severity}` as MsgKey)}</span> <span class="muted">${T('fd.id')} <code>${esc(m.fingerprint)}</code></span></li>`,
+              `<li>${base ? '' : `<label class="pick"><input type="checkbox" class="sel" data-ids="${esc(m.fingerprint)}"><span class="sr">${T('rc.selectOne')}: <span lang="en">${esc(m.title)}</span> ${esc(pathname(m.url))}</span></label>`}<code>${esc(pathname(m.url))}</code> <span class="muted">${esc(m.viewport ?? '')}</span> <span class="chip sev sev-${m.severity}">${T(`sev.${m.severity}` as MsgKey)}</span> <span class="muted">${T('fd.id')} <code>${esc(m.fingerprint)}</code></span></li>`,
           )
           .join('')}</ul>`
       : '';
@@ -355,7 +356,7 @@ ${
         .slice(0, 4)
         .map(
           ({ g, n }) =>
-            `<li><a href="#${g.id}">${esc(g.lead.title)}</a>${n > 1 ? ` <span class="n">×${n}</span>` : ''}</li>`,
+            `<li><a href="#${g.id}">${ruleText(g.lead, 'title')}</a>${n > 1 ? ` <span class="n">×${n}</span>` : ''}</li>`,
         )
         .join('')}</ul>`
     : `<p>${T('sec.empty')}</p>`

@@ -64,8 +64,15 @@ describe('Turkish rule texts', () => {
 
   it('Turkish texts do not claim WCAG conformance or legal compliance', () => {
     const claims = /uyumlu(dur|sunuz)?\b|uyumluluk|yasal|mevzuat|sertifika/iu;
+    // "uygun" alone is ordinary ("amacına uygun"); next to WCAG it claims conformance.
+    const wcagConforms = /WCAG\S*\s+(?:\S+\s+){0,3}uygun/iu;
+    expect(wcagConforms.test('Sayfa WCAG 2.2 AA ölçütlerine uygundur.')).toBe(true);
+    expect(wcagConforms.test('amacına uygun bir autocomplete değeri')).toBe(false);
     const hits = Object.entries(RULE_TEXT_TR)
-      .filter(([, t]) => claims.test(`${t.title} ${t.impact} ${t.recommendation}`))
+      .filter(([, t]) => {
+        const all = `${t.title} ${t.impact} ${t.recommendation}`;
+        return claims.test(all) || wcagConforms.test(all);
+      })
       .map(([id]) => id);
     expect(hits).toEqual([]);
   });

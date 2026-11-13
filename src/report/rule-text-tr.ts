@@ -1,13 +1,18 @@
 // Turkish texts of Jourilo's own rules for the Turkish report: one entry per native rule in RULES
 // (src/audit/rules/registry.ts); tests/unit/rule-text.test.ts fails when a rule has none. A rule's title, impact and
-// recommendation are fixed per rule, so they are written here once. Findings whose English text carries a value (a
-// width, a journey name, a metric) get the general Turkish text; the value stays in the English description, which
-// is dynamic and is never translated. axe-core rules keep axe's English texts (axe-core ships no Turkish locale).
+// recommendation are written here once per rule. Where a rule's English text names values of the finding (a width, a
+// journey name, a measured time, autocomplete tokens, brand colors), the field is listed in `dynamic` and the report
+// shows the English original after the Turkish text, so a Turkish reader keeps every value. Descriptions are never
+// translated. axe-core rules keep axe's English texts (axe-core ships no Turkish locale).
+
+export type RuleTextField = 'title' | 'impact' | 'recommendation';
 
 export interface RuleTextTr {
   title: string;
   impact: string;
   recommendation: string;
+  /** Fields whose English text carries values of the finding; the report keeps the English next to the Turkish. */
+  dynamic?: readonly RuleTextField[];
 }
 
 /** The impact text of every conversion hypothesis, with the metric that would validate it. */
@@ -23,7 +28,7 @@ export const RULE_TEXT_TR: Record<string, RuleTextTr> = {
     impact:
       'Az gören kişiler ve parlak ışıkta telefondan okuyanlar, metnin görselin benzer tondaki bölümüne denk gelen kısımlarını okuyamaz.',
     recommendation:
-      'Metnin arkasına bir perde katmanı (görselle metin arasında düz veya yarı saydam bir katman) ekleyin, metni görselin daha sade bir bölümüne taşıyın ya da metin rengini değiştirin; arka planın her noktasında kontrast en az 4,5:1 olsun (büyük metinde 3:1: 24 px ya da kalın 18,66 px).',
+      'Metnin arkasına bir perde katmanı (görselle metin arasında düz veya yarı saydam bir katman) ekleyin, metni görselin daha sade bir bölümüne taşıyın ya da metin rengini değiştirin; arka planın her noktasında kontrast en az 4,5:1, büyük metinde (24 px ya da kalın 18,66 px) 3:1 olsun.',
   },
   'jourilo/focus-visible': {
     title: 'Klavye odağı görünmüyor',
@@ -40,6 +45,7 @@ export const RULE_TEXT_TR: Record<string, RuleTextTr> = {
       'Odak geldiğinde öğenin üstünü kapatan içeriği başka yere taşıyın veya kapatın ya da yapışkan çubukların yüksekliği kadar scroll-padding (üstte ve altta) verin.',
   },
   'jourilo/button-implicit-submit': {
+    dynamic: ['title'],
     title: 'Türü belirtilmemiş bir düğme, adı gönderme anlamı taşımadığı hâlde formu gönderiyor',
     impact:
       'Başka bir iş için konmuş bir kontrol (parolayı göstermek, menü açmak, panel kapatmak) o ana kadar yazılanlarla birlikte formu da gönderir.',
@@ -68,11 +74,12 @@ export const RULE_TEXT_TR: Record<string, RuleTextTr> = {
   'jourilo/paste-blocked': {
     title: 'Parola veya kod alanlarına yapıştırma engellenmiş',
     impact:
-      'Parola yöneticisi kullanan ya da parolayı ezberleyip yeniden yazamayan kişiler (bilişsel ve motor engelliler) giriş yapamaz.',
+      'Parola yöneticisi kullananlar ve parolayı ezberleyip yeniden yazamayan, bilişsel veya motor engeli olan kişiler giriş yapamaz.',
     recommendation:
       'Kimlik bilgisi alanlarındaki yapıştırma engelini (onpaste işleyicileri, paste olayında preventDefault) kaldırın.',
   },
   'jourilo/input-purpose': {
+    dynamic: ['recommendation'],
     title: 'Kişisel veri alanlarında autocomplete yok',
     impact:
       'Tarayıcılar ve parola yöneticileri bu alanları dolduramaz; motor veya bilişsel engeli olan kişiler daha çok yazmak zorunda kalır.',
@@ -103,7 +110,7 @@ export const RULE_TEXT_TR: Record<string, RuleTextTr> = {
     title: 'Ok tuşları menü öğeleri arasında geçiş yapmıyor',
     impact: 'Klavye ve ekran okuyucu kullanıcıları ilk öğeden sonraki menü öğelerine ulaşamaz.',
     recommendation:
-      'APG menü düğmesi deseninde anlatıldığı gibi ArrowDown ve ArrowUp ile odağı sonraki veya önceki menü öğesine taşıyın (uçlarda başa ve sona dönerek).',
+      'APG menü düğmesi deseninde anlatıldığı gibi ArrowDown ve ArrowUp ile odağı sonraki veya önceki menü öğesine taşıyın (sondan başa, baştan sona dönerek).',
   },
   'jourilo/menu-home-end': {
     title: 'Home ve End tuşları ilk ve son menü öğesine atlamıyor',
@@ -126,7 +133,7 @@ export const RULE_TEXT_TR: Record<string, RuleTextTr> = {
     title: 'Escape diyaloğu kapatmıyor',
     impact: 'Klavye kullanıcılarının diyalogdan çıkmak için hızlı ve beklenen bir yolu yok.',
     recommendation:
-      'Diyaloğu Escape ile kapatın (yerel <dialog> bunu kendisi yapar) ve odağı diyaloğu açan öğeye geri verin.',
+      'Diyaloğun Escape ile kapanmasını sağlayın (yerel <dialog> bunu kendisi yapar) ve odağı diyaloğu açan öğeye geri verin.',
   },
   'jourilo/dialog-focus-return': {
     title: 'Diyalog kapanınca odak kayboluyor',
@@ -188,6 +195,7 @@ export const RULE_TEXT_TR: Record<string, RuleTextTr> = {
       'Geçersiz alanlara aria-invalid="true" ekleyin, her mesajı aria-describedby ile alanına bağlayın ve hata özetini role="alert" bölgesinde duyurun ya da odağı özete taşıyın.',
   },
   'jourilo/horizontal-overflow': {
+    dynamic: ['title'],
     title: 'Sayfa yatay olarak kayıyor',
     impact:
       'İçerik kesilir ya da iki yönlü kaydırma gerektirir; telefonda sayfa kaydırılırken yana doğru oynar.',
@@ -226,23 +234,27 @@ export const RULE_TEXT_TR: Record<string, RuleTextTr> = {
     recommendation: 'Başarısız bir gönderimden sonra odağı hata özetine veya ilk geçersiz alana taşıyın.',
   },
   'journey/failed': {
+    dynamic: ['title', 'impact'],
     title: 'Yolculuk hedefine ulaşmıyor',
     impact: 'Kişiler bu görevi tamamlayamıyor.',
     recommendation:
       'Başarısız olan adımı düzeltin ve yolculuğu yeniden çalıştırın. Yolculuk Jourilo tarafından önerildiyse önce tanımın amaçlanan akışla eşleştiğini kontrol edin.',
   },
   'journey/blocked-by-policy': {
+    dynamic: ['title'],
     title: 'Yolculuk güvenlik politikası tarafından durduruldu',
     impact: 'Bu yolculuğun geri kalanı test edilmedi.',
     recommendation:
       'Bu yolculuğun kapsanması gerekiyorsa test hesaplarıyla yerel veya sandbox bir ortamda çalıştırın.',
   },
   'journey/page-errors': {
+    dynamic: ['title'],
     title: 'Yolculuk sırasında yakalanmamış istisnalar',
     impact: 'Etkileşimli özellikler gerçek kullanıcılar için sessizce çalışmayabilir.',
     recommendation: 'Adımları yeniden üretin ve kanıtta listelenen istisnaları düzeltin.',
   },
   'journey/flaky': {
+    dynamic: ['title'],
     title: 'Yolculuk denemelerin yalnızca bir kısmında başarılı oldu',
     impact:
       'Aralıklı hatalar gerçek kullanıcılara ulaşır ve önce/sonra karşılaştırmalarını güvenilmez kılar.',
@@ -256,6 +268,7 @@ export const RULE_TEXT_TR: Record<string, RuleTextTr> = {
       "Bu URL için sunucuyu, DNS'i ve yönlendirmeleri kontrol edin. Sayfa kendine yönlendiriyorsa sunucunun yönlendirme kurallarını veya barındırma yapılandırmasını (HTTP/HTTPS, www ve sondaki eğik çizgi yönlendirmeleri, proxy veya CDN yönlendirmesi) düzeltin.",
   },
   'jourilo/http-error-page': {
+    dynamic: ['title'],
     title: 'Sayfa HTTP hata koduyla yanıt veriyor',
     impact: 'Yolculukta çıkmaz sokak; ziyaretçiler siteden ayrılır ya da siteye güvenlerini yitirir.',
     recommendation:
@@ -279,6 +292,7 @@ export const RULE_TEXT_TR: Record<string, RuleTextTr> = {
     recommendation: 'Her bağımlılığın hâlâ gerekli ve ulaşılabilir olup olmadığını kontrol edin.',
   },
   'jourilo/redirect-chain': {
+    dynamic: ['title'],
     title: 'Sayfaya birden çok yönlendirmeyle ulaşılıyor',
     impact:
       'Her yönlendirme, sayfa yüklenmeye başlamadan önce bir istek ve bir gidiş-dönüş daha ekler; yavaş mobil ağlarda zincir fark edilir bir gecikme yaratır.',
@@ -291,42 +305,49 @@ export const RULE_TEXT_TR: Record<string, RuleTextTr> = {
     recommendation: 'Görsellere width ve height öznitelikleri (ya da aspect-ratio) ekleyin.',
   },
   'perf/lcp': {
+    dynamic: ['title'],
     title: 'Largest Contentful Paint (LCP) zayıf veya iyileştirilmeli (laboratuvar)',
     impact: SLOW_PAGE,
     recommendation:
-      "LCP öğesini daha erken sunun: hero görselini veya yazı tipini önceden yükleyin (preload), tembel yüklemeyin (lazy loading), sıkıştırın; oluşturmayı engelleyen CSS/JS'yi ve sunucu süresini azaltın.",
+      "LCP öğesini daha erken sunun: hero görselini veya yazı tipini önceden yükleyin (preload), lazy loading uygulamayın, sıkıştırın; oluşturmayı engelleyen CSS/JS'yi ve sunucu süresini azaltın.",
   },
   'perf/cls': {
+    dynamic: ['title'],
     title: 'Cumulative Layout Shift (CLS) zayıf veya iyileştirilmeli (laboratuvar)',
     impact: 'Kişiler okurken veya dokunmaya çalışırken içerik zıplar ve yanlış tıklamalara yol açar.',
     recommendation:
       'Görseller, reklamlar ve gömülü içerikler için yer ayırın (width/height ya da aspect-ratio), mevcut içeriğin üstüne yeni içerik eklemeyin, boyutu ayarlanmış yedek yazı tipleriyle font-display kullanın.',
   },
   'perf/fcp': {
+    dynamic: ['title'],
     title: 'First Contentful Paint (FCP) zayıf veya iyileştirilmeli (laboratuvar)',
     impact: SLOW_PAGE,
     recommendation:
       "Oluşturmayı engelleyen kaynakları ve sunucu yanıt süresini azaltın; kritik CSS'i satır içine alın.",
   },
   'perf/ttfb': {
+    dynamic: ['title'],
     title: 'Time to First Byte (TTFB) zayıf veya iyileştirilmeli (laboratuvar)',
     impact: SLOW_PAGE,
     recommendation:
       'Sunucu yanıtını hızlandırın: önbellekleme, CDN, daha az yönlendirme, daha hızlı arka uç sorguları.',
   },
   'perf/tbt': {
+    dynamic: ['title'],
     title: 'Total Blocking Time (TBT) zayıf veya iyileştirilmeli (laboratuvar)',
     impact: SLOW_PAGE,
     recommendation:
       'Ana iş parçacığındaki uzun görevleri bölün: kodu parçalara ayırın (code splitting), kritik olmayan betikleri erteleyin, işi ana iş parçacığının dışına taşıyın.',
   },
   'perf/inp': {
+    dynamic: ['title'],
     title: 'Yolculuk sırasında etkileşime yavaş yanıt (laboratuvar)',
     impact: 'Arayüz tepkisiz hissettirir; kişiler yeniden tıklar ya da vazgeçer.',
     recommendation:
       'Etkileşimi DevTools Performance panelinde inceleyin; olay işleyicilerindeki uzun görevleri bölün ve acil olmayan işleri erteleyin.',
   },
   'conv/no-primary-cta-above-fold': {
+    dynamic: ['title'],
     title: 'İlk ekranda belirgin bir eylem çağrısı yok',
     impact: hypothesis('açılış sayfasından huninin sonraki adımına tıklama oranı'),
     recommendation:
@@ -347,11 +368,13 @@ export const RULE_TEXT_TR: Record<string, RuleTextTr> = {
       'Belirli bir kitle için elde edilecek sonucu anlatan bir başlığı, destekleyici bir alt başlıkla birlikte test edin.',
   },
   'conv/vague-cta-label': {
+    dynamic: ['title'],
     title: 'Belirsiz eylem çağrısı etiketi',
     impact: hypothesis('bu kontrolün tıklama oranı'),
     recommendation: 'Sonucu adlandıran bir etiket test edin ("Hesabımı oluştur", "Raporu al").',
   },
   'conv/no-trust-signals': {
+    dynamic: ['title'],
     title: 'Kişisel veya ödeme bilgisi isteyen formun yakınında güven sinyali yok',
     impact: hypothesis('formu başlatanların gönderimi tamamlama oranı'),
     recommendation:
@@ -378,6 +401,7 @@ export const RULE_TEXT_TR: Record<string, RuleTextTr> = {
       'Satın almadan sonra isteğe bağlı hesap oluşturmayla birlikte misafir olarak ödemeyi test edin.',
   },
   'design/off-brand-cta-color': {
+    dynamic: ['recommendation'],
     title: 'Birincil düğmelerde marka paleti dışında renkler kullanılıyor',
     impact:
       'Tutarsız eylem renkleri neyin tıklanabilir olduğunun tanınmasını zorlaştırır ve markayı zayıflatır.',
@@ -385,6 +409,7 @@ export const RULE_TEXT_TR: Record<string, RuleTextTr> = {
       "Birincil düğmelerde, amaçlanan role en yakın marka renk token'ını kullanın; kanıttaki renkleri marka paletiyle karşılaştırın.",
   },
   'design/off-brand-font': {
+    dynamic: ['recommendation'],
     title: 'Metinde marka tipografisinde olmayan yazı tipleri kullanılıyor',
     impact:
       'Ürün markayla tutarsız görünür; yüklenemeyen bir web yazı tipi ayrıca düzen kaymasına yol açabilir.',
