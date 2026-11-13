@@ -39181,7 +39181,10 @@ function hostListsFrom(ctx) {
 function envValue(...names) {
   for (const name of names) {
     const value = process.env[name]?.trim();
-    if (value) return { name, value };
+    if (!value) continue;
+    const keys = Object.keys(process.env);
+    const actual = keys.includes(name) ? name : keys.find((k) => k.toLowerCase() === name.toLowerCase()) ?? name;
+    return { name: actual, value };
   }
   return void 0;
 }

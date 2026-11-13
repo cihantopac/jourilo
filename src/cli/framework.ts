@@ -397,7 +397,14 @@ export function hostListsFrom(ctx: Context): { allowHosts: string[]; blockHosts:
 function envValue(...names: string[]): { name: string; value: string } | undefined {
   for (const name of names) {
     const value = process.env[name]?.trim();
-    if (value) return { name, value };
+    if (!value) continue;
+    // Windows environment names are case-insensitive: `https_proxy` finds `HTTPS_PROXY`. Name the variable as it is
+    // actually spelled, so a message that says "unset X" names the variable the user set.
+    const keys = Object.keys(process.env);
+    const actual = keys.includes(name)
+      ? name
+      : (keys.find((k) => k.toLowerCase() === name.toLowerCase()) ?? name);
+    return { name: actual, value };
   }
   return undefined;
 }
