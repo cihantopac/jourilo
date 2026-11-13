@@ -17,8 +17,9 @@ export function staleServerSuspect(observations: PageObservation[]): string | nu
       (n) =>
         n.firstParty && n.resourceType === 'script' && ((n.status ?? 0) >= 500 || n.failure !== undefined),
     ).length;
-    const total = o.scriptRequests?.firstParty ?? 0;
-    if (failed === 0 || failed < total) return null;
+    // A page without a recorded count cannot show that all its scripts failed: never guess it.
+    const total = o.scriptRequests?.firstParty;
+    if (total === undefined || failed === 0 || failed < total) return null;
   }
   return STALE_SERVER_LIMITATION;
 }

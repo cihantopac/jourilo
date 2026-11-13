@@ -55,4 +55,11 @@ describe('staleServerSuspect (F42)', () => {
     const third = { ...chunk(500), firstParty: false };
     expect(staleServerSuspect([page('/', [third], 1), page('/about', [third], 1)])).toBeNull();
   });
+
+  it('stays silent when a page has no recorded script count', () => {
+    const counted = page('/', [chunk(500)], 1);
+    const uncounted = { ...page('/about', [chunk(500)], 1), scriptRequests: undefined };
+    expect(staleServerSuspect([counted, uncounted])).toBeNull();
+    expect(staleServerSuspect([uncounted, counted])).toBeNull();
+  });
 });

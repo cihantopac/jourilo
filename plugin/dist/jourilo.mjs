@@ -44231,6 +44231,9 @@ var charClass = (c) => /\d/.test(c) ? 0 : c === c.toUpperCase() ? 1 : 2;
 function randomLooking(run) {
   const body = run.replace(/=+$/, "");
   if (!/\d/.test(body) || !/[A-Za-z]/.test(body)) return false;
+  const letters = body.replace(/[^A-Za-z]/g, "").length;
+  const inWords = (body.match(/[A-Z]?[a-z]{3,}/g) ?? []).join("").length;
+  if (inWords >= 0.6 * letters) return false;
   let switches = 0;
   for (let i = 1; i < body.length; i++) if (charClass(body[i]) !== charClass(body[i - 1])) switches++;
   return switches >= 0.4 * (body.length - 1);
@@ -47569,8 +47572,8 @@ function staleServerSuspect(observations) {
     const failed = o.network.filter(
       (n) => n.firstParty && n.resourceType === "script" && ((n.status ?? 0) >= 500 || n.failure !== void 0)
     ).length;
-    const total = o.scriptRequests?.firstParty ?? 0;
-    if (failed === 0 || failed < total) return null;
+    const total = o.scriptRequests?.firstParty;
+    if (total === void 0 || failed === 0 || failed < total) return null;
   }
   return STALE_SERVER_LIMITATION;
 }

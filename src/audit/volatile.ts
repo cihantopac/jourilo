@@ -31,11 +31,17 @@ const charClass = (c: string) => (/\d/.test(c) ? 0 : c === c.toUpperCase() ? 1 :
  * A base64-like run is volatile only when it looks random: it has a letter and a digit and switches character class
  * (upper, lower, digit) at least every 2.5 characters on average. Random base64 switches about every 1.5 characters;
  * a readable identifier such as `ProductCard2024Summer` or `iphone15promax256gb` keeps long runs of one class and
- * stays as it is. `+` and `/` split runs, so a path or a `+`-joined query never counts as one token.
+ * stays as it is. A run whose letters sit mostly (60% or more) in words (`[A-Z]?[a-z]{3,}`, as in
+ * `Icon24ArrowLeftBold` or `HeaderV2Mobile3Dark`) is readable and kept too, however often it switches class. Both
+ * tests err on the safe side: a random token taken for readable only prevents a collapse.
+ * `+` and `/` split runs, so a path or a `+`-joined query never counts as one token.
  */
 function randomLooking(run: string): boolean {
   const body = run.replace(/=+$/, '');
   if (!/\d/.test(body) || !/[A-Za-z]/.test(body)) return false;
+  const letters = body.replace(/[^A-Za-z]/g, '').length;
+  const inWords = (body.match(/[A-Z]?[a-z]{3,}/g) ?? []).join('').length;
+  if (inWords >= 0.6 * letters) return false;
   let switches = 0;
   for (let i = 1; i < body.length; i++) if (charClass(body[i]!) !== charClass(body[i - 1]!)) switches++;
   return switches >= 0.4 * (body.length - 1);

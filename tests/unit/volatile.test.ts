@@ -98,6 +98,8 @@ describe('normalizeVolatile', () => {
     differ('/search?q=iphone+15+pro+max+256gb', '/search?q=galaxy+s24+ultra+512gb');
     differ('fetch /api/v1/users → 500', 'fetch /api/v2/users → 500');
     differ('ERR_HTTP2_PROTOCOL_ERROR', 'ERR_HTTP2_PING_FAILED');
+    differ('image /icons/Icon24ArrowLeftBold.svg → 404', 'image /icons/Icon24ArrowRightBold.svg → 404');
+    differ('Hydration failed for HeaderV2Mobile3Dark', 'Hydration failed for FooterV2Mobile3Dark');
     // A random-looking token is still volatile.
     expect(normalizeVolatile('/img/k3Jd9sLq0ZpX2mWv8nRt.jpg')).toBe('/img/*.jpg');
   });
