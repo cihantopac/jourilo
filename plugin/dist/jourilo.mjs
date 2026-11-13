@@ -41378,10 +41378,33 @@ function isSameSiteNavigation(initiator, url, fetchSite) {
     return false;
   }
 }
-function navigationCookies(jar, sameSite, method, browser) {
+var isIpLiteral = (host) => /^\d+\.\d+\.\d+\.\d+$/.test(host) || host.startsWith("[") || host.includes(":");
+function pathMatches(requestPath, cookiePath) {
+  if (requestPath === cookiePath) return true;
+  if (!requestPath.startsWith(cookiePath)) return false;
+  return cookiePath.endsWith("/") || requestPath[cookiePath.length] === "/";
+}
+function cookieMatchesUrl(c, url, now = Date.now()) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  const host = u.hostname.toLowerCase();
+  const hostOnly = !c.domain.startsWith(".");
+  const domain = c.domain.replace(/^\./, "").toLowerCase();
+  const domainOk = hostOnly ? host === domain : host === domain || host.endsWith(`.${domain}`) && !isIpLiteral(host);
+  if (!domainOk) return false;
+  if (!pathMatches(u.pathname || "/", c.path || "/")) return false;
+  if (c.secure && u.protocol !== "https:" && host !== "localhost" && !host.endsWith(".localhost") && host !== "127.0.0.1" && host !== "[::1]")
+    return false;
+  return c.expires === -1 || c.expires * 1e3 > now;
+}
+function navigationCookies(jar, url, sameSite, method, browser) {
   const safe = method.toUpperCase() === "GET" || method.toUpperCase() === "HEAD";
   return jar.filter(
-    (c) => c.sameSite === "Strict" ? sameSite : c.sameSite === "Lax" ? sameSite || safe : c.secure || browser !== "chromium"
+    (c) => !cookieMatchesUrl(c, url) ? false : c.sameSite === "Strict" ? sameSite : c.sameSite === "Lax" ? sameSite || safe : c.secure || browser !== "chromium"
   );
 }
 
@@ -41684,7 +41707,7 @@ async function installRequestGuard(target, policy, options = {}) {
         continued ? void 0 : req.headers()["sec-fetch-site"]
       );
       const jar = await context.cookies(req.url());
-      headers.cookie = navigationCookies(jar, sameSite, req.method(), browserName).map((c) => `${c.name}=${c.value}`).join("; ");
+      headers.cookie = navigationCookies(jar, req.url(), sameSite, req.method(), browserName).map((c) => `${c.name}=${c.value}`).join("; ");
       response = await route.fetch({
         headers: { ...headers, ...own ? scope.headers : {} },
         maxRedirects: 0,

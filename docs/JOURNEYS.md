@@ -72,8 +72,10 @@ The safety policy holds in every tab, including a popup the page opens on its ow
   redirects fails the step as a redirect loop (a browser's ERR_TOO_MANY_REDIRECTS). Cookies follow the SameSite rules,
   judged against the page or browser action that started the chain: `Strict` cookies only when that was the same site
   (or `page.goto`, `back`), `Lax` cookies also on a cross-site GET, never on a cross-site POST. Where the browser's
-  decision cannot be reproduced, the cookie is withheld, so a journey can fail where a browser succeeds but never the
-  other way round: two different host names count as different sites unless the browser itself says otherwise
+  decision cannot be reproduced, the cookie is usually withheld, so a journey fails where a browser would succeed
+  rather than the other way round. One exception: in Chromium, a navigation that another window or frame started
+  without a Referer is judged by the tab's own page, which can count it as same-site where the browser would not.
+  Withheld cases: two different host names count as different sites unless the browser itself says otherwise
   (subdomains of one site included), a popup opened without a referrer counts as cross-site, and Chromium's
   two-minute allowance for POSTs with new cookies that have no SameSite attribute is not applied.
 

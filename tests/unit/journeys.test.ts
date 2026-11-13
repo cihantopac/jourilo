@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { emptyInventory } from '../../src/audit/engine.js';
 import type { PageInventory } from '../../src/core/types.js';
 import {
+  cookieMatchesUrl,
   isSameSiteNavigation,
   type JarCookie,
   navigationCookies,
@@ -307,19 +308,57 @@ describe('cookies on navigations the guard makes itself', () => {
     expect(isSameSiteNavigation({ kind: 'opaque' }, 'http://x.test/', 'none')).toBe(true);
   });
   it('sends Strict same-site only, Lax also on a cross-site GET, None as each browser stores it', () => {
+    const at = { domain: 'localhost', path: '/', expires: -1 };
     const jar: JarCookie[] = [
-      { name: 'strict', value: '1', secure: false, sameSite: 'Strict' },
-      { name: 'lax', value: '1', secure: false, sameSite: 'Lax' },
-      { name: 'none', value: '1', secure: false, sameSite: 'None' },
-      { name: 'noneSecure', value: '1', secure: true, sameSite: 'None' },
+      { ...at, name: 'strict', value: '1', secure: false, sameSite: 'Strict' },
+      { ...at, name: 'lax', value: '1', secure: false, sameSite: 'Lax' },
+      { ...at, name: 'none', value: '1', secure: false, sameSite: 'None' },
+      { ...at, name: 'noneSecure', value: '1', secure: true, sameSite: 'None' },
     ];
     const names = (sameSite: boolean, method: string, browser = 'chromium') =>
-      navigationCookies(jar, sameSite, method, browser).map((c) => c.name);
+      navigationCookies(jar, 'http://localhost:3000/', sameSite, method, browser).map((c) => c.name);
     expect(names(true, 'POST')).toEqual(['strict', 'lax', 'noneSecure']);
     expect(names(false, 'GET')).toEqual(['lax', 'noneSecure']);
     expect(names(false, 'POST')).toEqual(['noneSecure']);
     // Firefox and WebKit report a cookie without a SameSite attribute as None, and send it.
     expect(names(false, 'POST', 'firefox')).toEqual(['none', 'noneSecure']);
+  });
+  it("matches domain and path as RFC 6265 does, not as Playwright's looser URL filter", () => {
+    const c = (domain: string, path = '/', over: Partial<JarCookie> = {}): JarCookie => ({
+      name: 'c',
+      value: '1',
+      domain,
+      path,
+      expires: -1,
+      secure: false,
+      sameSite: 'Lax',
+      ...over,
+    });
+    // The three leaks: a host-only cookie to a subdomain, and a path prefix that is not a path segment.
+    expect(cookieMatchesUrl(c('localhost'), 'http://idp.localhost/')).toBe(false);
+    expect(cookieMatchesUrl(c('app.example.test'), 'https://auth.app.example.test/')).toBe(false);
+    expect(cookieMatchesUrl(c('app.example.test', '/app'), 'https://app.example.test/application')).toBe(
+      false,
+    );
+    // And through navigationCookies, which the guard uses.
+    expect(navigationCookies([c('localhost')], 'http://idp.localhost/', true, 'GET', 'chromium')).toEqual([]);
+    // Positive cases.
+    expect(cookieMatchesUrl(c('localhost'), 'http://localhost:3000/x')).toBe(true);
+    expect(cookieMatchesUrl(c('.example.test'), 'https://auth.app.example.test/')).toBe(true);
+    expect(cookieMatchesUrl(c('.example.test'), 'https://example.test/')).toBe(true);
+    expect(cookieMatchesUrl(c('app.example.test', '/app'), 'https://app.example.test/app/x')).toBe(true);
+    expect(cookieMatchesUrl(c('app.example.test', '/app'), 'https://app.example.test/app')).toBe(true);
+    expect(cookieMatchesUrl(c('app.example.test', '/app/'), 'https://app.example.test/app/x')).toBe(true);
+    // A Domain cookie never matches by suffix on an IP address; Secure needs https (or localhost); expiry counts.
+    expect(cookieMatchesUrl(c('.0.0.1'), 'http://127.0.0.1/')).toBe(false);
+    expect(cookieMatchesUrl(c('app.example.test', '/', { secure: true }), 'http://app.example.test/')).toBe(
+      false,
+    );
+    expect(cookieMatchesUrl(c('app.example.test', '/', { secure: true }), 'https://app.example.test/')).toBe(
+      true,
+    );
+    expect(cookieMatchesUrl(c('localhost', '/', { secure: true }), 'http://localhost/')).toBe(true);
+    expect(cookieMatchesUrl(c('localhost', '/', { expires: 1 }), 'http://localhost/')).toBe(false);
   });
 });
 

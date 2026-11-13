@@ -3,8 +3,12 @@
 // Strict cookies from a navigation a cross-site page started, and Lax cookies from a cross-site POST. Sending them
 // would let a cross-site sign-in flow pass where real users fail, so the guard builds the Cookie header itself.
 //
-// Where the browser's decision cannot be reproduced exactly, the cookie is withheld (fail closed): the journey may
-// fail where a browser would succeed, never the other way round.
+// Where the browser's decision cannot be reproduced exactly, the cookie is withheld (fail closed), with one known
+// exception: in Chromium, a navigation another window or frame started without a Referer is judged by the frame's
+// document, which may count it as same-site where the browser would not.
+//
+// Which cookies match a URL follows RFC 6265 (`cookieMatchesUrl`), not Playwright's `context.cookies(url)` filter,
+// which is looser: it sends a host-only cookie to subdomains and a `Path=/app` cookie to `/application`.
 //  - "Same site" needs the public suffix list. The browser's own verdict is used when it gives one (Sec-Fetch-Site on
 //    the first hop, Firefox and WebKit); otherwise two different host names count as cross-site, even subdomains of
 //    one site.
@@ -41,8 +45,55 @@ export function isSameSiteNavigation(initiator: Initiator, url: string, fetchSit
 export interface JarCookie {
   name: string;
   value: string;
+  /** Playwright's form: a leading dot for a Domain cookie, none for a host-only cookie. */
+  domain: string;
+  path: string;
+  /** Seconds since the epoch; -1 for a session cookie. */
+  expires: number;
   secure: boolean;
   sameSite: 'Strict' | 'Lax' | 'None';
+}
+
+const isIpLiteral = (host: string) =>
+  /^\d+\.\d+\.\d+\.\d+$/.test(host) || host.startsWith('[') || host.includes(':');
+
+/** RFC 6265 §5.1.4 path-match. */
+export function pathMatches(requestPath: string, cookiePath: string): boolean {
+  if (requestPath === cookiePath) return true;
+  if (!requestPath.startsWith(cookiePath)) return false;
+  return cookiePath.endsWith('/') || requestPath[cookiePath.length] === '/';
+}
+
+/**
+ * Whether a browser sends the cookie to `url` (RFC 6265 §5.4): host-only cookies to their exact host, Domain cookies
+ * to the domain and its subdomains (never by suffix on an IP address), path-match, Secure only over https (or to
+ * localhost, which browsers treat as secure), and not expired.
+ */
+export function cookieMatchesUrl(c: JarCookie, url: string, now = Date.now()): boolean {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  const host = u.hostname.toLowerCase();
+  const hostOnly = !c.domain.startsWith('.');
+  const domain = c.domain.replace(/^\./, '').toLowerCase();
+  const domainOk = hostOnly
+    ? host === domain
+    : host === domain || (host.endsWith(`.${domain}`) && !isIpLiteral(host));
+  if (!domainOk) return false;
+  if (!pathMatches(u.pathname || '/', c.path || '/')) return false;
+  if (
+    c.secure &&
+    u.protocol !== 'https:' &&
+    host !== 'localhost' &&
+    !host.endsWith('.localhost') &&
+    host !== '127.0.0.1' &&
+    host !== '[::1]'
+  )
+    return false;
+  return c.expires === -1 || c.expires * 1000 > now;
 }
 
 /**
@@ -52,16 +103,19 @@ export interface JarCookie {
  */
 export function navigationCookies(
   jar: readonly JarCookie[],
+  url: string,
   sameSite: boolean,
   method: string,
   browser: string,
 ): JarCookie[] {
   const safe = method.toUpperCase() === 'GET' || method.toUpperCase() === 'HEAD';
   return jar.filter((c) =>
-    c.sameSite === 'Strict'
-      ? sameSite
-      : c.sameSite === 'Lax'
-        ? sameSite || safe
-        : c.secure || browser !== 'chromium',
+    !cookieMatchesUrl(c, url)
+      ? false
+      : c.sameSite === 'Strict'
+        ? sameSite
+        : c.sameSite === 'Lax'
+          ? sameSite || safe
+          : c.secure || browser !== 'chromium',
   );
 }

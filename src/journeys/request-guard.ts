@@ -190,8 +190,9 @@ export async function installRequestGuard(
         req.url(),
         continued ? undefined : req.headers()['sec-fetch-site'],
       );
+      // Playwright's URL filter is a superset; RFC 6265 domain and path matching is applied on top.
       const jar = await context.cookies(req.url());
-      headers.cookie = navigationCookies(jar, sameSite, req.method(), browserName)
+      headers.cookie = navigationCookies(jar, req.url(), sameSite, req.method(), browserName)
         .map((c) => `${c.name}=${c.value}`)
         .join('; ');
       response = await route.fetch({
