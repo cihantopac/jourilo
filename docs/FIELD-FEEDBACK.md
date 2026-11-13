@@ -339,8 +339,8 @@ Count each project that reports the same item again here; recurrence decides pri
 
 Done in 1.4.0 ([RELEASE-1.4.md](RELEASE-1.4.md)) unless a row says otherwise.
 
-| Item | Status                                                                                                                                                                                                    |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F42  | Done (Task 13): a run where every page's own scripts fail adds one stale-server limitation; the plugin's audit skill checks that the port is free before it starts a dev server. Findings are not hidden. |
-| F43  | Documented, not changed: put runs outside an audited repository with `--workspace` ([WORKFLOW.md](WORKFLOW.md)). The optional warning when the workspace is inside `--repo` was not added.                           |
+| Item | Status                                                                                                                                                                                                     |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F42  | Done (Task 13): a run where every page's own scripts fail adds one stale-server limitation; the plugin's audit skill checks that the port is free before it starts a dev server. Findings are not hidden.  |
+| F43  | Documented, not changed: put runs outside an audited repository with `--workspace` ([WORKFLOW.md](WORKFLOW.md)). The optional warning when the workspace is inside `--repo` was not added.                 |
 | F44  | Done (Tasks 12 and 15): findings that differ only in volatile tokens collapse into one finding with `pages`; axe-core runs under a strict CSP and Jourilo's own injection is not reported as a site error. |

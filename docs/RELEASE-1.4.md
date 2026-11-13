@@ -35,17 +35,16 @@ chunk).
 
 ### Evidence (2026-11-14, macOS 27, Node 22.23, Playwright 1.64.1)
 
-The controller measures `npm run ci`, `npm run bench`, `scripts/smoke-pack.mjs` and `claude plugin validate` once on
-the release commit; the results go in this table. The values below are from the task runs.
+Measured once on the release branch (macOS, Node 22).
 
-| Check                                                                            | Result                                                                                                                              |
-| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run ci` (lint, typecheck, build, unit and browser tests, dist check)        | task runs: 50 files, 747 tests green on d01a824 (1.3.0: 38 files, 468 tests); release run: to be filled in                          |
-| Fixture benchmark (`npm run bench`)                                              | 90 / 90 found (1.3.0: 56 / 56; 34 new must-find items), 0 false positives, source location 10 / 10, measured on 13b14f3; release run: to be filled in |
-| Independent W3C ACT benchmark                                                    | not re-run for 1.4.0; the 1.3.0 numbers (93.4 % / 56.1 % / 12 false positives) stand for the rules that did not change             |
-| `scripts/smoke-pack.mjs` (clean install from the packed tarball, every command)  | to be filled in (checks that `ts-parser.mjs` is in the tarball)                                                                     |
-| `claude plugin validate` (marketplace and plugin, strict)                        | to be filled in                                                                                                                     |
-| Sequential test, false stops at alpha 0.05 (A/A, small samples, large `--tau`)   | 0.2 to 4.4 % over repeated probes with the max-variance form (the plug-in variance gave 12 to 13.6 %); power 300 / 300              |
+| Check                                                                           | Result                                                                                                                 |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `npm run ci` (lint, typecheck, build, unit and browser tests, dist check)       | 51 files, 761 tests green (1.3.0: 38 files, 468 tests)                                                                 |
+| Fixture benchmark (`npm run bench`)                                             | 90 / 90 found (1.3.0: 56 / 56; 34 new must-find items), 0 false positives, source location 10 / 10, 362 s              |
+| Independent W3C ACT benchmark                                                   | not re-run for 1.4.0; the 1.3.0 numbers (93.4 % / 56.1 % / 12 false positives) stand for the rules that did not change |
+| `scripts/smoke-pack.mjs` (clean install from the packed tarball, every command) | passed: `jourilo-1.4.0.tgz`, 31 files, 1575 kB, every command run from a clean install (includes `ts-parser.mjs`)      |
+| `claude plugin validate` (marketplace and plugin, strict)                       | passed                                                                                                                 |
+| Sequential test, false stops at alpha 0.05 (A/A, small samples, large `--tau`)  | 0.2 to 4.4 % over repeated probes with the max-variance form (the plug-in variance gave 12 to 13.6 %); power 300 / 300 |
 
 No real-project audit was repeated for 1.4.0. No automated run shows WCAG conformance.
 
