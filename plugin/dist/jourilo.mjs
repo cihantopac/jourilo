@@ -42703,6 +42703,124 @@ async function checkComposites(page, out) {
     `document.querySelectorAll('[data-jourilo-composite],[data-jourilo-composite-stop]').forEach((e) => { e.removeAttribute('data-jourilo-composite'); e.removeAttribute('data-jourilo-composite-stop'); })`
   ).catch(() => void 0);
 }
+var MENU_TRIGGERS = `(() => {
+  const visible = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+  const out = [];
+  for (const b of document.querySelectorAll('[aria-haspopup="menu"], [aria-haspopup="true"]')) {
+    if (out.length >= 4 || !visible(b) || b.disabled || b.getAttribute('aria-disabled') === 'true') continue;
+    if (b.closest('[role="menu"], [role="menubar"]')) continue;
+    const id = 'jourilo-menu-' + out.length;
+    b.setAttribute('data-jourilo-menu', id);
+    const r = b.getBoundingClientRect();
+    out.push({ id, name: (b.getAttribute('aria-label') || b.innerText || b.getAttribute('title') || '').replace(/\\s+/g, ' ').trim().slice(0, 80), rect: { x: Math.round(r.left + scrollX), y: Math.round(r.top + scrollY), width: Math.round(r.width), height: Math.round(r.height) } });
+  }
+  return out;
+})()`;
+var MENU_STATE = `(id) => {
+  const visible = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+  const b = document.querySelector('[data-jourilo-menu="' + id + '"]');
+  if (!b) return null;
+  const controls = (b.getAttribute('aria-controls') || '').split(/\\s+/).map((i) => document.getElementById(i)).filter(Boolean);
+  const menus = controls.filter((e) => e.getAttribute('role') === 'menu');
+  if (!menus.length) menus.push(...Array.from(document.querySelectorAll('[role="menu"]')));
+  const menu = menus.find(visible);
+  const ae = document.activeElement;
+  if (!menu) return { open: false, items: 0, pos: -1, onTrigger: ae === b };
+  const items = Array.from(menu.querySelectorAll('[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]')).filter((e) => visible(e) && e.getAttribute('aria-disabled') !== 'true');
+  const ad = menu.getAttribute('aria-activedescendant') || (ae && ae.getAttribute && ae.getAttribute('aria-activedescendant')) || '';
+  const target = ad && document.getElementById(ad) ? document.getElementById(ad) : ae;
+  return { open: true, items: items.length, pos: target ? items.findIndex((i) => i === target || i.contains(target)) : -1, onTrigger: ae === b };
+}`;
+async function checkMenus(page, out) {
+  const found = await page.evaluate(MENU_TRIGGERS).catch(() => []);
+  const startUrl = page.url();
+  for (const m of found) {
+    if (DESTRUCTIVE.test(m.name) || FINANCIAL.test(m.name) || AVOID.test(m.name)) continue;
+    const trigger = page.locator(`[data-jourilo-menu="${m.id}"]`).first();
+    const selector = `[aria-haspopup][data-jourilo-menu="${m.id}"]`;
+    const read3 = () => page.evaluate(`(${MENU_STATE})(${JSON.stringify(m.id)})`);
+    const issue = (kind, detail, steps) => out.issues.push({ kind, trigger: selector, name: m.name, rect: m.rect, detail, steps });
+    let opened = null;
+    try {
+      await trigger.focus({ timeout: 2e3 });
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(300);
+      opened = await read3();
+      if (!opened?.open) {
+        await trigger.focus({ timeout: 2e3 });
+        await page.keyboard.press("ArrowDown");
+        await page.waitForTimeout(300);
+        opened = await read3();
+      }
+    } catch {
+      continue;
+    }
+    if (!opened?.open || opened.items < 2) {
+      await restoreMenuPage(page, startUrl, !!opened?.open);
+      continue;
+    }
+    const last = opened.items - 1;
+    const open = [`Focus the menu button "${m.name}" and press Enter to open its menu.`];
+    let cur = opened;
+    if (cur.pos < 0) {
+      await page.keyboard.press("ArrowDown");
+      await page.waitForTimeout(120);
+      cur = await read3() ?? cur;
+    }
+    const press = async (key) => {
+      await page.keyboard.press(key);
+      await page.waitForTimeout(120);
+      return read3();
+    };
+    const p0 = cur.pos;
+    const afterDown = await press("ArrowDown");
+    const afterUp = await press("ArrowUp");
+    const downMoved = !!afterDown?.open && afterDown.pos !== p0 && afterDown.pos >= 0;
+    const upMoved = !!afterUp?.open && afterUp.pos !== (afterDown?.pos ?? p0) && afterUp.pos >= 0;
+    if (!downMoved && !upMoved)
+      issue(
+        "menu-arrows",
+        `ArrowDown and ArrowUp do not move focus between the ${opened.items} menu items.`,
+        [...open, "Press ArrowDown and ArrowUp: focus does not move to another menu item."]
+      );
+    const home = await press("Home");
+    const end = await press("End");
+    const homeOk = home?.pos === 0;
+    const endOk = end?.pos === last;
+    if (!homeOk || !endOk)
+      issue(
+        "menu-home-end",
+        `${[!homeOk && "Home does not move to the first item", !endOk && "End does not move to the last item"].filter(Boolean).join(" and ")}.`,
+        [...open, "Press Home, then End: focus does not jump to the first and last menu items."]
+      );
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    const closed = await read3();
+    if (closed?.open) {
+      issue("menu-escape", "Pressing Escape did not close the menu.", [
+        ...open,
+        "Press Escape: the menu stays open."
+      ]);
+      await restoreMenuPage(page, startUrl, true);
+      continue;
+    }
+    if (!closed?.onTrigger)
+      issue(
+        "menu-focus-not-returned",
+        "After Escape closed the menu, focus did not return to the menu button.",
+        [...open, "Press Escape: the menu closes, but focus is not on the menu button."]
+      );
+  }
+  await page.evaluate(
+    `document.querySelectorAll('[data-jourilo-menu]').forEach((e) => e.removeAttribute('data-jourilo-menu'))`
+  ).catch(() => void 0);
+}
+async function restoreMenuPage(page, startUrl, menuStillOpen) {
+  if (page.url() !== startUrl) await page.goto(startUrl, { waitUntil: "load" }).catch(() => void 0);
+  else if (menuStillOpen) await page.reload({ waitUntil: "load" }).catch(() => void 0);
+  else return;
+  await page.evaluate(MENU_TRIGGERS).catch(() => void 0);
+}
 async function checkWidgets(page) {
   const triggers = await page.evaluate(TRIGGERS);
   const out = {
@@ -42713,6 +42831,7 @@ async function checkWidgets(page) {
     issues: []
   };
   await checkComposites(page, out);
+  await checkMenus(page, out);
   const state = (controls, mode = "open") => page.evaluate(`(${STATE})(${JSON.stringify(controls)}, ${JSON.stringify(mode)})`);
   for (const t of triggers) {
     if (DESTRUCTIVE.test(t.name) || FINANCIAL.test(t.name) || AVOID.test(t.name)) continue;
@@ -45556,6 +45675,70 @@ var WIDGET_RULES = {
         id: "keyboard-interface",
         title: "Developing a Keyboard Interface",
         url: "https://www.w3.org/WAI/ARIA/apg/practices/keyboard-interface/"
+      }
+    ]
+  },
+  "menu-arrows": {
+    ruleId: "jourilo/menu-arrow-keys",
+    title: "Arrow keys do not move between menu items",
+    severity: "serious",
+    impact: "Keyboard and screen-reader users cannot reach the menu items beyond the first one.",
+    recommendation: "Move focus to the next or previous menu item with ArrowDown and ArrowUp (wrapping at the ends), as the APG menu button pattern describes.",
+    standards: [
+      wcag("2.1.1"),
+      {
+        standard: "WAI-ARIA APG",
+        id: "menu-button",
+        title: "Menu Button Pattern",
+        url: "https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/"
+      }
+    ]
+  },
+  "menu-home-end": {
+    ruleId: "jourilo/menu-home-end",
+    title: "Home and End do not jump to the first and last menu item",
+    severity: "minor",
+    impact: "Keyboard users must press an arrow key many times to reach the ends of a long menu.",
+    recommendation: "Move focus to the first menu item on Home and to the last one on End.",
+    standards: [
+      wcag("2.1.1"),
+      {
+        standard: "WAI-ARIA APG",
+        id: "menu-button",
+        title: "Menu Button Pattern",
+        url: "https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/"
+      }
+    ]
+  },
+  "menu-escape": {
+    ruleId: "jourilo/menu-escape",
+    title: "Escape does not close the menu",
+    severity: "moderate",
+    impact: "Keyboard users have no quick, expected way to dismiss an open menu.",
+    recommendation: "Close the menu on Escape and return focus to the menu button.",
+    standards: [
+      wcag("2.1.1"),
+      {
+        standard: "WAI-ARIA APG",
+        id: "menu-button",
+        title: "Menu Button Pattern",
+        url: "https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/"
+      }
+    ]
+  },
+  "menu-focus-not-returned": {
+    ruleId: "jourilo/menu-focus-return",
+    title: "Focus is lost when the menu closes",
+    severity: "moderate",
+    impact: "After closing the menu, keyboard users are sent elsewhere and must find their place again.",
+    recommendation: "Move focus back to the menu button when the menu closes with Escape.",
+    standards: [
+      wcag("2.4.3"),
+      {
+        standard: "WAI-ARIA APG",
+        id: "menu-button",
+        title: "Menu Button Pattern",
+        url: "https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/"
       }
     ]
   },
@@ -53240,6 +53423,34 @@ var RULES = [
     "serious",
     "Items of a tab list, radio group, list box or menu bar cannot be reached with the keyboard",
     ["WAI-ARIA APG keyboard-interface"]
+  ),
+  rule(
+    "jourilo/menu-arrow-keys",
+    "accessibility",
+    "defect",
+    "serious",
+    "Arrow keys do not move between menu items",
+    ["WCAG 2.2 2.1.1", "WAI-ARIA APG menu-button"]
+  ),
+  rule(
+    "jourilo/menu-home-end",
+    "accessibility",
+    "defect",
+    "minor",
+    "Home and End do not jump to the first and last menu item",
+    ["WCAG 2.2 2.1.1", "WAI-ARIA APG menu-button"]
+  ),
+  rule("jourilo/menu-escape", "accessibility", "defect", "moderate", "Escape does not close the menu", [
+    "WCAG 2.2 2.1.1",
+    "WAI-ARIA APG menu-button"
+  ]),
+  rule(
+    "jourilo/menu-focus-return",
+    "accessibility",
+    "defect",
+    "moderate",
+    "Focus is lost when the menu closes",
+    ["WCAG 2.2 2.4.3", "WAI-ARIA APG menu-button"]
   ),
   rule("jourilo/dialog-escape", "accessibility", "defect", "moderate", "Escape does not close the dialog", [
     "WAI-ARIA APG dialog-modal",

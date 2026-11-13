@@ -578,6 +578,71 @@ const WIDGET_RULES: Record<
       },
     ],
   },
+  'menu-arrows': {
+    ruleId: 'jourilo/menu-arrow-keys',
+    title: 'Arrow keys do not move between menu items',
+    severity: 'serious',
+    impact: 'Keyboard and screen-reader users cannot reach the menu items beyond the first one.',
+    recommendation:
+      'Move focus to the next or previous menu item with ArrowDown and ArrowUp (wrapping at the ends), as the APG menu button pattern describes.',
+    standards: [
+      wcag('2.1.1'),
+      {
+        standard: 'WAI-ARIA APG',
+        id: 'menu-button',
+        title: 'Menu Button Pattern',
+        url: 'https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/',
+      },
+    ],
+  },
+  'menu-home-end': {
+    ruleId: 'jourilo/menu-home-end',
+    title: 'Home and End do not jump to the first and last menu item',
+    severity: 'minor',
+    impact: 'Keyboard users must press an arrow key many times to reach the ends of a long menu.',
+    recommendation: 'Move focus to the first menu item on Home and to the last one on End.',
+    standards: [
+      wcag('2.1.1'),
+      {
+        standard: 'WAI-ARIA APG',
+        id: 'menu-button',
+        title: 'Menu Button Pattern',
+        url: 'https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/',
+      },
+    ],
+  },
+  'menu-escape': {
+    ruleId: 'jourilo/menu-escape',
+    title: 'Escape does not close the menu',
+    severity: 'moderate',
+    impact: 'Keyboard users have no quick, expected way to dismiss an open menu.',
+    recommendation: 'Close the menu on Escape and return focus to the menu button.',
+    standards: [
+      wcag('2.1.1'),
+      {
+        standard: 'WAI-ARIA APG',
+        id: 'menu-button',
+        title: 'Menu Button Pattern',
+        url: 'https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/',
+      },
+    ],
+  },
+  'menu-focus-not-returned': {
+    ruleId: 'jourilo/menu-focus-return',
+    title: 'Focus is lost when the menu closes',
+    severity: 'moderate',
+    impact: 'After closing the menu, keyboard users are sent elsewhere and must find their place again.',
+    recommendation: 'Move focus back to the menu button when the menu closes with Escape.',
+    standards: [
+      wcag('2.4.3'),
+      {
+        standard: 'WAI-ARIA APG',
+        id: 'menu-button',
+        title: 'Menu Button Pattern',
+        url: 'https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/',
+      },
+    ],
+  },
   'dialog-escape': {
     ruleId: 'jourilo/dialog-escape',
     title: 'Escape does not close the dialog',

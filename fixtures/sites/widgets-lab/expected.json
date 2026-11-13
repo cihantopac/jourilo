@@ -35,9 +35,35 @@
       "rule": "jourilo/dialog-focus-containment",
       "path": "/dialog-escapes-empty",
       "why": "focus escapes to empty focusable page elements that are not guards (no aria-hidden, no guard attribute); the walk ends on one of them"
+    },
+    {
+      "rule": "jourilo/menu-arrow-keys",
+      "path": "/menu-broken",
+      "why": "arrow keys do not move between the File menu items"
+    },
+    {
+      "rule": "jourilo/menu-home-end",
+      "path": "/menu-broken",
+      "why": "Home and End do nothing in the menus"
+    },
+    {
+      "rule": "jourilo/menu-escape",
+      "path": "/menu-broken",
+      "why": "Escape leaves the File menu open"
+    },
+    {
+      "rule": "jourilo/menu-focus-return",
+      "path": "/menu-broken",
+      "why": "the View menu closes on Escape but drops focus to the page"
     }
   ],
-  "sources": [{ "rule": "jourilo/focus-visible", "path": "/pressed-tools", "file": "style.css" }],
+  "sources": [
+    {
+      "rule": "jourilo/focus-visible",
+      "path": "/pressed-tools",
+      "file": "style.css"
+    }
+  ],
   "mustNotFind": [
     {
       "rule": "jourilo/expanded-state",
@@ -138,6 +164,26 @@
       "rule": "jourilo/dialog-focus-containment",
       "path": "/dialog-guards-slow",
       "why": "the Tab walk ends on a focus guard whose wrap lags past the stability window (F30: the audit read focus on the guard)"
+    },
+    {
+      "rule": "jourilo/menu-arrow-keys",
+      "path": "/menu-good",
+      "why": "APG menu button: arrows wrap, Home/End, Escape returns focus; the link-item menu is never activated"
+    },
+    {
+      "rule": "jourilo/menu-home-end",
+      "path": "/menu-good",
+      "why": "APG menu button: arrows wrap, Home/End, Escape returns focus; the link-item menu is never activated"
+    },
+    {
+      "rule": "jourilo/menu-escape",
+      "path": "/menu-good",
+      "why": "APG menu button: arrows wrap, Home/End, Escape returns focus; the link-item menu is never activated"
+    },
+    {
+      "rule": "jourilo/menu-focus-return",
+      "path": "/menu-good",
+      "why": "APG menu button: arrows wrap, Home/End, Escape returns focus; the link-item menu is never activated"
     }
   ],
   "maxDefects": {
@@ -151,7 +197,8 @@
       "/focus-sibling",
       "/disclosure-overlay",
       "/dialog-guards",
-      "/dialog-guards-slow"
+      "/dialog-guards-slow",
+      "/menu-good"
     ]
   },
   "audit": {
