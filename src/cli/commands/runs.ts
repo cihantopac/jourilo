@@ -14,7 +14,8 @@ export const runs: Command = {
   options: { target: { type: 'string' } },
   details: `Subcommands:
   trend            Defects per capture, critical and serious defects, LCP and CLS for every page and viewport across the
-                   runs of one target, oldest first. Partial and no-page-loaded runs are left out and counted.
+                   runs of one target, oldest first. Partial and no-page-loaded runs are left out and counted. A finding with no
+                   viewport is counted at every viewport of its page.
 
 Options:
   --target URL     With trend, the target to follow (default: the target of the latest run)`,
@@ -24,8 +25,7 @@ Options:
     if (sub)
       throw new JouriloError('USAGE', `Unknown runs subcommand: ${sub}.`, 'Usage: jourilo runs [trend]');
     if (str(ctx, 'target')) throw new JouriloError('USAGE', '--target applies to `jourilo runs trend`.');
-    // The trend slice is for `runs trend` and the report; the listing itself stays as it was.
-    const list = ctx.ws.listRuns().map((r) => ({ ...r, trend: undefined }));
+    const list = ctx.ws.listRuns();
     return {
       data: list,
       text: list.length
@@ -36,7 +36,7 @@ Options:
 };
 
 async function runsTrend(ctx: Context) {
-  const list = ctx.ws.listRuns();
+  const list = ctx.ws.listRuns({ trend: true });
   const target = str(ctx, 'target') ?? list[list.length - 1]?.target;
   if (!target)
     return { data: { target: null, rows: [], used: 0, skipped: 0 }, text: `No runs in ${ctx.ws.runsDir}.` };
@@ -81,7 +81,7 @@ export const report: Command = {
     }
     if (!['html', 'md'].includes(format))
       throw new JouriloError('USAGE', '--format must be html, md, sarif or json.');
-    const written = writeReports(dir, run, cmp, { history: ctx.ws.listRuns() });
+    const written = writeReports(dir, run, cmp, { history: ctx.ws.listRuns({ trend: true }) });
     return { data: written, text: `Report: ${format === 'md' ? written.markdown : written.html}` };
   },
 };
@@ -98,7 +98,7 @@ export const compare: Command = {
     const { run: head, dir } = ctx.ws.loadRun(headRef);
     if (base.id === head.id) throw new JouriloError('USAGE', 'Baseline and head are the same run.');
     const cmp = compareRuns(base, head);
-    const written = writeReports(dir, head, cmp, { history: ctx.ws.listRuns() });
+    const written = writeReports(dir, head, cmp, { history: ctx.ws.listRuns({ trend: true }) });
     const failed = flag(ctx, 'fail-on-regression') && !cmp.regressionFree;
     const lines = [
       `Baseline ${base.id} → ${head.id}`,

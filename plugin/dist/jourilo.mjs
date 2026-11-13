@@ -81,88 +81,6 @@ var init_errors = __esm({
   }
 });
 
-// src/audit/outcome.ts
-function runOutcome(run) {
-  if (run.stoppedBy) return "partial";
-  return run.pages.some((p) => p.status !== null) ? "complete" : "no-page-loaded";
-}
-function exitCodeForOutcome(outcome, gateFailed) {
-  if (outcome === "partial") return 6;
-  if (outcome === "no-page-loaded") return 5;
-  return gateFailed ? 1 : 0;
-}
-var init_outcome = __esm({
-  "src/audit/outcome.ts"() {
-    "use strict";
-  }
-});
-
-// src/report/trends.ts
-function trendSlice(run) {
-  return {
-    id: run.id,
-    target: run.target,
-    startedAt: run.startedAt,
-    outcome: run.outcome,
-    stoppedBy: run.stoppedBy,
-    pages: run.pages.map((p) => ({ url: p.url, viewport: p.viewport, status: p.status, metrics: p.metrics })),
-    findings: run.findings.map((f) => ({
-      kind: f.kind,
-      severity: f.severity,
-      url: f.url,
-      viewport: f.viewport
-    }))
-  };
-}
-function usable(run) {
-  return (run.outcome ?? runOutcome(run)) === "complete";
-}
-function trendReport(runs2, key) {
-  const same = runs2.filter((r) => r.target === key.target).sort((a, b) => a.startedAt.localeCompare(b.startedAt));
-  const good = same.filter(usable);
-  const rows = /* @__PURE__ */ new Map();
-  for (const run of good) {
-    const captures = /* @__PURE__ */ new Map();
-    for (const p of run.pages) {
-      if (p.status === null) continue;
-      const k = `${p.url}
-${p.viewport}`;
-      captures.set(k, [...captures.get(k) ?? [], p]);
-    }
-    for (const [k, caps] of captures) {
-      const first = caps[0];
-      const mine = run.findings.filter(
-        (f) => f.kind === "defect" && f.url === first.url && (f.viewport === void 0 || f.viewport === first.viewport)
-      );
-      const row = rows.get(k) ?? { url: first.url, viewport: first.viewport, points: [] };
-      row.points.push({
-        runId: run.id,
-        at: run.startedAt,
-        defectsPerCapture: mine.length / caps.length,
-        serious: mine.filter((f) => f.severity === "critical" || f.severity === "serious").length / caps.length,
-        lcp: metric(first, "LCP"),
-        cls: metric(first, "CLS")
-      });
-      rows.set(k, row);
-    }
-  }
-  return {
-    rows: [...rows.values()].sort(
-      (a, b) => a.url.localeCompare(b.url) || a.viewport.localeCompare(b.viewport)
-    ),
-    used: good.length,
-    skipped: same.length - good.length
-  };
-}
-var metric;
-var init_trends = __esm({
-  "src/report/trends.ts"() {
-    "use strict";
-    init_outcome();
-    metric = (p, name) => p.metrics.find((m) => m.name === name)?.value ?? null;
-  }
-});
-
 // src/core/fs-safety.ts
 import { chmodSync, existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -208,6 +126,29 @@ var init_fs_safety = __esm({
   }
 });
 
+// src/core/trend-run.ts
+function trendSlice(run) {
+  return {
+    id: run.id,
+    target: run.target,
+    startedAt: run.startedAt,
+    outcome: run.outcome,
+    stoppedBy: run.stoppedBy,
+    pages: run.pages.map((p) => ({ url: p.url, viewport: p.viewport, status: p.status, metrics: p.metrics })),
+    findings: run.findings.map((f) => ({
+      kind: f.kind,
+      severity: f.severity,
+      url: f.url,
+      viewport: f.viewport
+    }))
+  };
+}
+var init_trend_run = __esm({
+  "src/core/trend-run.ts"() {
+    "use strict";
+  }
+});
+
 // src/core/types.ts
 var RUN_SCHEMA_VERSION;
 var init_types = __esm({
@@ -228,9 +169,9 @@ var Workspace;
 var init_workspace = __esm({
   "src/core/workspace.ts"() {
     "use strict";
-    init_trends();
     init_errors();
     init_fs_safety();
+    init_trend_run();
     init_types();
     Workspace = class {
       root;
@@ -261,7 +202,8 @@ var init_workspace = __esm({
 `);
         return file2;
       }
-      listRuns() {
+      /** `trend: true` adds each run's trend slice (for reports and `runs trend`); plain listings stay small. */
+      listRuns(opts = {}) {
         if (!existsSync2(this.runsDir)) return [];
         const out = [];
         for (const id of readdirSync(this.runsDir).sort()) {
@@ -278,7 +220,7 @@ var init_workspace = __esm({
               kinds: run.summary.byKind,
               pages: run.summary.pages,
               journeys: run.summary.journeys,
-              trend: trendSlice(run)
+              ...opts.trend ? { trend: trendSlice(run) } : {}
             });
           } catch {
           }
@@ -47296,8 +47238,18 @@ function emptyInventory() {
   };
 }
 
+// src/audit/outcome.ts
+function runOutcome(run) {
+  if (run.stoppedBy) return "partial";
+  return run.pages.some((p) => p.status !== null) ? "complete" : "no-page-loaded";
+}
+function exitCodeForOutcome(outcome, gateFailed) {
+  if (outcome === "partial") return 6;
+  if (outcome === "no-page-loaded") return 5;
+  return gateFailed ? 1 : 0;
+}
+
 // src/cli/commands/audit.ts
-init_outcome();
 init_errors();
 init_fs_safety();
 
@@ -48430,7 +48382,7 @@ var EN = {
   "history.hint": "Runs with the same target in this workspace. Different page sets or viewports make counts not directly comparable; use jourilo verify for like-for-like comparisons.",
   "history.this": "(this run)",
   "trend.title": "Trend per page and viewport",
-  "trend.hint": "Defects are counted per capture (one page at one viewport), so runs audited with different --pages stay comparable. Values run from the oldest run to this one.",
+  "trend.hint": "Defects are counted per capture (one page at one viewport), so runs audited with different --pages stay comparable. A finding with no viewport counts at every viewport of its page. Values run from the oldest run to this one.",
   "trend.skipped": "{n} partial or empty run(s) left out: their numbers are not comparable.",
   "trend.series": "Oldest to newest: {list}",
   "trend.noData": "no data",
@@ -48653,7 +48605,7 @@ var TR = {
   "history.hint": "Bu \xE7al\u0131\u015Fma alan\u0131nda ayn\u0131 hedefe ait \xE7al\u0131\u015Fmalar. Farkl\u0131 sayfa k\xFCmeleri veya g\xF6r\xFCn\xFCm alanlar\u0131 say\u0131lar\u0131 do\u011Frudan kar\u015F\u0131la\u015Ft\u0131r\u0131lamaz k\u0131lar; birebir kar\u015F\u0131la\u015Ft\u0131rma i\xE7in jourilo verify kullan\u0131n.",
   "history.this": "(bu \xE7al\u0131\u015Fma)",
   "trend.title": "Sayfa ve g\xF6r\xFCn\xFCm alan\u0131 ba\u015F\u0131na e\u011Filim",
-  "trend.hint": "Kusurlar yakalama ba\u015F\u0131na (bir sayfa, bir g\xF6r\xFCn\xFCm alan\u0131) say\u0131l\u0131r; bu y\xFCzden farkl\u0131 --pages ile yap\u0131lan \xE7al\u0131\u015Fmalar kar\u015F\u0131la\u015Ft\u0131r\u0131labilir kal\u0131r. De\u011Ferler en eski \xE7al\u0131\u015Fmadan bu \xE7al\u0131\u015Fmaya do\u011Fru gider.",
+  "trend.hint": "Kusurlar yakalama ba\u015F\u0131na (bir sayfa, bir g\xF6r\xFCn\xFCm alan\u0131) say\u0131l\u0131r; bu y\xFCzden farkl\u0131 --pages ile yap\u0131lan \xE7al\u0131\u015Fmalar kar\u015F\u0131la\u015Ft\u0131r\u0131labilir kal\u0131r. G\xF6r\xFCn\xFCm alan\u0131 olmayan bir bulgu, sayfas\u0131n\u0131n her g\xF6r\xFCn\xFCm alan\u0131nda say\u0131l\u0131r. De\u011Ferler en eski \xE7al\u0131\u015Fmadan bu \xE7al\u0131\u015Fmaya do\u011Fru gider.",
   "trend.skipped": "{n} yar\u0131m veya bo\u015F \xE7al\u0131\u015Fma d\u0131\u015Far\u0131da b\u0131rak\u0131ld\u0131: say\u0131lar\u0131 kar\u015F\u0131la\u015Ft\u0131r\u0131lamaz.",
   "trend.series": "Eskiden yeniye: {list}",
   "trend.noData": "veri yok",
@@ -49687,8 +49639,51 @@ function rootCauseKey(f) {
   return `${f.ruleId}|fp|${f.fingerprint}`;
 }
 
+// src/report/trends.ts
+init_trend_run();
+var metric = (p, name) => p.metrics.find((m) => m.name === name)?.value ?? null;
+function usable(run) {
+  return (run.outcome ?? runOutcome(run)) === "complete";
+}
+function trendReport(runs2, key) {
+  const same = runs2.filter((r) => r.target === key.target).sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+  const good = same.filter(usable);
+  const rows = /* @__PURE__ */ new Map();
+  for (const run of good) {
+    const captures = /* @__PURE__ */ new Map();
+    for (const p of run.pages) {
+      if (p.status === null) continue;
+      const k = `${p.url}
+${p.viewport}`;
+      captures.set(k, [...captures.get(k) ?? [], p]);
+    }
+    for (const [k, caps] of captures) {
+      const first = caps[0];
+      const mine = run.findings.filter(
+        (f) => f.kind === "defect" && f.url === first.url && (f.viewport === void 0 || f.viewport === first.viewport)
+      );
+      const row = rows.get(k) ?? { url: first.url, viewport: first.viewport, points: [] };
+      row.points.push({
+        runId: run.id,
+        at: run.startedAt,
+        defectsPerCapture: mine.length / caps.length,
+        serious: mine.filter((f) => f.severity === "critical" || f.severity === "serious").length / caps.length,
+        lcp: metric(first, "LCP"),
+        cls: metric(first, "CLS")
+      });
+      rows.set(k, row);
+    }
+  }
+  return {
+    rows: [...rows.values()].sort(
+      (a, b) => a.url.localeCompare(b.url) || a.viewport.localeCompare(b.viewport)
+    ),
+    used: good.length,
+    skipped: same.length - good.length
+  };
+}
+
 // src/report/html.ts
-init_trends();
 function esc(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
@@ -51366,7 +51361,7 @@ async function runCmd(ctx) {
     const repo = str(ctx, "repo") ?? (isDir ? resolve5(baseArg) : void 0);
     if (repo) await locateFindings(run, repo);
     ctx.ws.saveRun(run);
-    const reports = writeReports(runDir, run, void 0, { history: ctx.ws.listRuns() });
+    const reports = writeReports(runDir, run, void 0, { history: ctx.ws.listRuns({ trend: true }) });
     const failed = journeys2.filter((j) => j.status === "failed").length;
     return {
       data: { runId: id, runDir, reports, journeys: journeys2, findings },
@@ -51640,7 +51635,7 @@ async function auditCommand(ctx, usage2, categories) {
     ctx.ws.saveRun(run);
     const reports = writeReports(runDir, run, void 0, {
       sarif: flag(ctx, "sarif"),
-      history: ctx.ws.listRuns()
+      history: ctx.ws.listRuns({ trend: true })
     });
     const severityGate = failOn ? run.findings.some((f) => f.kind === "defect" && severityRank(f.severity) <= severityRank(failOn)) : false;
     const gate = severityGate || budgetFailed(run.budgets);
@@ -53983,7 +53978,7 @@ undismiss options:
     run.findings.push(f);
     run.summary = { ...run.summary, ...summarize(run.findings, run.summary.pages, run.summary.journeys) };
     ctx.ws.saveRun(run);
-    writeReports(dir, run, void 0, { history: ctx.ws.listRuns() });
+    writeReports(dir, run, void 0, { history: ctx.ws.listRuns({ trend: true }) });
     return {
       data: f,
       text: `Added ${f.provenance} finding ${f.fingerprint} to run ${run.id} (${join24(dir, "report.html")}).`
@@ -53996,7 +53991,7 @@ function refreshRun(ctx, runRef, change) {
   if (run.dismissed && !run.dismissed.length) delete run.dismissed;
   run.summary = { ...run.summary, ...summarize(run.findings, run.summary.pages, run.summary.journeys) };
   ctx.ws.saveRun(run);
-  writeReports(dir, run, void 0, { history: ctx.ws.listRuns() });
+  writeReports(dir, run, void 0, { history: ctx.ws.listRuns({ trend: true }) });
   return run.id;
 }
 function dismiss(ctx) {
@@ -54061,7 +54056,6 @@ function undismiss(ctx) {
 // src/cli/commands/optimize.ts
 import { existsSync as existsSync19, mkdirSync as mkdirSync8, writeFileSync as writeFileSync13 } from "node:fs";
 import { join as join25, resolve as resolve9 } from "node:path";
-init_outcome();
 init_errors();
 init_fs_safety();
 
@@ -54441,7 +54435,7 @@ ${networkOptionsHelp(25)}
       run.outcome = runOutcome(run);
       ctx.ws.saveRun(run);
       const cmp = compareRuns(base2, run);
-      const reports = writeReports(runDir, run, cmp, { history: ctx.ws.listRuns() });
+      const reports = writeReports(runDir, run, cmp, { history: ctx.ws.listRuns({ trend: true }) });
       const failed = flag(ctx, "fail-on-regression") && !cmp.regressionFree;
       const caveat = run.outcome === "no-page-loaded" ? `  No page could be loaded from ${origin}, so no comparison was possible: no finding is counted as fixed.` : run.outcome === "partial" ? "  The run was stopped early: the comparison is partial, and findings on pages not re-checked are not counted as fixed." : void 0;
       return {
@@ -55041,7 +55035,6 @@ ${text}`
 
 // src/cli/commands/runs.ts
 init_errors();
-init_trends();
 var runs = {
   name: "runs",
   summary: "List stored runs in the workspace (.jourilo/runs).",
@@ -55049,7 +55042,8 @@ var runs = {
   options: { target: { type: "string" } },
   details: `Subcommands:
   trend            Defects per capture, critical and serious defects, LCP and CLS for every page and viewport across the
-                   runs of one target, oldest first. Partial and no-page-loaded runs are left out and counted.
+                   runs of one target, oldest first. Partial and no-page-loaded runs are left out and counted. A finding with no
+                   viewport is counted at every viewport of its page.
 
 Options:
   --target URL     With trend, the target to follow (default: the target of the latest run)`,
@@ -55059,7 +55053,7 @@ Options:
     if (sub)
       throw new JouriloError("USAGE", `Unknown runs subcommand: ${sub}.`, "Usage: jourilo runs [trend]");
     if (str(ctx, "target")) throw new JouriloError("USAGE", "--target applies to `jourilo runs trend`.");
-    const list2 = ctx.ws.listRuns().map((r) => ({ ...r, trend: void 0 }));
+    const list2 = ctx.ws.listRuns();
     return {
       data: list2,
       text: list2.length ? list2.map((r) => `${r.id}  ${String(r.findings).padStart(4)} findings  ${r.target}`).join("\n") : `No runs in ${ctx.ws.runsDir}.`
@@ -55067,7 +55061,7 @@ Options:
   }
 };
 async function runsTrend(ctx) {
-  const list2 = ctx.ws.listRuns();
+  const list2 = ctx.ws.listRuns({ trend: true });
   const target = str(ctx, "target") ?? list2[list2.length - 1]?.target;
   if (!target)
     return { data: { target: null, rows: [], used: 0, skipped: 0 }, text: `No runs in ${ctx.ws.runsDir}.` };
@@ -55114,7 +55108,7 @@ var report = {
     }
     if (!["html", "md"].includes(format))
       throw new JouriloError("USAGE", "--format must be html, md, sarif or json.");
-    const written = writeReports(dir, run, cmp, { history: ctx.ws.listRuns() });
+    const written = writeReports(dir, run, cmp, { history: ctx.ws.listRuns({ trend: true }) });
     return { data: written, text: `Report: ${format === "md" ? written.markdown : written.html}` };
   }
 };
@@ -55130,7 +55124,7 @@ var compare = {
     const { run: head, dir } = ctx.ws.loadRun(headRef);
     if (base2.id === head.id) throw new JouriloError("USAGE", "Baseline and head are the same run.");
     const cmp = compareRuns(base2, head);
-    const written = writeReports(dir, head, cmp, { history: ctx.ws.listRuns() });
+    const written = writeReports(dir, head, cmp, { history: ctx.ws.listRuns({ trend: true }) });
     const failed = flag(ctx, "fail-on-regression") && !cmp.regressionFree;
     const lines = [
       `Baseline ${base2.id} \u2192 ${head.id}`,

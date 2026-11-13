@@ -1,9 +1,9 @@
 // Run storage. Every run lives in <workspace>/runs/<id>/ with run.json, screenshots/ and report files.
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { type TrendRun, trendSlice } from '../report/trends.js';
 import { JouriloError } from './errors.js';
 import { resolveInside } from './fs-safety.js';
+import { type TrendRun, trendSlice } from './trend-run.js';
 import { RUN_SCHEMA_VERSION, type Run } from './types.js';
 
 export interface RunListing {
@@ -15,7 +15,7 @@ export interface RunListing {
   kinds: Run['summary']['byKind'];
   pages: number;
   journeys: number;
-  /** The slice of the run that trends read, so history does not hold whole runs. */
+  /** Only with `listRuns({ trend: true })`: the slice of the run that trends read. */
   trend?: TrendRun;
 }
 
@@ -55,7 +55,8 @@ export class Workspace {
     return file;
   }
 
-  listRuns(): RunListing[] {
+  /** `trend: true` adds each run's trend slice (for reports and `runs trend`); plain listings stay small. */
+  listRuns(opts: { trend?: boolean } = {}): RunListing[] {
     if (!existsSync(this.runsDir)) return [];
     const out: RunListing[] = [];
     for (const id of readdirSync(this.runsDir).sort()) {
@@ -72,7 +73,7 @@ export class Workspace {
           kinds: run.summary.byKind,
           pages: run.summary.pages,
           journeys: run.summary.journeys,
-          trend: trendSlice(run),
+          ...(opts.trend ? { trend: trendSlice(run) } : {}),
         });
       } catch {
         // A half-written run is skipped, not fatal.

@@ -163,7 +163,7 @@ const EN = {
   'history.this': '(this run)',
   'trend.title': 'Trend per page and viewport',
   'trend.hint':
-    'Defects are counted per capture (one page at one viewport), so runs audited with different --pages stay comparable. Values run from the oldest run to this one.',
+    'Defects are counted per capture (one page at one viewport), so runs audited with different --pages stay comparable. A finding with no viewport counts at every viewport of its page. Values run from the oldest run to this one.',
   'trend.skipped': '{n} partial or empty run(s) left out: their numbers are not comparable.',
   'trend.series': 'Oldest to newest: {list}',
   'trend.noData': 'no data',
@@ -417,7 +417,7 @@ const TR: Record<MsgKey, string> = {
   'history.this': '(bu çalışma)',
   'trend.title': 'Sayfa ve görünüm alanı başına eğilim',
   'trend.hint':
-    'Kusurlar yakalama başına (bir sayfa, bir görünüm alanı) sayılır; bu yüzden farklı --pages ile yapılan çalışmalar karşılaştırılabilir kalır. Değerler en eski çalışmadan bu çalışmaya doğru gider.',
+    'Kusurlar yakalama başına (bir sayfa, bir görünüm alanı) sayılır; bu yüzden farklı --pages ile yapılan çalışmalar karşılaştırılabilir kalır. Görünüm alanı olmayan bir bulgu, sayfasının her görünüm alanında sayılır. Değerler en eski çalışmadan bu çalışmaya doğru gider.',
   'trend.skipped': '{n} yarım veya boş çalışma dışarıda bırakıldı: sayıları karşılaştırılamaz.',
   'trend.series': 'Eskiden yeniye: {list}',
   'trend.noData': 'veri yok',

@@ -235,7 +235,7 @@ export async function auditCommand(
     ctx.ws.saveRun(run);
     const reports = writeReports(runDir, run, undefined, {
       sarif: flag(ctx, 'sarif'),
-      history: ctx.ws.listRuns(),
+      history: ctx.ws.listRuns({ trend: true }),
     });
     const severityGate = failOn
       ? run.findings.some((f) => f.kind === 'defect' && severityRank(f.severity) <= severityRank(failOn))

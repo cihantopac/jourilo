@@ -320,7 +320,7 @@ ${networkOptionsHelp(25)}
       run.outcome = runOutcome(run);
       ctx.ws.saveRun(run);
       const cmp = compareRuns(base, run);
-      const reports = writeReports(runDir, run, cmp, { history: ctx.ws.listRuns() });
+      const reports = writeReports(runDir, run, cmp, { history: ctx.ws.listRuns({ trend: true }) });
       const failed = flag(ctx, 'fail-on-regression') && !cmp.regressionFree;
       // Without loaded pages nothing was re-checked; a stopped run re-checked only part of the scope.
       const caveat =

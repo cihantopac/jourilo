@@ -305,6 +305,12 @@ describe('report interface', () => {
     );
     expect(html).toContain('3000 ms, 2000 ms');
     expect(html).toContain('data-i18n="trend.title"');
+    // A partial run of the same target is left out and the report says how many.
+    const partial = run([], { id: 'part1', pages: [cap(9000)], stoppedBy: 'signal' });
+    const withPartial = renderHtml(now, undefined, [listing(older), listing(partial)]);
+    expect(withPartial).toContain('data-i18n="trend.skipped" data-i18n-v="{&quot;n&quot;:1}"');
+    expect(withPartial).not.toContain('9000 ms');
+    expect(html).not.toContain('data-i18n="trend.skipped"');
     // Without a second run there is nothing to trend.
     expect(renderHtml(now, undefined, [])).not.toContain('class="history trend"');
   });

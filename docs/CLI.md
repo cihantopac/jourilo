@@ -535,7 +535,8 @@ jourilo runs [trend [--target URL]]
 ```
 Subcommands:
   trend            Defects per capture, critical and serious defects, LCP and CLS for every page and viewport across the
-                   runs of one target, oldest first. Partial and no-page-loaded runs are left out and counted.
+                   runs of one target, oldest first. Partial and no-page-loaded runs are left out and counted. A finding with no
+                   viewport is counted at every viewport of its page.
 
 Options:
   --target URL     With trend, the target to follow (default: the target of the latest run)

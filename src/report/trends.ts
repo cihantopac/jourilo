@@ -1,18 +1,9 @@
 // Trends across runs of one target, normalized per page capture (URL x viewport), so runs audited with different
 // --pages or viewports still compare: every row follows one page at one viewport through the runs that captured it.
 import { runOutcome } from '../audit/outcome.js';
-import type { Finding, PageCapture, Run } from '../core/types.js';
+import type { TrendRun } from '../core/trend-run.js';
 
-/** The part of a run a trend needs. A `Run` fits; `RunListing` keeps this slice so history stays light. */
-export interface TrendRun {
-  id: string;
-  target: string;
-  startedAt: string;
-  outcome?: Run['outcome'];
-  stoppedBy?: Run['stoppedBy'];
-  pages: Pick<PageCapture, 'url' | 'viewport' | 'status' | 'metrics'>[];
-  findings: Pick<Finding, 'kind' | 'severity' | 'url' | 'viewport'>[];
-}
+export { type TrendRun, trendSlice } from '../core/trend-run.js';
 
 export interface TrendPoint {
   runId: string;
@@ -39,24 +30,6 @@ export interface TrendReport {
   skipped: number;
 }
 
-/** The slice of a run `trends` reads. */
-export function trendSlice(run: Run): TrendRun {
-  return {
-    id: run.id,
-    target: run.target,
-    startedAt: run.startedAt,
-    outcome: run.outcome,
-    stoppedBy: run.stoppedBy,
-    pages: run.pages.map((p) => ({ url: p.url, viewport: p.viewport, status: p.status, metrics: p.metrics })),
-    findings: run.findings.map((f) => ({
-      kind: f.kind,
-      severity: f.severity,
-      url: f.url,
-      viewport: f.viewport,
-    })),
-  };
-}
-
 const metric = (p: TrendRun['pages'][number], name: string): number | null =>
   p.metrics.find((m) => m.name === name)?.value ?? null;
 
@@ -80,7 +53,7 @@ export function trendReport(runs: TrendRun[], key: { target: string }): TrendRep
     }
     for (const [k, caps] of captures) {
       const first = caps[0]!;
-      // A finding without a viewport belongs to the page at every viewport.
+      // A finding without a viewport (a page-level result) is counted at every viewport of its page: once per row.
       const mine = run.findings.filter(
         (f) =>
           f.kind === 'defect' &&

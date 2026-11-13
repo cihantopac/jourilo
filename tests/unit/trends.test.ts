@@ -133,13 +133,46 @@ describe('trends', () => {
     expect(data.target).toBe(TARGET);
     expect(data.used).toBe(2);
     expect(data.skipped).toBe(1);
+    expect(data.rows).toHaveLength(2);
     expect(data.rows.map((r) => r.viewport)).toEqual(['desktop', 'mobile']);
     expect(data.rows.every((r) => r.points.length === 2)).toBe(true);
     expect(res.text).toContain('1 partial or empty run(s) left out');
     expect(res.text).toContain('2000 → 1500');
-    const plain = JSON.stringify((await exec([])).data);
-    expect(plain).not.toContain('trend');
-    expect(plain).toContain('20261101-100000-aaaaaa');
+    const plain = (await exec([])).data as Record<string, unknown>[];
+    expect(plain.map((r) => r.id)).toEqual([
+      '20261101-100000-aaaaaa',
+      '20261102-100000-bbbbbb',
+      '20261103-100000-cccccc',
+    ]);
+    for (const r of plain) {
+      expect(Object.keys(r).sort()).toEqual(
+        ['defects', 'findings', 'id', 'journeys', 'kinds', 'pages', 'startedAt', 'target'].sort(),
+      );
+    }
+    expect(Object.hasOwn(ws.listRuns()[0]!, 'trend')).toBe(false);
+    expect(ws.listRuns({ trend: true })[0]!.trend?.id).toBe('20261101-100000-aaaaaa');
+    // --target picks another target; one with no runs is empty, and skips nothing.
+    const none = (await exec(['trend', '--target', 'https://nothing.test/', '--json'])).data;
+    expect(none).toEqual({ target: 'https://nothing.test/', rows: [], used: 0, skipped: 0 });
     await expect(exec(['bogus'])).rejects.toMatchObject({ code: 'USAGE' });
+  });
+
+  it('counts a finding without a viewport at every viewport of its page', () => {
+    const noViewport = { ...defect('/', 'desktop', 'serious', 9), viewport: undefined } as Finding;
+    const a = mk('r1', '2026-11-01T10:00:00Z', [page('/', 'desktop'), page('/', 'mobile')], [noViewport]);
+    const b = mk('r2', '2026-11-02T10:00:00Z', [page('/', 'desktop'), page('/', 'mobile')], []);
+    const rows = trends([a, b].map(trendSlice), { target: TARGET });
+    expect(rows.map((r) => [r.viewport, r.points.map((p) => p.defectsPerCapture)])).toEqual([
+      ['desktop', [1, 0]],
+      ['mobile', [1, 0]],
+    ]);
+  });
+
+  it('says nothing for a workspace without runs', async () => {
+    const ws = new Workspace(mkdtempSync(join(tmpdir(), 'jourilo-trend-')));
+    const ctx = parse(runsCommand, ['trend', '--json', '--workspace', ws.root]);
+    ctx.log = () => undefined;
+    const res = await runsCommand.run(ctx);
+    expect(res.data).toEqual({ target: null, rows: [], used: 0, skipped: 0 });
   });
 });
