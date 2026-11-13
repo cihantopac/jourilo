@@ -40894,7 +40894,7 @@ var GuardBlockedError = class extends Error {
 var systemResolve = (host) => new Promise(
   (resolve10, reject) => dnsLookup(host, { all: true, verbatim: true }, (err, addrs) => err ? reject(err) : resolve10(addrs))
 );
-async function resolveAllowed(host, port, policy, deps = {}) {
+async function resolveAllowedAll(host, port, policy, deps = {}) {
   const h = host.replace(/^\[|\]$/g, "");
   const named = hostVerdict(h, policy);
   if (!named.ok) return { blocked: named.reason };
@@ -40913,25 +40913,83 @@ async function resolveAllowed(host, port, policy, deps = {}) {
     }
   }
   let reason = "";
+  const addresses = [];
   for (const a of addrs) {
     const v = verdict(a.address, port);
-    if (v.ok) return { address: a.address, family: a.family };
-    reason ||= v.reason;
+    if (v.ok) {
+      if (!addresses.some((x) => x.address === a.address))
+        addresses.push({ address: a.address, family: a.family });
+    } else reason ||= v.reason;
   }
+  if (addresses.length) return { addresses };
   return { blocked: reason || `${h} did not resolve to an allowed address.` };
 }
-function guardedLookup(policy, port, deps = {}) {
-  return (hostname, options, callback) => {
-    const wantAll = typeof options === "object" && options?.all === true;
-    resolveAllowed(hostname, port, policy, deps).then(
-      (r) => {
-        if ("blocked" in r) return callback(new GuardBlockedError(r.blocked), wantAll ? [] : "", 0);
-        if (wantAll) return callback(null, [{ address: r.address, family: r.family }]);
-        callback(null, r.address, r.family);
-      },
-      (err) => callback(err, wantAll ? [] : "", 0)
+var CONNECT_ATTEMPT_TIMEOUT_MS = 5e3;
+var CONNECT_TIMEOUT_MS = 3e4;
+var CONNECT_FALLBACK_CODES = /* @__PURE__ */ new Set([
+  "ECONNREFUSED",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "EADDRNOTAVAIL",
+  "ETIMEDOUT"
+]);
+var errorWithCode = (message, code) => Object.assign(new Error(message), { code });
+function connectAddress(address, port, timeoutMs, onSocket) {
+  return new Promise((resolve10, reject) => {
+    const sock = net.connect({ host: address, port });
+    let settled2 = false;
+    const finish = (err) => {
+      if (settled2) return;
+      settled2 = true;
+      clearTimeout(timer);
+      sock.off("connect", onConnect);
+      sock.off("error", finish);
+      sock.off("close", onClose);
+      if (err) {
+        sock.destroy();
+        return reject(err);
+      }
+      sock.on("error", () => void 0);
+      resolve10(sock);
+    };
+    const onConnect = () => finish();
+    const onClose = () => finish(errorWithCode(`connect closed ${authorityOf(address, port)}`, "ECONNABORTED"));
+    const timer = setTimeout(
+      () => finish(errorWithCode(`connect ETIMEDOUT ${authorityOf(address, port)}`, "ETIMEDOUT")),
+      timeoutMs
     );
-  };
+    sock.once("connect", onConnect);
+    sock.once("error", finish);
+    sock.once("close", onClose);
+    onSocket?.(sock);
+  });
+}
+async function connectFirst(addresses, port, opts) {
+  const deadline = Date.now() + opts.timeoutMs;
+  let last;
+  for (const [i, address] of addresses.entries()) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    const limit = i === addresses.length - 1 ? remaining : Math.min(opts.attemptTimeoutMs, remaining);
+    try {
+      return await connectAddress(address, port, limit, opts.onSocket);
+    } catch (err) {
+      last = err;
+      if (!CONNECT_FALLBACK_CODES.has(last.code ?? "")) throw last;
+    }
+  }
+  throw last ?? errorWithCode(`connect ETIMEDOUT ${port}`, "ETIMEDOUT");
+}
+async function connectChecked(host, port, addresses, policy, opts) {
+  const first = addresses[0].address;
+  const proxy = viaUpstream(policy, host, first, port);
+  if (proxy) return openTunnel(proxy, first, port, opts.tunnelTimeoutMs, opts.onSocket);
+  const direct = addresses.map((a) => a.address).filter((a) => !viaUpstream(policy, host, a, port));
+  return connectFirst(direct, port, {
+    attemptTimeoutMs: opts.deps?.connectAttemptTimeoutMs ?? CONNECT_ATTEMPT_TIMEOUT_MS,
+    timeoutMs: Math.min(opts.timeoutMs, opts.deps?.connectTimeoutMs ?? CONNECT_TIMEOUT_MS),
+    ...opts.onSocket ? { onSocket: opts.onSocket } : {}
+  });
 }
 var TUNNEL_TIMEOUT_MS = 3e4;
 function viaUpstream(policy, host, address, port) {
@@ -41073,35 +41131,24 @@ async function startNetGuard(policy, deps = {}) {
     s.once("close", () => sockets.delete(s));
     return s;
   };
-  const checkDestination = (host, port2, onAllowed, onFail) => {
-    resolveAllowed(host, port2, policy, deps).then(
+  const connectUpstream = (host, port2, onReady, onFail) => {
+    resolveAllowedAll(host, port2, policy, deps).then(
       (r) => {
         if ("blocked" in r) {
           record(host, port2, r.blocked);
           return onFail(403, r.blocked);
         }
-        onAllowed(r.address, viaUpstream(policy, host, r.address, port2));
+        connectChecked(host, port2, r.addresses, policy, {
+          deps,
+          timeoutMs: CONNECT_TIMEOUT_MS,
+          tunnelTimeoutMs: TUNNEL_TIMEOUT_MS,
+          onSocket: track
+        }).then(
+          (socket) => onReady(track(socket)),
+          (err) => onFail(502, err.message)
+        );
       },
       (err) => onFail(502, err.message)
-    );
-  };
-  const connectUpstream = (host, port2, onReady, onFail) => {
-    checkDestination(
-      host,
-      port2,
-      (address, proxy) => {
-        if (proxy) {
-          openTunnel(proxy, address, port2, TUNNEL_TIMEOUT_MS, track).then(
-            (tunnel) => onReady(track(tunnel)),
-            (err) => onFail(502, err.message)
-          );
-          return;
-        }
-        const upstream = track(net.connect({ host: address, port: port2 }));
-        upstream.once("connect", () => onReady(upstream));
-        upstream.once("error", (err) => onFail(502, err.message));
-      },
-      onFail
     );
   };
   const pipeBoth = (client2, upstream, head) => {
@@ -41256,17 +41303,24 @@ ${status === 403 ? `Blocked by Jourilo network guard: ${reason}` : ""}`
 }
 async function guardedHop(current, policy, opts) {
   const port = Number(current.port || (current.protocol === "https:" ? 443 : 80));
-  const pre = await resolveAllowed(current.hostname, port, policy, opts.deps).catch(
+  const pre = await resolveAllowedAll(current.hostname, port, policy, opts.deps).catch(
     (e) => ({ blocked: `${current.hostname} could not be resolved (${e.message})` })
   );
   if ("blocked" in pre) return { blocked: pre.blocked };
   const servername = current.hostname.replace(/^\[|\]$/g, "");
-  const proxy = viaUpstream(policy, servername, pre.address, port);
   const secure = current.protocol === "https:";
-  let tunnel;
-  if (proxy) {
-    tunnel = await openTunnel(proxy, pre.address, port, opts.timeoutMs).catch(() => void 0);
-    if (!tunnel) return { failed: "the upstream proxy did not open a tunnel" };
+  let socket;
+  try {
+    socket = await connectChecked(servername, port, pre.addresses, policy, {
+      ...opts.deps ? { deps: opts.deps } : {},
+      timeoutMs: opts.timeoutMs,
+      tunnelTimeoutMs: opts.timeoutMs
+    });
+  } catch (e) {
+    const err = e;
+    if (err.message.startsWith("upstream proxy:"))
+      return { failed: "the upstream proxy did not open a tunnel" };
+    return { failed: err.code ?? err.message };
   }
   return new Promise((resolve10) => {
     const mod = secure ? https : http;
@@ -41276,16 +41330,11 @@ async function guardedHop(current, policy, opts) {
         method: opts.method,
         headers: opts.headers,
         timeout: opts.timeoutMs,
-        ...tunnel ? {
-          createConnection: () => {
-            tunnel.resume();
-            return secure ? tls.connect({
-              socket: tunnel,
-              host: servername,
-              ...isIP2(servername) ? {} : { servername }
-            }) : tunnel;
-          }
-        } : { lookup: guardedLookup(policy, port, opts.deps), agent: false }
+        // The connection is already open to a checked address (or a tunnel to one): no lookup, no agent.
+        createConnection: () => {
+          socket.resume();
+          return secure ? tls.connect({ socket, host: servername, ...isIP2(servername) ? {} : { servername } }) : socket;
+        }
       },
       (r) => {
         const status = r.statusCode ?? 0;

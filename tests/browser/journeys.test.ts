@@ -456,7 +456,8 @@ describe('journeys across tabs and popups', () => {
     await new Promise<void>((done) => v4.listen(0, '127.0.0.1', done));
     servers.push(v4);
     const { port } = v4.address() as AddressInfo;
-    // Jourilo's network guard connects to the first address "localhost" resolves to, which may be ::1.
+    // Also on ::1: kept from before the network guard tried every address "localhost" resolves to (harmless).
+    // tests/unit/net-guard.test.ts checks that a 127.0.0.1-only server is reachable through "localhost".
     const v6 = createServer(handler);
     await new Promise<void>((done) => {
       v6.once('error', () => done());

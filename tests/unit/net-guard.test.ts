@@ -4,7 +4,7 @@ import http from 'node:http';
 import net, { type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   GuardBlockedError,
   guardedFetch,
@@ -21,6 +21,7 @@ import {
   addressVerdict,
   checkTarget,
   checkTargetDetailed,
+  classifyIp,
   isLocalHostname,
   LookupFailed,
   resolveInChild,
@@ -766,5 +767,232 @@ describe('upstream proxy: plain HTTP, request framing and the guard lifetime', (
     for (const c of closes) expect(await settledWithin(c, 1000)).toBe(true);
     client.destroy();
     await closeServer(proxy);
+  });
+});
+
+describe('every allowed address is tried, in resolver order', () => {
+  const listenOn = (s: net.Server, host = '127.0.0.1', port = 0) =>
+    new Promise<number>((r) => s.listen(port, host, () => r((s.address() as AddressInfo).port)));
+  const closeServer = (s: net.Server) => new Promise((r) => s.close(r));
+  const local: AddressPolicy = { target: 'local', allowPrivate: false };
+  const resolveTo =
+    (...ips: string[]) =>
+    async () =>
+      ips.map((address) => ({ address, family: address.includes(':') ? 6 : 4 }));
+  /** The addresses the guard opened a TCP connection to on `port` (spied on net.connect). */
+  const connectsTo = (port: number) => {
+    const spy = vi.spyOn(net, 'connect');
+    return {
+      hosts: () =>
+        spy.mock.calls
+          .map((c) => c[0] as unknown as { host?: string; port?: number })
+          .filter((o) => typeof o === 'object' && Number(o.port) === port)
+          .map((o) => o.host),
+      restore: () => spy.mockRestore(),
+    };
+  };
+  const getVia = (guardUrl: string, url: string) =>
+    new Promise<{ status?: number; headers: http.IncomingHttpHeaders; body: string }>((resolve, reject) => {
+      const p = new URL(guardUrl);
+      http
+        .get(
+          { host: p.hostname, port: p.port, path: url, headers: { host: new URL(url).host }, agent: false },
+          (r) => {
+            let body = '';
+            r.on('data', (d) => (body += d));
+            r.on('end', () => resolve({ status: r.statusCode, headers: r.headers, body }));
+          },
+        )
+        .on('error', reject);
+    });
+  /** A CONNECT through the guard; resolves with the status line of its answer. */
+  const connectVia = (guardUrl: string, authority: string) =>
+    new Promise<string>((resolve, reject) => {
+      const p = new URL(guardUrl);
+      const s = net.connect(Number(p.port), p.hostname, () =>
+        s.write(`CONNECT ${authority} HTTP/1.1\r\nHost: ${authority}\r\n\r\n`),
+      );
+      s.once('data', (d) => {
+        resolve(d.toString('latin1').split('\r\n')[0]!);
+        s.destroy();
+      });
+      s.on('error', reject);
+    });
+
+  // Field evidence (Task 6, Task 8): on macOS "localhost" resolves to ::1 first, and a dev server listening only on
+  // 127.0.0.1 answered "Bad gateway" to everything the guard proxied.
+  it('a name resolving to [::1, 127.0.0.1] reaches a server that listens only on 127.0.0.1', async () => {
+    const site = http.createServer((_req, res) => res.end('v4 only'));
+    const port = await listenOn(site);
+    const deps = { resolve: resolveTo('::1', '127.0.0.1') };
+    const spy = connectsTo(port);
+    const guard = await startNetGuard(local, deps);
+    try {
+      expect(
+        await guardedFetchText(`http://dual.test:${port}/robots.txt`, local, {
+          timeoutMs: 3000,
+          userAgent: 'test',
+          deps,
+        }),
+      ).toBe('v4 only');
+      const res = await guardedFetch(`http://dual.test:${port}/`, local, { timeoutMs: 3000, deps });
+      expect(await res.text()).toBe('v4 only');
+      expect(await getVia(guard.url, `http://dual.test:${port}/`)).toMatchObject({
+        status: 200,
+        body: 'v4 only',
+      });
+      expect(await connectVia(guard.url, `dual.test:${port}`)).toMatch(/^HTTP\/1\.1 200/);
+      // Each request tried ::1 first, then 127.0.0.1.
+      expect(spy.hosts()).toEqual([
+        '::1',
+        '127.0.0.1',
+        '::1',
+        '127.0.0.1',
+        '::1',
+        '127.0.0.1',
+        '::1',
+        '127.0.0.1',
+      ]);
+    } finally {
+      spy.restore();
+      await guard.close();
+      await closeServer(site);
+    }
+  });
+
+  it('the real resolver: a 127.0.0.1-only server is reachable through "localhost"', async () => {
+    const site = http.createServer((_req, res) => res.end('through localhost'));
+    const port = await listenOn(site);
+    const guard = await startNetGuard(local);
+    try {
+      expect(await getVia(guard.url, `http://localhost:${port}/`)).toMatchObject({
+        status: 200,
+        body: 'through localhost',
+      });
+    } finally {
+      await guard.close();
+      await closeServer(site);
+    }
+  });
+
+  it('a fallback never reaches an address the policy refuses', async () => {
+    const site = http.createServer((_req, res) => res.end('allowed'));
+    const port = await listenOn(site);
+    // Only loopback at this port counts as public; 10.0.0.1 and 169.254.169.254 stay refused by the real rules.
+    const verdict = (ip: string, p: number) =>
+      p === port && classifyIp(ip) === 'loopback' ? ({ ok: true } as const) : addressVerdict(ip, pub);
+    const spy = connectsTo(port);
+    try {
+      const deps = { resolve: resolveTo('::1', '10.0.0.1', '169.254.169.254', '127.0.0.1'), verdict };
+      const res = await guardedFetch(`http://mixed.example:${port}/`, pub, { timeoutMs: 3000, deps });
+      expect(await res.text()).toBe('allowed');
+      expect(spy.hosts()).toEqual(['::1', '127.0.0.1']);
+      // Every allowed address refuses: the refused one behind them is still never tried.
+      await closeServer(site);
+      const refused = { resolve: resolveTo('::1', '10.0.0.1'), verdict };
+      await expect(
+        guardedFetch(`http://mixed.example:${port}/`, pub, { timeoutMs: 3000, deps: refused }),
+      ).rejects.toThrow(/ECONNREFUSED/);
+      expect(spy.hosts()).not.toContain('10.0.0.1');
+      expect(spy.hosts()).not.toContain('169.254.169.254');
+    } finally {
+      spy.restore();
+      if (site.listening) await closeServer(site);
+    }
+  });
+
+  it('every allowed address refusing gives the existing connection-refused error', async () => {
+    const probe = net.createServer();
+    const port = await listenOn(probe);
+    await closeServer(probe);
+    const deps = { resolve: resolveTo('::1', '127.0.0.1') };
+    const spy = connectsTo(port);
+    const guard = await startNetGuard(local, deps);
+    try {
+      await expect(
+        guardedFetch(`http://dual.test:${port}/`, local, { timeoutMs: 3000, deps }),
+      ).rejects.toThrow(`dual.test:${port}: ECONNREFUSED`);
+      const res = await getVia(guard.url, `http://dual.test:${port}/`);
+      expect(res.status).toBe(502);
+      expect(res.headers['x-jourilo-guard-upstream-error']).toBe(`${guard.token} the connection was refused`);
+      expect(await connectVia(guard.url, `dual.test:${port}`)).toMatch(/^HTTP\/1\.1 502/);
+      expect(spy.hosts()).toEqual(['::1', '127.0.0.1', '::1', '127.0.0.1', '::1', '127.0.0.1']);
+    } finally {
+      spy.restore();
+      await guard.close();
+    }
+  });
+
+  it('an error after the connection is made (HTTP error, reset, TLS) does not fall back', async () => {
+    const site = http.createServer((req, res) => {
+      if (req.url === '/reset') return void req.socket.destroy();
+      res.writeHead(500).end('server error');
+    });
+    const port = await listenOn(site);
+    const deps = { resolve: resolveTo('127.0.0.1', '::1') };
+    const spy = connectsTo(port);
+    const guard = await startNetGuard(local, deps);
+    try {
+      const res = await guardedFetch(`http://dual.test:${port}/`, local, { timeoutMs: 3000, deps });
+      expect(res.status).toBe(500);
+      await expect(
+        guardedFetch(`http://dual.test:${port}/reset`, local, { timeoutMs: 3000, deps }),
+      ).rejects.toThrow(/ECONNRESET|socket hang up/);
+      // A TLS handshake with a plain-HTTP server fails after the TCP connection is made.
+      await expect(
+        guardedFetch(`https://dual.test:${port}/`, local, { timeoutMs: 3000, deps }),
+      ).rejects.toThrow();
+      expect((await getVia(guard.url, `http://dual.test:${port}/`)).status).toBe(500);
+      expect(spy.hosts()).toEqual(['127.0.0.1', '127.0.0.1', '127.0.0.1', '127.0.0.1']);
+    } finally {
+      spy.restore();
+      await guard.close();
+      await closeServer(site);
+    }
+  });
+
+  it('an address that does not answer the connect falls back after its attempt timeout, within one budget', async () => {
+    const site = http.createServer((_req, res) => res.end('answered'));
+    const port = await listenOn(site);
+    const silent = ['192.0.2.1', '192.0.2.2', '192.0.2.3', '192.0.2.4', '192.0.2.5'];
+    const orig = net.connect.bind(net);
+    // The documentation addresses stand for hosts that never answer the SYN: their socket never connects.
+    const spy = vi
+      .spyOn(net, 'connect')
+      .mockImplementation(((o: net.NetConnectOpts) =>
+        silent.includes((o as net.TcpNetConnectOpts).host ?? '')
+          ? new net.Socket()
+          : orig(o)) as typeof net.connect);
+    const verdict = (_ip: string, p: number) =>
+      p === port ? ({ ok: true } as const) : ({ ok: false, reason: 'other port' } as const);
+    try {
+      const fallback = {
+        resolve: resolveTo('192.0.2.1', '127.0.0.1'),
+        verdict,
+        connectAttemptTimeoutMs: 100,
+      };
+      const res = await guardedFetch(`http://slow.example:${port}/`, pub, {
+        timeoutMs: 3000,
+        deps: fallback,
+      });
+      expect(await res.text()).toBe('answered');
+      // Five silent addresses with a 300 ms budget: the request fails in about 300 ms, not 5 x the attempt time.
+      const hanging = {
+        resolve: resolveTo(...silent),
+        verdict,
+        connectAttemptTimeoutMs: 200,
+        connectTimeoutMs: 300,
+      };
+      const started = Date.now();
+      await expect(
+        guardedFetch(`http://slow.example:${port}/`, pub, { timeoutMs: 3000, deps: hanging }),
+      ).rejects.toThrow(/ETIMEDOUT/);
+      expect(Date.now() - started).toBeLessThan(900);
+      const tried = spy.mock.calls.map((c) => (c[0] as unknown as net.TcpNetConnectOpts).host);
+      expect(tried).toEqual(['192.0.2.1', '127.0.0.1', '192.0.2.1', '192.0.2.2']);
+    } finally {
+      spy.mockRestore();
+      await closeServer(site);
+    }
   });
 });
