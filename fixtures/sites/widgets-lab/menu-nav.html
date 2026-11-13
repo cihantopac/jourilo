@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Menus (site nav) – Widgets lab</title><link rel="stylesheet" href="/style.css">
+<style>[role="menu"]{padding:4px;background:#fff} [role="menu"][hidden]{display:none} ul[role="menu"]{list-style:none;margin:0 0 12px;display:flex;gap:12px} [role="menuitem"]{display:block;padding:6px 10px;color:#111;background:none;border:0;font:inherit;text-align:left} [role="menuitem"]:focus-visible{outline:3px solid #0645ad}</style></head>
+<body>
+<!-- Real-site shape: an always-visible <ul role="menu"> site nav (items are plain links, no arrow-key handling) sits
+     next to a correct menu button that has no aria-controls. Only the popup the button opens may be judged. -->
+<main><h1>Site nav</h1><p><a href="/">Back to the lab</a></p>
+<ul role="menu" aria-label="Site">
+  <li role="none"><a role="menuitem" href="/accessible">Accessible</a></li>
+  <li role="none"><a role="menuitem" href="/anchors">Anchors</a></li>
+  <li role="none"><a role="menuitem" href="/launcher">Launcher</a></li>
+</ul>
+<div>
+  <button type="button" id="more-btn" aria-haspopup="menu" aria-expanded="false">More</button>
+  <div role="menu" id="more-menu" aria-labelledby="more-btn" hidden>
+    <button type="button" role="menuitem" tabindex="-1">Sort</button>
+    <button type="button" role="menuitem" tabindex="-1">Filter</button>
+    <button type="button" role="menuitem" tabindex="-1">Group</button>
+  </div>
+</div>
+</main>
+<script>
+  var btn = document.getElementById('more-btn'), menu = document.getElementById('more-menu');
+  var items = Array.prototype.slice.call(menu.querySelectorAll('[role="menuitem"]'));
+  function close() { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); btn.focus(); }
+  btn.addEventListener('click', function () { if (menu.hidden) { menu.hidden = false; btn.setAttribute('aria-expanded', 'true'); items[0].focus(); } else close(); });
+  menu.addEventListener('keydown', function (e) {
+    var i = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+    else if (e.key === 'Home') { e.preventDefault(); items[0].focus(); }
+    else if (e.key === 'End') { e.preventDefault(); items[items.length - 1].focus(); }
+    else if (e.key === 'Escape') { e.preventDefault(); close(); }
+  });
+</script>
+</body>
+</html>

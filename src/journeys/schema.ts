@@ -22,7 +22,13 @@ export type Step =
   | { action: 'wait'; ms?: number; target?: Target; note?: string }
   | { action: 'back'; note?: string }
   | { action: 'expect'; url?: string; visible?: Target; hidden?: Target; title?: string; note?: string }
-  | { action: 'screenshot'; name?: string; note?: string };
+  | { action: 'screenshot'; name?: string; note?: string }
+  /** Makes the next popup or new tab the page opened (optionally the one whose URL matches) the current tab. */
+  | { action: 'waitForPopup'; urlMatch?: string; note?: string }
+  /** `index` counts the open tabs in the order they were opened (0 is the journey's first tab). */
+  | { action: 'switchTab'; index?: number; urlMatch?: string; note?: string }
+  /** Closes the current tab; the tab that opened it becomes current again. */
+  | { action: 'closeTab'; note?: string };
 
 export interface SuccessCriterion {
   description: string;
@@ -57,7 +63,7 @@ export interface JourneySpec {
   tags?: string[];
 }
 
-const ACTIONS = new Set([
+export const STEP_ACTIONS: readonly Step['action'][] = [
   'goto',
   'click',
   'fill',
@@ -69,7 +75,11 @@ const ACTIONS = new Set([
   'back',
   'expect',
   'screenshot',
-]);
+  'waitForPopup',
+  'switchTab',
+  'closeTab',
+];
+const ACTIONS = new Set<string>(STEP_ACTIONS);
 const NEEDS_TARGET = new Set(['click', 'fill', 'select', 'check', 'hover']);
 
 function validTarget(t: unknown): t is Target {
@@ -106,6 +116,19 @@ export function validateJourney(raw: unknown, source = 'journey'): JourneySpec {
       errs.push(`steps[${i}] (goto): url is required`);
     else if (step.action === 'press' && typeof (step as { key?: unknown }).key !== 'string')
       errs.push(`steps[${i}] (press): key is required`);
+    else if (step.action === 'waitForPopup' || step.action === 'switchTab') {
+      const { index, urlMatch } = step as { index?: unknown; urlMatch?: unknown };
+      if (urlMatch !== undefined && (typeof urlMatch !== 'string' || !urlMatch))
+        errs.push(`steps[${i}] (${step.action}): urlMatch must be a non-empty string`);
+      else if (
+        step.action === 'switchTab' &&
+        index !== undefined &&
+        !(Number.isInteger(index) && (index as number) >= 0)
+      )
+        errs.push(`steps[${i}] (switchTab): index must be a whole number from 0`);
+      else if (step.action === 'switchTab' && (index === undefined) === (urlMatch === undefined))
+        errs.push(`steps[${i}] (switchTab): index or urlMatch is required, not both`);
+    }
   });
   (j.success ?? []).forEach((c, i) => {
     if (!c?.description) errs.push(`success[${i}]: description is required`);
@@ -151,5 +174,11 @@ export function describeStep(s: Step, secret = false): string {
       return `Expect ${[s.url ? `URL ~ ${s.url}` : '', s.visible ? `${describeTarget(s.visible)} visible` : '', s.hidden ? `${describeTarget(s.hidden)} hidden` : '', s.title ? `title ~ "${s.title}"` : ''].filter(Boolean).join(', ')}`;
     case 'screenshot':
       return `Screenshot${s.name ? ` "${s.name}"` : ''}`;
+    case 'waitForPopup':
+      return `Wait for a popup or new tab${s.urlMatch ? ` at ~ ${s.urlMatch}` : ''}`;
+    case 'switchTab':
+      return s.index !== undefined ? `Switch to tab ${s.index}` : `Switch to the tab at ~ ${s.urlMatch}`;
+    case 'closeTab':
+      return 'Close the current tab';
   }
 }

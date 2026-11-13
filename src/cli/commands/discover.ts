@@ -46,6 +46,7 @@ function repoText(p: ProductProfile): string {
     p.integrations.searvex ? `  Searvex data: ${p.integrations.searvex}` : '',
     '  Gaps:',
     ...p.gaps.map((g) => `    - ${g}`),
+    ...(p.limitations?.length ? ['  Limitations:', ...p.limitations.map((l) => `    - ${l}`)] : []),
   );
   return lines.filter(Boolean).join('\n');
 }
@@ -96,7 +97,7 @@ ${networkOptionsHelp(22)}`,
     const target = requirePositional(ctx, 0, 'path|url', discover.usage);
     ctx.ws.ensure();
     if (!target.includes('://') && existsSync(target) && statSync(target).isDirectory()) {
-      const profile = discoverRepository(resolve(target));
+      const profile = await discoverRepository(resolve(target));
       const file = join(ctx.ws.root, 'product.json');
       writeFileSync(file, `${JSON.stringify(profile, null, 2)}\n`);
       return { data: { file, profile }, text: `${repoText(profile)}\n\n  Saved: ${file}` };

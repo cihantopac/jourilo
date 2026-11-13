@@ -59,7 +59,7 @@ import { runJourney } from '../journeys/runner.js';
 import { testData } from '../journeys/safety.js';
 import type { JourneySpec } from '../journeys/schema.js';
 import { type EvidenceMode, firstScreenLimitation, pruneFullPageScreenshots } from './evidence.js';
-import { mergeFindings } from './finding.js';
+import { collapseVolatileFindings, mergeFindings } from './finding.js';
 import {
   axeFindings,
   keyboardFindings,
@@ -68,6 +68,7 @@ import {
   widgetFindings,
 } from './rules/accessibility.js';
 import { performanceFindings, reliabilityFindings, responsiveFindings } from './rules/experience.js';
+import { staleServerSuspect } from './stale-server.js';
 
 export type Rule = (obs: PageObservation) => Finding[];
 
@@ -657,6 +658,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
               });
             });
             formFindings.push(...r.findings);
+            if (r.limitation) limitations.push(r.limitation);
             if (r.result.outcome === 'blocked')
               limitations.push(`Form ${form.selector} on ${o.url} was not submitted: ${r.result.detail}`);
             if (r.result.outcome === 'simulated') simulated.push(`${form.selector} on ${o.url}`);
@@ -702,6 +704,9 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       }
     }
 
+    const staleServer = staleServerSuspect(observations);
+    if (staleServer) limitations.push(staleServer);
+
     // 4. Findings.
     let findings: Finding[] = [...formFindings];
     for (const obs of opts.inventoryOnly ? [] : observations) {
@@ -713,7 +718,11 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       for (const e of obs.errors)
         if (!e.startsWith('navigation:')) limitations.push(`${obs.url} (${obs.viewport.name}): ${e}`);
     }
-    findings = mergeFindings(findings);
+    // One cause seen on several pages (e.g. a CSP-blocked script with a per-page nonce) becomes one finding (F44).
+    findings = collapseVolatileFindings(
+      mergeFindings(findings),
+      observations.map((o) => o.url),
+    );
     respectLockedBrand(findings, opts.context?.brand ?? null);
     if (opts.categories?.length) findings = findings.filter((f) => opts.categories!.includes(f.category));
     // Findings a person already dismissed stay out of the run (and the summary), listed apart with their reason.

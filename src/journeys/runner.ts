@@ -2,20 +2,27 @@
 // failures, optional Playwright trace. Deterministic: fixed viewport, generated test data, no randomness in
 // selectors, one controlled retry for transient element states.
 import { join } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import type { Browser, ElementHandle, Locator, Page } from 'playwright-core';
 import { EVIDENCE_QUALITY, type EvidenceMode } from '../audit/evidence.js';
 import { makeFinding } from '../audit/finding.js';
 import { CWV, nielsen } from '../audit/standards.js';
 import { DEFAULT_MASK, newContext, observe } from '../browser/capture.js';
+import { asJourilo } from '../browser/own-activity.js';
 import type { TargetHeaders } from '../browser/target-headers.js';
 import { parseViewports } from '../browser/viewports.js';
 import { type RawVitals, READ_VITALS_SCRIPT, rate } from '../browser/vitals.js';
 import { toPosix, writeFileSafe } from '../core/fs-safety.js';
 import { excerpt, redactUrl } from '../core/redact.js';
 import type { Finding, JourneyResult, JourneyStepResult } from '../core/types.js';
-import type { HostClass } from '../core/url-safety.js';
+import { type HostClass, isLocalHostname } from '../core/url-safety.js';
 import { coverAt } from './cover.js';
-import { installRequestGuard } from './request-guard.js';
+import {
+  type BlockedRequest,
+  installRequestGuard,
+  MAX_REDIRECTS,
+  type RequestGuard,
+} from './request-guard.js';
 import { checkAction, interpolate, isSecretValue, type SafetyPolicy } from './safety.js';
 import { describeStep, describeTarget, type JourneySpec, type Step, type Target } from './schema.js';
 
@@ -170,17 +177,65 @@ export function matchesUrl(actual: string, expected: string): boolean {
   return actual.includes(expected);
 }
 
+/**
+ * The policy for activating elements in a tab. A tab on another origin the journey may reach (`allowOrigins`) is
+ * judged by its own host: a popup on a non-local test identity provider gets the non-local rules (no submission
+ * without --allow-submit, never a payment or deletion) even when the journey's target is a local host.
+ */
+export function tabPolicy(url: string, base: URL, policy: SafetyPolicy): SafetyPolicy {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return policy;
+  }
+  if (
+    (u.protocol !== 'http:' && u.protocol !== 'https:') ||
+    u.origin === base.origin ||
+    isLocalHostname(u.hostname)
+  )
+    return policy;
+  return { ...policy, hostClass: 'public' };
+}
+
+/** The journey's open tabs, in the order they were opened, and the current one the steps act on. */
+interface Tabs {
+  current(): Page | undefined;
+  all(): Page[];
+  /** Tabs and popups the pages opened that no `waitForPopup` or `switchTab` has taken yet, oldest first. */
+  fresh(): Page[];
+  select(page: Page): Promise<void>;
+}
+
+/** Polls for a tab until the step timeout: a popup's page and its first URL arrive a moment after the click. */
+async function waitForTab(find: () => Page | undefined, timeoutMs: number): Promise<Page | undefined> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const p = find();
+    if (p || Date.now() >= deadline) return p;
+    await sleep(100);
+  }
+}
+
 class Blocked extends Error {}
 
 /** Runs one step. A returned note is appended to the step's description (what was done differently, and why). */
-async function act(page: Page, step: Step, opts: JourneyRunOptions): Promise<string | void> {
+async function act(
+  tabs: Tabs,
+  step: Step,
+  opts: JourneyRunOptions,
+  guard: RequestGuard,
+): Promise<string | void> {
   const t = opts.stepTimeoutMs;
   const value = (v: string) => interpolate(v, opts.data);
+  const page = tabs.current();
+  if (!page) throw new Error('No open tab: every tab of the journey has been closed.');
   switch (step.action) {
     case 'goto': {
       const url = new URL(value(step.url), opts.base);
       if (url.origin !== opts.base.origin && !(opts.allowOrigins ?? []).includes(url.origin))
         throw new Blocked(`goto ${url.origin} leaves the target origin ${opts.base.origin}`);
+      guard.expectBrowserNavigation(page, url.toString());
       await page.goto(url.toString(), { waitUntil: 'load', timeout: t * 3 });
       await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => undefined);
       return;
@@ -200,24 +255,29 @@ async function act(page: Page, step: Step, opts: JourneyRunOptions): Promise<str
       const f = handle ? ((await handle.evaluate(facts(ELEMENT_FACTS))) as ElementFacts | null) : null;
       const effect = step.action === 'click' ? (f?.submits ? 'submit' : 'activate') : keyEffect(step.key, f);
       if (f && effect !== 'none') {
-        const verdict = verdictFor(f, effect, step.action, opts.policy);
+        const verdict = verdictFor(f, effect, step.action, tabPolicy(page.url(), opts.base, opts.policy));
         if (!verdict.allowed) throw new Blocked(verdict.reason);
       }
       let note: string | undefined;
-      if (step.action === 'click') {
-        // A covered center would make Playwright wait for the cover to go away until the step times out: say what
-        // is on top, and click a clear part of the target when there is one.
-        const c = await coverAt(handle!);
-        if (c.covered && c.visiblePoint) {
-          note = `center covered by ${c.cover ?? 'another element'}; clicked the visible part`;
-          await handle!.click({ timeout: t, position: c.visiblePoint });
-        } else if (c.covered) {
-          throw new Error(
-            `${describeTarget(step.target)} is covered by ${c.cover ?? 'another element'}; nothing of it is visible to click.`,
-          );
-        } else await handle!.click({ timeout: t });
-      } else if (loc && handle) await handle.press(step.key, { timeout: t });
-      else await page.keyboard.press(step.key);
+      try {
+        if (step.action === 'click') {
+          // A covered center would make Playwright wait for the cover to go away until the step times out: say
+          // what is on top, and click a clear part of the target when there is one.
+          const c = await coverAt(handle!);
+          if (c.covered && c.visiblePoint) {
+            note = `center covered by ${c.cover ?? 'another element'}; clicked the visible part`;
+            await handle!.click({ timeout: t, position: c.visiblePoint });
+          } else if (c.covered) {
+            throw new Error(
+              `${describeTarget(step.target)} is covered by ${c.cover ?? 'another element'}; nothing of it is visible to click.`,
+            );
+          } else await handle!.click({ timeout: t });
+        } else if (loc && handle) await handle.press(step.key, { timeout: t });
+        else await page.keyboard.press(step.key);
+      } catch (err) {
+        // A popup that closes itself on the click (an identity provider handing back to its opener) did its job.
+        if (!page.isClosed()) throw err;
+      }
       await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => undefined);
       return note;
     }
@@ -241,6 +301,7 @@ async function act(page: Page, step: Step, opts: JourneyRunOptions): Promise<str
       else await page.waitForTimeout(Math.min(step.ms ?? 500, 10_000));
       return;
     case 'back':
+      guard.expectBrowserNavigation(page);
       await page.goBack({ timeout: t });
       return;
     case 'expect': {
@@ -262,7 +323,84 @@ async function act(page: Page, step: Step, opts: JourneyRunOptions): Promise<str
     }
     case 'screenshot':
       return;
+    case 'waitForPopup': {
+      const popup = await waitForTab(
+        () => tabs.fresh().find((p) => !step.urlMatch || matchesUrl(p.url(), step.urlMatch)),
+        t,
+      );
+      if (!popup)
+        throw new Error(
+          `No popup or new tab${step.urlMatch ? ` at ~ ${step.urlMatch}` : ''} opened within ${Math.round(t / 1000)} s.`,
+        );
+      await tabs.select(popup);
+      await popup.waitForLoadState('load', { timeout: t }).catch(() => undefined);
+      await popup.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => undefined);
+      return;
+    }
+    case 'switchTab': {
+      const find = () =>
+        step.index !== undefined
+          ? tabs.all()[step.index]
+          : tabs.all().find((p) => matchesUrl(p.url(), step.urlMatch ?? ''));
+      const tab = await waitForTab(find, t);
+      if (!tab)
+        throw new Error(
+          `${step.index !== undefined ? `There is no tab ${step.index}` : `No tab at ~ ${step.urlMatch}`}; open tabs: ${tabs
+            .all()
+            .map((p, i) => `${i} ${redactUrl(p.url())}`)
+            .join(', ')}.`,
+        );
+      await tabs.select(tab);
+      return;
+    }
+    case 'closeTab':
+      if (tabs.all().length < 2) throw new Error("closeTab would close the journey's last tab.");
+      await page.close();
+      return;
   }
+}
+
+/**
+ * Hands out what the request guard stopped, one step at a time. Each `take()` returns the stops since the previous
+ * one, so a stop between two steps (during a screenshot, or a popup the page opens a moment later) is charged to the
+ * next step, and one after the last step's check to the last step, instead of going unreported. Only navigations and
+ * destructive or financial requests count: a stopped background form post is reported with the journey, not a step.
+ */
+export function stopLedger(blocked: readonly BlockedRequest[]): { take(): BlockedRequest[] } {
+  let seen = 0;
+  return {
+    take() {
+      const fresh = blocked.slice(seen).filter((b) => b.navigation || b.kind !== 'submit');
+      seen = blocked.length;
+      return fresh;
+    },
+  };
+}
+
+/** Marks a step blocked by the stops charged to it (a step already blocked keeps its own reason). */
+export function chargeStops(
+  step: Pick<JourneyStepResult, 'status' | 'error'>,
+  stopped: BlockedRequest[],
+): boolean {
+  if (!stopped.length) return false;
+  if (step.status !== 'blocked') {
+    step.status = 'blocked';
+    step.error = excerpt(
+      `${stopped[0]!.reason}${stopped.length > 1 ? ` (+${stopped.length - 1} more)` : ''}`,
+      300,
+    );
+  }
+  return true;
+}
+
+/** Waits (up to the step timeout) until the current tab has left Jourilo's hand-over page for a redirect. */
+async function settleRedirects(tabs: Tabs, guard: RequestGuard, timeoutMs: number): Promise<void> {
+  const page = tabs.current();
+  if (!page || !guard.handingOver(page.url())) return;
+  const deadline = Date.now() + timeoutMs;
+  while (!page.isClosed() && guard.handingOver(page.url()) && Date.now() < deadline) await sleep(50);
+  await page.waitForLoadState('load', { timeout: Math.max(1, deadline - Date.now()) }).catch(() => undefined);
+  await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => undefined);
 }
 
 const TRANSIENT = /detached|not stable|intercepts pointer events|Execution context was destroyed|navigation/i;
@@ -285,15 +423,63 @@ export async function runJourney(
   const tracePath = opts.trace ? join('traces', `${spec.id}-${vp.name}.zip`) : undefined;
   if (tracePath) await ctx.tracing.start({ screenshots: true, snapshots: true, title: spec.name });
   // Network backstop: whatever a step triggers, requests that the policy forbids never leave the browser.
-  const guard = await installRequestGuard(ctx, {
-    ...opts.policy,
-    origin: opts.base.origin,
-    ...(opts.allowOrigins ? { allowOrigins: opts.allowOrigins } : {}),
-    mode: 'journey',
+  // Every hop of a redirect chain is judged before it is sent (Playwright routes only a chain's first URL).
+  const guard = await installRequestGuard(
+    ctx,
+    {
+      ...opts.policy,
+      origin: opts.base.origin,
+      ...(opts.allowOrigins ? { allowOrigins: opts.allowOrigins } : {}),
+      mode: 'journey',
+    },
+    {
+      checkRedirects: true,
+      timeoutMs: opts.stepTimeoutMs * 3,
+      ...(opts.extraHeaders ? { targetHeaders: opts.extraHeaders } : {}),
+    },
+  );
+  // Every tab and popup of the context is tracked: the request guard above is context-wide, so the policy holds for
+  // all of them, including a popup the page opens on its own (its off-origin navigation is aborted before the
+  // request leaves the browser). Only waitForPopup and switchTab make another tab current.
+  const open: Page[] = [];
+  const fresh: Page[] = [];
+  const openers = new Map<Page, Page | null>();
+  const observers: ReturnType<typeof observe>[] = [];
+  let current: Page | undefined;
+  const track = (p: Page) => {
+    open.push(p);
+    const live = observe(p, opts.base.origin);
+    live.ignore(guard.isBlocked);
+    observers.push(live);
+    // Recorded synchronously when the popup appears, before it can close itself.
+    p.on('popup', (child) => openers.set(child, p));
+    p.on('close', () => {
+      for (const list of [open, fresh]) if (list.includes(p)) list.splice(list.indexOf(p), 1);
+      if (current !== p) return;
+      // The current tab closed (a popup that closed itself, or closeTab): its opener, or the nearest still-open
+      // ancestor, becomes current; failing that, the most recently opened tab.
+      let o = openers.get(p) ?? null;
+      while (o?.isClosed()) o = openers.get(o) ?? null;
+      current = o ?? open[open.length - 1];
+    });
+  };
+  current = await ctx.newPage();
+  track(current);
+  ctx.on('page', (p) => {
+    if (open.includes(p) || p.isClosed()) return;
+    track(p);
+    fresh.push(p);
   });
-  const page = await ctx.newPage();
-  const live = observe(page, opts.base.origin);
-  live.ignore(guard.isBlocked);
+  const tabs: Tabs = {
+    current: () => current,
+    all: () => open.filter((p) => !p.isClosed()),
+    fresh: () => fresh.filter((p) => !p.isClosed()),
+    select: async (p) => {
+      current = p;
+      if (fresh.includes(p)) fresh.splice(fresh.indexOf(p), 1);
+      await p.bringToFront().catch(() => undefined);
+    },
+  };
   const steps: JourneyStepResult[] = [];
   const findings: Finding[] = [];
   const t0 = Date.now();
@@ -305,21 +491,32 @@ export async function runJourney(
       'screenshots',
       `journey-${spec.id}-${vp.name}${opts.attempt === undefined ? '' : `-a${opts.attempt}`}-${String(i).padStart(2, '0')}.jpg`,
     );
-    try {
-      await page.screenshot({
-        path: join(opts.runDir, file),
-        type: 'jpeg',
-        quality: opts.evidence === 'minimal' ? EVIDENCE_QUALITY.minimal : 70,
-        animations: 'disabled',
-        caret: 'hide',
-        mask: DEFAULT_MASK.map((s) => page.locator(s)),
-        maskColor: '#FF00FF',
-      });
-      return toPosix(file);
-    } catch {
-      return undefined;
+    // From the current tab. A tab that is closing itself as the step ends hands over to its opener: take that.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const page = tabs.current();
+      if (!page) return undefined;
+      try {
+        await asJourilo(page, () =>
+          page.screenshot({
+            path: join(opts.runDir, file),
+            type: 'jpeg',
+            quality: opts.evidence === 'minimal' ? EVIDENCE_QUALITY.minimal : 70,
+            animations: 'disabled',
+            caret: 'hide',
+            mask: DEFAULT_MASK.map((s) => page.locator(s)),
+            maskColor: '#FF00FF',
+          }),
+        );
+        return toPosix(file);
+      } catch {
+        if (!page.isClosed()) await sleep(300);
+        if (!page.isClosed() || tabs.current() === page) return undefined;
+      }
     }
+    return undefined;
   };
+
+  const stops = stopLedger(guard.blocked);
 
   try {
     for (let i = 0; i < allSteps.length; i++) {
@@ -338,31 +535,38 @@ export async function runJourney(
       };
       opts.log?.(`    ${i + 1}. ${res.description}`);
       let note: string | void;
+      const loopsBefore = guard.redirectLoops.length;
       try {
         try {
-          note = await act(page, step, opts);
+          note = await act(tabs, step, opts, guard);
         } catch (err) {
-          if (err instanceof Blocked || !TRANSIENT.test((err as Error).message)) throw err;
-          await page.waitForTimeout(500);
-          note = await act(page, step, opts);
+          if (
+            err instanceof Blocked ||
+            !TRANSIENT.test((err as Error).message) ||
+            guard.redirectLoops.length > loopsBefore
+          )
+            throw err;
+          await sleep(500);
+          note = await act(tabs, step, opts, guard);
         }
         if (note) res.description = `${res.description} (${note})`;
+        // A redirect is handed to the browser as a page that navigates on: wait for the chain to land.
+        await settleRedirects(tabs, guard, opts.stepTimeoutMs);
       } catch (err) {
         res.status = err instanceof Blocked ? 'blocked' : 'failed';
         res.error = excerpt((err as Error).message.split('\n')[0], 300);
       }
+      guard.clearBrowserNavigations();
+      const loop = guard.redirectLoops.slice(loopsBefore)[0];
+      if (loop && res.status !== 'blocked') {
+        res.status = 'failed';
+        res.error = `${loop.url} redirects more than ${MAX_REDIRECTS} times (a redirect loop; a browser stops with ERR_TOO_MANY_REDIRECTS).`;
+      }
       // A navigation or an irreversible/payment request the step caused was stopped: the step did not do what it
       // would have done. (Background data requests that were stopped are reported with the journey, not here.)
-      const stopped = guard.since(s0).filter((b) => b.navigation || b.kind !== 'submit');
-      if (stopped.length && res.status !== 'blocked') {
-        res.status = 'blocked';
-        res.error = excerpt(
-          `${stopped[0]!.reason}${stopped.length > 1 ? ` (+${stopped.length - 1} more)` : ''}`,
-          300,
-        );
-      }
+      chargeStops(res, stops.take());
       res.durationMs = Date.now() - s0;
-      res.url = redactUrl(page.url());
+      res.url = redactUrl(tabs.current()?.url() ?? '');
       const s = await shot(i);
       if (s) res.screenshot = s;
       steps.push(res);
@@ -380,27 +584,34 @@ export async function runJourney(
         break;
       }
     }
+    // A navigation stopped after the last step's check (a popup that opened late) still stops the journey.
+    if (status === 'passed' && steps.length && chargeStops(steps[steps.length - 1]!, stops.take()))
+      status = 'blocked';
 
     // Success criteria are evaluated even after a failure so the report shows which goals were missed.
-    const pageErrors = live.console.filter((c) => c.type === 'pageerror');
-    const failedFirstParty = live.network.filter((n) => n.firstParty);
+    const page = tabs.current();
+    const finalUrl = page?.url() ?? '';
+    const pageErrors = observers.flatMap((o) => o.console).filter((c) => c.type === 'pageerror');
+    const failedFirstParty = observers.flatMap((o) => o.network).filter((n) => n.firstParty);
     const criteria: JourneyResult['successCriteria'] = [];
     for (const c of spec.success) {
       let met = true;
       const details: string[] = [];
-      if (c.url && !matchesUrl(page.url(), c.url)) {
+      if (c.url && !matchesUrl(finalUrl, c.url)) {
         met = false;
-        details.push(`ended at ${redactUrl(page.url())}`);
+        details.push(`ended at ${redactUrl(finalUrl)}`);
       }
-      if (c.urlNot && matchesUrl(page.url(), c.urlNot)) {
+      if (c.urlNot && matchesUrl(finalUrl, c.urlNot)) {
         met = false;
-        details.push(`still at ${redactUrl(page.url())}`);
+        details.push(`still at ${redactUrl(finalUrl)}`);
       }
       if (c.visible) {
-        const vis = await locatorFor(page, c.visible)
-          .first()
-          .isVisible()
-          .catch(() => false);
+        const vis = page
+          ? await locatorFor(page, c.visible)
+              .first()
+              .isVisible()
+              .catch(() => false)
+          : false;
         if (!vis) {
           met = false;
           details.push(`${describeTarget(c.visible)} not visible`);
@@ -422,7 +633,7 @@ export async function runJourney(
     }
     if (status === 'passed' && criteria.some((c) => !c.met)) status = 'failed';
 
-    const vitals = (await page.evaluate(READ_VITALS_SCRIPT).catch(() => null)) as RawVitals | null;
+    const vitals = (await page?.evaluate(READ_VITALS_SCRIPT).catch(() => null)) as RawVitals | null;
     const durationMs = Date.now() - t0;
     if (tracePath) {
       await ctx.tracing.stop({ path: join(opts.runDir, tracePath) });
@@ -451,7 +662,7 @@ export async function runJourney(
     const reproduction = steps.filter((s) => s.status !== 'skipped').map((s) => s.description);
     const failedStep = steps.find((s) => s.status === 'failed');
     const blockedStep = steps.find((s) => s.status === 'blocked');
-    const url = redactUrl(page.url());
+    const url = redactUrl(finalUrl);
     if (failedStep || criteria.some((c) => !c.met)) {
       const unmet = criteria.filter((c) => !c.met);
       findings.push(

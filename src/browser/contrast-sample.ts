@@ -3,6 +3,7 @@
 // image dependency), and the text color is compared with the background pixels behind it. Any failure returns null,
 // so the node stays a manual-review item.
 import type { Page } from 'playwright-core';
+import { asJourilo } from './own-activity.js';
 
 export interface ContrastSample {
   /** Lowest WCAG contrast ratio between the text color and a sampled background pixel. */
@@ -203,12 +204,14 @@ export async function sampleContrast(page: Page, target: string): Promise<Contra
     )) as NodeStyle | null;
     if (!style || style.width < 1 || style.height < 1) return null;
     if (style.width * style.height * style.dpr * style.dpr > MAX_DEVICE_PIXELS) return null;
-    const png = await locator.screenshot({
-      type: 'png',
-      animations: 'disabled',
-      caret: 'hide',
-      timeout: 2000,
-    });
+    const png = await asJourilo(page, () =>
+      locator.screenshot({
+        type: 'png',
+        animations: 'disabled',
+        caret: 'hide',
+        timeout: 2000,
+      }),
+    );
     const arg = {
       url: `data:image/png;base64,${png.toString('base64')}`,
       rgb: style.rgb,

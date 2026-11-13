@@ -1,6 +1,6 @@
 // Journeys end-to-end on the acme-saas fixture: suggestion derives the expected journeys from real pages, the
 // runner reports real outcomes, and the safety policy blocks risky steps.
-import { spawnSync } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import {
   copyFileSync,
   existsSync,
@@ -10,8 +10,11 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { createServer, type RequestListener, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { promisify } from 'node:util';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const root = join(import.meta.dirname, '..', '..');
 const cli = join(root, 'plugin', 'dist', 'jourilo.mjs');
@@ -393,4 +396,327 @@ describe('journeys --repeat --evidence minimal', () => {
       { selector: '#bold', name: 'Bold', state: 'pressed', controls: null },
     ]);
   });
+});
+
+describe('journeys across tabs and popups', () => {
+  // The app on 127.0.0.1 and the test IdP on localhost: one local server, two origins. Every request is logged by
+  // origin, so a blocked popup can be shown never to have reached the IdP.
+  const lab = join(root, 'fixtures', 'apps', 'journey-lab');
+  const requests: string[] = [];
+  /** The Cookie header each /oauth/echo request carried, by its `via` parameter. */
+  const echoed = new Map<string, string>();
+  const servers: Server[] = [];
+  let app = '';
+  let idp = '';
+
+  beforeAll(async () => {
+    const handler: RequestListener = (req, res) => {
+      requests.push(`${req.headers.host} ${req.url}`);
+      const url = new URL(req.url ?? '/', 'http://x');
+      if (url.pathname === '/oauth/hop') {
+        res.writeHead(302, { location: '/oauth/help.html' }).end();
+        return;
+      }
+      if (url.pathname === '/oauth/loop') {
+        res.writeHead(302, { location: '/oauth/loop' }).end();
+        return;
+      }
+      if (url.pathname === '/oauth/set-cookies') {
+        res
+          .writeHead(200, {
+            'content-type': 'text/html',
+            'set-cookie': ['strict=1; Path=/; SameSite=Strict', 'lax=1; Path=/; SameSite=Lax'],
+          })
+          .end('<h1>Cookies set</h1>');
+        return;
+      }
+      if (url.pathname === '/oauth/echo') {
+        echoed.set(url.searchParams.get('via') ?? '', req.headers.cookie ?? '');
+        res.writeHead(200, { 'content-type': 'text/html' }).end('<h1>Echo</h1>');
+        return;
+      }
+      // Like a real "/auth/provider" route: a 302 to the IdP on the other loopback name.
+      if (req.url === '/oauth/start') {
+        const [host, port] = (req.headers.host ?? '').split(':');
+        const other = host === 'localhost' ? '127.0.0.1' : 'localhost';
+        const back = encodeURIComponent(`http://${req.headers.host}`);
+        res
+          .writeHead(302, { location: `http://${other}:${port}/oauth/idp.html?return_origin=${back}` })
+          .end();
+        return;
+      }
+      const path = join(lab, new URL(req.url ?? '/', 'http://x').pathname);
+      if (!path.startsWith(lab) || !existsSync(path)) {
+        res.writeHead(404).end();
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(readFileSync(path));
+    };
+    const v4 = createServer(handler);
+    await new Promise<void>((done) => v4.listen(0, '127.0.0.1', done));
+    servers.push(v4);
+    const { port } = v4.address() as AddressInfo;
+    // Also on ::1: kept from before the network guard tried every address "localhost" resolves to (harmless).
+    // tests/unit/net-guard.test.ts checks that a 127.0.0.1-only server is reachable through "localhost".
+    const v6 = createServer(handler);
+    await new Promise<void>((done) => {
+      v6.once('error', () => done());
+      v6.listen(port, '::1', () => {
+        servers.push(v6);
+        done();
+      });
+    });
+    app = `http://127.0.0.1:${port}`;
+    idp = `http://localhost:${port}`;
+  });
+  afterAll(() => Promise.all(servers.map((s) => new Promise<void>((done) => s.close(() => done())))));
+
+  const runTabs = async (id: string, start: string, steps: unknown[], ...flags: string[]) => {
+    const dir = join(ws, 'journeys');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, `${id}.json`),
+      JSON.stringify({
+        version: 1,
+        id,
+        name: id,
+        start,
+        steps,
+        success: [{ description: 'No script errors', noPageErrors: true }],
+      }),
+    );
+    // Asynchronous: the fixture server lives in this process and must keep answering while the run goes on.
+    const r = await promisify(execFile)(
+      process.execPath,
+      [
+        cli,
+        'journeys',
+        'run',
+        id,
+        '--base',
+        app,
+        '--timeout',
+        '5',
+        ...flags,
+        '--workspace',
+        ws,
+        '--json',
+        '-q',
+      ],
+      { encoding: 'utf8', cwd: root },
+    ).catch((err: { stdout: string }) => err);
+    return JSON.parse(r.stdout) as {
+      journeys: {
+        status: string;
+        steps: { action: string; status: string; url: string; error?: string; screenshot?: string }[];
+        blockedRequests?: { url: string }[];
+      }[];
+      findings: { ruleId: string; description: string }[];
+      runDir: string;
+    };
+  };
+
+  const oauthSteps = [
+    { action: 'click', target: { role: 'button', name: 'Sign in with Test IdP' } },
+    { action: 'waitForPopup', urlMatch: '/oauth/idp' },
+    { action: 'fill', target: { label: 'Email' }, value: '{{email}}' },
+    { action: 'click', target: { role: 'button', name: 'Sign in', exact: true } },
+    { action: 'switchTab', index: 0 },
+    { action: 'expect', visible: { text: 'Signed in' } },
+  ];
+
+  const idpHits = () => requests.filter((r) => r.startsWith('localhost:'));
+
+  it('a journey signs in through an OAuth popup on a local test IdP', async () => {
+    requests.length = 0;
+    const out = await runTabs('oauth-popup', '/oauth/index.html', oauthSteps, '--allow-origin', idp);
+    const j = out.journeys[0]!;
+    expect(j.status, JSON.stringify(j.steps)).toBe('passed');
+    expect(j.steps.map((s) => s.action)).toEqual([
+      'goto',
+      'click',
+      'waitForPopup',
+      'fill',
+      'click',
+      'switchTab',
+      'expect',
+    ]);
+    // Each step's screenshot and URL come from the tab that was current after it: the IdP popup while it is open,
+    // the app once the popup has closed itself.
+    for (const s of j.steps) {
+      expect(s.screenshot, s.action).toBeTruthy();
+      expect(existsSync(join(out.runDir, s.screenshot!)), s.screenshot).toBe(true);
+    }
+    expect(j.steps[2]!.url).toContain(`${idp}/oauth/idp.html`);
+    expect(j.steps[3]!.url).toContain(`${idp}/oauth/idp.html`);
+    expect(j.steps[4]!.url).toContain(`${app}/oauth/index.html`);
+    expect(j.steps[6]!.url).toContain(`${app}/oauth/index.html`);
+    expect(j.blockedRequests).toBeUndefined();
+    // Positive control for the hit counter the blocking tests rely on.
+    expect(idpHits().length).toBeGreaterThan(0);
+  }, 120_000);
+
+  it('follows a redirect to an allowed IdP hop by hop', async () => {
+    requests.length = 0;
+    const out = await runTabs(
+      'oauth-redirect',
+      '/oauth/index.html',
+      [
+        { action: 'click', target: { role: 'button', name: 'Sign in through the app' } },
+        ...oauthSteps.slice(1),
+      ],
+      '--allow-origin',
+      idp,
+    );
+    const j = out.journeys[0]!;
+    expect(j.status, JSON.stringify(j.steps)).toBe('passed');
+    expect(j.steps[2]!.url).toContain(`${idp}/oauth/idp.html`);
+    // Each hop was requested once: the guard's own fetch, not a second request by the browser.
+    expect(requests.filter((r) => r.endsWith(' /oauth/start'))).toHaveLength(1);
+    expect(idpHits().filter((r) => r.includes('/oauth/idp.html'))).toHaveLength(1);
+  }, 120_000);
+
+  it('a redirect to an origin not in allowOrigins is blocked, in a popup and in the main tab', async () => {
+    requests.length = 0;
+    const popup = await runTabs('redirect-popup-blocked', '/oauth/index.html', [
+      { action: 'click', target: { role: 'button', name: 'Sign in through the app' } },
+      { action: 'waitForPopup' },
+    ]);
+    const pj = popup.journeys[0]!;
+    expect(pj.status, JSON.stringify(pj.steps)).toBe('blocked');
+    const step = pj.steps.find((s) => s.status === 'blocked')!;
+    // The redirect is judged once the popup's first hop has answered: during the click or the wait that follows.
+    expect(['click', 'waitForPopup']).toContain(step.action);
+    expect(step.error).toContain(`--allow-origin ${idp}`);
+    expect(popup.findings.some((f) => f.ruleId === 'journey/blocked-by-policy')).toBe(true);
+    // The first hop on the journey's origin was made; the redirect's target was never asked.
+    expect(requests.some((r) => r.startsWith('127.0.0.1:') && r.endsWith(' /oauth/start'))).toBe(true);
+    expect(idpHits()).toEqual([]);
+
+    requests.length = 0;
+    const main = await runTabs('redirect-main-blocked', '/oauth/start', [
+      { action: 'expect', visible: { role: 'heading', name: 'Test IdP' } },
+    ]);
+    const mj = main.journeys[0]!;
+    expect(mj.status).toBe('blocked');
+    expect(mj.steps[0]!.status).toBe('blocked');
+    expect(mj.steps[0]!.error).toContain(`--allow-origin ${idp}`);
+    expect(requests.some((r) => r.endsWith(' /oauth/start'))).toBe(true);
+    expect(idpHits()).toEqual([]);
+  }, 120_000);
+
+  it('a start URL that redirects lands on the final page in step 1', async () => {
+    const out = await runTabs('start-redirects', '/oauth/hop', [
+      { action: 'expect', visible: { role: 'heading', name: 'Help' } },
+    ]);
+    const j = out.journeys[0]!;
+    expect(j.status, JSON.stringify(j.steps)).toBe('passed');
+    // The step's URL and screenshot are the final page, not the hand-over page for the redirect.
+    expect(j.steps[0]!.url).toBe(`${app}/oauth/help.html`);
+    const shot = readFileSync(join(out.runDir, j.steps[0]!.screenshot!));
+    const help = readFileSync(join(out.runDir, j.steps[1]!.screenshot!));
+    expect(shot.equals(help)).toBe(true);
+  }, 120_000);
+
+  it('stops a redirect loop at 20 hops with a clear error', async () => {
+    requests.length = 0;
+    const out = await runTabs('redirect-loop', '/oauth/loop', [
+      { action: 'expect', visible: { role: 'heading', name: 'Help' } },
+    ]);
+    const j = out.journeys[0]!;
+    expect(j.status).toBe('failed');
+    expect(j.steps[0]!.error).toMatch(/redirects more than 20 times.*ERR_TOO_MANY_REDIRECTS/);
+    // The first request and 20 redirects, as a browser does; no retry of the loop.
+    expect(requests.filter((r) => r.endsWith(' /oauth/loop'))).toHaveLength(21);
+  }, 120_000);
+
+  it('sends cookies on proxied navigations by the SameSite rules', async () => {
+    echoed.clear();
+    const out = await runTabs(
+      'samesite',
+      '/oauth/cookies.html',
+      [
+        { action: 'goto', url: `${idp}/oauth/set-cookies` },
+        { action: 'goto', url: '/oauth/cookies.html' },
+        { action: 'click', target: { role: 'link', name: 'Visit the IdP' } },
+        { action: 'goto', url: '/oauth/cookies.html' },
+        { action: 'click', target: { role: 'button', name: 'Post to the IdP' } },
+        { action: 'goto', url: `${idp}/oauth/echo?via=goto` },
+      ],
+      '--allow-origin',
+      idp,
+    );
+    const j = out.journeys[0]!;
+    expect(j.status, JSON.stringify(j.steps)).toBe('passed');
+    const has = (via: string) => (echoed.get(via) ?? '').split(/;\s*/).filter(Boolean).sort();
+    // Cross-site GET link: Lax only. Cross-site POST: neither. Typed address (page.goto): both.
+    expect(has('link')).toEqual(['lax=1']);
+    expect(has('post')).toEqual([]);
+    expect(has('goto')).toEqual(['lax=1', 'strict=1']);
+  }, 120_000);
+
+  it('a target=_blank link to an origin not in allowOrigins is blocked', async () => {
+    requests.length = 0;
+    const out = await runTabs('blank-link-blocked', '/oauth/index.html', [
+      { action: 'click', target: { role: 'link', name: "Open the IdP's help in a new tab" } },
+      { action: 'switchTab', index: 1 },
+    ]);
+    const j = out.journeys[0]!;
+    expect(j.status).toBe('blocked');
+    expect(j.steps.find((s) => s.status === 'blocked')!.error).toContain(`--allow-origin ${idp}`);
+    expect(idpHits()).toEqual([]);
+  }, 120_000);
+
+  it('a popup to an origin not in allowOrigins is blocked', async () => {
+    requests.length = 0;
+    const out = await runTabs('oauth-popup-blocked', '/oauth/index.html', oauthSteps);
+    const j = out.journeys[0]!;
+    expect(j.status).toBe('blocked');
+    const step = j.steps.find((s) => s.status === 'blocked')!;
+    expect(step.action).toBe('click');
+    expect(step.error).toContain(`--allow-origin ${idp}`);
+    expect(out.findings.some((f) => f.ruleId === 'journey/blocked-by-policy')).toBe(true);
+    // Stopped before the request left the browser: the IdP origin never saw it.
+    expect(requests.some((r) => r.startsWith('127.0.0.1:'))).toBe(true);
+    expect(idpHits()).toEqual([]);
+  }, 120_000);
+
+  it('a popup the page opens on its own is held to the same policy', async () => {
+    requests.length = 0;
+    const out = await runTabs('oauth-popup-unasked', '/oauth/index.html?auto=1', [
+      { action: 'expect', visible: { role: 'heading', name: 'Test app' } },
+    ]);
+    const j = out.journeys[0]!;
+    expect(j.status).toBe('blocked');
+    expect(j.steps.find((s) => s.status === 'blocked')!.error).toContain(`--allow-origin ${idp}`);
+    expect(idpHits()).toEqual([]);
+  }, 120_000);
+
+  it('a target=_blank link journey switches tabs and back', async () => {
+    const out = await runTabs('new-tab', '/oauth/index.html', [
+      { action: 'click', target: { role: 'link', name: 'Open help in a new tab' } },
+      { action: 'switchTab', index: 1 },
+      { action: 'expect', visible: { role: 'heading', name: 'Help' } },
+      { action: 'switchTab', index: 0 },
+      { action: 'expect', visible: { role: 'heading', name: 'Test app' } },
+      { action: 'switchTab', urlMatch: '/oauth/help' },
+      { action: 'closeTab' },
+      { action: 'expect', visible: { role: 'heading', name: 'Test app' } },
+    ]);
+    const j = out.journeys[0]!;
+    expect(j.status, JSON.stringify(j.steps)).toBe('passed');
+    expect(j.steps.map((s) => new URL(s.url).pathname)).toEqual([
+      '/oauth/index.html',
+      '/oauth/index.html',
+      '/oauth/help.html',
+      '/oauth/help.html',
+      '/oauth/index.html',
+      '/oauth/index.html',
+      '/oauth/help.html',
+      // Closing the current tab makes its opener current again.
+      '/oauth/index.html',
+      '/oauth/index.html',
+    ]);
+    for (const s of j.steps) expect(s.screenshot, s.action).toBeTruthy();
+  }, 120_000);
 });

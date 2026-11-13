@@ -1,5 +1,5 @@
 // Markdown summary (for PRs, issues and agents) and SARIF 2.1.0 (for GitHub code scanning).
-import { severityRank } from '../audit/finding.js';
+import { pagesOf, severityRank } from '../audit/finding.js';
 import { MANUAL_REVIEW } from '../audit/standards.js';
 import type { Finding, Run } from '../core/types.js';
 import { VERSION } from '../core/version.js';
@@ -15,6 +15,13 @@ function path(u: string): string {
 }
 
 const md = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+
+/** The page of a finding, or every page of one collapsed over several pages (F44), the first 8 by name. */
+function pageCell(f: Finding): string {
+  const pages = pagesOf(f);
+  const shown = pages.slice(0, 8).map((u) => `\`${md(path(u))}\``);
+  return `${shown.join(', ')}${pages.length > 8 ? ` +${pages.length - 8} more` : ''}`;
+}
 
 export function renderMarkdown(run: Run, cmp?: RunComparison, limit = 25): string {
   const s = run.summary;
@@ -76,7 +83,7 @@ export function renderMarkdown(run: Run, cmp?: RunComparison, limit = 25): strin
     );
     for (const f of list.slice(0, limit))
       lines.push(
-        `| ${f.severity} | ${md(f.title)}${f.occurrences > 1 ? ` (×${f.occurrences})` : ''} | \`${md(path(f.url))}\` | ${f.viewport ?? ''} | ${f.provenance}/${f.confidence} | \`${f.fingerprint}\` |`,
+        `| ${f.severity} | ${md(f.title)}${f.occurrences > 1 ? ` (×${f.occurrences})` : ''} | ${pageCell(f)} | ${f.viewport ?? ''} | ${f.provenance}/${f.confidence} | \`${f.fingerprint}\` |`,
       );
     if (list.length > limit) lines.push(`| | … ${list.length - limit} more in run.json | | | | |`);
     lines.push('');

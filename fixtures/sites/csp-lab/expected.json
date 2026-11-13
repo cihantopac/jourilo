@@ -1,0 +1,78 @@
+{
+  "description": "One CSP-blocked script on several pages, each page with its own nonce and cache-buster (Frameva, field item F44): one finding per rule that lists the pages; a page with a genuinely different error stays its own finding. A page with a strict nonce CSP for scripts and styles (Task 15): axe still runs there, and Jourilo's own instrumentation is never reported as the site's console error.",
+  "mustFind": [
+    {
+      "rule": "jourilo/console-errors",
+      "path": "/team",
+      "pagesExactly": [
+        "/team",
+        "/pricing",
+        "/contact",
+        "/near"
+      ],
+      "why": "inline script blocked by a per-page CSP nonce plus React error #418 on four pages (the near-miss page logs the same errors): one collapsed finding"
+    },
+    {
+      "rule": "jourilo/failed-requests",
+      "path": "/pricing",
+      "pagesExactly": [
+        "/team",
+        "/pricing",
+        "/contact"
+      ],
+      "why": "the e-mail decoder script and the same product image fail on three pages with a per-page ?v= cache-buster: one collapsed finding"
+    },
+    {
+      "rule": "jourilo/failed-requests",
+      "path": "/near",
+      "evidenceExactly": [
+        "email-decode.min.js",
+        "galaxys24ultra512gb.jpg"
+      ],
+      "why": "near miss: same CSP, decoder and nonce pattern, but a different product image, a readable name that differs only in letters and digits, so it is its own finding"
+    },
+    {
+      "rule": "jourilo/console-errors",
+      "path": "/control",
+      "evidenceExactly": [
+        "cart is undefined"
+      ],
+      "why": "a different error message is its own finding, not part of the collapse"
+    },
+    {
+      "rule": "jourilo/failed-requests",
+      "path": "/control",
+      "evidenceExactly": [
+        "/js/cart.js"
+      ],
+      "why": "a different failing URL is its own finding, not part of the collapse"
+    },
+    {
+      "rule": "axe/button-name",
+      "path": "/downloads",
+      "why": "an icon-only share button with no accessible name on a page whose CSP allows only nonce scripts and styles: axe must run despite the CSP"
+    }
+  ],
+  "mustNotFind": [
+    {
+      "rule": "jourilo/console-errors",
+      "path": "/",
+      "why": "the home page has no CSP and no errors"
+    },
+    {
+      "rule": "jourilo/failed-requests",
+      "path": "/",
+      "why": "the home page loads nothing that fails"
+    },
+    {
+      "rule": "jourilo/console-errors",
+      "path": "/downloads",
+      "why": "the strict-CSP page runs only its own nonce script, which works; a CSP refusal of Jourilo's injected axe or of Playwright's screenshot style is not a site error"
+    },
+    {
+      "rule": "jourilo/failed-requests",
+      "path": "/downloads",
+      "why": "the strict-CSP page loads nothing that fails"
+    }
+  ]
+}

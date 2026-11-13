@@ -13,13 +13,43 @@ root-cause files, required recommendation text). The clean control must have no 
 | acme-saas                                        | 7 × 2 (+ form probes) | 23 / 23 | 0               | 9 / 9           | 43.1 s |
 | brand-site (locked Markilo brand + Searvex data) | 2 × 2                 | 3 / 3   | 0               | —               | 5.5 s  |
 | clean-shop (control)                             | 4 × 2                 | —       | 0               | —               | 12.4 s |
+| contrast-lab (contrast over images)              | —                     | 2 / 2   | 0               | —               | —      |
+| csp-lab (strict CSP, collapse and near-miss)     | —                     | 6 / 6   | 0               | —               | —      |
+| it-negozio (Italian shop)                        | —                     | 7 / 7   | 0               | —               | —      |
 | multilang-build (no `/`, production sitemap)     | 3 × 2                 | 1 / 1   | 0               | —               | 11.2 s |
-| structure-lab (structure, keyboard traps)        | 5 × 2                 | 6 / 6   | 0               | —               | 15.0 s |
+| nl-winkel (Dutch shop)                           | —                     | 7 / 7   | 0               | —               | —      |
+| overlay-lab                                      | —                     | 3 / 3   | 0               | —               | —      |
+| pt-loja (Portuguese shop)                        | —                     | 7 / 7   | 0               | —               | —      |
+| structure-lab (structure, keyboard traps)        | —                     | 11 / 11 | 0               | —               | —      |
 | tr-dukkan (Turkish shop)                         | 5 × 2                 | 8 / 8   | 0               | —               | 15.8 s |
-| widgets-lab (dialogs, disclosures, composites)   | 8 × 2                 | 4 / 4   | 0               | —               | 30.2 s |
+| widgets-lab (dialogs, disclosures, composites)   | —                     | 12 / 12 | 0               | —               | —      |
+
+Pages, times and the rows with "—" were measured on 1.0.0 only where a number is given; later fixtures were added
+without timing them.
 
 1.0.0 on 2026-11-01: 45 / 45 seeded problems, 0 false positives, 9 / 9 root-cause files (CI gate on every push).
 Cross-browser (same acme-saas ground truth): Firefox and WebKit find the same set (CI on Linux, macOS and Windows).
+
+1.4.0 (measured on 13b14f3; two later commits touched finding collapse, so the release commit is measured again): 90 / 90 seeded problems
+(1.3.0: 56 / 56), 0 false positives, source location 10 / 10. The 34 new must-find items come from the fixtures
+added in this release, each with controls that must stay quiet:
+
+- `widgets-lab`: `menu-good` (a good menu button, a link-item menu, a dialog item), `menu-broken` (two broken menus:
+  arrow keys, Home/End, Escape and focus return), `menu-nav` (an always-visible `role="menu"` navigation that must
+  not be judged) and `menu-popups` (a button with `aria-haspopup="true"` that opens a dialog ignoring Escape).
+- `structure-lab`: `implicit-submit` and `implicit-submit-plain` (a typeless button that submits a form, with a typed
+  reset button before it).
+- `csp-lab`: a nonce CSP on several pages (one cause that must collapse into one finding, a near-miss with different
+  real messages that must not, and axe still finding `button-name` under the CSP).
+- `it-negozio`, `pt-loja`, `nl-winkel`: vocabulary for each language (7 must-find each), with pricing-period, trust
+  and English look-alike controls.
+- `fixtures/apps/fixer-lab` (`login.html`, `docs.html`): exact edits, `verify` and rollback for the `type="button"`
+  and `scroll-padding` fixers (`tests/browser/repair.test.ts`).
+- `fixtures/apps/journey-lab/oauth`: an OAuth popup against a test identity provider, redirect hops, SameSite and
+  popup attribution (`tests/browser/journeys.test.ts`).
+
+The full `npm run ci`, the benchmark, `smoke-pack` and plugin validation are re-run on the release commit; the
+results are in [RELEASE-1.4.md](RELEASE-1.4.md). The ACT benchmark was not re-run for 1.4.0 (below).
 
 **Caveat.** The fixtures were built by the same team as the rules. They prove that each rule detects what it is
 designed to detect and stays quiet on a clean page; they do not measure coverage of real-world problems or compare

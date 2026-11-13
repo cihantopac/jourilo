@@ -2,11 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { makeFinding } from '../../src/audit/finding.js';
 import type { Finding } from '../../src/core/types.js';
 import { compareRuns } from '../../src/report/compare.js';
-import { renderHtml } from '../../src/report/html.js';
+import { esc, renderHtml } from '../../src/report/html.js';
+import { REPORT_JS } from '../../src/report/html-client.js';
 import { fill, I18N } from '../../src/report/html-i18n.js';
 import { PROMPT_JS } from '../../src/report/html-prompt.js';
 import { fixPathOf, rootCauseKey } from '../../src/report/remediation.js';
+import { RULE_TEXT_TR } from '../../src/report/rule-text-tr.js';
+import { trendSlice } from '../../src/report/trends.js';
 import { run } from '../helpers.js';
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const f = (rule: string, path: string, over: Partial<Finding> = {}) =>
   ({
@@ -267,5 +272,139 @@ describe('report interface', () => {
     expect(html).toContain('Before / after');
     const evil = run([f('axe/x', '/', { evidence: [shot] })], { id: '../../etc', pages: [page] });
     expect(renderHtml(head, compareRuns(evil, head))).not.toMatch(/src="\.\.\/\.\./);
+  });
+
+  it('the report shows a trend table with an accessible text alternative', () => {
+    const cap = (lcp: number) => ({
+      url: 'https://example.test/',
+      finalUrl: 'https://example.test/',
+      status: 200,
+      title: 't',
+      viewport: 'desktop',
+      loadMs: 1,
+      metrics: [{ name: 'LCP', value: lcp, unit: 'ms' as const, source: 'lab' as const }],
+      consoleErrors: 0,
+      failedRequests: 0,
+      inventory: {} as never,
+    });
+    const older = run([f('axe/x', '/'), f('axe/y', '/')], { id: 'old1', pages: [cap(3000)] });
+    const now = run([f('axe/x', '/')], { id: 'new1', pages: [cap(2000)] });
+    const listing = (r: typeof now) => ({
+      id: r.id,
+      target: r.target,
+      startedAt: r.startedAt,
+      findings: r.findings.length,
+      defects: r.summary.findings,
+      kinds: r.summary.byKind,
+      pages: 1,
+      journeys: 0,
+      trend: trendSlice(r),
+    });
+    const html = renderHtml(now, undefined, [listing(older)]);
+    expect(html).toContain('class="history trend"');
+    expect(html).toMatch(/<svg class="spark"[^>]*aria-hidden="true"/);
+    // The series is real text next to the (decorative) line, not only an aria-label on the SVG.
+    expect(html).toMatch(
+      /class="sr">\. <span data-i18n="trend\.series" data-i18n-v="\{&quot;list&quot;:&quot;2, 1&quot;\}">Oldest to newest: 2, 1/,
+    );
+    expect(html).toContain('3000 ms, 2000 ms');
+    expect(html).toContain('data-i18n="trend.title"');
+    // A partial run of the same target is left out and the report says how many.
+    const partial = run([], { id: 'part1', pages: [cap(9000)], stoppedBy: 'signal' });
+    const withPartial = renderHtml(now, undefined, [listing(older), listing(partial)]);
+    expect(withPartial).toContain('data-i18n="trend.skipped" data-i18n-v="{&quot;n&quot;:1}"');
+    expect(withPartial).not.toContain('9000 ms');
+    expect(html).not.toContain('data-i18n="trend.skipped"');
+    // Without a second run there is nothing to trend.
+    expect(renderHtml(now, undefined, [])).not.toContain('class="history trend"');
+  });
+  // Field evidence: the texts jourilo/focus-visible really emits (src/audit/rules/accessibility.ts).
+  const focusVisible = () =>
+    f('jourilo/focus-visible', '/', {
+      title: 'Keyboard focus is not visible',
+      description: '3 of 12 focus stops show no visible focus indicator.',
+      impact: 'Keyboard users cannot see where they are on the page, so they cannot operate it reliably.',
+      recommendation:
+        'Do not remove the focus outline without a replacement. Add a clearly visible :focus-visible style (e.g. a 2 px outline with 3:1 contrast) to the shared button/link/input components.',
+    });
+
+  it('a Turkish report shows the Turkish title with lang="tr"', () => {
+    const html = renderHtml(run([focusVisible()]));
+    const tr = RULE_TEXT_TR['jourilo/focus-visible']!;
+    // English stays the server text (the report works without JavaScript); the Turkish text sits next to it.
+    expect(html).toContain(
+      `<span class="t"><span lang="en" data-rl="en">Keyboard focus is not visible</span><span lang="tr" data-rl="tr" hidden>${esc(tr.title)}</span></span>`,
+    );
+    expect(html).toContain(`<span lang="tr" data-rl="tr" hidden>${esc(tr.impact)}</span>`);
+    expect(html).toContain(`<span lang="tr" data-rl="tr" hidden>${esc(tr.recommendation)}</span>`);
+    // The "fix first" card heading and the overview lane link too.
+    const pair = `<span lang="en" data-rl="en">Keyboard focus is not visible</span><span lang="tr" data-rl="tr" hidden>${esc(tr.title)}</span>`;
+    expect(html).toMatch(new RegExp(`<h3><a href="#[^"]+">${escapeRe(pair)}</a></h3>`));
+    expect(html).toMatch(new RegExp(`<li><a href="#[^"]+">${escapeRe(pair)}</a></li>`));
+    // Screen-reader labels mix an interface label with an English title, which is tagged.
+    expect(html).toContain(': <span lang="en">Keyboard focus is not visible</span></span></label>');
+    // The description is dynamic and stays English.
+    expect(html).toContain('<p lang="en">3 of 12 focus stops show no visible focus indicator.</p>');
+    // The client switches [data-rl] with the interface language (tests/browser/cli.test.ts clicks it for real).
+    expect(REPORT_JS).toContain("qsa('[data-rl]')");
+  });
+
+  it('a rule without a translation falls back to English with lang="en"', () => {
+    const saved = RULE_TEXT_TR['jourilo/focus-visible']!;
+    delete RULE_TEXT_TR['jourilo/focus-visible'];
+    try {
+      const html = renderHtml(run([focusVisible(), f('ai/custom-check', '/b')]));
+      expect(html).toContain('<span class="t"><span lang="en">Keyboard focus is not visible</span></span>');
+      expect(html).toContain(
+        '<dd><span lang="en">Keyboard users cannot see where they are on the page, so they cannot operate it reliably.</span></dd>',
+      );
+      expect(html).toContain('<span class="t"><span lang="en">T ai/custom-check</span></span>');
+      // Never an empty or hidden-only text: without a translation nothing in the markup is marked for the switch.
+      const markup = html.slice(html.indexOf('<body>'), html.indexOf('<script type="application/json"'));
+      expect(markup).not.toMatch(/ data-rl="/);
+      expect(markup).not.toContain('<span lang="tr"');
+    } finally {
+      RULE_TEXT_TR['jourilo/focus-visible'] = saved;
+    }
+  });
+
+  it('the Turkish copy keeps the values that only the English text names', () => {
+    // Field evidence: what input-purpose (accessibility.ts) and off-brand-cta-color (design-rules.ts) really emit.
+    const autocomplete = f('jourilo/input-purpose', '/signup', {
+      title: 'Personal-data fields without autocomplete',
+      description:
+        '2 field(s) in the signup form collect information about the user but have no autocomplete attribute.',
+      impact:
+        'Browsers and password managers cannot fill them; people with motor or cognitive disabilities type more.',
+      recommendation: 'Add autocomplete tokens, e.g. email → email, phone → tel.',
+    });
+    const brand = f('design/off-brand-cta-color', '/', {
+      category: 'design-system',
+      severity: 'minor',
+      title: 'Primary buttons use colors outside the brand palette',
+      description:
+        '1 primary call(s) to action use a background color that is far from every DTCG palette color (ΔE > 12).',
+      impact: 'Inconsistent action colors weaken recognition of what is clickable and dilute the brand.',
+      recommendation: 'Use the brand token closest to the intended role (nearest: primary #1d4ed8).',
+    });
+    const overflow = f('jourilo/horizontal-overflow', '/', {
+      category: 'responsive',
+      title: 'Page scrolls sideways at 390 px',
+    });
+    const html = renderHtml(run([autocomplete, brand, overflow]));
+    const tr = (id: string) => RULE_TEXT_TR[id]!;
+    expect(html).toContain(
+      `<span lang="tr" data-rl="tr" hidden>${esc(tr('jourilo/input-purpose').recommendation)} <span lang="en">(Add autocomplete tokens, e.g. email → email, phone → tel.)</span></span>`,
+    );
+    expect(html).toContain(
+      `<span lang="tr" data-rl="tr" hidden>${esc(tr('design/off-brand-cta-color').recommendation)} <span lang="en">(Use the brand token closest to the intended role (nearest: primary #1d4ed8).)</span></span>`,
+    );
+    expect(html).toContain(
+      `<span lang="tr" data-rl="tr" hidden>${esc(tr('jourilo/horizontal-overflow').title)} <span lang="en">(Page scrolls sideways at 390 px)</span></span>`,
+    );
+    // A fixed text gets no English twin inside the Turkish copy.
+    expect(html).toContain(
+      `<span lang="tr" data-rl="tr" hidden>${esc(tr('jourilo/input-purpose').title)}</span>`,
+    );
   });
 });

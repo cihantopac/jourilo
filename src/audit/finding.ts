@@ -1,5 +1,6 @@
 import { shortHash } from '../core/hash.js';
 import type { Finding, Severity } from '../core/types.js';
+import { normalizeVolatile } from './volatile.js';
 
 export type FindingInput = Omit<Finding, 'fingerprint' | 'occurrences' | 'reproduction'> & {
   /** Distinguishes several findings of one rule on one page (e.g. the element selector). */
@@ -99,7 +100,110 @@ export function mergeFindings(findings: Finding[]): Finding[] {
       if (e.type === 'screenshot' || !dup) prev.evidence.push(e);
     }
   }
-  return [...byFp.values()].sort(
-    (a, b) => severityRank(a.severity) - severityRank(b.severity) || a.ruleId.localeCompare(b.ruleId),
+  return [...byFp.values()].sort(byImportance);
+}
+
+const byImportance = (a: Finding, b: Finding) =>
+  severityRank(a.severity) - severityRank(b.severity) || a.ruleId.localeCompare(b.ruleId);
+
+/** Page-level rules whose findings on several pages collapse into one when only volatile tokens differ (F44). */
+export const COLLAPSIBLE_RULES: readonly string[] = ['jourilo/console-errors', 'jourilo/failed-requests'];
+
+/** Every page a finding was seen on: its `pages` when it was collapsed, otherwise its one URL. */
+export function pagesOf(f: Pick<Finding, 'url' | 'pages'>): string[] {
+  return f.pages?.length ? f.pages : [f.url];
+}
+
+/**
+ * What a finding of a collapsible rule says, independent of its page: the rule, the journey and the distinct
+ * console and network snippets with volatile tokens (and the page's own URL) normalized, in sorted order. A set,
+ * not a list: the same message logged at two viewports, or twice on one page, is the same evidence.
+ * A console message's location (`file:line`) is part of it, normalized the same way, so one generic message logged
+ * from different files does not collapse. The line of an inline script on the page itself (`{page}:12`) is dropped:
+ * it depends on each page's HTML, while the script is the same.
+ * Undefined for other rules and for findings without such evidence.
+ */
+export function collapseKey(f: Finding): string | undefined {
+  if (!COLLAPSIBLE_RULES.includes(f.ruleId)) return undefined;
+  const items = new Set(
+    f.evidence
+      .filter((e) => (e.type === 'console' || e.type === 'network') && e.snippet)
+      .map((e) => {
+        const at =
+          e.type === 'console' && e.note
+            ? normalizeVolatile(e.note, f.url).replace(/^\{page\}(:\d+)+$/, '{page}')
+            : '';
+        return `${e.type}:${normalizeVolatile(e.snippet!, f.url)}${at ? ` @ ${at}` : ''}`;
+      }),
   );
+  if (!items.size) return undefined;
+  return [f.ruleId, f.journey ?? '', ...[...items].sort()].join('\n');
+}
+
+/**
+ * Cross-page collapse (F44): findings of a collapsible rule with the same journey and the same evidence once volatile
+ * tokens are normalized become one finding that lists every affected page in capture order (`pageOrder`). Its
+ * fingerprint depends on the rule, the normalized evidence and the journey only, so it stays stable whichever pages
+ * a run sampled. A finding seen on one page is returned unchanged, with its per-page fingerprint.
+ */
+export function collapseVolatileFindings(findings: Finding[], pageOrder: string[] = []): Finding[] {
+  const groups = new Map<string, Finding[]>();
+  const slots: (Finding | string)[] = [];
+  for (const f of findings) {
+    const key = collapseKey(f);
+    if (!key) {
+      slots.push(f);
+      continue;
+    }
+    const g = groups.get(key);
+    if (g) g.push(f);
+    else {
+      groups.set(key, [f]);
+      slots.push(key);
+    }
+  }
+  const rank = (url: string) => {
+    const i = pageOrder.indexOf(url);
+    return i < 0 ? pageOrder.length : i;
+  };
+  const out = slots.flatMap((s) => {
+    if (typeof s !== 'string') return [s];
+    const members = groups.get(s)!;
+    if (new Set(members.map((m) => fingerprintPath(m.url))).size < 2) return members;
+    return [
+      collapse(
+        [...members].sort((a, b) => rank(a.url) - rank(b.url)),
+        s,
+      ),
+    ];
+  });
+  return out.sort(byImportance);
+}
+
+function collapse(members: Finding[], key: string): Finding {
+  const first = members[0]!;
+  const top = members.reduce(
+    (best, m) => (severityRank(m.severity) < severityRank(best.severity) ? m : best),
+    first,
+  );
+  const pages = [...new Set(members.map((m) => m.url))];
+  const n = pages.length;
+  const viewports = new Set(members.flatMap((m) => (m.viewport ?? '').split(', ')));
+  viewports.delete('');
+  const note = `The same evidence appeared on ${n} pages (volatile tokens such as nonces ignored when comparing).`;
+  return {
+    ...first,
+    fingerprint: shortHash(first.ruleId, 'pages', key, first.journey ?? ''),
+    title: top.title,
+    severity: top.severity,
+    description: `${top.description} Seen on ${n} pages with the same evidence (volatile tokens such as nonces ignored).`,
+    ...(viewports.size ? { viewport: [...viewports].join(', ') } : {}),
+    pages,
+    evidence: [...first.evidence, { type: first.evidence.find((e) => e.snippet)?.type ?? 'console', note }],
+    reproduction: [
+      ...first.reproduction,
+      `The same evidence appears on the other ${n - 1} affected page(s).`,
+    ],
+    occurrences: members.reduce((sum, m) => sum + m.occurrences, 0),
+  };
 }

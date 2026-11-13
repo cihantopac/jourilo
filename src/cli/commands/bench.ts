@@ -4,7 +4,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { runAudit } from '../../audit/engine.js';
-import { pathOf, severityRank } from '../../audit/finding.js';
+import { pagesOf, pathOf, severityRank } from '../../audit/finding.js';
 import { parseViewports } from '../../browser/viewports.js';
 import { JouriloError } from '../../core/errors.js';
 import { serveStatic } from '../../core/static-server.js';
@@ -14,7 +14,7 @@ import { loadContext } from '../../integrations/context.js';
 import { locateFindings } from '../../repair/locate.js';
 import { type Command, str } from '../framework.js';
 
-interface Expectation {
+export interface Expectation {
   rule: string;
   path: string;
   viewport?: string;
@@ -26,6 +26,11 @@ interface Expectation {
    * selector) and every text is contained in some item.
    */
   evidenceExactly?: string[];
+  /** The matching finding was collapsed over exactly these pages (F44), in any order. */
+  pagesExactly?: string[];
+  // Limits for a finding collapsed over several pages (F44): `path` matches any of its pages, but `viewport` is checked
+  // against the union of viewports of all its pages and `evidenceExactly` against the first page's evidence only (a
+  // collapsed finding does not keep either per page). Use them on per-page findings or on single-viewport fixtures.
 }
 
 interface DefectLimit {
@@ -64,11 +69,21 @@ export interface FixtureResult {
   seconds: number;
 }
 
-const matches = (f: Finding, e: Expectation) =>
+const benchPath = (url: string) => pathOf(url).split('?')[0]!.replace(/\/$/, '');
+
+const samePages = (f: Finding, want: string[]) => {
+  const got = new Set(pagesOf(f).map((u) => benchPath(u) || '/'));
+  const norm = new Set(want.map((p) => p.replace(/\/$/, '') || '/'));
+  return got.size === norm.size && [...norm].every((p) => got.has(p));
+};
+
+/** A finding collapsed over several pages (F44) matches an expectation on any of its pages. */
+export const benchMatches = (f: Finding, e: Expectation) =>
   f.ruleId === e.rule &&
   (!e.kind || f.kind === e.kind) &&
-  pathOf(f.url).split('?')[0]!.replace(/\/$/, '') === e.path.replace(/\/$/, '') &&
-  (!e.viewport || (f.viewport ?? '').split(', ').includes(e.viewport));
+  pagesOf(f).some((u) => benchPath(u) === e.path.replace(/\/$/, '')) &&
+  (!e.viewport || (f.viewport ?? '').split(', ').includes(e.viewport)) &&
+  (!e.pagesExactly || samePages(f, e.pagesExactly));
 
 export async function benchFixture(dir: string, wsRoot: string): Promise<FixtureResult> {
   const expected = JSON.parse(readFileSync(join(dir, 'expected.json'), 'utf8')) as Expected;
@@ -94,7 +109,7 @@ export async function benchFixture(dir: string, wsRoot: string): Promise<Fixture
       mode: 'repository',
       context: loadContext(dir),
     });
-    locateFindings(run, dir);
+    await locateFindings(run, dir);
     const evidenceOk = (f: Finding, e: Expectation) => {
       if (!e.evidenceExactly) return true;
       const texts = f.evidence.map((ev) => `${ev.snippet ?? ''} ${ev.selector ?? ''}`);
@@ -105,15 +120,15 @@ export async function benchFixture(dir: string, wsRoot: string): Promise<Fixture
       );
     };
     const missed = expected.mustFind.filter(
-      (e) => !run.findings.some((f) => matches(f, e) && evidenceOk(f, e)),
+      (e) => !run.findings.some((f) => benchMatches(f, e) && evidenceOk(f, e)),
     );
     for (const r of expected.recommendations ?? []) {
-      const f = run.findings.find((x) => matches(x, r));
+      const f = run.findings.find((x) => benchMatches(x, r));
       if (!f?.recommendation.includes(r.includes))
         missed.push({ rule: r.rule, path: r.path, why: `recommendation should include "${r.includes}"` });
     }
     const falsePositives = expected.mustNotFind
-      .filter((e) => run.findings.some((f) => matches(f, e)))
+      .filter((e) => run.findings.some((f) => benchMatches(f, e) && evidenceOk(f, e)))
       .map((e) => ({ rule: e.rule, path: e.path, ...(e.why ? { why: e.why } : {}) }));
     const limits = expected.maxDefects ? [expected.maxDefects].flat() : [];
     const excessDefects: FixtureResult['excessDefects'] = [];
@@ -122,15 +137,14 @@ export async function benchFixture(dir: string, wsRoot: string): Promise<Fixture
       for (const f of run.findings) {
         if (f.kind !== 'defect' || severityRank(f.severity) > severityRank(lim.minSeverity)) continue;
         if (lim.rule && f.ruleId !== lim.rule) continue;
-        if (lim.paths && !lim.paths.includes(pathOf(f.url).split('?')[0]!.replace(/\/$/, '') || '/'))
-          continue;
+        if (lim.paths && !pagesOf(f).some((u) => lim.paths!.includes(benchPath(u) || '/'))) continue;
         over.push({ rule: f.ruleId, path: pathOf(f.url), severity: f.severity });
       }
       excessDefects.push(...over.slice(0, Math.max(0, over.length - lim.count)));
     }
     const sourceMisses: FixtureResult['sourceMisses'] = [];
     for (const s of expected.sources ?? []) {
-      const f = run.findings.find((x) => matches(x, { rule: s.rule, path: s.path }));
+      const f = run.findings.find((x) => benchMatches(x, { rule: s.rule, path: s.path }));
       const got = f?.sources?.map((x) => x.file) ?? [];
       if (got[0] !== s.file) sourceMisses.push({ ...s, got });
     }

@@ -22,7 +22,10 @@ Stated so nobody mistakes silence for a pass.
 - The keyboard walk visits up to 60 stops per page and only on keyboard (non-touch) viewports by default. Dialogs and
   disclosures that declare `aria-haspopup`/`aria-expanded` are operated with Enter/Escape. Composite widgets (tabs,
   radio groups, list boxes, menu bars, trees) are tested for keyboard reachability (do the arrow keys reach the other
-  items?); the full arrow-key patterns (Home/End, typeahead, menus opening submenus, grids) are not.
+  items?). Menu buttons (`aria-haspopup="menu"` or `true`, at most 4 per page) also get the APG menu-button keys:
+  ArrowDown/ArrowUp, Home/End, Escape and focus return. Items are never activated, so what an item does is not
+  tested; a menu bar, submenus, typeahead and grids are not tested beyond reachability. A role-less popup without
+  `aria-expanded` that ignores Escape is not detected.
 - Focus-visible detection compares the styles of the element and its parent, then the pixels around the element with
   and without focus, so indicators drawn by a sibling are seen; an indicator drawn far away from the element is not.
 - Focus hidden by other content is found when an opaque, hit-testable element covers the focused element at the
@@ -77,8 +80,9 @@ Stated so nobody mistakes silence for a pass.
 - `journeys suggest` picks the most emphasized control as the main call to action; on a real site (1.1.0 validation)
   that was a theme toggle. Review suggested journeys before running them.
 - Suggested journeys are heuristics from page structure; they need review. `--repeat N` detects flaky journeys but
-  cannot tell a product race from a fragile journey definition; the report says which attempts failed. No multi-tab, file upload, OAuth popup,
-  CAPTCHA or e-mail verification support. Signed-in flows need a test account: run a sign-in journey with
+  cannot tell a product race from a fragile journey definition; the report says which attempts failed. Multi-tab steps
+  and OAuth popups work against test identity providers you are authorized to use (`--allow-origin`); there is no
+  file upload, CAPTCHA or e-mail verification support. Signed-in flows need a test account: run a sign-in journey with
   `--save-auth`, or provide a Playwright storage state.
 - A setup journey (`--setup-journey`) carries over cookies and `localStorage` only. State kept in memory (a
   single-page app's store, `sessionStorage`, an open dialog, a service worker's cache) is gone when each page loads
@@ -91,9 +95,16 @@ Stated so nobody mistakes silence for a pass.
 - Form validation is probed on local hosts by simulating an empty submission: requests that would send data are
   intercepted, so validation that only the server performs is reported as not tested. `--allow-submit` sends the
   submission for real (disposable environments only).
-- The journey safety policy recognizes destructive and payment actions from names, identifiers and URLs in five
+- The journey safety policy recognizes destructive and payment actions from names, identifiers and URLs in eight
   languages and from HTTP methods. A neutrally named endpoint that deletes data (`POST /api/x`) is not recognized;
   journeys that submit should use disposable data.
+- Journeys make top-level navigations through Node, so that every redirect hop is checked: lab timings of those steps
+  include the hop, `goto` reports 200 for the final page of a redirect, and a 307 or 308 redirect that resends a form
+  is followed only for URL-encoded bodies. Cookies follow SameSite and RFC 6265 matching where the browser's own
+  decision can be reproduced, and are withheld where it cannot, so a journey can fail where a browser would succeed.
+  In Chromium, a navigation that another window or frame started without a Referer is judged by the tab's own page,
+  which can count it as same-site where the browser would not. A domain cookie on a host with a trailing dot is
+  withheld.
 - Without `--allow-submit`, journeys on non-local hosts cannot send first-party POST requests (including some
   telemetry); the journey result lists what was stopped.
 
@@ -108,18 +119,28 @@ Stated so nobody mistakes silence for a pass.
 
 - Conversion rules are text/structure heuristics. Vocabulary (calls to action, trust and pricing signals, form
   purposes, error messages, field names, and the safety policy's destructive/financial actions) covers English,
-  Turkish, German, Spanish and French; other languages fall back to structure-only signals.
-- Experiment statistics: two-proportion z-test with fixed horizon only; no sequential testing, no continuous metrics,
-  no CUPED. Jourilo does not connect to analytics or flag providers yet; plans list detected tools only.
+  Turkish, German, Spanish, French, Italian, Portuguese and Dutch; other languages fall back to structure-only signals.
+  A few short words can match a control that is not the target (for example `licht` or `modo` as a theme toggle, or
+  Italian `Ordina per prezzo` refused as an order button); the safety policy errs toward refusing.
+- Experiment statistics: conversion (two-proportion) metrics only, with a fixed-horizon z-test or a sequential mSPRT
+  (always-valid p-value and confidence sequence, normal approximation); no continuous metrics, no CUPED. The CLI keeps
+  no history between `analyze` runs, so each run is one look, and an arm with almost no visitors can give a far too
+  small p-value (the decision stays correct). `--from` reads results read-only from PostHog,
+  GrowthBook and Amplitude; Jourilo does not create or change experiments or flags, and plans list the detected
+  tools only. Amplitude's funnel API does not list a flag's variants, so a missing third arm of a multi-arm
+  experiment cannot be detected (a missing control or a single arm is). The adapters were tested on responses
+  synthesized from vendor documentation, not on live accounts.
 
 ## Discovery and root causes
 
-- Repository discovery is lexical (file patterns and regexes), not AST-based. Laravel route files, groups and
-  Filament panels are followed; router configs built dynamically at runtime are missed, and a configurable route
+- Repository discovery reads TS, TSX, JS, Vue and Svelte routes from the syntax tree (a bundled TypeScript 6.0.3
+  parser, loaded only when needed) and the rest from file patterns and regexes. A file the parser cannot read, or
+  minified code, falls back to the regex with a limitation. Laravel route files, groups and Filament panels are
+  followed; router configs built dynamically at runtime are missed, and a configurable route
   prefix is shown with its local default. Website discovery crawls up to 30 pages, same origin only; on a local
   target, a sitemap that lists production URLs is mapped onto the local server, otherwise sitemaps on other origins
   are ignored.
-- Source location is lexical and can be wrong; each candidate states its reason and confidence. Seven fix types are
+- Source location is lexical and can be wrong; each candidate states its reason and confidence. Nine fix types are
   automated; everything else is done by a person or an agent and then verified.
 
 ## Network safety
@@ -133,6 +154,11 @@ Stated so nobody mistakes silence for a pass.
   reach only its own port. It does not cover other private ranges (use the default guard for public targets), and it
   is refused with `--browser webkit` because WebKit's HTTPS redirects bypass the proxy. A blocked request appears in
   the run's limitations and can show as an error page for that URL.
+- Jourilo does not start the server it audits. When at least two pages were captured and every own-origin script
+  request of every page failed (5xx or no answer), the run adds one limitation saying this looks like a stale or
+  different server on the port; the failures are still reported as findings.
+- With `--proxy`, the tunnel is opened to the first allowed address of a name only; a name with several addresses
+  does not fall back to the others through the proxy (loopback is reached directly and does fall back).
 - `--proxy` (or `HTTPS_PROXY` / `HTTP_PROXY`) chains to an upstream HTTP proxy behind the guard. The guard still
   resolves and checks every destination, then asks the proxy for a tunnel to the checked address, never to the name:
   `CONNECT 93.184.216.34:443` for HTTPS and WebSockets, and `CONNECT 93.184.216.34:80` for plain HTTP, whose request
@@ -204,24 +230,46 @@ Stated so nobody mistakes silence for a pass.
 
 ## Reports
 
-- The report interface is in English and Turkish; finding titles, descriptions and recommendations come from the
-  rules and stay in English, and page text stays as captured.
+- The report interface is in English and Turkish. In a Turkish report, Jourilo's own rules show a Turkish title,
+  impact and recommendation. Where the English text names values of the finding (a width, a journey name, a measured
+  time, suggested autocomplete tokens, the nearest brand colors), the English original follows the Turkish text, so
+  no value is lost. Descriptions, reproduction steps and sources stay in English, and page text stays as captured.
+- axe-core rule help stays English in Turkish reports, because axe-core ships no Turkish locale. The report renders
+  both languages and switches in the page, so the Turkish text is checked by tests for presence and parity, not for
+  wording; the wording of the first Turkish rule texts is for a fluent reader to review.
+- Jourilo's own activity in the page (the injected axe-core, its probes, screenshot masks) is marked and not reported
+  as a site error in Chromium and Firefox. WebKit drops the marker: there, Jourilo's own style refusal during a
+  screenshot is dropped only by time window (a site's own style refusal in those few milliseconds would be dropped
+  too), and an exception thrown by Jourilo's own code cannot be told from the site's. A site's script refusals are
+  never dropped.
 - Repair prompts are text. Whether a coding agent follows them is outside Jourilo's control; `jourilo verify` is
   what shows whether a fix worked.
 - Before/after crops reuse the baseline element's position on the new screenshot; if the layout moved, the "after"
   crop shows the same place, not necessarily the same element. Baseline images load from the sibling run folder, so
   moving a run folder elsewhere breaks them (the report still renders).
-- Root-cause grouping is lexical (rule + source line or selector), not a semantic judgment.
-- History in the report lists earlier runs of the same target with defect counts; it does not normalize for different
-  page sets or viewports (use `verify` for like-for-like comparisons).
+- Root-cause grouping is lexical (rule + source line or selector), not a semantic judgment. Component-level causes
+  follow imports, barrels and the usual aliases (`@/`, `~/`, `#/`, `$lib/`) in TS, TSX, Vue and Svelte; a record that
+  only has `loadComponent` in a file with no router call is not in the graph, and that finding groups per line.
+- History in the report lists earlier runs of the same target with defect counts; that list does not normalize for
+  different page sets or viewports. The trend table (and `runs trend`) does, per page and viewport and per capture,
+  and leaves out partial and no-page-loaded runs. A finding with no viewport counts at every viewport of its page, LCP
+  and CLS come from the first capture, and a changed page set between runs is not flagged. Use `verify` for
+  like-for-like comparisons.
 - Screenshots are capped at 12 000 px height.
 - Screenshot names come from the page's path and query, so `--url /a?x=1` and `--url /a?x=1#top` write the same file.
   A form-probe screenshot is named from the page's final URL, so a start URL that redirects to another host gets a
   name with an origin tag.
 - Before/after pairs in `compare` and `verify` reports need the full-page screenshot; a page kept only as a first
   screen (`--evidence minimal`) has no pair image.
-- One cause seen on many pages is reported once per page when the evidence differs between pages, for example by a
-  CSP nonce in a console message (F44 in [FIELD-FEEDBACK.md](FIELD-FEEDBACK.md)).
+- `jourilo/console-errors` and `jourilo/failed-requests` findings that differ only in volatile tokens are collapsed
+  into one finding with `pages` (F44 in [FIELD-FEEDBACK.md](FIELD-FEEDBACK.md)). Volatile tokens are CSP nonces and
+  hashes, UUIDs, long hex and base64-like runs, chunk hashes in file names, cache-busting query values (`v`, `t`, `_`, `ts`, `cb`,
+  `ver` and `nonce` with a number, version, hash or random-looking value, so `?v=2026.11.14` counts; and any query
+  value of 8 or more digits, such as a date `?d=20261114`), runs of 10 or more digits, and the page's own URL. Readable
+  identifiers (`Icon24ArrowLeftBold`) are kept. The rule errs toward not collapsing: evidence cut at 400 characters can
+  keep two findings apart, and a page that was redirected is not normalized. A value that is a real identifier but
+  looks volatile (a 10-digit order number, an 8-digit date) does collapse. A dismissal made before the collapse does not carry over,
+  because the fingerprint changes.
 - On a partial run (stopped early, exit 6), `sample.audited` and the manifest's `scope.urls` count the pages that
   were planned, not only those that finished; `pages` lists what finished.
 - `jourilo verify` does not apply the baseline's `--budget`; it compares metrics with their ranges. Give `--budget`

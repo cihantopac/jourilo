@@ -14,6 +14,11 @@
 // its default host. A proxy that refuses tunnels to port 80 (a 4xx other than 407) fails the request with the guard's
 // own 502, never its page; a 5xx means the proxy could not reach the site. Loopback addresses a local target may reach, and hosts NO_PROXY matches, connect directly (the proxy's
 // loopback is another machine).
+//
+// A name can resolve to several allowed addresses (`localhost` to ::1 and 127.0.0.1). Every address is checked first;
+// a direct connection then tries the allowed ones in resolver order and moves to the next only when the connection
+// itself fails (refused, unreachable, or no answer within the attempt time), within one time budget for the request.
+// An error after the connection is made (TLS, HTTP, a reset) is final.
 import { randomBytes } from 'node:crypto';
 import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
@@ -39,12 +44,6 @@ export interface BlockedConnection {
   reason: string;
 }
 
-type LookupCallback = (
-  err: NodeJS.ErrnoException | null,
-  address: string | LookupAddress[],
-  family?: number,
-) => void;
-
 export class GuardBlockedError extends Error {
   readonly code = 'EJOURILOBLOCKED';
 }
@@ -57,6 +56,10 @@ export interface GuardDeps {
   verdict?: (address: string, port: number) => Verdict;
   /** Limit for one name lookup (default 5 s). */
   resolveTimeoutMs?: number;
+  /** Limit for one address's connection when another address is left to try (default 5 s). */
+  connectAttemptTimeoutMs?: number;
+  /** Limit for connecting at all, every address included (default 30 s, and never more than a hop's own timeout). */
+  connectTimeoutMs?: number;
 }
 
 const systemResolve = (host: string) =>
@@ -65,16 +68,16 @@ const systemResolve = (host: string) =>
   );
 
 /**
- * Resolves a host and keeps only addresses the policy allows. A mixed answer keeps its allowed addresses, so the
- * connection can never reach a forbidden one; an answer with no allowed address is blocked. Callers connect to the
- * returned address itself, so there is no second lookup that DNS rebinding could change.
+ * Resolves a host and keeps only addresses the policy allows, in resolver order. A mixed answer keeps its allowed
+ * addresses, so the connection can never reach a forbidden one; an answer with no allowed address is blocked. Callers
+ * connect to the returned addresses themselves, so there is no second lookup that DNS rebinding could change.
  */
-export async function resolveAllowed(
+export async function resolveAllowedAll(
   host: string,
   port: number,
   policy: AddressPolicy,
   deps: GuardDeps = {},
-): Promise<{ address: string; family: number } | { blocked: string }> {
+): Promise<{ addresses: { address: string; family: number }[] } | { blocked: string }> {
   const h = host.replace(/^\[|\]$/g, '');
   // --allow-hosts / --block-hosts decide by name, before the name is even looked up.
   const named = hostVerdict(h, policy);
@@ -94,27 +97,131 @@ export async function resolveAllowed(
     }
   }
   let reason = '';
+  const addresses: { address: string; family: number }[] = [];
   for (const a of addrs) {
     const v = verdict(a.address, port);
-    if (v.ok) return { address: a.address, family: a.family };
-    reason ||= v.reason;
+    if (v.ok) {
+      if (!addresses.some((x) => x.address === a.address))
+        addresses.push({ address: a.address, family: a.family });
+    } else reason ||= v.reason;
   }
+  if (addresses.length) return { addresses };
   return { blocked: reason || `${h} did not resolve to an allowed address.` };
 }
 
-/** A `dns.lookup`-compatible function (for http.request) built on resolveAllowed. */
-export function guardedLookup(policy: AddressPolicy, port: number, deps: GuardDeps = {}) {
-  return (hostname: string, options: { all?: boolean } | number, callback: LookupCallback): void => {
-    const wantAll = typeof options === 'object' && options?.all === true;
-    resolveAllowed(hostname, port, policy, deps).then(
-      (r) => {
-        if ('blocked' in r) return callback(new GuardBlockedError(r.blocked), wantAll ? [] : '', 0);
-        if (wantAll) return callback(null, [{ address: r.address, family: r.family }]);
-        callback(null, r.address, r.family);
-      },
-      (err: Error) => callback(err as NodeJS.ErrnoException, wantAll ? [] : '', 0),
+/** The first address `resolveAllowedAll` allows. */
+export async function resolveAllowed(
+  host: string,
+  port: number,
+  policy: AddressPolicy,
+  deps: GuardDeps = {},
+): Promise<{ address: string; family: number } | { blocked: string }> {
+  const r = await resolveAllowedAll(host, port, policy, deps);
+  return 'blocked' in r ? r : r.addresses[0]!;
+}
+
+/** How long one address may take to accept the connection while another address is left to try. */
+const CONNECT_ATTEMPT_TIMEOUT_MS = 5_000;
+/** How long connecting may take in all, every address of the name included. */
+const CONNECT_TIMEOUT_MS = 30_000;
+/** Failures of the connection itself: the next allowed address may still answer. */
+const CONNECT_FALLBACK_CODES = new Set([
+  'ECONNREFUSED',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'EADDRNOTAVAIL',
+  'ETIMEDOUT',
+]);
+
+const errorWithCode = (message: string, code: string) =>
+  Object.assign(new Error(message), { code }) as NodeJS.ErrnoException;
+
+/** One TCP connection to a checked address (a literal IP, so there is no lookup). */
+function connectAddress(
+  address: string,
+  port: number,
+  timeoutMs: number,
+  onSocket?: (s: Socket) => void,
+): Promise<Socket> {
+  return new Promise((resolve, reject) => {
+    const sock = net.connect({ host: address, port });
+    let settled = false;
+    const finish = (err?: NodeJS.ErrnoException) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      sock.off('connect', onConnect);
+      sock.off('error', finish);
+      sock.off('close', onClose);
+      if (err) {
+        sock.destroy();
+        return reject(err);
+      }
+      // The connection's user adds its own handlers; an error before then must not crash the process.
+      sock.on('error', () => undefined);
+      resolve(sock);
+    };
+    const onConnect = () => finish();
+    const onClose = () =>
+      finish(errorWithCode(`connect closed ${authorityOf(address, port)}`, 'ECONNABORTED'));
+    const timer = setTimeout(
+      () => finish(errorWithCode(`connect ETIMEDOUT ${authorityOf(address, port)}`, 'ETIMEDOUT')),
+      timeoutMs,
     );
-  };
+    sock.once('connect', onConnect);
+    sock.once('error', finish);
+    sock.once('close', onClose);
+    onSocket?.(sock);
+  });
+}
+
+/**
+ * Connects to the first of the checked addresses that accepts, in order. Only a failure of the connection itself moves
+ * on to the next address; any other error, or the end of the time budget, is final. The last error is reported.
+ */
+async function connectFirst(
+  addresses: string[],
+  port: number,
+  opts: { attemptTimeoutMs: number; timeoutMs: number; onSocket?: (s: Socket) => void },
+): Promise<Socket> {
+  const deadline = Date.now() + opts.timeoutMs;
+  let last: NodeJS.ErrnoException | undefined;
+  for (const [i, address] of addresses.entries()) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    const limit = i === addresses.length - 1 ? remaining : Math.min(opts.attemptTimeoutMs, remaining);
+    try {
+      return await connectAddress(address, port, limit, opts.onSocket);
+    } catch (err) {
+      last = err as NodeJS.ErrnoException;
+      if (!CONNECT_FALLBACK_CODES.has(last.code ?? '')) throw last;
+    }
+  }
+  throw last ?? errorWithCode(`connect ETIMEDOUT ${port}`, 'ETIMEDOUT');
+}
+
+/**
+ * Opens a connection to a destination `resolveAllowedAll` checked: a TCP connection to the first allowed address that
+ * accepts, or a CONNECT tunnel through the upstream proxy. Through the proxy, the tunnel goes to the first allowed
+ * address only: the proxy, not this machine, makes the connection, so its failures are not connection failures here.
+ * When the first address goes through the proxy, a later one never connects directly.
+ */
+async function connectChecked(
+  host: string,
+  port: number,
+  addresses: { address: string }[],
+  policy: AddressPolicy,
+  opts: { deps?: GuardDeps; timeoutMs: number; tunnelTimeoutMs: number; onSocket?: (s: Socket) => void },
+): Promise<Socket> {
+  const first = addresses[0]!.address;
+  const proxy = viaUpstream(policy, host, first, port);
+  if (proxy) return openTunnel(proxy, first, port, opts.tunnelTimeoutMs, opts.onSocket);
+  const direct = addresses.map((a) => a.address).filter((a) => !viaUpstream(policy, host, a, port));
+  return connectFirst(direct, port, {
+    attemptTimeoutMs: opts.deps?.connectAttemptTimeoutMs ?? CONNECT_ATTEMPT_TIMEOUT_MS,
+    timeoutMs: Math.min(opts.timeoutMs, opts.deps?.connectTimeoutMs ?? CONNECT_TIMEOUT_MS),
+    ...(opts.onSocket ? { onSocket: opts.onSocket } : {}),
+  });
 }
 
 /** How long the upstream proxy may take to open a tunnel. */
@@ -325,48 +432,33 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
     return s;
   };
 
-  /** Resolves under the policy; `onAllowed` gets the checked address and the upstream proxy to reach it through. */
-  const checkDestination = (
-    host: string,
-    port: number,
-    onAllowed: (address: string, proxy: Upstream | undefined) => void,
-    onFail: (status: number, reason: string) => void,
-  ) => {
-    resolveAllowed(host, port, policy, deps).then(
-      (r) => {
-        if ('blocked' in r) {
-          record(host, port, r.blocked);
-          return onFail(403, r.blocked);
-        }
-        onAllowed(r.address, viaUpstream(policy, host, r.address, port));
-      },
-      (err: Error) => onFail(502, err.message),
-    );
-  };
-
-  /** Opens a TCP connection to the checked address itself, or a CONNECT tunnel to it through the upstream proxy. */
+  /**
+   * Resolves under the policy, then opens a TCP connection to the first checked address that accepts it, or a CONNECT
+   * tunnel to the checked address through the upstream proxy (connectChecked).
+   */
   const connectUpstream = (
     host: string,
     port: number,
     onReady: (s: Socket) => void,
     onFail: (status: number, reason: string) => void,
   ) => {
-    checkDestination(
-      host,
-      port,
-      (address, proxy) => {
-        if (proxy) {
-          openTunnel(proxy, address, port, TUNNEL_TIMEOUT_MS, track).then(
-            (tunnel) => onReady(track(tunnel)),
-            (err: Error) => onFail(502, err.message),
-          );
-          return;
+    resolveAllowedAll(host, port, policy, deps).then(
+      (r) => {
+        if ('blocked' in r) {
+          record(host, port, r.blocked);
+          return onFail(403, r.blocked);
         }
-        const upstream = track(net.connect({ host: address, port }));
-        upstream.once('connect', () => onReady(upstream));
-        upstream.once('error', (err) => onFail(502, err.message));
+        connectChecked(host, port, r.addresses, policy, {
+          deps,
+          timeoutMs: CONNECT_TIMEOUT_MS,
+          tunnelTimeoutMs: TUNNEL_TIMEOUT_MS,
+          onSocket: track,
+        }).then(
+          (socket) => onReady(track(socket)),
+          (err: Error) => onFail(502, err.message),
+        );
       },
-      onFail,
+      (err: Error) => onFail(502, err.message),
     );
   };
 
@@ -542,6 +634,84 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
   };
 }
 
+interface HopOptions {
+  method: 'GET' | 'POST';
+  headers: Record<string, string>;
+  body?: string;
+  timeoutMs: number;
+  maxBytes?: number;
+  deps?: GuardDeps;
+}
+
+type Hop =
+  | { status: number; headers: IncomingMessage['headers']; body: string }
+  | { blocked: string }
+  | { failed: string };
+
+/**
+ * One request under the address policy, without following redirects. The host is resolved and checked before
+ * connecting; through an upstream proxy the request takes a CONNECT tunnel to the checked address, as the guard does.
+ */
+async function guardedHop(current: URL, policy: AddressPolicy, opts: HopOptions): Promise<Hop> {
+  const port = Number(current.port || (current.protocol === 'https:' ? 443 : 80));
+  const pre = await resolveAllowedAll(current.hostname, port, policy, opts.deps).catch(
+    (e: Error) => ({ blocked: `${current.hostname} could not be resolved (${e.message})` }) as const,
+  );
+  if ('blocked' in pre) return { blocked: pre.blocked };
+  const servername = current.hostname.replace(/^\[|\]$/g, '');
+  const secure = current.protocol === 'https:';
+  let socket: Socket;
+  try {
+    socket = await connectChecked(servername, port, pre.addresses, policy, {
+      ...(opts.deps ? { deps: opts.deps } : {}),
+      timeoutMs: opts.timeoutMs,
+      tunnelTimeoutMs: opts.timeoutMs,
+    });
+  } catch (e) {
+    const err = e as NodeJS.ErrnoException;
+    if (err.message.startsWith('upstream proxy:'))
+      return { failed: 'the upstream proxy did not open a tunnel' };
+    return { failed: err.code ?? err.message };
+  }
+  return new Promise<Hop>((resolve) => {
+    const mod = secure ? https : http;
+    const req = mod.request(
+      current,
+      {
+        method: opts.method,
+        headers: opts.headers,
+        timeout: opts.timeoutMs,
+        // The connection is already open to a checked address (or a tunnel to one): no lookup, no agent.
+        createConnection: () => {
+          socket.resume();
+          return secure
+            ? tls.connect({ socket, host: servername, ...(isIP(servername) ? {} : { servername }) })
+            : socket;
+        },
+      },
+      (r) => {
+        const status = r.statusCode ?? 0;
+        const max = opts.maxBytes ?? 2_000_000;
+        let size = 0;
+        const chunks: Buffer[] = [];
+        r.on('data', (c: Buffer) => {
+          size += c.length;
+          if (size <= max) chunks.push(c);
+          else r.destroy();
+        });
+        const done = () =>
+          resolve({ status, headers: r.headers, body: Buffer.concat(chunks).toString('utf8') });
+        r.on('end', done);
+        r.on('close', done);
+        r.on('error', () => resolve({ failed: 'the response was interrupted' }));
+      },
+    );
+    req.on('timeout', () => req.destroy(new Error(`timed out after ${opts.timeoutMs} ms`)));
+    req.on('error', (e: NodeJS.ErrnoException) => resolve({ failed: e.code ?? e.message }));
+    req.end(opts.body);
+  });
+}
+
 /**
  * GET a small text resource (robots.txt, sitemap) under the address policy. Redirects are followed manually, at most
  * five, only on the same origin, and every hop is resolved and checked again before connecting.
@@ -553,82 +723,73 @@ export async function guardedFetchText(
 ): Promise<string | null> {
   const origin = new URL(url).origin;
   let current = new URL(url);
+  const headers = { 'user-agent': opts.userAgent, accept: 'text/plain, application/xml, text/xml, */*' };
   for (let hop = 0; hop < 6; hop++) {
     if (current.origin !== origin) return null;
-    const port = Number(current.port || (current.protocol === 'https:' ? 443 : 80));
-    // Node skips `lookup` for literal IPs, so every hop is checked here as well.
-    const pre = await resolveAllowed(current.hostname, port, policy, opts.deps).catch(() => null);
-    if (!pre || 'blocked' in pre) return null;
-    // Through the upstream proxy: a CONNECT tunnel to the checked address (HTTPS with TLS to the host name inside it,
-    // plain HTTP with its own Host header), as the guard does.
-    const servername = current.hostname.replace(/^\[|\]$/g, '');
-    const proxy = viaUpstream(policy, servername, pre.address, port);
-    const secure = current.protocol === 'https:';
-    let tunnel: Socket | undefined;
-    if (proxy) {
-      tunnel = await openTunnel(proxy, pre.address, port, opts.timeoutMs).catch(() => undefined);
-      if (!tunnel) return null;
-    }
-    const headers = { 'user-agent': opts.userAgent, accept: 'text/plain, application/xml, text/xml, */*' };
-    const res = await new Promise<{ status: number; location?: string; body?: string } | null>((resolve) => {
-      const mod = secure ? https : http;
-      const req = mod.get(
-        current,
-        {
-          headers,
-          timeout: opts.timeoutMs,
-          ...(tunnel
-            ? {
-                createConnection: () => {
-                  tunnel!.resume();
-                  return secure
-                    ? tls.connect({
-                        socket: tunnel!,
-                        host: servername,
-                        ...(isIP(servername) ? {} : { servername }),
-                      })
-                    : tunnel!;
-                },
-              }
-            : { lookup: guardedLookup(policy, port, opts.deps) as never, agent: false }),
-        },
-        (r) => {
-          const status = r.statusCode ?? 0;
-          if (status >= 300 && status < 400 && r.headers.location) {
-            r.resume();
-            return resolve({ status, location: r.headers.location });
-          }
-          if (status < 200 || status >= 300) {
-            r.resume();
-            return resolve({ status });
-          }
-          const max = opts.maxBytes ?? 2_000_000;
-          let size = 0;
-          const chunks: Buffer[] = [];
-          r.on('data', (c: Buffer) => {
-            size += c.length;
-            if (size <= max) chunks.push(c);
-            else r.destroy();
-          });
-          const done = () => resolve({ status, body: Buffer.concat(chunks).toString('utf8') });
-          r.on('end', done);
-          r.on('close', done);
-          r.on('error', () => resolve(null));
-        },
-      );
-      req.on('timeout', () => req.destroy());
-      req.on('error', () => resolve(null));
-    });
-    if (!res) return null;
-    if (res.location) {
+    const res = await guardedHop(current, policy, { ...opts, method: 'GET', headers });
+    if (!('status' in res)) return null;
+    if (res.status >= 300 && res.status < 400 && res.headers.location) {
       try {
-        current = new URL(res.location, current);
+        current = new URL(res.headers.location, current);
       } catch {
         return null;
       }
       continue;
     }
-    return res.body ?? null;
+    if (res.status < 200 || res.status >= 300) return null;
+    return res.body;
   }
   return null;
+}
+
+/**
+ * A `fetch` for Jourilo's own API calls (the read-only analytics adapters) under the same address policy and upstream
+ * proxy as every other outbound request. GET follows at most five redirects, only on the same origin, so headers such
+ * as Authorization never reach another host; any other method returns a redirect as it is. A destination the policy
+ * refuses throws GuardBlockedError; a connection that fails throws an Error naming the cause, never the headers.
+ */
+export async function guardedFetch(
+  url: string,
+  policy: AddressPolicy,
+  opts: {
+    method?: 'GET' | 'POST';
+    headers?: Record<string, string>;
+    body?: string;
+    timeoutMs: number;
+    maxBytes?: number;
+    deps?: GuardDeps;
+  },
+): Promise<Response> {
+  const method = opts.method ?? 'GET';
+  const origin = new URL(url).origin;
+  let current = new URL(url);
+  for (let hop = 0; hop < 6; hop++) {
+    if (current.origin !== origin)
+      throw new GuardBlockedError(
+        `${origin} redirected to another origin (${current.origin}); not followed.`,
+      );
+    const res = await guardedHop(current, policy, {
+      method,
+      headers: opts.headers ?? {},
+      ...(opts.body !== undefined ? { body: opts.body } : {}),
+      timeoutMs: opts.timeoutMs,
+      ...(opts.maxBytes !== undefined ? { maxBytes: opts.maxBytes } : {}),
+      ...(opts.deps ? { deps: opts.deps } : {}),
+    });
+    if ('blocked' in res) throw new GuardBlockedError(res.blocked);
+    if ('failed' in res) throw new Error(`${current.host}: ${res.failed}`);
+    if (method === 'GET' && res.status >= 300 && res.status < 400 && res.headers.location) {
+      current = new URL(res.headers.location, current);
+      continue;
+    }
+    const headers = new Headers();
+    for (const [k, v] of Object.entries(res.headers)) {
+      if (v === undefined) continue;
+      for (const one of Array.isArray(v) ? v : [v]) headers.append(k, one);
+    }
+    const status = res.status >= 200 && res.status <= 599 ? res.status : 502;
+    const empty = status === 204 || status === 205 || status === 304;
+    return new Response(empty ? null : res.body, { status, headers });
+  }
+  throw new Error(`${origin}: too many redirects`);
 }

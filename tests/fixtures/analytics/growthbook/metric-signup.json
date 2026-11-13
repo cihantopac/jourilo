@@ -1,0 +1,24 @@
+{
+  "_synthesized": "Shape of GET /api/v1/metrics/:id (docs.growthbook.io/api/metrics/operation/getMetric), a binomial metric. Not a live recording.",
+  "metric": {
+    "id": "met_signup",
+    "name": "Signups",
+    "description": "",
+    "type": "binomial",
+    "datasourceId": "ds_example",
+    "owner": "",
+    "tags": [],
+    "projects": [],
+    "archived": false,
+    "behavior": {
+      "goal": "increase",
+      "windowSettings": {
+        "type": "conversion",
+        "delayValue": 0,
+        "delayUnit": "hours",
+        "windowValue": 72,
+        "windowUnit": "hours"
+      }
+    }
+  }
+}

@@ -95,3 +95,61 @@ describe('repair loop', () => {
     expect(git('status', '--short')).toBe('');
   });
 });
+
+// The two Next-3 fixers on their own fixture repo: type="button" for a typeless button that submits its form, and
+// scroll-padding-top for a focused element a sticky header covers. Each: exact edit, verify shows it fixed, rollback.
+describe('type="button" and scroll-padding fixers', () => {
+  const tmp2 = join(root, 'tests', '.tmp', 'repair-fixers');
+  const app2 = join(tmp2, 'app');
+  const ws2 = join(tmp2, 'ws');
+  const run2 = (...args: string[]) => {
+    const r = spawnSync(process.execPath, [cli, ...args, '--workspace', ws2, '--json', '-q'], {
+      encoding: 'utf8',
+      cwd: app2,
+    });
+    if (r.status !== 0 && r.status !== 1) throw new Error(r.stderr);
+    return JSON.parse(r.stdout);
+  };
+  const read = (f: string) => readFileSync(join(app2, f), 'utf8');
+  const original: Record<string, string> = {};
+  let runId = '';
+  const titles = (v: { fixed: { title: string }[] }) => v.fixed.map((f) => f.title).join('\n');
+
+  beforeAll(() => {
+    rmSync(tmp2, { recursive: true, force: true });
+    cpSync(join(root, 'fixtures/apps/fixer-lab'), app2, { recursive: true });
+    for (const f of ['login.html', 'site.css']) original[f] = read(f);
+    execFileSync(process.execPath, [join(root, 'scripts', 'build.mjs')]);
+    runId = run2('audit', '.', '--viewports', 'desktop,mobile').runId;
+  });
+
+  it('adds type="button" to the Show password button and leaves the Sign in submit alone', () => {
+    const plan = run2('optimize', runId, '--rule', 'jourilo/button-implicit-submit');
+    expect(plan.fixes.map((f: { ruleId: string }) => f.ruleId)).toEqual(['jourilo/button-implicit-submit']);
+    expect(readFileSync(join(app2, 'login.html'), 'utf8')).toBe(original['login.html']);
+    run2('optimize', runId, '--rule', 'jourilo/button-implicit-submit', '--apply');
+    expect(read('login.html')).toBe(
+      original['login.html']!.replace(
+        '<button id="show-password" class="ghost">',
+        '<button type="button" id="show-password" class="ghost">',
+      ),
+    );
+    expect(titles(run2('verify', runId))).toMatch(/Show password|submits/i);
+  });
+
+  it('adds scroll-padding-top for the sticky header height to html in the stylesheet', () => {
+    const plan = run2('optimize', runId, '--rule', 'jourilo/focus-obscured');
+    expect(plan.fixes.map((f: { ruleId: string }) => f.ruleId)).toEqual(['jourilo/focus-obscured']);
+    run2('optimize', runId, '--rule', 'jourilo/focus-obscured', '--apply');
+    expect(read('site.css')).toBe(`${original['site.css']}\nhtml {\n  scroll-padding-top: 56px;\n}\n`);
+    expect(titles(run2('verify', runId))).toMatch(/hidden behind other content/);
+  });
+
+  it('rolls both changes back byte for byte', () => {
+    const second = run2('rollback', 'latest', '--yes');
+    expect(second.conflicts).toEqual([]);
+    const first = run2('rollback', 'latest', '--yes');
+    expect(first.conflicts).toEqual([]);
+    for (const f of ['login.html', 'site.css']) expect(read(f)).toBe(original[f]);
+  });
+});

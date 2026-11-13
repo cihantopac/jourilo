@@ -9,9 +9,10 @@ import type { BrowserContext } from 'playwright-core';
 import { makeFinding } from '../audit/finding.js';
 import { nielsen, wcag } from '../audit/standards.js';
 import { DEFAULT_MASK, originFreeName, waitForElement } from '../browser/capture.js';
+import { SELECTOR_OF } from '../browser/keyboard.js';
 import { toPosix } from '../core/fs-safety.js';
 import { shortHash } from '../core/hash.js';
-import { lexiconSource } from '../core/lexicon.js';
+import { lexicon, lexiconSource } from '../core/lexicon.js';
 import { excerpt, redactUrl } from '../core/redact.js';
 import type { Finding, FormInfo, Viewport } from '../core/types.js';
 import { installRequestGuard } from './request-guard.js';
@@ -77,7 +78,7 @@ export function formScreenshotFile(
   return toPosix(`screenshots/form-${hash.slice(0, 8)}-${vp.name}.jpg`);
 }
 
-export async function probeFormValidation(
+async function probeEmptySubmission(
   ctx: BrowserContext,
   url: string,
   form: FormInfo,
@@ -308,4 +309,160 @@ export async function probeFormValidation(
     await guard.detach();
     await page.close().catch(() => undefined);
   }
+}
+
+// The form's buttons without a type, each with a selector and its opening tag as the page wrote it.
+const IMPLICIT_BUTTONS = `(sel) => {
+  const form = document.querySelector(sel);
+  if (!form) return [];
+  const path = ${SELECTOR_OF};
+  return Array.from(form.querySelectorAll('button:not([type])')).map((b, index) => {
+    const attrs = ['id', 'class', 'aria-label', 'name']
+      .filter((a) => b.hasAttribute(a))
+      .map((a) => ' ' + a + '="' + b.getAttribute(a).replace(/\\s+/g, ' ').trim().slice(0, 80).replace(/"/g, '&quot;') + '"');
+    return {
+      index,
+      selector: path(b),
+      name: (b.getAttribute('aria-label') || b.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 80),
+      markup: '<button' + attrs.join('') + '>',
+      disabled: b.disabled,
+    };
+  });
+}`;
+
+// Records the form's submit events and cancels them, so a probe click never navigates; the request guard still
+// stops any request the page's own handlers send.
+const WATCH_SUBMIT = `(() => {
+  window.__jouriloSubmits = 0;
+  window.addEventListener('submit', (e) => { window.__jouriloSubmits++; e.preventDefault(); }, true);
+})()`;
+
+/**
+ * jourilo/button-implicit-submit: a `<button>` with no `type` inside a form submits it, so a "Show password" or
+ * "Close" button sends the form by accident. Each such button whose name is not a submit word (lexicon `submit`) is
+ * clicked once with submissions cancelled and requests intercepted; the rule fires only when a `submit` event
+ * really fired. Native validation is switched off for the click, because an empty required field would otherwise
+ * hide the submission. A fresh page per form: the clicks may run the page's own handlers.
+ */
+async function probeImplicitSubmit(
+  ctx: BrowserContext,
+  url: string,
+  form: FormInfo,
+  vp: Viewport,
+  policy: SafetyPolicy,
+  wait?: { waitFor?: string; timeoutMs?: number },
+): Promise<{ findings: Finding[]; limitation?: string }> {
+  const page = await ctx.newPage();
+  const guard = await installRequestGuard(page, {
+    ...policy,
+    allowDestructive: false,
+    origin: new URL(url).origin,
+    mode: policy.allowSubmit ? 'journey' : 'read-only',
+  });
+  const findings: Finding[] = [];
+  try {
+    await page.goto(url, { waitUntil: 'load', timeout: 30_000 });
+    await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => undefined);
+    if (wait?.waitFor && !(await waitForElement(page, wait.waitFor, wait.timeoutMs ?? 30_000)))
+      return { findings };
+    const buttons = (await page
+      .evaluate(`(${IMPLICIT_BUTTONS})(${JSON.stringify(form.selector)})`)
+      .catch(() => [])) as {
+      index: number;
+      selector: string;
+      name: string;
+      markup: string;
+      disabled: boolean;
+    }[];
+    const submitWord = lexicon('submit');
+    const candidates = buttons.filter((b) => !b.disabled && b.name && !submitWord.test(b.name));
+    if (!candidates.length) return { findings };
+    await page.evaluate(WATCH_SUBMIT);
+    for (const b of candidates.slice(0, 5)) {
+      const payment = await page
+        .evaluate(
+          `(() => { const f = document.querySelector(${JSON.stringify(form.selector)}); return !!f && !!f.querySelector('input[autocomplete^="cc-"], input[name*="card" i], input[name*="cvc" i]'); })()`,
+        )
+        .catch(() => false);
+      const verdict = checkAction(
+        { action: 'click', name: b.name, submitsForm: true, paymentForm: payment as boolean },
+        policy,
+      );
+      if (!verdict.allowed) continue;
+      const button = page.locator(form.selector).locator('button:not([type])').nth(b.index);
+      await page.evaluate(
+        `(() => { window.__jouriloSubmits = 0; const f = document.querySelector(${JSON.stringify(form.selector)}); if (f) f.noValidate = true; })()`,
+      );
+      await button.click({ timeout: 5000 }).catch(() => undefined);
+      await page.waitForTimeout(150);
+      const submits = (await page.evaluate('window.__jouriloSubmits').catch(() => 0)) as number;
+      if (!submits) continue;
+      findings.push(
+        makeFinding({
+          ruleId: 'jourilo/button-implicit-submit',
+          key: `${form.selector} ${b.selector}`,
+          title: `"${excerpt(b.name, 40)}" button submits the form because it has no type`,
+          category: 'usability',
+          kind: 'defect',
+          severity: 'moderate',
+          confidence: 'high',
+          provenance: 'observed',
+          url: redactUrl(url),
+          viewport: vp.name,
+          description: `A <button> with no type attribute inside \`${form.selector}\` fired a submit event when clicked. Its name, "${excerpt(b.name, 60)}", is not a submit word, so the form is sent by accident.`,
+          impact:
+            'A control that is meant to do something else (reveal a password, open a menu, close a panel) also sends the form, with whatever is typed so far.',
+          recommendation:
+            'Give the button type="button". A button that should send the form keeps type="submit".',
+          standards: [nielsen(5)],
+          evidence: [
+            {
+              type: 'element',
+              selector: b.selector,
+              snippet: excerpt(`${b.markup}${b.name}`, 240),
+              data: { buttonName: b.name, form: form.selector },
+            },
+          ],
+          reproduction: [
+            `Open ${redactUrl(url)} (${vp.name}).`,
+            `Click "${b.name}" in \`${form.selector}\`.`,
+            'Observe that the form fires a submit event.',
+          ],
+        }),
+      );
+    }
+    return { findings };
+  } catch (err) {
+    return {
+      findings,
+      limitation: `Buttons without a type in ${form.selector} on ${redactUrl(url)} were not checked for accidental submission: ${excerpt((err as Error).message, 160)}`,
+    };
+  } finally {
+    await guard.detach();
+    await page.close().catch(() => undefined);
+  }
+}
+
+export async function probeFormValidation(
+  ctx: BrowserContext,
+  url: string,
+  form: FormInfo,
+  vp: Viewport,
+  policy: SafetyPolicy,
+  runDir: string,
+  wait?: { waitFor?: string; timeoutMs?: number; primaryOrigin?: string },
+): Promise<{ result: FormProbeResult; findings: Finding[]; limitation?: string }> {
+  const out: { result: FormProbeResult; findings: Finding[]; limitation?: string } =
+    await probeEmptySubmission(ctx, url, form, vp, policy, runDir, wait);
+  // Only where the empty submission was allowed to run: the same safety policy covers the probe clicks.
+  if (
+    out.result.outcome !== 'blocked' &&
+    out.result.outcome !== 'skipped' &&
+    out.result.outcome !== 'error'
+  ) {
+    const implicit = await probeImplicitSubmit(ctx, url, form, vp, policy, wait);
+    out.findings.push(...implicit.findings);
+    if (implicit.limitation) out.limitation = implicit.limitation;
+  }
+  return out;
 }

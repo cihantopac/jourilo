@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Menus (accessible) – Widgets lab</title><link rel="stylesheet" href="/style.css">
+<style>[role="menu"]{border:1px solid #555;padding:4px;display:inline-block;background:#fff} [role="menu"][hidden]{display:none} [role="menuitem"]{display:block;padding:6px 10px;color:#111;text-decoration:none;background:none;border:0;font:inherit;text-align:left;width:100%} [role="menuitem"]:focus-visible{outline:3px solid #0645ad}
+dialog{border:1px solid #555;padding:16px}</style></head>
+<body>
+<!-- APG menu button: Enter or ArrowDown opens, arrows wrap, Home/End jump, Escape closes and returns focus. The second
+     menu has link items that navigate; the checker must never activate them. -->
+<main><h1>Menus</h1><p><a href="/">Back to the lab</a></p>
+<div>
+  <button type="button" id="actions-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="actions-menu">Actions</button>
+  <div role="menu" id="actions-menu" aria-labelledby="actions-btn" hidden>
+    <button type="button" role="menuitem" tabindex="-1">Rename</button>
+    <button type="button" role="menuitem" tabindex="-1" id="about-item">About this page</button>
+    <button type="button" role="menuitem" tabindex="-1">Duplicate</button>
+  </div>
+</div>
+<dialog id="about" role="dialog" aria-labelledby="about-title"><h2 id="about-title">About</h2><p>Menus lab.</p><button type="button" id="about-close">Close</button></dialog>
+<div>
+  <button type="button" id="nav-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="nav-menu">Go to</button>
+  <div role="menu" id="nav-menu" aria-labelledby="nav-btn" hidden>
+    <a role="menuitem" tabindex="-1" href="/accessible">Accessible widgets</a>
+    <a role="menuitem" tabindex="-1" href="/anchors">In-page anchors</a>
+    <a role="menuitem" tabindex="-1" href="/launcher">Help launcher</a>
+  </div>
+</div>
+</main>
+<script>
+  function setup(btnId, menuId) {
+    var btn = document.getElementById(btnId), menu = document.getElementById(menuId);
+    var items = Array.prototype.slice.call(menu.querySelectorAll('[role="menuitem"]'));
+    function open(which) {
+      menu.hidden = false; btn.setAttribute('aria-expanded', 'true');
+      items[which === 'last' ? items.length - 1 : 0].focus();
+    }
+    function close() { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); btn.focus(); }
+    btn.addEventListener('click', function () { menu.hidden ? open('first') : close(); });
+    btn.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); open('first'); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); open('last'); }
+    });
+    menu.addEventListener('keydown', function (e) {
+      var i = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+      else if (e.key === 'Home') { e.preventDefault(); items[0].focus(); }
+      else if (e.key === 'End') { e.preventDefault(); items[items.length - 1].focus(); }
+      else if (e.key === 'Escape') { e.preventDefault(); close(); }
+      else if (e.key === 'Tab') { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+    });
+    return { menu: menu, btn: btn, close: close };
+  }
+  var actions = setup('actions-btn', 'actions-menu');
+  setup('nav-btn', 'nav-menu');
+  var dlg = document.getElementById('about');
+  document.getElementById('about-item').addEventListener('click', function () {
+    actions.menu.hidden = true; actions.btn.setAttribute('aria-expanded', 'false'); dlg.showModal();
+  });
+  dlg.addEventListener('close', function () { actions.menu.hidden = false; actions.btn.setAttribute('aria-expanded', 'true'); document.getElementById('about-item').focus(); });
+  document.getElementById('about-close').addEventListener('click', function () { dlg.close(); });
+</script>
+</body>
+</html>

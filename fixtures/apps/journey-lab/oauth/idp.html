@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Test IdP</title>
+  </head>
+  <body>
+    <main>
+      <h1>Test IdP</h1>
+      <form id="login">
+        <label>Email <input type="email" name="email" required /></label>
+        <button type="submit">Sign in</button>
+      </form>
+      <p id="error" hidden>This window must be opened by the app.</p>
+    </main>
+    <script>
+      // A local stand-in for an OAuth identity provider: hands the account back to the opener and closes itself.
+      const returnOrigin = new URLSearchParams(location.search).get('return_origin');
+      const form = document.getElementById('login');
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (!window.opener || !returnOrigin) {
+          document.getElementById('error').hidden = false;
+          return;
+        }
+        window.opener.postMessage({ type: 'test-idp-signed-in', email: form.email.value }, returnOrigin);
+        window.close();
+      });
+    </script>
+  </body>
+</html>

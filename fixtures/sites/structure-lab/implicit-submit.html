@@ -1,0 +1,11 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font:16px/1.5 system-ui,sans-serif;color:#111827;margin:0}main{max-width:720px;margin:0 auto;padding:24px 16px}label{display:block;margin-top:12px}input{font:inherit;padding:6px 8px}a:focus-visible,input:focus-visible,button:focus-visible{outline:3px solid #1d4ed8}button{font:inherit;padding:10px 16px;margin-top:12px}</style><title>Sign in – Structure lab</title></head><body><main>
+<h1>Sign in</h1>
+<!-- Show password has no type, so it submits the form (fires). "Sign in" has no type either but is the submit button (control). -->
+<form id="login" action="/accessible" method="get">
+<label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" required>
+<label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required>
+<button id="show-pw">Show password</button>
+<button id="ctl-sign-in">Sign in</button>
+</form>
+<script>document.getElementById('show-pw').addEventListener('click',function(){var p=document.getElementById('password');p.type=p.type==='password'?'text':'password'});</script>
+</main></body></html>

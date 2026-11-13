@@ -1,0 +1,61 @@
+{
+  "_synthesized": "Second page of GET /api/v1/experiments. Not a live recording.",
+  "experiments": [
+    {
+      "id": "exp_example1",
+      "name": "Signup form length",
+      "trackingKey": "signup-form-length",
+      "status": "running",
+      "variations": [
+        {
+          "variationId": "var_control",
+          "key": "0",
+          "name": "Control"
+        },
+        {
+          "variationId": "var_short",
+          "key": "1",
+          "name": "Short form"
+        }
+      ],
+      "phases": [
+        {
+          "name": "Main",
+          "dateStarted": "2026-10-01T00:00:00Z",
+          "trafficSplit": [
+            {
+              "variationId": "var_control",
+              "weight": 0.5
+            },
+            {
+              "variationId": "var_short",
+              "weight": 0.5
+            }
+          ]
+        }
+      ],
+      "settings": {
+        "datasourceId": "ds_example",
+        "assignmentQueryId": "user_id",
+        "statsEngine": "frequentist",
+        "goals": [
+          {
+            "metricId": "met_signup"
+          }
+        ],
+        "secondaryMetrics": [
+          {
+            "metricId": "met_pageviews"
+          }
+        ],
+        "guardrails": []
+      }
+    }
+  ],
+  "limit": 100,
+  "offset": 100,
+  "count": 1,
+  "total": 2,
+  "hasMore": false,
+  "nextOffset": null
+}

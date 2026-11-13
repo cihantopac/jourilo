@@ -19,6 +19,7 @@ import {
 } from './contrast-sample.js';
 import PROBE_SOURCE from './inpage/probe.js?raw';
 import { type KeyboardWalk, keyboardWalk } from './keyboard.js';
+import { asJourilo, inpageSource, isOwnConsoleMessage, isOwnException } from './own-activity.js';
 import { watchContext } from './session.js';
 import { sendTargetHeaders, type TargetHeaders } from './target-headers.js';
 import { type RawVitals, READ_VITALS_SCRIPT, VITALS_INIT_SCRIPT } from './vitals.js';
@@ -129,6 +130,8 @@ export interface PageObservation {
   foldScreenshot?: string;
   console: ConsoleEntry[];
   network: NetworkFailure[];
+  /** Own-origin script requests the page made (live count, like `network`); lets a run tell "all failed" from "some". */
+  scriptRequests?: { firstParty: number };
   vitals: RawVitals | null;
   /** Min/max per vital when vitals are medians of several runs. */
   vitalsSpread?: Record<string, [number, number]>;
@@ -204,7 +207,7 @@ export async function newContext(
   // Freezes Date only; timers and animations keep running.
   if (opts.clock) await ctx.clock.setFixedTime(new Date(opts.clock));
   await ctx.addInitScript({ content: NAME_SHIM });
-  await ctx.addInitScript({ content: VITALS_INIT_SCRIPT });
+  await ctx.addInitScript({ content: inpageSource('vitals-init', VITALS_INIT_SCRIPT) });
   return ctx;
 }
 
@@ -212,9 +215,15 @@ export async function newContext(
 export function observe(
   page: Page,
   origin: string,
-): { console: ConsoleEntry[]; network: NetworkFailure[]; ignore(fn: (url: string) => boolean): void } {
+): {
+  console: ConsoleEntry[];
+  network: NetworkFailure[];
+  scripts: { firstParty: number };
+  ignore(fn: (url: string) => boolean): void;
+} {
   const consoleEntries: ConsoleEntry[] = [];
   const network: NetworkFailure[] = [];
+  const scripts = { firstParty: 0 };
   // Requests Jourilo itself aborted (safety guard) are not failures of the site.
   let ignored: (url: string) => boolean = () => false;
   page.on('console', (msg) => {
@@ -224,12 +233,14 @@ export function observe(
     // Chromium logs every failed resource to the console; those are reported once, as network evidence.
     if (/^Failed to load resource/i.test(msg.text())) return;
     const loc = msg.location();
+    // Jourilo's own probes and screenshots are not the site's errors; the site's own CSP refusals still are.
+    if (isOwnConsoleMessage(page, msg.text(), loc.url)) return;
     const entry: ConsoleEntry = { type: t, text: excerpt(msg.text(), 400) };
     if (loc.url) entry.location = `${redactUrl(loc.url)}:${loc.lineNumber}`;
     consoleEntries.push(entry);
   });
   page.on('pageerror', (err) => {
-    if (consoleEntries.length >= 100) return;
+    if (consoleEntries.length >= 100 || isOwnException(err)) return;
     consoleEntries.push({ type: 'pageerror', text: excerpt(`${err.name}: ${err.message}`, 400) });
   });
   const firstParty = (u: string) => {
@@ -239,6 +250,9 @@ export function observe(
       return false;
     }
   };
+  page.on('request', (req) => {
+    if (req.resourceType() === 'script' && !ignored(req.url()) && firstParty(req.url())) scripts.firstParty++;
+  });
   page.on('requestfailed', (req) => {
     if (ignored(req.url())) return;
     const failure = req.failure()?.errorText ?? 'failed';
@@ -267,6 +281,7 @@ export function observe(
   return {
     console: consoleEntries,
     network,
+    scripts,
     ignore: (fn) => {
       ignored = fn;
     },
@@ -299,8 +314,13 @@ export const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa',
 
 const HIDDEN_SKIP_RULES = new Set(['color-contrast', 'color-contrast-enhanced']);
 
+// Evaluated, not added as a <script> element: a page whose CSP allows only nonce or hash scripts would refuse an
+// inline element (and log the refusal as if it were the site's error), while evaluation is not governed by the CSP
+// in Chromium, Firefox or WebKit.
+const AXE_SOURCE = inpageSource('axe', axe.source);
+
 async function runAxe(page: Page): Promise<PageObservation['axe']> {
-  await page.addScriptTag({ content: axe.source });
+  await page.evaluate(AXE_SOURCE);
   const raw = (await page.evaluate(
     `axe.run(document, { runOnly: { type: 'tag', values: ${JSON.stringify(AXE_TAGS)} }, resultTypes: ['violations', 'incomplete'], elementRef: false, rules: { 'target-size': { enabled: true } } })`,
   )) as {
@@ -496,6 +516,7 @@ export async function capturePage(
     loadMs: 0,
     console: live.console,
     network: live.network,
+    scriptRequests: live.scripts,
     vitals: null,
     probe: null,
     axe: null,
@@ -560,7 +581,10 @@ export async function capturePage(
 
     obs.probe = (await page
       .evaluate(
-        `(${PROBE_SOURCE.trim().replace(/;$/, '')})(${JSON.stringify({ maxItems: 40, viewportWidth: vp.width, viewportHeight: vp.height, lex: lexiconSources() })})`,
+        inpageSource(
+          'probe',
+          `(${PROBE_SOURCE.trim().replace(/;$/, '')})(${JSON.stringify({ maxItems: 40, viewportWidth: vp.width, viewportHeight: vp.height, lex: lexiconSources() })})`,
+        ),
       )
       .catch((e: Error) => {
         obs.errors.push(`probe: ${e.message.split('\n')[0]}`);
@@ -570,7 +594,7 @@ export async function capturePage(
 
     if (opts.axe !== false) {
       obs.axe = await runAxe(page).catch((e: Error) => {
-        obs.errors.push(`axe: ${e.message.split('\n')[0]}`);
+        obs.errors.push(`axe could not run on this page: ${e.message.split('\n')[0]}`);
         return null;
       });
     }
@@ -580,44 +604,47 @@ export async function capturePage(
       const mode = opts.evidence ?? 'full';
       const { full, fold } = captureScreenshotFiles(url, vp, opts.primaryOrigin);
       try {
-        const height = Math.min(obs.probe?.scroll.height ?? vp.height, FULL_PAGE_MAX_HEIGHT[mode]);
-        if (mode === 'minimal' && height <= vp.height) {
-          // The document fits in the first screen: one file serves as fold and full page (same pixels, same coordinates).
-          await page.screenshot({
-            path: join(opts.runDir, full),
-            type: 'jpeg',
-            quality: EVIDENCE_QUALITY[mode],
-            animations: 'disabled',
-            caret: 'hide',
-            mask,
-            maskColor: '#FF00FF',
-          });
-          obs.screenshot = toPosix(full);
-          obs.foldScreenshot = obs.screenshot;
-        } else {
-          await page.screenshot({
-            path: join(opts.runDir, full),
-            type: 'jpeg',
-            quality: EVIDENCE_QUALITY[mode],
-            fullPage: true,
-            clip: { x: 0, y: 0, width: vp.width, height },
-            animations: 'disabled',
-            caret: 'hide',
-            mask,
-            maskColor: '#FF00FF',
-          });
-          obs.screenshot = toPosix(full);
-          await page.screenshot({
-            path: join(opts.runDir, fold),
-            type: 'jpeg',
-            quality: EVIDENCE_QUALITY[mode],
-            animations: 'disabled',
-            caret: 'hide',
-            mask,
-            maskColor: '#FF00FF',
-          });
-          obs.foldScreenshot = toPosix(fold);
-        }
+        // In WebKit Playwright adds a style while it shoots; a strict style-src refuses it (not the site's error).
+        await asJourilo(page, async () => {
+          const height = Math.min(obs.probe?.scroll.height ?? vp.height, FULL_PAGE_MAX_HEIGHT[mode]);
+          if (mode === 'minimal' && height <= vp.height) {
+            // The document fits in the first screen: one file serves as fold and full page (same pixels, same coordinates).
+            await page.screenshot({
+              path: join(opts.runDir, full),
+              type: 'jpeg',
+              quality: EVIDENCE_QUALITY[mode],
+              animations: 'disabled',
+              caret: 'hide',
+              mask,
+              maskColor: '#FF00FF',
+            });
+            obs.screenshot = toPosix(full);
+            obs.foldScreenshot = obs.screenshot;
+          } else {
+            await page.screenshot({
+              path: join(opts.runDir, full),
+              type: 'jpeg',
+              quality: EVIDENCE_QUALITY[mode],
+              fullPage: true,
+              clip: { x: 0, y: 0, width: vp.width, height },
+              animations: 'disabled',
+              caret: 'hide',
+              mask,
+              maskColor: '#FF00FF',
+            });
+            obs.screenshot = toPosix(full);
+            await page.screenshot({
+              path: join(opts.runDir, fold),
+              type: 'jpeg',
+              quality: EVIDENCE_QUALITY[mode],
+              animations: 'disabled',
+              caret: 'hide',
+              mask,
+              maskColor: '#FF00FF',
+            });
+            obs.foldScreenshot = toPosix(fold);
+          }
+        });
       } catch (e) {
         obs.errors.push(`screenshot: ${(e as Error).message.split('\n')[0]}`);
       }

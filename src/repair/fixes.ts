@@ -312,6 +312,189 @@ const placeholderLabel: Fixer = (f, _root, read) => {
   };
 };
 
+/** Opening `<button ...>` tags of a file, found with quotes and braces tracked (JSX attributes hold `=>` and `>`). */
+function buttonTags(text: string): { start: number; end: number; tag: string }[] {
+  const out: { start: number; end: number; tag: string }[] = [];
+  for (const m of text.matchAll(/<button(?=[\s>/])/g)) {
+    let i = m.index! + m[0].length;
+    let quote = '';
+    let depth = 0;
+    for (; i < text.length; i++) {
+      const c = text[i]!;
+      if (quote) {
+        if (c === quote) quote = '';
+      } else if (c === '"' || c === "'" || (depth > 0 && c === '`')) quote = c;
+      else if (c === '{') depth++;
+      else if (c === '}') depth = Math.max(0, depth - 1);
+      else if (c === '>' && depth === 0) break;
+    }
+    if (i < text.length) out.push({ start: m.index!, end: i + 1, tag: text.slice(m.index!, i + 1) });
+  }
+  return out;
+}
+
+/** button-implicit-submit: add type="button" to the located button (HTML or JSX). */
+const buttonType: Fixer = (f, _root, read) => {
+  const e = f.evidence.find((x) => typeof x.data?.buttonName === 'string');
+  if (!e) return null;
+  const name = String(e.data!.buttonName);
+  const id = e.snippet?.match(/\bid="([^"]+)"/)?.[1];
+  for (const s of f.sources ?? []) {
+    const text = read(s.file);
+    if (!text) continue;
+    const scored = buttonTags(text)
+      // Typeless, and no spread that may carry a type.
+      .filter((t) => !/\stype\s*=/.test(t.tag) && !/\{\s*\.\.\./.test(t.tag))
+      .map((t) => {
+        const after = text.slice(t.end, t.end + name.length + 200).replace(/\s+/g, ' ');
+        const label = new RegExp(`^\\s*(?:<[^>]+>\\s*)*${escRe(name)}`).test(after);
+        const named = new RegExp(`aria-label=["']${escRe(name)}["']`).test(t.tag);
+        const byId = !!id && new RegExp(`\\bid=["']${escRe(id)}["']`).test(t.tag);
+        const line = text.slice(0, t.start).split('\n').length;
+        return { t, score: (byId ? 4 : 0) + (label || named ? 2 : 0), dist: Math.abs(line - s.line) };
+      })
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score || a.dist - b.dist);
+    const best = scored[0];
+    if (!best || (scored[1] && scored[1].score === best.score && scored[1].dist === best.dist)) continue;
+    const after = `${text.slice(0, best.t.start)}<button type="button"${text.slice(best.t.start + '<button'.length)}`;
+    return {
+      ...base(
+        f,
+        `Add type="button" to the "${name}" button`,
+        'A button with no type is a submit button inside a form. type="button" keeps it from sending the form.',
+        'Clicking the button no longer fires a submit event; the form is sent only by its submit button.',
+      ),
+      edits: [{ file: s.file, before: text, after }],
+      assumptions: [
+        `Confirm "${name}" is not meant to submit the form. If it is, give it type="submit" instead of this change.`,
+      ],
+    };
+  }
+  return null;
+};
+
+/** Global stylesheets tried when no located stylesheet defines the covering bar (the repo profile names none). */
+const GLOBAL_CSS = [
+  'src/app/globals.css',
+  'app/globals.css',
+  'src/styles/globals.css',
+  'styles/globals.css',
+  'src/styles/global.css',
+  'src/global.css',
+  'src/index.css',
+  'src/styles.css',
+  'src/style.css',
+  'src/main.css',
+  'styles.css',
+  'style.css',
+  'site.css',
+  'main.css',
+  'global.css',
+  'index.css',
+];
+
+// CSS modules are excluded: a bare `html` selector is not pure and Next.js rejects it.
+const isCss = (file: string) => /\.(css|scss|less)$/.test(file) && !/\.module\.(css|scss|less)$/.test(file);
+
+/** The body span of the first top-level rule whose selector is exactly `html` (not `.dark html`, not inside @media). */
+function topLevelHtmlRule(css: string): { open: number; close: number } | null {
+  let depth = 0;
+  let boundary = 0;
+  for (let i = 0; i < css.length; i++) {
+    const c = css[i]!;
+    if (c === '/' && css[i + 1] === '*') {
+      const end = css.indexOf('*/', i + 2);
+      i = end < 0 ? css.length : end + 1;
+    } else if (c === '"' || c === "'") {
+      const end = css.indexOf(c, i + 1);
+      i = end < 0 ? css.length : end;
+    } else if (c === '{') {
+      if (depth === 0) {
+        const sel = css
+          .slice(boundary, i)
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .trim();
+        if (sel === 'html') {
+          let d = 1;
+          let j = i + 1;
+          for (; j < css.length && d > 0; j++) {
+            if (css[j] === '{') d++;
+            else if (css[j] === '}') d--;
+          }
+          return d === 0 ? { open: i, close: j - 1 } : null;
+        }
+      }
+      depth++;
+    } else if (c === '}') {
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) boundary = i + 1;
+    } else if (c === ';' && depth === 0) boundary = i + 1;
+  }
+  return null;
+}
+
+/** Adds or updates `scroll-padding-top` on the top-level `html` rule; null when it already holds that value. */
+function withScrollPadding(css: string, px: number): string | null {
+  const decl = `scroll-padding-top: ${px}px`;
+  const rule = topLevelHtmlRule(css);
+  if (rule) {
+    const body = css.slice(rule.open + 1, rule.close);
+    const cur = body.match(/scroll-padding-top\s*:\s*([^;}]+)/);
+    let nextBody: string;
+    if (cur) {
+      if (cur[1]!.trim() === `${px}px`) return null;
+      nextBody = body.replace(/scroll-padding-top\s*:\s*[^;}]+/, decl);
+    } else {
+      const indent = body.match(/\n([ \t]+)\S/)?.[1] ?? '  ';
+      const kept = body.replace(/\s*$/, '');
+      const semi = kept.trim() && !kept.trim().endsWith(';') ? ';' : '';
+      nextBody = body.includes('\n') ? `${kept}${semi}\n${indent}${decl};\n` : `${kept}${semi} ${decl}; `;
+    }
+    return `${css.slice(0, rule.open + 1)}${nextBody}${css.slice(rule.close)}`;
+  }
+  return `${css.replace(/\n*$/, '\n')}\nhtml {\n  ${decl};\n}\n`;
+}
+
+/** focus-obscured: when a sticky or fixed bar at the top covers the focused element, pad scrolling by its height. */
+const scrollPadding: Fixer = (f, _root, read) => {
+  const bars = f.evidence
+    .map((e) => e.data)
+    .filter(
+      (d) =>
+        d &&
+        (d.coverPosition === 'sticky' || d.coverPosition === 'fixed') &&
+        Number(d.coverTop) <= 8 &&
+        Number(d.coverHeight) > 0,
+    );
+  if (!bars.length) return null;
+  const px = Math.max(...bars.map((d) => Number(d!.coverHeight)));
+  const located = (f.sources ?? []).map((s) => s.file).find(isCss);
+  const candidates = [...(located ? [located] : []), ...GLOBAL_CSS];
+  for (const file of candidates) {
+    const text = read(file);
+    if (text === null) continue;
+    const after = withScrollPadding(text, px);
+    if (after === null) return null;
+    return {
+      ...base(
+        f,
+        `Set scroll-padding-top: ${px}px on html`,
+        `The ${String(bars[0]!.coverPosition)} bar covers elements that scroll to the top edge. scroll-padding-top keeps scrolled-to and focused elements clear of it.`,
+        'Focused elements are no longer hidden behind the bar (WCAG 2.4.11).',
+      ),
+      edits: [{ file, before: text, after }],
+      assumptions: [
+        `${px}px is the bar's measured height at the audited viewport; if it changes with the breakpoint, set scroll-padding-top there too (or from a CSS variable).`,
+        ...(file === located
+          ? []
+          : [`No located stylesheet defines the bar; ${file} is the global stylesheet by convention.`]),
+      ],
+    };
+  }
+  return null;
+};
+
 export const FIXERS: Record<string, Fixer> = {
   'axe/html-has-lang': htmlLang,
   'jourilo/missing-viewport-meta': viewportMeta,
@@ -320,6 +503,8 @@ export const FIXERS: Record<string, Fixer> = {
   'jourilo/paste-blocked': pasteAllowed,
   'jourilo/unsized-images': imageDimensions,
   'jourilo/placeholder-label': placeholderLabel,
+  'jourilo/button-implicit-submit': buttonType,
+  'jourilo/focus-obscured': scrollPadding,
 };
 
 /** Text of a file that is valid UTF-8; other encodings are left alone (rewriting them would change bytes). */

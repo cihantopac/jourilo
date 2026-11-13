@@ -4,6 +4,9 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
 import { toPosix } from '../core/fs-safety.js';
 import type { Confidence, Finding, Run, SourceLocation } from '../core/types.js';
+import type { ComponentDef } from '../discovery/ast/components.js';
+import { loadTsParser } from '../discovery/ast/load.js';
+import { isStructuralFile } from '../discovery/ast/route-files.js';
 
 const SOURCE_EXT = new Set([
   '.html',
@@ -343,6 +346,57 @@ export function tokensFor(f: Finding): Token[] {
         regex: /onpaste\s*=|addEventListener\(\s*['"]paste['"]|onPaste\s*=/i,
       });
       break;
+    case 'jourilo/button-implicit-submit':
+      add({
+        value: '<button>',
+        weight: 4,
+        reason: '<button> without a type',
+        scope: 'markup',
+        regex: /<button\b(?![^>]*\btype\s*=)/i,
+      });
+      for (const e of f.evidence) {
+        const label = e.data?.buttonName;
+        if (typeof label === 'string')
+          add({
+            value: label,
+            weight: 5,
+            reason: `button text "${label}"`,
+            scope: 'markup',
+            regex: new RegExp(escapeRe(label), 'i'),
+          });
+      }
+      break;
+    case 'jourilo/focus-obscured':
+      // The root cause is the covering bar's own rule (sticky or fixed), not the element that was covered.
+      for (const e of f.evidence) {
+        const d = e.data ?? {};
+        const kind = String(d.coverPosition ?? 'covering');
+        const names: string[] = [];
+        if (typeof d.coverBarId === 'string' && d.coverBarId) names.push(`#${d.coverBarId}`);
+        if (typeof d.coverBarClasses === 'string')
+          for (const c of d.coverBarClasses.split(/\s+/).filter(Boolean)) names.push(`.${c}`);
+        for (const n of names)
+          add({
+            value: n,
+            weight: 9,
+            reason: `styles the ${kind} bar ${n}`,
+            scope: 'style',
+            regex: new RegExp(`(^|[^\\w-])${escapeRe(n)}($|[^\\w-])`),
+          });
+        const tag =
+          typeof d.coverBarSelector === 'string'
+            ? /^[a-z][a-z0-9-]*/i.exec(d.coverBarSelector.split(/\s*[>+~]\s*|\s+/).pop() ?? '')?.[0]
+            : null;
+        if (tag)
+          add({
+            value: tag,
+            weight: 6,
+            reason: `styles the ${kind} bar <${tag}>`,
+            scope: 'style',
+            regex: new RegExp(`^\\s*${escapeRe(tag)}\\s*[,{]`, 'i'),
+          });
+      }
+      break;
     case 'axe/meta-viewport':
       add({
         value: 'user-scalable',
@@ -480,8 +534,86 @@ export function locate(f: Finding, files: SourceFile[], max = 3): SourceLocation
   });
 }
 
+const GRAPH_FAILED =
+  'The component graph could not be built, so findings in shared components are grouped per source line instead of per component.';
+
+/** Files the component graph reads (the parser's languages). */
+const COMPONENT_FILE = /\.(tsx?|jsx?|mjs|vue|svelte)$/;
+const isMinified = (rel: string, lines: string[]) =>
+  /\.min\.[cm]?js$/.test(rel) || lines.some((l) => l.length >= 2000);
+
+/** The innermost component whose declaration spans `line` of `file`. */
+function componentAt(
+  byFile: Map<string, ComponentDef[]>,
+  file: string,
+  line: number,
+): ComponentDef | undefined {
+  let best: ComponentDef | undefined;
+  for (const c of byFile.get(file) ?? [])
+    if (c.line <= line && line <= c.endLine && (!best || c.line >= best.line)) best = c;
+  return best;
+}
+
+/**
+ * When a finding's best source lies inside a component that more than one route renders, names that component on
+ * the source, so every page sharing it reports one root cause. Loads the parser chunk only when a best source is in
+ * a code file. Never throws: a file the parser or the walk cannot handle is left out and reported in one line.
+ */
+async function addComponents(run: Run, files: SourceFile[]): Promise<void> {
+  const best = run.findings
+    .map((f) => f.sources?.[0])
+    .filter((s): s is SourceLocation => !!s && s.confidence !== 'low' && COMPONENT_FILE.test(s.file));
+  if (!best.length) return;
+  const loaded = await loadTsParser();
+  if (!('parser' in loaded)) {
+    run.limitations.push(
+      `The bundled TypeScript parser could not be loaded (${loaded.error}), so findings in shared components are grouped per source line instead of per component.`,
+    );
+    return;
+  }
+  const { parser } = loaded;
+  const parsed = new Map<string, NonNullable<ReturnType<typeof parser.parseSource>>>();
+  const texts = new Map<string, string>();
+  const skipped: string[] = [];
+  for (const file of files) {
+    if (!COMPONENT_FILE.test(file.rel) || file.rel.endsWith('.d.ts')) continue;
+    if (isMinified(file.rel, file.lines)) continue;
+    const text = file.lines.join('\n');
+    const sf = parser.parseSource(file.rel, text);
+    if (!sf) {
+      skipped.push(file.rel);
+      continue;
+    }
+    parsed.set(file.rel, sf);
+    texts.set(file.rel, text);
+  }
+  let byFile: Map<string, ComponentDef[]>;
+  try {
+    const index = parser.componentIndex(parsed, texts);
+    byFile = index.byFile;
+    skipped.push(...index.failed);
+  } catch {
+    run.limitations.push(GRAPH_FAILED);
+    return;
+  }
+  for (const src of best) {
+    const c = componentAt(byFile, src.file, src.line);
+    if (!c || c.usedBy < 2) continue;
+    src.component = { name: c.name, file: c.file, usedBy: c.usedBy };
+    src.reason += `; in component ${c.name}, used by ${c.usedBy} routes`;
+  }
+  // Only files that matter are named: one holding a finding's source, or a route, layout or router file (which
+  // decides how many routes render a component). Unrelated broken samples and fixtures stay out of the report.
+  const sourceFiles = new Set(best.map((b) => b.file));
+  const unread = [...new Set(skipped)].filter((f) => sourceFiles.has(f) || isStructuralFile(f)).sort();
+  if (unread.length)
+    run.limitations.push(
+      `${unread.length} code file(s) were left out of the component graph (broken or newer syntax, or code the parser could not walk), so findings in them are grouped per source line: ${unread.slice(0, 3).join(', ')}${unread.length > 3 ? ` and ${unread.length - 3} more` : ''}.`,
+    );
+}
+
 /** Adds `sources` to every finding in the run; returns how many got at least one candidate. */
-export function locateFindings(run: Run, repoRoot: string): number {
+export async function locateFindings(run: Run, repoRoot: string): Promise<number> {
   const files = indexRepository(repoRoot);
   let n = 0;
   for (const f of run.findings) {
@@ -490,6 +622,12 @@ export function locateFindings(run: Run, repoRoot: string): number {
       f.sources = src;
       n++;
     }
+  }
+  try {
+    await addComponents(run, files);
+  } catch {
+    // The component graph only refines grouping; locating never fails because of it.
+    if (!run.limitations.includes(GRAPH_FAILED)) run.limitations.push(GRAPH_FAILED);
   }
   return n;
 }

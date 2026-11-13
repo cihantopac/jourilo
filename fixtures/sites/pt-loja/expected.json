@@ -1,0 +1,57 @@
+{
+  "description": "Portuguese shop: conversion heuristics and form error feedback; the account page's specific buttons are controls.",
+  "mustFind": [
+    {
+      "rule": "conv/unclear-value-proposition",
+      "path": "/",
+      "why": "h1 'Bem-vindo'"
+    },
+    {
+      "rule": "conv/vague-cta-label",
+      "path": "/",
+      "why": "primary CTA 'Continuar'"
+    },
+    {
+      "rule": "conv/vague-cta-label",
+      "path": "/cadastro",
+      "why": "submit 'Enviar'"
+    },
+    {
+      "rule": "conv/pricing-period-unclear",
+      "path": "/precos",
+      "why": "price without a billing period"
+    },
+    {
+      "rule": "conv/signup-friction",
+      "path": "/cadastro",
+      "why": "6 fields, password repeat, required phone"
+    },
+    {
+      "rule": "conv/no-trust-signals",
+      "path": "/cadastro",
+      "why": "no reassurance next to signup"
+    },
+    {
+      "rule": "a11y/errors-not-associated",
+      "path": "/cadastro",
+      "why": "'O campo e-mail é obrigatório.' not associated"
+    }
+  ],
+  "mustNotFind": [
+    {
+      "rule": "conv/vague-cta-label",
+      "path": "/conta",
+      "why": "'Salvar alterações' and 'Excluir conta' are specific actions"
+    },
+    {
+      "rule": "conv/pricing-period-unclear",
+      "path": "/precos-anuais",
+      "why": "prices state their period in the local language"
+    },
+    {
+      "rule": "conv/no-trust-signals",
+      "path": "/cadastro-seguro",
+      "why": "'Pagamento protegido. Seus dados são criptografados.' is a security signal"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Popup triggers (aria-haspopup=true) – Widgets lab</title><link rel="stylesheet" href="/style.css">
+<style>#help[hidden]{display:none} #help{border:1px solid #555;padding:12px;background:#fff}</style></head>
+<body>
+<!-- ARIA 1.0 style aria-haspopup="true" triggers that are not menus: a button that opens a dialog which ignores
+     Escape (the dialog check must still run afterwards), and a link that navigates when activated. -->
+<main><h1>Popup triggers</h1><p><a href="/">Back to the lab</a></p>
+<p><button type="button" id="help-btn" aria-haspopup="true">Help</button></p>
+<div id="help" role="dialog" aria-labelledby="help-title" hidden><h2 id="help-title">Help</h2><p>Contact us.</p><button type="button" id="help-close">Close</button></div>
+<p><a href="/accessible" id="products" aria-haspopup="true">Products</a></p>
+</main>
+<script>
+  // Escape is not handled: the dialog stays open.
+  document.getElementById('help-btn').addEventListener('click', function () { document.getElementById('help').hidden = false; document.getElementById('help-close').focus(); });
+  document.getElementById('help-close').addEventListener('click', function () { document.getElementById('help').hidden = true; });
+</script>
+</body>
+</html>
