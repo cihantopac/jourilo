@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  GuardBlockedError,
+  guardedFetch,
   guardedFetchText,
   loopbackRedirectVerdict,
   redirectEscape,
@@ -174,6 +176,73 @@ describe('guardedFetchText', () => {
     } finally {
       await new Promise((r) => proxy.close(r));
     }
+  });
+});
+
+describe('guardedFetch (analytics adapters)', () => {
+  let site: http.Server;
+  let sitePort = 0;
+  const seen: { method?: string; url?: string; auth?: string; body: string }[] = [];
+  beforeAll(async () => {
+    site = http.createServer((req, res) => {
+      let body = '';
+      req.on('data', (c) => {
+        body += c;
+      });
+      req.on('end', () => {
+        seen.push({ method: req.method, url: req.url, auth: req.headers.authorization, body });
+        if (req.url === '/hop') return void res.writeHead(302, { location: '/data' }).end();
+        if (req.url === '/away') return void res.writeHead(302, { location: 'http://other.example/x' }).end();
+        if (req.url === '/limited') return void res.writeHead(429, { 'retry-after': '7' }).end('{}');
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, body }));
+      });
+    });
+    sitePort = await new Promise<number>((r) =>
+      site.listen(0, '127.0.0.1', () => r((site.address() as AddressInfo).port)),
+    );
+  });
+  afterAll(() => new Promise((r) => site.close(r)));
+  const deps = () => ({
+    resolve: async () => [{ address: '127.0.0.1', family: 4 }],
+    verdict: (ip: string, port: number) =>
+      port === sitePort ? ({ ok: true } as const) : addressVerdict(ip, pub),
+  });
+  const at = (path: string) => `http://api.example:${sitePort}${path}`;
+
+  it('sends GET and read-only POST with headers, following same-origin GET redirects only', async () => {
+    seen.length = 0;
+    const get = await guardedFetch(at('/hop'), pub, {
+      headers: { authorization: 'Bearer k' },
+      timeoutMs: 3000,
+      deps: deps(),
+    });
+    expect(get.status).toBe(200);
+    expect(seen.map((s) => [s.method, s.url, s.auth])).toEqual([
+      ['GET', '/hop', 'Bearer k'],
+      ['GET', '/data', 'Bearer k'],
+    ]);
+    const post = await guardedFetch(at('/query'), pub, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{"q":1}',
+      timeoutMs: 3000,
+      deps: deps(),
+    });
+    expect(await post.json()).toEqual({ ok: true, body: '{"q":1}' });
+    const limited = await guardedFetch(at('/limited'), pub, { timeoutMs: 3000, deps: deps() });
+    expect([limited.status, limited.headers.get('retry-after')]).toEqual([429, '7']);
+  });
+  it('never follows a redirect to another origin, and refuses private destinations', async () => {
+    await expect(
+      guardedFetch(at('/away'), pub, {
+        headers: { authorization: 'Bearer k' },
+        timeoutMs: 3000,
+        deps: deps(),
+      }),
+    ).rejects.toBeInstanceOf(GuardBlockedError);
+    await expect(guardedFetch('http://10.0.0.5/x', pub, { timeoutMs: 3000 })).rejects.toBeInstanceOf(
+      GuardBlockedError,
+    );
   });
 });
 

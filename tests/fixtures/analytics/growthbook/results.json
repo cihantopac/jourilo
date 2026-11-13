@@ -1,0 +1,115 @@
+{
+  "_synthesized": "Shape of GET /api/v1/experiments/:id/results (docs.growthbook.io/api/experiments/operation/getExperimentResults). For a proportion metric `users` = exposed users and `numerator` = converted users. Not a live recording.",
+  "result": {
+    "id": "snp_example",
+    "experimentId": "exp_example1",
+    "phase": "0",
+    "dateUpdated": "2026-11-10T04:00:00Z",
+    "statsEngine": "frequentist",
+    "goals": [
+      {
+        "metricId": "met_signup"
+      }
+    ],
+    "queryIds": ["qry_example"],
+    "results": [
+      {
+        "dimension": "",
+        "totalUsers": 4780,
+        "checks": {
+          "srm": 0.84
+        },
+        "metrics": [
+          {
+            "metricId": "met_pageviews",
+            "metricName": "Page views",
+            "variations": [
+              {
+                "variationId": "var_control",
+                "variationName": "Control",
+                "users": 2400,
+                "analyses": [
+                  {
+                    "engine": "frequentist",
+                    "numerator": 2400,
+                    "denominator": 2400,
+                    "mean": 1.0,
+                    "stddev": 0.2,
+                    "percentChange": 0,
+                    "ciLow": null,
+                    "ciHigh": null,
+                    "pValue": null,
+                    "errorMessage": null
+                  }
+                ]
+              },
+              {
+                "variationId": "var_short",
+                "variationName": "Short form",
+                "users": 2380,
+                "analyses": [
+                  {
+                    "engine": "frequentist",
+                    "numerator": 2380,
+                    "denominator": 2380,
+                    "mean": 1.0,
+                    "stddev": 0.2,
+                    "percentChange": 0,
+                    "ciLow": null,
+                    "ciHigh": null,
+                    "pValue": null,
+                    "errorMessage": null
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "metricId": "met_signup",
+            "metricName": "Signups",
+            "variations": [
+              {
+                "variationId": "var_control",
+                "variationName": "Control",
+                "users": 2400,
+                "analyses": [
+                  {
+                    "engine": "frequentist",
+                    "numerator": 120,
+                    "denominator": 2400,
+                    "mean": 0.05,
+                    "stddev": 0.2,
+                    "percentChange": 0,
+                    "ciLow": null,
+                    "ciHigh": null,
+                    "pValue": null,
+                    "errorMessage": null
+                  }
+                ]
+              },
+              {
+                "variationId": "var_short",
+                "variationName": "Short form",
+                "users": 2380,
+                "analyses": [
+                  {
+                    "engine": "frequentist",
+                    "numerator": 150,
+                    "denominator": 2380,
+                    "mean": 0.06302521008403361,
+                    "stddev": 0.2,
+                    "percentChange": 0,
+                    "ciLow": null,
+                    "ciHigh": null,
+                    "pValue": null,
+                    "errorMessage": null
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

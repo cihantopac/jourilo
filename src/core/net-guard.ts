@@ -542,6 +542,85 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
   };
 }
 
+interface HopOptions {
+  method: 'GET' | 'POST';
+  headers: Record<string, string>;
+  body?: string;
+  timeoutMs: number;
+  maxBytes?: number;
+  deps?: GuardDeps;
+}
+
+type Hop =
+  | { status: number; headers: IncomingMessage['headers']; body: string }
+  | { blocked: string }
+  | { failed: string };
+
+/**
+ * One request under the address policy, without following redirects. The host is resolved and checked before
+ * connecting; through an upstream proxy the request takes a CONNECT tunnel to the checked address, as the guard does.
+ */
+async function guardedHop(current: URL, policy: AddressPolicy, opts: HopOptions): Promise<Hop> {
+  const port = Number(current.port || (current.protocol === 'https:' ? 443 : 80));
+  // Node skips `lookup` for literal IPs, so every hop is checked here as well.
+  const pre = await resolveAllowed(current.hostname, port, policy, opts.deps).catch(
+    (e: Error) => ({ blocked: `${current.hostname} could not be resolved (${e.message})` }) as const,
+  );
+  if ('blocked' in pre) return { blocked: pre.blocked };
+  const servername = current.hostname.replace(/^\[|\]$/g, '');
+  const proxy = viaUpstream(policy, servername, pre.address, port);
+  const secure = current.protocol === 'https:';
+  let tunnel: Socket | undefined;
+  if (proxy) {
+    tunnel = await openTunnel(proxy, pre.address, port, opts.timeoutMs).catch(() => undefined);
+    if (!tunnel) return { failed: 'the upstream proxy did not open a tunnel' };
+  }
+  return new Promise<Hop>((resolve) => {
+    const mod = secure ? https : http;
+    const req = mod.request(
+      current,
+      {
+        method: opts.method,
+        headers: opts.headers,
+        timeout: opts.timeoutMs,
+        ...(tunnel
+          ? {
+              createConnection: () => {
+                tunnel!.resume();
+                return secure
+                  ? tls.connect({
+                      socket: tunnel!,
+                      host: servername,
+                      ...(isIP(servername) ? {} : { servername }),
+                    })
+                  : tunnel!;
+              },
+            }
+          : { lookup: guardedLookup(policy, port, opts.deps) as never, agent: false }),
+      },
+      (r) => {
+        const status = r.statusCode ?? 0;
+        const max = opts.maxBytes ?? 2_000_000;
+        let size = 0;
+        const chunks: Buffer[] = [];
+        r.on('data', (c: Buffer) => {
+          size += c.length;
+          if (size <= max) chunks.push(c);
+          else r.destroy();
+        });
+        const done = () =>
+          resolve({ status, headers: r.headers, body: Buffer.concat(chunks).toString('utf8') });
+        r.on('end', done);
+        r.on('close', done);
+        r.on('error', () => resolve({ failed: 'the response was interrupted' }));
+      },
+    );
+    req.on('timeout', () => req.destroy(new Error(`timed out after ${opts.timeoutMs} ms`)));
+    req.on('error', (e: NodeJS.ErrnoException) => resolve({ failed: e.code ?? e.message }));
+    req.end(opts.body);
+  });
+}
+
 /**
  * GET a small text resource (robots.txt, sitemap) under the address policy. Redirects are followed manually, at most
  * five, only on the same origin, and every hop is resolved and checked again before connecting.
@@ -553,82 +632,73 @@ export async function guardedFetchText(
 ): Promise<string | null> {
   const origin = new URL(url).origin;
   let current = new URL(url);
+  const headers = { 'user-agent': opts.userAgent, accept: 'text/plain, application/xml, text/xml, */*' };
   for (let hop = 0; hop < 6; hop++) {
     if (current.origin !== origin) return null;
-    const port = Number(current.port || (current.protocol === 'https:' ? 443 : 80));
-    // Node skips `lookup` for literal IPs, so every hop is checked here as well.
-    const pre = await resolveAllowed(current.hostname, port, policy, opts.deps).catch(() => null);
-    if (!pre || 'blocked' in pre) return null;
-    // Through the upstream proxy: a CONNECT tunnel to the checked address (HTTPS with TLS to the host name inside it,
-    // plain HTTP with its own Host header), as the guard does.
-    const servername = current.hostname.replace(/^\[|\]$/g, '');
-    const proxy = viaUpstream(policy, servername, pre.address, port);
-    const secure = current.protocol === 'https:';
-    let tunnel: Socket | undefined;
-    if (proxy) {
-      tunnel = await openTunnel(proxy, pre.address, port, opts.timeoutMs).catch(() => undefined);
-      if (!tunnel) return null;
-    }
-    const headers = { 'user-agent': opts.userAgent, accept: 'text/plain, application/xml, text/xml, */*' };
-    const res = await new Promise<{ status: number; location?: string; body?: string } | null>((resolve) => {
-      const mod = secure ? https : http;
-      const req = mod.get(
-        current,
-        {
-          headers,
-          timeout: opts.timeoutMs,
-          ...(tunnel
-            ? {
-                createConnection: () => {
-                  tunnel!.resume();
-                  return secure
-                    ? tls.connect({
-                        socket: tunnel!,
-                        host: servername,
-                        ...(isIP(servername) ? {} : { servername }),
-                      })
-                    : tunnel!;
-                },
-              }
-            : { lookup: guardedLookup(policy, port, opts.deps) as never, agent: false }),
-        },
-        (r) => {
-          const status = r.statusCode ?? 0;
-          if (status >= 300 && status < 400 && r.headers.location) {
-            r.resume();
-            return resolve({ status, location: r.headers.location });
-          }
-          if (status < 200 || status >= 300) {
-            r.resume();
-            return resolve({ status });
-          }
-          const max = opts.maxBytes ?? 2_000_000;
-          let size = 0;
-          const chunks: Buffer[] = [];
-          r.on('data', (c: Buffer) => {
-            size += c.length;
-            if (size <= max) chunks.push(c);
-            else r.destroy();
-          });
-          const done = () => resolve({ status, body: Buffer.concat(chunks).toString('utf8') });
-          r.on('end', done);
-          r.on('close', done);
-          r.on('error', () => resolve(null));
-        },
-      );
-      req.on('timeout', () => req.destroy());
-      req.on('error', () => resolve(null));
-    });
-    if (!res) return null;
-    if (res.location) {
+    const res = await guardedHop(current, policy, { ...opts, method: 'GET', headers });
+    if (!('status' in res)) return null;
+    if (res.status >= 300 && res.status < 400 && res.headers.location) {
       try {
-        current = new URL(res.location, current);
+        current = new URL(res.headers.location, current);
       } catch {
         return null;
       }
       continue;
     }
-    return res.body ?? null;
+    if (res.status < 200 || res.status >= 300) return null;
+    return res.body;
   }
   return null;
+}
+
+/**
+ * A `fetch` for Jourilo's own API calls (the read-only analytics adapters) under the same address policy and upstream
+ * proxy as every other outbound request. GET follows at most five redirects, only on the same origin, so headers such
+ * as Authorization never reach another host; any other method returns a redirect as it is. A destination the policy
+ * refuses throws GuardBlockedError; a connection that fails throws an Error naming the cause, never the headers.
+ */
+export async function guardedFetch(
+  url: string,
+  policy: AddressPolicy,
+  opts: {
+    method?: 'GET' | 'POST';
+    headers?: Record<string, string>;
+    body?: string;
+    timeoutMs: number;
+    maxBytes?: number;
+    deps?: GuardDeps;
+  },
+): Promise<Response> {
+  const method = opts.method ?? 'GET';
+  const origin = new URL(url).origin;
+  let current = new URL(url);
+  for (let hop = 0; hop < 6; hop++) {
+    if (current.origin !== origin)
+      throw new GuardBlockedError(
+        `${origin} redirected to another origin (${current.origin}); not followed.`,
+      );
+    const res = await guardedHop(current, policy, {
+      method,
+      headers: opts.headers ?? {},
+      ...(opts.body !== undefined ? { body: opts.body } : {}),
+      timeoutMs: opts.timeoutMs,
+      ...(opts.maxBytes !== undefined ? { maxBytes: opts.maxBytes } : {}),
+      ...(opts.deps ? { deps: opts.deps } : {}),
+    });
+    if ('blocked' in res) throw new GuardBlockedError(res.blocked);
+    if ('failed' in res) throw new Error(`${current.host}: ${res.failed}`);
+    if (method === 'GET' && res.status >= 300 && res.status < 400 && res.headers.location) {
+      current = new URL(res.headers.location, current);
+      continue;
+    }
+    const headers = new Headers();
+    for (const [k, v] of Object.entries(res.headers)) {
+      if (v === undefined) continue;
+      for (const one of Array.isArray(v) ? v : [v]) headers.append(k, one);
+    }
+    const status = res.status >= 200 && res.status <= 599 ? res.status : 502;
+    const empty = status === 204 || status === 205 || status === 304;
+    return new Response(empty ? null : res.body, { status, headers });
+  }
+  throw new Error(`${origin}: too many redirects`);
 }

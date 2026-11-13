@@ -1,0 +1,17 @@
+{
+  "_synthesized": "funnels.json without the control group. Not a live recording.",
+  "data": [
+    {
+      "groupValue": "treatment",
+      "meta": {
+        "segmentIndex": 0
+      },
+      "events": ["$exposure", "purchase_completed"],
+      "cumulativeRaw": [2380, 150],
+      "cumulative": [1, 0.063],
+      "stepByStep": [1, 0.063],
+      "medianTransTimes": [0, 60000],
+      "avgTransTimes": [0, 90000]
+    }
+  ]
+}

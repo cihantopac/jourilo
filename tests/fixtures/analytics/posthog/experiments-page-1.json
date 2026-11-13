@@ -1,0 +1,9 @@
+{
+  "_synthesized": "Shape of GET /api/projects/:project_id/experiments/ (posthog.com/docs/api/experiments; `next`/`previous` pagination from posthog.com/docs/api). Not a live recording.",
+  "next": "https://us.posthog.com/api/projects/@current/experiments/?limit=100&offset=100",
+  "previous": null,
+  "results": [
+    { "id": 40, "name": "Hero headline", "feature_flag_key": "hero-headline", "metrics": [] },
+    { "id": 41, "name": "Pricing table order", "feature_flag_key": "pricing-order", "metrics": [] }
+  ]
+}

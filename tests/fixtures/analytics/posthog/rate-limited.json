@@ -1,0 +1,7 @@
+{
+  "_synthesized": "Body PostHog documents for an exhausted query budget (HTTP 429 with Retry-After; posthog.com/docs/api/queries, Rate limits). Not a live recording.",
+  "type": "throttled_error",
+  "code": "api_queries_budget_exceeded",
+  "detail": "Request was throttled. Expected available in 30 seconds.",
+  "attr": null
+}

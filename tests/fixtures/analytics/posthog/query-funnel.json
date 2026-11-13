@@ -1,0 +1,26 @@
+{
+  "_synthesized": "Shape of POST /api/projects/:project_id/query/ with an ExperimentQuery (NewExperimentQueryResponse in posthog/schema.py; posthog.com/docs/api/queries). For a funnel metric number_of_samples = exposed users, sum = users who reached the last step. Not a live recording.",
+  "kind": "ExperimentQuery",
+  "baseline": {
+    "key": "control",
+    "number_of_samples": 2400,
+    "sum": 120,
+    "sum_squares": 120,
+    "step_counts": [120]
+  },
+  "variant_results": [
+    {
+      "key": "test",
+      "number_of_samples": 2380,
+      "sum": 150,
+      "sum_squares": 150,
+      "step_counts": [150],
+      "method": "frequentist",
+      "p_value": 0.06,
+      "significant": false,
+      "confidence_interval": [-0.001, 0.026],
+      "validation_failures": []
+    }
+  ],
+  "is_precomputed": false
+}

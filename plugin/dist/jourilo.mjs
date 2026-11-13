@@ -34818,7 +34818,7 @@ var require_axe = __commonJS({
         Plugin.prototype.run = function run3() {
           return this._run.apply(this, arguments);
         };
-        Plugin.prototype.collect = function collect() {
+        Plugin.prototype.collect = function collect2() {
           return this._collect.apply(this, arguments);
         };
         Plugin.prototype.cleanup = function cleanup2(done) {
@@ -40798,14 +40798,14 @@ async function startNetGuard(policy, deps = {}) {
       onFail
     );
   };
-  const pipeBoth = (client, upstream, head) => {
+  const pipeBoth = (client2, upstream, head) => {
     if (head.length) upstream.write(head);
-    upstream.pipe(client);
-    client.pipe(upstream);
-    upstream.on("error", () => client.destroy());
-    client.on("error", () => upstream.destroy());
-    client.on("close", () => upstream.destroy());
-    upstream.on("close", () => client.destroy());
+    upstream.pipe(client2);
+    client2.pipe(upstream);
+    upstream.on("error", () => client2.destroy());
+    client2.on("error", () => upstream.destroy());
+    client2.on("close", () => upstream.destroy());
+    upstream.on("close", () => client2.destroy());
   };
   const server = http.createServer((req, res) => {
     let target;
@@ -40873,24 +40873,24 @@ async function startNetGuard(policy, deps = {}) {
       }
     );
   });
-  server.on("connect", (req, client, head) => {
-    track(client);
-    client.on("error", () => void 0);
+  server.on("connect", (req, client2, head) => {
+    track(client2);
+    client2.on("error", () => void 0);
     const hp = splitHostPort(req.url ?? "", 443);
     if (!hp) {
-      client.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+      client2.end("HTTP/1.1 400 Bad Request\r\n\r\n");
       return;
     }
     connectUpstream(
       hp.host,
       hp.port,
       (upstream) => {
-        client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
-        pipeBoth(client, upstream, head);
+        client2.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+        pipeBoth(client2, upstream, head);
       },
       // Browsers ignore a failed CONNECT's headers. Jourilo's own fetches through the guard (route.fetch for
       // --extra-header) read the reply as the response, so it carries the token signal too, in fixed wording.
-      (status, reason) => client.end(
+      (status, reason) => client2.end(
         `HTTP/1.1 ${status} ${status === 403 ? "Forbidden" : "Bad Gateway"}\r
 content-type: text/plain\r
 ${GUARD_UPSTREAM_ERROR_HEADER}: ${token} ${status === 403 ? GUARD_REFUSED_WORDING : upstreamFailureWording(reason)}\r
@@ -40899,14 +40899,14 @@ ${status === 403 ? `Blocked by Jourilo network guard: ${reason}` : ""}`
       )
     );
   });
-  server.on("upgrade", (req, client, head) => {
-    track(client);
-    client.on("error", () => void 0);
+  server.on("upgrade", (req, client2, head) => {
+    track(client2);
+    client2.on("error", () => void 0);
     let target;
     try {
       target = new URL(req.url ?? "");
     } catch {
-      client.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+      client2.end("HTTP/1.1 400 Bad Request\r\n\r\n");
       return;
     }
     connectUpstream(
@@ -40922,9 +40922,9 @@ ${status === 403 ? `Blocked by Jourilo network guard: ${reason}` : ""}`
         upstream.write(`${lines.join("\r\n")}\r
 \r
 `);
-        pipeBoth(client, upstream, head);
+        pipeBoth(client2, upstream, head);
       },
-      (status) => client.end(`HTTP/1.1 ${status} ${status === 403 ? "Forbidden" : "Bad Gateway"}\r
+      (status) => client2.end(`HTTP/1.1 ${status} ${status === 403 ? "Forbidden" : "Bad Gateway"}\r
 \r
 `)
     );
@@ -40948,80 +40948,114 @@ ${status === 403 ? `Blocked by Jourilo network guard: ${reason}` : ""}`
     })
   };
 }
+async function guardedHop(current, policy, opts) {
+  const port = Number(current.port || (current.protocol === "https:" ? 443 : 80));
+  const pre = await resolveAllowed(current.hostname, port, policy, opts.deps).catch(
+    (e) => ({ blocked: `${current.hostname} could not be resolved (${e.message})` })
+  );
+  if ("blocked" in pre) return { blocked: pre.blocked };
+  const servername = current.hostname.replace(/^\[|\]$/g, "");
+  const proxy = viaUpstream(policy, servername, pre.address, port);
+  const secure = current.protocol === "https:";
+  let tunnel;
+  if (proxy) {
+    tunnel = await openTunnel(proxy, pre.address, port, opts.timeoutMs).catch(() => void 0);
+    if (!tunnel) return { failed: "the upstream proxy did not open a tunnel" };
+  }
+  return new Promise((resolve10) => {
+    const mod = secure ? https : http;
+    const req = mod.request(
+      current,
+      {
+        method: opts.method,
+        headers: opts.headers,
+        timeout: opts.timeoutMs,
+        ...tunnel ? {
+          createConnection: () => {
+            tunnel.resume();
+            return secure ? tls.connect({
+              socket: tunnel,
+              host: servername,
+              ...isIP2(servername) ? {} : { servername }
+            }) : tunnel;
+          }
+        } : { lookup: guardedLookup(policy, port, opts.deps), agent: false }
+      },
+      (r) => {
+        const status = r.statusCode ?? 0;
+        const max = opts.maxBytes ?? 2e6;
+        let size = 0;
+        const chunks = [];
+        r.on("data", (c) => {
+          size += c.length;
+          if (size <= max) chunks.push(c);
+          else r.destroy();
+        });
+        const done = () => resolve10({ status, headers: r.headers, body: Buffer.concat(chunks).toString("utf8") });
+        r.on("end", done);
+        r.on("close", done);
+        r.on("error", () => resolve10({ failed: "the response was interrupted" }));
+      }
+    );
+    req.on("timeout", () => req.destroy(new Error(`timed out after ${opts.timeoutMs} ms`)));
+    req.on("error", (e) => resolve10({ failed: e.code ?? e.message }));
+    req.end(opts.body);
+  });
+}
 async function guardedFetchText(url, policy, opts) {
   const origin = new URL(url).origin;
   let current = new URL(url);
+  const headers = { "user-agent": opts.userAgent, accept: "text/plain, application/xml, text/xml, */*" };
   for (let hop = 0; hop < 6; hop++) {
     if (current.origin !== origin) return null;
-    const port = Number(current.port || (current.protocol === "https:" ? 443 : 80));
-    const pre = await resolveAllowed(current.hostname, port, policy, opts.deps).catch(() => null);
-    if (!pre || "blocked" in pre) return null;
-    const servername = current.hostname.replace(/^\[|\]$/g, "");
-    const proxy = viaUpstream(policy, servername, pre.address, port);
-    const secure = current.protocol === "https:";
-    let tunnel;
-    if (proxy) {
-      tunnel = await openTunnel(proxy, pre.address, port, opts.timeoutMs).catch(() => void 0);
-      if (!tunnel) return null;
-    }
-    const headers = { "user-agent": opts.userAgent, accept: "text/plain, application/xml, text/xml, */*" };
-    const res = await new Promise((resolve10) => {
-      const mod = secure ? https : http;
-      const req = mod.get(
-        current,
-        {
-          headers,
-          timeout: opts.timeoutMs,
-          ...tunnel ? {
-            createConnection: () => {
-              tunnel.resume();
-              return secure ? tls.connect({
-                socket: tunnel,
-                host: servername,
-                ...isIP2(servername) ? {} : { servername }
-              }) : tunnel;
-            }
-          } : { lookup: guardedLookup(policy, port, opts.deps), agent: false }
-        },
-        (r) => {
-          const status = r.statusCode ?? 0;
-          if (status >= 300 && status < 400 && r.headers.location) {
-            r.resume();
-            return resolve10({ status, location: r.headers.location });
-          }
-          if (status < 200 || status >= 300) {
-            r.resume();
-            return resolve10({ status });
-          }
-          const max = opts.maxBytes ?? 2e6;
-          let size = 0;
-          const chunks = [];
-          r.on("data", (c) => {
-            size += c.length;
-            if (size <= max) chunks.push(c);
-            else r.destroy();
-          });
-          const done = () => resolve10({ status, body: Buffer.concat(chunks).toString("utf8") });
-          r.on("end", done);
-          r.on("close", done);
-          r.on("error", () => resolve10(null));
-        }
-      );
-      req.on("timeout", () => req.destroy());
-      req.on("error", () => resolve10(null));
-    });
-    if (!res) return null;
-    if (res.location) {
+    const res = await guardedHop(current, policy, { ...opts, method: "GET", headers });
+    if (!("status" in res)) return null;
+    if (res.status >= 300 && res.status < 400 && res.headers.location) {
       try {
-        current = new URL(res.location, current);
+        current = new URL(res.headers.location, current);
       } catch {
         return null;
       }
       continue;
     }
-    return res.body ?? null;
+    if (res.status < 200 || res.status >= 300) return null;
+    return res.body;
   }
   return null;
+}
+async function guardedFetch(url, policy, opts) {
+  const method = opts.method ?? "GET";
+  const origin = new URL(url).origin;
+  let current = new URL(url);
+  for (let hop = 0; hop < 6; hop++) {
+    if (current.origin !== origin)
+      throw new GuardBlockedError(
+        `${origin} redirected to another origin (${current.origin}); not followed.`
+      );
+    const res = await guardedHop(current, policy, {
+      method,
+      headers: opts.headers ?? {},
+      ...opts.body !== void 0 ? { body: opts.body } : {},
+      timeoutMs: opts.timeoutMs,
+      ...opts.maxBytes !== void 0 ? { maxBytes: opts.maxBytes } : {},
+      ...opts.deps ? { deps: opts.deps } : {}
+    });
+    if ("blocked" in res) throw new GuardBlockedError(res.blocked);
+    if ("failed" in res) throw new Error(`${current.host}: ${res.failed}`);
+    if (method === "GET" && res.status >= 300 && res.status < 400 && res.headers.location) {
+      current = new URL(res.headers.location, current);
+      continue;
+    }
+    const headers = new Headers();
+    for (const [k, v] of Object.entries(res.headers)) {
+      if (v === void 0) continue;
+      for (const one of Array.isArray(v) ? v : [v]) headers.append(k, one);
+    }
+    const status = res.status >= 200 && res.status <= 599 ? res.status : 502;
+    const empty = status === 204 || status === 205 || status === 304;
+    return new Response(empty ? null : res.body, { status, headers });
+  }
+  throw new Error(`${origin}: too many redirects`);
 }
 
 // src/journeys/safety.ts
@@ -52869,6 +52903,426 @@ init_errors();
 import { existsSync as existsSync17, mkdirSync as mkdirSync7, readFileSync as readFileSync15, writeFileSync as writeFileSync12 } from "node:fs";
 import { join as join23 } from "node:path";
 
+// src/experiment/adapters/index.ts
+init_errors();
+
+// src/experiment/adapters/amplitude.ts
+init_errors();
+
+// src/experiment/adapters/common.ts
+init_errors();
+var IncompleteData = class extends Error {
+};
+var TIMEOUT_MS = 3e4;
+var MAX_BYTES = 2e7;
+function requireEnv(env, name, what) {
+  const v = env[name]?.trim();
+  if (!v)
+    throw new JouriloError(
+      "USAGE",
+      `${name} is not set.`,
+      `Set ${name} to ${what}. It is read from the environment only.`
+    );
+  return v;
+}
+function hostFrom(env, name, fallback) {
+  const raw = env[name]?.trim() || fallback;
+  let url;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
+  } catch {
+    throw new JouriloError("USAGE", `${name} is not a valid URL.`, "Example: https://eu.posthog.com");
+  }
+  if (url.username || url.password)
+    throw new JouriloError(
+      "USAGE",
+      `${name} must not contain credentials; keys are read from their own variables.`
+    );
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && isLocalHostname(url.hostname)))
+    throw new JouriloError("USAGE", `${name} must be an https:// URL (plain http only for a local host).`);
+  url.pathname = url.pathname.replace(/\/+$/, "");
+  url.search = "";
+  url.hash = "";
+  return url;
+}
+function scrub(text, secrets) {
+  let out = text;
+  for (const s of secrets) if (s) out = out.split(s).join("[redacted]");
+  return out;
+}
+function defaultFetch(proxy) {
+  return (url, init) => {
+    const u = new URL(url);
+    const upstream = proxy?.(u);
+    const policy = {
+      target: isLocalHostname(u.hostname) ? "local" : "public",
+      allowPrivate: false,
+      ...upstream ? { upstream } : {}
+    };
+    return guardedFetch(url, policy, { ...init, timeoutMs: TIMEOUT_MS, maxBytes: MAX_BYTES });
+  };
+}
+function client(vendor, deps, auth) {
+  const fetch = deps.fetch ?? defaultFetch(deps.proxy);
+  const clean = (t) => scrub(t, auth.secrets);
+  const send = async (method, url, body) => {
+    const path2 = new URL(url).pathname;
+    let res;
+    try {
+      res = await fetch(url, {
+        method,
+        headers: {
+          authorization: auth.header,
+          accept: "application/json",
+          "user-agent": `Jourilo/${VERSION} (+https://github.com/cihantopac/jourilo)`,
+          ...body !== void 0 ? { "content-type": "application/json" } : {}
+        },
+        ...body !== void 0 ? { body: JSON.stringify(body) } : {}
+      });
+    } catch (e) {
+      if (e instanceof GuardBlockedError)
+        throw new JouriloError(
+          "UNSAFE_URL",
+          clean(`${vendor}: the network guard refused the request: ${e.message}`)
+        );
+      throw new IncompleteData(
+        clean(`${vendor} could not be reached for ${path2} (${e.message}).`)
+      );
+    }
+    if (res.status === 429) {
+      const retry = res.headers.get("retry-after");
+      throw new IncompleteData(
+        `${vendor} rate-limited the request for ${path2} (HTTP 429)${retry && /^\d+$/.test(retry) ? `; retry after ${retry} s` : ""}. The numbers read so far are partial.`
+      );
+    }
+    if (res.status === 401 || res.status === 403)
+      throw new JouriloError(
+        "USAGE",
+        `${vendor} refused the key in ${auth.keyVars} (HTTP ${res.status}).`,
+        "Check that the key is valid and has read access to experiments."
+      );
+    if (res.status === 404)
+      throw new JouriloError("NOT_FOUND", `${vendor}: ${path2} was not found (HTTP 404).`);
+    if (res.status < 200 || res.status >= 300)
+      throw new IncompleteData(
+        `${vendor} answered HTTP ${res.status} for ${path2}; that page of data is missing.`
+      );
+    try {
+      return JSON.parse(await res.text());
+    } catch {
+      throw new IncompleteData(`${vendor} sent a response for ${path2} that is not JSON.`);
+    }
+  };
+  return {
+    get: (url) => send("GET", url),
+    post: (url, body) => send("POST", url, body),
+    scrub: clean
+  };
+}
+var isCount = (n) => typeof n === "number" && Number.isInteger(n) && n >= 0;
+async function collect(id, read3, secrets) {
+  let complete = true;
+  const state = {
+    metric: "",
+    variants: [],
+    notes: [],
+    incomplete(note) {
+      complete = false;
+      state.notes.push(note);
+    }
+  };
+  try {
+    await read3(state);
+  } catch (e) {
+    if (e instanceof IncompleteData) state.incomplete(e.message);
+    else if (e instanceof JouriloError) throw new JouriloError(e.code, scrub(e.message, secrets), e.hint);
+    else throw e;
+  }
+  return {
+    id,
+    metric: state.metric,
+    variants: state.variants,
+    complete,
+    notes: state.notes.map((n) => scrub(n, secrets))
+  };
+}
+function settleVariants(vendor, state, expected) {
+  if (expected.length) {
+    const byName = new Map(state.variants.map((v) => [v.name, v]));
+    const missing = expected.filter((n) => !byName.has(n));
+    if (missing.length)
+      state.incomplete(
+        `${vendor} returned no numbers for variant${missing.length > 1 ? "s" : ""} ${missing.join(", ")}; a comparison without ${missing.length > 1 ? "them" : "it"} would be partial.`
+      );
+    const extra = state.variants.filter((v) => !expected.includes(v.name));
+    state.variants = [...expected.flatMap((n) => byName.get(n) ?? []), ...extra];
+  }
+  if (state.variants.length < 2 && state.notes.length === 0)
+    state.incomplete(
+      `${vendor} returned ${state.variants.length} variant(s); a comparison needs at least two.`
+    );
+}
+function pushVariant(state, name, exposures, conversions) {
+  if (!isCount(exposures) || !isCount(conversions) || conversions > exposures) {
+    state.incomplete(
+      `Variant ${name}: the numbers are not user counts with conversions \u2264 exposures (got ${String(conversions)}/${String(exposures)}); analyze needs a conversion metric.`
+    );
+    return;
+  }
+  state.variants.push({ name, exposures, conversions });
+}
+
+// src/experiment/adapters/amplitude.ts
+var GROUP_LIMIT = 1e3;
+var NO_VALUE = "(none)";
+function day(value, flag2) {
+  const m = value?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m)
+    throw new JouriloError("USAGE", `${flag2} must be a date as YYYY-MM-DD (Amplitude needs the date range).`);
+  return `${m[1]}${m[2]}${m[3]}`;
+}
+function amplitudeAdapter(deps) {
+  const apiKey = requireEnv(deps.env, "AMPLITUDE_API_KEY", "the Amplitude project's API key");
+  const secret = requireEnv(deps.env, "AMPLITUDE_SECRET_KEY", "the Amplitude project's secret key");
+  const host = hostFrom(deps.env, "AMPLITUDE_HOST", "https://amplitude.com");
+  if (!deps.metric)
+    throw new JouriloError(
+      "USAGE",
+      "Amplitude needs --metric EVENT: the conversion event to count after exposure."
+    );
+  const event = deps.metric;
+  const start = day(deps.start, "--start");
+  const end = deps.end ? day(deps.end, "--end") : (/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "");
+  const basic = Buffer.from(`${apiKey}:${secret}`).toString("base64");
+  const http2 = client("Amplitude", deps, {
+    header: `Basic ${basic}`,
+    keyVars: "AMPLITUDE_API_KEY / AMPLITUDE_SECRET_KEY",
+    secrets: [apiKey, secret, basic]
+  });
+  return {
+    name: "amplitude",
+    experiment: (flagKey) => collect(
+      flagKey,
+      async (state) => {
+        state.metric = event;
+        const q = new URLSearchParams();
+        q.append(
+          "e",
+          JSON.stringify({
+            event_type: "$exposure",
+            filters: [
+              {
+                subprop_type: "event",
+                subprop_key: "flag_key",
+                subprop_op: "is",
+                subprop_value: [flagKey]
+              }
+            ]
+          })
+        );
+        q.append("e", JSON.stringify({ event_type: event }));
+        q.set("start", start);
+        q.set("end", end);
+        q.set("g", `gp:[Experiment] ${flagKey}`);
+        q.set("limit", String(GROUP_LIMIT));
+        const body = await http2.get(`${host.href.replace(/\/$/, "")}/api/2/funnels?${q}`);
+        const groups = body.data ?? [];
+        if (groups.length >= GROUP_LIMIT)
+          throw new IncompleteData(
+            `Amplitude returned ${GROUP_LIMIT} groups, its limit; variants may be cut off.`
+          );
+        let unassigned = 0;
+        for (const g of groups) {
+          const name = g.groupValue ?? NO_VALUE;
+          const raw = g.cumulativeRaw ?? [];
+          if (name === NO_VALUE) {
+            unassigned += raw[0] ?? 0;
+            continue;
+          }
+          pushVariant(state, name, raw[0], raw.length > 1 ? raw.at(-1) : void 0);
+        }
+        if (unassigned)
+          state.notes.push(
+            `${unassigned} exposed user(s) had no [Experiment] ${flagKey} property and were left out.`
+          );
+        if (!state.variants.some((v) => v.name === "control"))
+          state.incomplete(
+            "Amplitude returned no numbers for the control variant; a comparison without it would be partial."
+          );
+        const others = state.variants.filter((v) => v.name !== "control").map((v) => v.name);
+        settleVariants(
+          "Amplitude",
+          state,
+          state.variants.some((v) => v.name === "control") ? ["control", ...others] : []
+        );
+      },
+      [apiKey, secret, basic]
+    )
+  };
+}
+
+// src/experiment/adapters/growthbook.ts
+init_errors();
+var MAX_PAGES = 50;
+function growthbookAdapter(deps) {
+  const key = requireEnv(deps.env, "GROWTHBOOK_API_KEY", "a GrowthBook secret API key with read access");
+  const host = hostFrom(deps.env, "GROWTHBOOK_HOST", "https://api.growthbook.io");
+  const base2 = `${host.href.replace(/\/$/, "")}/api/v1`;
+  const http2 = client("GrowthBook", deps, {
+    header: `Bearer ${key}`,
+    keyVars: "GROWTHBOOK_API_KEY",
+    secrets: [key]
+  });
+  async function find(trackingKey) {
+    let offset = 0;
+    for (let page = 0; offset !== null && page < MAX_PAGES; page++) {
+      const body = await http2.get(`${base2}/experiments?limit=100&offset=${offset}`);
+      const hit = body.experiments?.find((e) => e.trackingKey === trackingKey);
+      if (hit) return hit;
+      offset = body.hasMore && typeof body.nextOffset === "number" ? body.nextOffset : null;
+    }
+    if (offset !== null)
+      throw new IncompleteData(
+        `GrowthBook listed more than ${MAX_PAGES} pages of experiments; ${trackingKey} was not among them.`
+      );
+    throw new JouriloError("NOT_FOUND", `GrowthBook has no experiment with the tracking key ${trackingKey}.`);
+  }
+  return {
+    name: "growthbook",
+    experiment: (id) => collect(
+      id,
+      async (state) => {
+        state.metric = deps.metric ?? "";
+        const exp = id.startsWith("exp_") ? (await http2.get(`${base2}/experiments/${encodeURIComponent(id)}`)).experiment : await find(id);
+        const raw = await http2.get(`${base2}/experiments/${encodeURIComponent(exp.id)}/results`);
+        const slices = raw.result?.results ?? raw.results ?? [];
+        const overall = slices.find((s) => !(s.dimensionValue ?? s.dimension)) ?? slices[0];
+        if (!overall) throw new IncompleteData("GrowthBook has no analysis for this experiment yet.");
+        const wanted = deps.metric ?? exp.settings?.goals?.[0]?.metricId;
+        const metric2 = wanted ? overall.metrics?.find((m) => m.metricId === wanted || m.metricName === wanted) : overall.metrics?.[0];
+        if (!metric2)
+          throw new IncompleteData(
+            wanted ? `Metric "${wanted}" is not in the experiment's results.` : "The results contain no metric."
+          );
+        state.metric = metric2.metricName || metric2.metricId;
+        const variations = exp.variations ?? [];
+        const nameOf = (variationId) => {
+          const v = variations.find((x) => x.variationId === variationId);
+          return v?.name || v?.key || variationId;
+        };
+        for (const v of metric2.variations ?? []) {
+          const a = v.analyses?.[0];
+          if (a?.errorMessage) {
+            state.incomplete(`Variant ${nameOf(v.variationId)}: GrowthBook reported an analysis error.`);
+            continue;
+          }
+          pushVariant(state, nameOf(v.variationId), v.users ?? a?.denominator, a?.numerator);
+        }
+        settleVariants(
+          "GrowthBook",
+          state,
+          variations.map((v) => nameOf(v.variationId))
+        );
+      },
+      [key]
+    )
+  };
+}
+
+// src/experiment/adapters/posthog.ts
+init_errors();
+var MAX_PAGES2 = 50;
+function posthogAdapter(deps) {
+  const key = requireEnv(
+    deps.env,
+    "POSTHOG_API_KEY",
+    "a PostHog personal API key with experiment:read and query:read"
+  );
+  const host = hostFrom(deps.env, "POSTHOG_HOST", "https://us.posthog.com");
+  const project = deps.env.POSTHOG_PROJECT_ID?.trim() || "@current";
+  if (!/^(@current|\d+)$/.test(project))
+    throw new JouriloError(
+      "USAGE",
+      "POSTHOG_PROJECT_ID must be a numeric project id (or unset for @current)."
+    );
+  const base2 = `${host.href.replace(/\/$/, "")}/api/projects/${project}`;
+  const http2 = client("PostHog", deps, {
+    header: `Bearer ${key}`,
+    keyVars: "POSTHOG_API_KEY",
+    secrets: [key]
+  });
+  async function find(flagKey) {
+    let url = `${base2}/experiments/?limit=100`;
+    for (let page = 0; url && page < MAX_PAGES2; page++) {
+      const body = await http2.get(url);
+      const hit = body.results?.find((e) => e.feature_flag_key === flagKey);
+      if (hit) return hit;
+      url = body.next ?? null;
+      if (url && new URL(url, base2).origin !== host.origin)
+        throw new IncompleteData(
+          "PostHog pointed the next page of experiments at another host; it was not followed."
+        );
+      if (url) url = new URL(url, base2).href;
+    }
+    if (url)
+      throw new IncompleteData(
+        `PostHog listed more than ${MAX_PAGES2} pages of experiments; ${flagKey} was not among them.`
+      );
+    throw new JouriloError("NOT_FOUND", `PostHog has no experiment with the feature flag key ${flagKey}.`);
+  }
+  return {
+    name: "posthog",
+    experiment: (id) => collect(
+      id,
+      async (state) => {
+        state.metric = deps.metric ?? "";
+        const exp = /^\d+$/.test(id) ? await http2.get(`${base2}/experiments/${id}/`) : await find(id);
+        const metrics = exp.metrics ?? [];
+        const metric2 = deps.metric ? metrics.find((m) => m.name === deps.metric || m.uuid === deps.metric) : metrics[0];
+        if (!metric2)
+          throw new IncompleteData(
+            deps.metric ? `Metric "${deps.metric}" is not among the experiment's primary metrics.` : "The experiment has no primary metric."
+          );
+        state.metric = metric2.name || metric2.series?.at(-1)?.name || metric2.series?.at(-1)?.event || metric2.source?.event || "primary metric";
+        if (metric2.metric_type !== "funnel")
+          throw new IncompleteData(
+            `"${state.metric}" is a ${metric2.metric_type ?? "unknown"} metric; analyze needs a conversion (funnel) metric.`
+          );
+        const res = await http2.post(`${base2}/query/`, {
+          query: { kind: "ExperimentQuery", experiment_id: exp.id, metric: metric2 }
+        });
+        if (!res.baseline)
+          throw new IncompleteData("PostHog has not computed results for this metric yet.");
+        for (const r of [res.baseline, ...res.variant_results ?? []])
+          pushVariant(state, r.key, r.number_of_samples, r.sum);
+        const excluded = new Set(exp.excluded_variants ?? []);
+        const flagVariants = (exp.feature_flag?.filters?.multivariate?.variants ?? exp.parameters?.feature_flag_variants ?? []).map((v) => v.key).filter((k) => !excluded.has(k));
+        const baseline = res.baseline.key;
+        settleVariants("PostHog", state, [
+          ...flagVariants.filter((k) => k === baseline),
+          ...flagVariants.filter((k) => k !== baseline)
+        ]);
+      },
+      [key]
+    )
+  };
+}
+
+// src/experiment/adapters/index.ts
+var ADAPTERS2 = ["posthog", "growthbook", "amplitude"];
+function adapterFor(name, deps) {
+  switch (name) {
+    case "posthog":
+      return posthogAdapter(deps);
+    case "growthbook":
+      return growthbookAdapter(deps);
+    case "amplitude":
+      return amplitudeAdapter(deps);
+    default:
+      throw new JouriloError("USAGE", `Unknown adapter "${name}".`, `Use one of: ${ADAPTERS2.join(", ")}.`);
+  }
+}
+
 // src/experiment/stats.ts
 function normCdf(z) {
   const t = 1 / (1 + 0.3275911 * (Math.abs(z) / Math.SQRT2));
@@ -53221,6 +53675,69 @@ function arm(spec, name) {
     );
   return { name, conversions: Number(m[1]), visitors: Number(m[2]) };
 }
+function analyzeOptions(ctx) {
+  return {
+    alpha: numOpt(ctx, "alpha") ?? 0.05,
+    expectedShare: numOpt(ctx, "expected-share") ?? 0.5,
+    ...numOpt(ctx, "planned") ? { plannedPerVariant: numOpt(ctx, "planned") } : {}
+  };
+}
+async function analyzeFrom(ctx, from) {
+  if (str(ctx, "control") !== void 0 || str(ctx, "variant") !== void 0)
+    throw new JouriloError("USAGE", "--from reads the numbers itself; leave out --control and --variant.");
+  const m = from.match(/^([a-z]+):(.+)$/);
+  if (!m)
+    throw new JouriloError(
+      "USAGE",
+      `--from must be <adapter>:<id>, e.g. posthog:42 (adapters: ${ADAPTERS2.join(", ")}).`
+    );
+  const [, name, id] = m;
+  const metric2 = str(ctx, "metric");
+  const start = str(ctx, "start");
+  const end = str(ctx, "end");
+  const adapter = adapterFor(name, {
+    env: process.env,
+    proxy: (url) => proxyFrom(ctx, url),
+    ...metric2 !== void 0 ? { metric: metric2 } : {},
+    ...start !== void 0 ? { start } : {},
+    ...end !== void 0 ? { end } : {}
+  });
+  const data = await adapter.experiment(id);
+  const label = `${name}:${id}`;
+  if (!data.complete)
+    throw new JouriloError(
+      "INVALID_INPUT",
+      `Not analyzed: ${label} returned incomplete data, and Jourilo does not compute on partial numbers.
+${data.notes.map((n) => `  - ${n}`).join("\n")}`,
+      "Rerun when the vendor has the full numbers (after a rate limit, wait for the Retry-After time)."
+    );
+  if (data.variants.length !== 2)
+    throw new JouriloError(
+      "INVALID_INPUT",
+      `Not analyzed: ${label} has ${data.variants.length} variants (${data.variants.map((v2) => v2.name).join(", ")}); analyze compares two arms.`,
+      "Pass the two arms you want to compare with --control and --variant."
+    );
+  const [c, v] = data.variants;
+  let r;
+  try {
+    r = analyze(
+      { name: c.name, visitors: c.exposures, conversions: c.conversions },
+      { name: v.name, visitors: v.exposures, conversions: v.conversions },
+      analyzeOptions(ctx)
+    );
+  } catch (e) {
+    throw new JouriloError("INVALID_INPUT", `${label}: ${e.message}`);
+  }
+  const vendor = { posthog: "PostHog", growthbook: "GrowthBook", amplitude: "Amplitude" }[adapter.name];
+  return {
+    data: { ...r, source: { adapter: adapter.name, ...data } },
+    text: [
+      `${vendor} experiment ${id}, metric ${data.metric}: ${c.name} ${c.conversions}/${c.exposures}, ${v.name} ${v.conversions}/${v.exposures}`,
+      ...data.notes.map((n) => `Note: ${n}`),
+      ...r.interpretation.map((l) => `\u2022 ${l}`)
+    ].join("\n")
+  };
+}
 var experiment = {
   name: "experiment",
   summary: "Plan and analyze experiments: sample size, plans from conversion hypotheses, significance and SRM checks on your data.",
@@ -53238,12 +53755,29 @@ var experiment = {
     control: { type: "string" },
     variant: { type: "string" },
     "expected-share": { type: "string" },
-    planned: { type: "string" }
+    planned: { type: "string" },
+    from: { type: "string" },
+    metric: { type: "string" },
+    start: { type: "string" },
+    end: { type: "string" }
   },
   details: `Subcommands:
   size     --baseline 4% --mde 10% [--absolute] [--alpha 0.05] [--power 0.8] [--variants 2] [--daily-traffic N]
   plan     --finding <fingerprint> [--run latest] [--baseline 4%] [--mde 10%] [--daily-traffic N]
   analyze  --control 120/2400 --variant 150/2380 [--alpha 0.05] [--expected-share 0.5] [--planned N]
+  analyze  --from <adapter>:<id> [--metric M] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--alpha \u2026]
+
+--from reads the numbers, read-only, from an analytics tool (keys from the environment only, never printed):
+  posthog:<id|flag-key>      POSTHOG_API_KEY (personal key: experiment:read, query:read); POSTHOG_HOST
+                             (default https://us.posthog.com), POSTHOG_PROJECT_ID (default @current).
+                             --metric picks a primary metric by name or uuid (default: the first); funnel only
+  growthbook:<exp_id|key>    GROWTHBOOK_API_KEY; GROWTHBOOK_HOST (default https://api.growthbook.io).
+                             --metric picks a metric by id or name (default: the first goal)
+  amplitude:<flag-key>       AMPLITUDE_API_KEY and AMPLITUDE_SECRET_KEY; AMPLITUDE_HOST (default
+                             https://amplitude.com). --metric EVENT (the conversion event) and --start are
+                             required; --end defaults to today
+Requests go through Jourilo's network guard and HTTPS_PROXY / NO_PROXY. A rate limit (429), a failed page or a
+missing variant makes the data incomplete: analyze then refuses and says why, instead of computing on partial numbers.
 
 Jourilo never invents traffic, conversions or effects: every number comes from you or from the formulas.`,
   async run(ctx) {
@@ -53307,12 +53841,14 @@ Jourilo never invents traffic, conversions or effects: every number comes from y
 Saved: ${md2}` };
     }
     if (sub === "analyze") {
+      const from = str(ctx, "from");
+      if (from !== void 0) return analyzeFrom(ctx, from);
       try {
-        const r = analyze(arm(str(ctx, "control"), "control"), arm(str(ctx, "variant"), "variant"), {
-          alpha: numOpt(ctx, "alpha") ?? 0.05,
-          expectedShare: numOpt(ctx, "expected-share") ?? 0.5,
-          ...numOpt(ctx, "planned") ? { plannedPerVariant: numOpt(ctx, "planned") } : {}
-        });
+        const r = analyze(
+          arm(str(ctx, "control"), "control"),
+          arm(str(ctx, "variant"), "variant"),
+          analyzeOptions(ctx)
+        );
         return { data: r, text: r.interpretation.map((l) => `\u2022 ${l}`).join("\n") };
       } catch (e) {
         if (e instanceof JouriloError) throw e;
