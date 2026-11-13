@@ -16,7 +16,12 @@ import { excerpt, redactUrl } from '../core/redact.js';
 import type { Finding, JourneyResult, JourneyStepResult } from '../core/types.js';
 import { type HostClass, isLocalHostname } from '../core/url-safety.js';
 import { coverAt } from './cover.js';
-import { type BlockedRequest, installRequestGuard } from './request-guard.js';
+import {
+  type BlockedRequest,
+  installRequestGuard,
+  MAX_REDIRECTS,
+  type RequestGuard,
+} from './request-guard.js';
 import { checkAction, interpolate, isSecretValue, type SafetyPolicy } from './safety.js';
 import { describeStep, describeTarget, type JourneySpec, type Step, type Target } from './schema.js';
 
@@ -214,7 +219,12 @@ async function waitForTab(find: () => Page | undefined, timeoutMs: number): Prom
 class Blocked extends Error {}
 
 /** Runs one step. A returned note is appended to the step's description (what was done differently, and why). */
-async function act(tabs: Tabs, step: Step, opts: JourneyRunOptions): Promise<string | void> {
+async function act(
+  tabs: Tabs,
+  step: Step,
+  opts: JourneyRunOptions,
+  guard: RequestGuard,
+): Promise<string | void> {
   const t = opts.stepTimeoutMs;
   const value = (v: string) => interpolate(v, opts.data);
   const page = tabs.current();
@@ -224,6 +234,7 @@ async function act(tabs: Tabs, step: Step, opts: JourneyRunOptions): Promise<str
       const url = new URL(value(step.url), opts.base);
       if (url.origin !== opts.base.origin && !(opts.allowOrigins ?? []).includes(url.origin))
         throw new Blocked(`goto ${url.origin} leaves the target origin ${opts.base.origin}`);
+      guard.expectBrowserNavigation(page, url.toString());
       await page.goto(url.toString(), { waitUntil: 'load', timeout: t * 3 });
       await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => undefined);
       return;
@@ -289,6 +300,7 @@ async function act(tabs: Tabs, step: Step, opts: JourneyRunOptions): Promise<str
       else await page.waitForTimeout(Math.min(step.ms ?? 500, 10_000));
       return;
     case 'back':
+      guard.expectBrowserNavigation(page);
       await page.goBack({ timeout: t });
       return;
     case 'expect': {
@@ -380,6 +392,16 @@ export function chargeStops(
   return true;
 }
 
+/** Waits (up to the step timeout) until the current tab has left Jourilo's hand-over page for a redirect. */
+async function settleRedirects(tabs: Tabs, guard: RequestGuard, timeoutMs: number): Promise<void> {
+  const page = tabs.current();
+  if (!page || !guard.handingOver(page.url())) return;
+  const deadline = Date.now() + timeoutMs;
+  while (!page.isClosed() && guard.handingOver(page.url()) && Date.now() < deadline) await sleep(50);
+  await page.waitForLoadState('load', { timeout: Math.max(1, deadline - Date.now()) }).catch(() => undefined);
+  await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => undefined);
+}
+
 const TRANSIENT = /detached|not stable|intercepts pointer events|Execution context was destroyed|navigation/i;
 
 export async function runJourney(
@@ -409,7 +431,11 @@ export async function runJourney(
       ...(opts.allowOrigins ? { allowOrigins: opts.allowOrigins } : {}),
       mode: 'journey',
     },
-    { checkRedirects: true, ...(opts.extraHeaders ? { targetHeaders: opts.extraHeaders } : {}) },
+    {
+      checkRedirects: true,
+      timeoutMs: opts.stepTimeoutMs * 3,
+      ...(opts.extraHeaders ? { targetHeaders: opts.extraHeaders } : {}),
+    },
   );
   // Every tab and popup of the context is tracked: the request guard above is context-wide, so the policy holds for
   // all of them, including a popup the page opens on its own (its off-origin navigation is aborted before the
@@ -506,18 +532,32 @@ export async function runJourney(
       };
       opts.log?.(`    ${i + 1}. ${res.description}`);
       let note: string | void;
+      const loopsBefore = guard.redirectLoops.length;
       try {
         try {
-          note = await act(tabs, step, opts);
+          note = await act(tabs, step, opts, guard);
         } catch (err) {
-          if (err instanceof Blocked || !TRANSIENT.test((err as Error).message)) throw err;
+          if (
+            err instanceof Blocked ||
+            !TRANSIENT.test((err as Error).message) ||
+            guard.redirectLoops.length > loopsBefore
+          )
+            throw err;
           await sleep(500);
-          note = await act(tabs, step, opts);
+          note = await act(tabs, step, opts, guard);
         }
         if (note) res.description = `${res.description} (${note})`;
+        // A redirect is handed to the browser as a page that navigates on: wait for the chain to land.
+        await settleRedirects(tabs, guard, opts.stepTimeoutMs);
       } catch (err) {
         res.status = err instanceof Blocked ? 'blocked' : 'failed';
         res.error = excerpt((err as Error).message.split('\n')[0], 300);
+      }
+      guard.clearBrowserNavigations();
+      const loop = guard.redirectLoops.slice(loopsBefore)[0];
+      if (loop && res.status !== 'blocked') {
+        res.status = 'failed';
+        res.error = `${loop.url} redirects more than ${MAX_REDIRECTS} times (a redirect loop; a browser stops with ERR_TOO_MANY_REDIRECTS).`;
       }
       // A navigation or an irreversible/payment request the step caused was stopped: the step did not do what it
       // would have done. (Background data requests that were stopped are reported with the journey, not here.)

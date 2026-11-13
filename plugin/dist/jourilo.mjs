@@ -41361,6 +41361,27 @@ async function guardedFetch(url, policy, opts) {
   throw new Error(`${origin}: too many redirects`);
 }
 
+// src/journeys/navigation-cookies.ts
+function isSameSiteNavigation(initiator, url, fetchSite) {
+  if (initiator.kind === "browser" || fetchSite === "none") return true;
+  if (fetchSite === "same-origin" || fetchSite === "same-site") return true;
+  if (fetchSite === "cross-site") return false;
+  if (initiator.kind === "opaque") return false;
+  try {
+    const a = new URL(initiator.origin);
+    const b = new URL(url);
+    return a.protocol === b.protocol && a.hostname === b.hostname;
+  } catch {
+    return false;
+  }
+}
+function navigationCookies(jar, sameSite, method, browser) {
+  const safe = method.toUpperCase() === "GET" || method.toUpperCase() === "HEAD";
+  return jar.filter(
+    (c) => c.sameSite === "Strict" ? sameSite : c.sameSite === "Lax" ? sameSite || safe : c.secure || browser !== "chromium"
+  );
+}
+
 // src/journeys/safety.ts
 var DESTRUCTIVE = lexicon("destructive");
 var FINANCIAL = lexicon("financial");
@@ -41563,6 +41584,23 @@ function isSecretValue(raw) {
 
 // src/journeys/request-guard.ts
 var REDIRECT = /* @__PURE__ */ new Set([301, 302, 303, 307, 308]);
+var MAX_REDIRECTS = 20;
+var withoutHash = (u) => u.split("#")[0];
+function originOf(u) {
+  try {
+    const x = new URL(u ?? "");
+    return x.protocol === "http:" || x.protocol === "https:" ? x.origin : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function pageOf(req) {
+  try {
+    return req.frame().page();
+  } catch {
+    return void 0;
+  }
+}
 function onwardPage(next, method, body, contentType) {
   const target = JSON.stringify(next.toString()).replace(/</g, "\\u003c");
   if (method === "GET" || method === "HEAD")
@@ -41589,6 +41627,24 @@ function frameUrl(req) {
 async function installRequestGuard(target, policy, options = {}) {
   const blocked = [];
   const urls = /* @__PURE__ */ new Set();
+  const redirectLoops = [];
+  const context = "context" in target ? target.context() : target;
+  const browserName = context.browser()?.browserType().name() ?? "chromium";
+  const browserNavigations = /* @__PURE__ */ new Map();
+  const chains = /* @__PURE__ */ new Map();
+  const handOvers = /* @__PURE__ */ new Set();
+  const initiatorOf = (req) => {
+    const page = pageOf(req);
+    if (page && browserNavigations.has(page)) {
+      const expected = browserNavigations.get(page);
+      if (expected === null || withoutHash(expected) === withoutHash(req.url())) {
+        browserNavigations.delete(page);
+        return { kind: "browser" };
+      }
+    }
+    const origin = originOf(req.headers().referer) ?? originOf(pageOf(req) ? frameUrl(req) : void 0);
+    return origin ? { kind: "site", origin } : { kind: "opaque" };
+  };
   const block = async (route, url, method, navigation, verdict) => {
     if (verdict.allowed) return;
     if (blocked.length < 200)
@@ -41606,15 +41662,31 @@ async function installRequestGuard(target, policy, options = {}) {
   };
   const navigate = async (route, req) => {
     const scope = options.targetHeaders;
+    const key = withoutHash(req.url());
+    const prior = chains.get(key);
+    chains.delete(key);
+    const continued = prior && Date.now() - prior.at < 6e4 && (!req.headers().referer || originOf(req.headers().referer) === originOf(prior.from)) ? prior : void 0;
+    const hops = continued?.hops ?? 0;
+    const initiator = continued?.initiator ?? initiatorOf(req);
     let response;
     try {
+      const names = new Set(Object.keys(scope?.headers ?? {}).map((n) => n.toLowerCase()));
       const own = scope && new URL(req.url()).origin === scope.origin;
-      if (own) {
-        const names = new Set(Object.keys(scope.headers).map((n) => n.toLowerCase()));
-        const headers = {};
-        for (const [k, v] of Object.entries(req.headers())) if (!names.has(k.toLowerCase())) headers[k] = v;
-        response = await route.fetch({ headers: { ...headers, ...scope.headers }, maxRedirects: 0 });
-      } else response = await route.fetch({ maxRedirects: 0 });
+      const headers = {};
+      for (const [k, v] of Object.entries(req.headers()))
+        if (k.toLowerCase() !== "cookie" && !(own && names.has(k.toLowerCase()))) headers[k] = v;
+      const sameSite = isSameSiteNavigation(
+        initiator,
+        req.url(),
+        continued ? void 0 : req.headers()["sec-fetch-site"]
+      );
+      const jar = await context.cookies(req.url());
+      headers.cookie = navigationCookies(jar, sameSite, req.method(), browserName).map((c) => `${c.name}=${c.value}`).join("; ");
+      response = await route.fetch({
+        headers: { ...headers, ...own ? scope.headers : {} },
+        maxRedirects: 0,
+        ...options.timeoutMs ? { timeout: options.timeoutMs } : {}
+      });
     } catch {
       await route.abort("failed").catch(() => void 0);
       return;
@@ -41628,6 +41700,7 @@ async function installRequestGuard(target, policy, options = {}) {
     const location = response.headers().location;
     const handOver = () => route.fulfill({ response }).catch(() => route.abort("failed").catch(() => void 0));
     if (!REDIRECT.has(response.status()) || !location) {
+      handOvers.delete(key);
       await handOver();
       return;
     }
@@ -41679,6 +41752,15 @@ async function installRequestGuard(target, policy, options = {}) {
       });
       return;
     }
+    if (hops >= MAX_REDIRECTS) {
+      redirectLoops.push({ url: redactUrl(req.url()), at: Date.now() });
+      handOvers.delete(key);
+      urls.add(req.url());
+      await route.abort("failed").catch(() => void 0);
+      return;
+    }
+    chains.set(withoutHash(next.toString()), { hops: hops + 1, initiator, from: req.url(), at: Date.now() });
+    handOvers.add(key);
     await route.fulfill({
       status: 200,
       contentType: "text/html; charset=utf-8",
@@ -41715,6 +41797,10 @@ async function installRequestGuard(target, policy, options = {}) {
     blocked,
     isBlocked: (u) => urls.has(u) || urls.has(u.split("#")[0]),
     since: (t) => blocked.filter((b) => b.at >= t),
+    redirectLoops,
+    expectBrowserNavigation: (page, url) => browserNavigations.set(page, url ?? null),
+    clearBrowserNavigations: () => browserNavigations.clear(),
+    handingOver: (u) => handOvers.has(withoutHash(u)),
     detach: () => target.unroute("**/*", handler).catch(() => void 0)
   };
 }
@@ -45634,7 +45720,7 @@ async function waitForTab(find, timeoutMs) {
 }
 var Blocked = class extends Error {
 };
-async function act(tabs, step, opts) {
+async function act(tabs, step, opts, guard) {
   const t = opts.stepTimeoutMs;
   const value = (v) => interpolate(v, opts.data);
   const page = tabs.current();
@@ -45644,6 +45730,7 @@ async function act(tabs, step, opts) {
       const url = new URL(value(step.url), opts.base);
       if (url.origin !== opts.base.origin && !(opts.allowOrigins ?? []).includes(url.origin))
         throw new Blocked(`goto ${url.origin} leaves the target origin ${opts.base.origin}`);
+      guard.expectBrowserNavigation(page, url.toString());
       await page.goto(url.toString(), { waitUntil: "load", timeout: t * 3 });
       await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
       return;
@@ -45702,6 +45789,7 @@ async function act(tabs, step, opts) {
       else await page.waitForTimeout(Math.min(step.ms ?? 500, 1e4));
       return;
     case "back":
+      guard.expectBrowserNavigation(page);
       await page.goBack({ timeout: t });
       return;
     case "expect": {
@@ -45774,6 +45862,14 @@ function chargeStops(step, stopped) {
   }
   return true;
 }
+async function settleRedirects(tabs, guard, timeoutMs) {
+  const page = tabs.current();
+  if (!page || !guard.handingOver(page.url())) return;
+  const deadline = Date.now() + timeoutMs;
+  while (!page.isClosed() && guard.handingOver(page.url()) && Date.now() < deadline) await sleep(50);
+  await page.waitForLoadState("load", { timeout: Math.max(1, deadline - Date.now()) }).catch(() => void 0);
+  await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
+}
 var TRANSIENT = /detached|not stable|intercepts pointer events|Execution context was destroyed|navigation/i;
 async function runJourney(browser, spec, opts) {
   const vp = parseViewports(opts.viewportOverride ?? spec.viewport ?? "desktop")[0];
@@ -45796,7 +45892,11 @@ async function runJourney(browser, spec, opts) {
       ...opts.allowOrigins ? { allowOrigins: opts.allowOrigins } : {},
       mode: "journey"
     },
-    { checkRedirects: true, ...opts.extraHeaders ? { targetHeaders: opts.extraHeaders } : {} }
+    {
+      checkRedirects: true,
+      timeoutMs: opts.stepTimeoutMs * 3,
+      ...opts.extraHeaders ? { targetHeaders: opts.extraHeaders } : {}
+    }
   );
   const open = [];
   const fresh = [];
@@ -45882,18 +45982,27 @@ async function runJourney(browser, spec, opts) {
       };
       opts.log?.(`    ${i + 1}. ${res.description}`);
       let note;
+      const loopsBefore = guard.redirectLoops.length;
       try {
         try {
-          note = await act(tabs, step, opts);
+          note = await act(tabs, step, opts, guard);
         } catch (err) {
-          if (err instanceof Blocked || !TRANSIENT.test(err.message)) throw err;
+          if (err instanceof Blocked || !TRANSIENT.test(err.message) || guard.redirectLoops.length > loopsBefore)
+            throw err;
           await sleep(500);
-          note = await act(tabs, step, opts);
+          note = await act(tabs, step, opts, guard);
         }
         if (note) res.description = `${res.description} (${note})`;
+        await settleRedirects(tabs, guard, opts.stepTimeoutMs);
       } catch (err) {
         res.status = err instanceof Blocked ? "blocked" : "failed";
         res.error = excerpt(err.message.split("\n")[0], 300);
+      }
+      guard.clearBrowserNavigations();
+      const loop = guard.redirectLoops.slice(loopsBefore)[0];
+      if (loop && res.status !== "blocked") {
+        res.status = "failed";
+        res.error = `${loop.url} redirects more than ${MAX_REDIRECTS} times (a redirect loop; a browser stops with ERR_TOO_MANY_REDIRECTS).`;
       }
       chargeStops(res, stops.take());
       res.durationMs = Date.now() - s0;

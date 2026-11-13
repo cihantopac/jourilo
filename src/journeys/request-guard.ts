@@ -9,11 +9,14 @@
 // judged like a navigation before anything is sent to it; if it is allowed, the browser is handed a page that
 // navigates there (`location.replace`), which is a new navigation and comes back through this route. No hop of a
 // chain reaches an origin or URL the policy forbids. Cookies a redirect sets are kept: `route.fetch` stores them in the
-// browser context.
+// browser context. Two browser behaviours are applied by hand, since the browser no longer sees the chain: the
+// redirect limit (MAX_REDIRECTS hops per chain) and the SameSite rules for the cookies each hop sends, judged against
+// whoever started the chain (navigation-cookies.ts).
 import type { APIResponse, BrowserContext, Page, Request, Route } from 'playwright-core';
 import type { TargetHeaders } from '../browser/target-headers.js';
 import { GUARD_UPSTREAM_ERROR_HEADER } from '../core/net-guard.js';
 import { redactUrl } from '../core/redact.js';
+import { type Initiator, isSameSiteNavigation, navigationCookies } from './navigation-cookies.js';
 import { type BlockKind, checkRequest, type RequestPolicy, type SafetyVerdict } from './safety.js';
 
 export interface BlockedRequest {
@@ -32,6 +35,14 @@ export interface RequestGuard {
   isBlocked(url: string): boolean;
   /** Blocked requests since a point in time (Date.now()). */
   since(t: number): BlockedRequest[];
+  /** Redirect chains stopped for having more hops than a browser follows (`checkRedirects`). */
+  redirectLoops: { url: string; at: number }[];
+  /** The page's next top-level navigation (to `url`, if given) is the browser's own: page.goto or goBack. */
+  expectBrowserNavigation(page: Page, url?: string): void;
+  /** Forgets browser navigations that never came (the step is over). */
+  clearBrowserNavigations(): void;
+  /** The URL is currently showing Jourilo's hand-over page for a redirect, on its way to the next hop. */
+  handingOver(url: string): boolean;
   detach(): Promise<void>;
 }
 
@@ -40,9 +51,32 @@ export interface RequestGuardOptions {
   checkRedirects?: boolean;
   /** `--extra-header`: the navigations this guard makes itself carry them to the target's origin only. */
   targetHeaders?: TargetHeaders;
+  /** Limit for one navigation request the guard makes itself (default: Playwright's 30 s). */
+  timeoutMs?: number;
 }
 
 const REDIRECT = new Set([301, 302, 303, 307, 308]);
+/** Chromium's and Firefox's redirect limit (ERR_TOO_MANY_REDIRECTS beyond it). */
+export const MAX_REDIRECTS = 20;
+
+const withoutHash = (u: string) => u.split('#')[0]!;
+
+function originOf(u: string | undefined): string | undefined {
+  try {
+    const x = new URL(u ?? '');
+    return x.protocol === 'http:' || x.protocol === 'https:' ? x.origin : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function pageOf(req: Request): Page | undefined {
+  try {
+    return req.frame().page();
+  } catch {
+    return undefined;
+  }
+}
 
 /** The page handed to the browser in place of an allowed redirect: it navigates on, as a new, routed navigation. */
 function onwardPage(next: URL, method: string, body: string | null, contentType: string): string | null {
@@ -83,6 +117,29 @@ export async function installRequestGuard(
 ): Promise<RequestGuard> {
   const blocked: BlockedRequest[] = [];
   const urls = new Set<string>();
+  const redirectLoops: { url: string; at: number }[] = [];
+  const context = 'context' in target ? target.context() : target;
+  const browserName = context.browser()?.browserType().name() ?? 'chromium';
+  /** Pages whose next navigation is page.goto (its URL) or goBack (null). */
+  const browserNavigations = new Map<Page, string | null>();
+  /** Hand-over navigations in flight, by the URL they go to: the chain they continue. */
+  const chains = new Map<string, { hops: number; initiator: Initiator; from: string; at: number }>();
+  /** URLs answered with a hand-over page (until the URL answers with a real page). */
+  const handOvers = new Set<string>();
+
+  /** Who started the navigation: the browser itself, or a page of some origin (Referer, then the frame's document). */
+  const initiatorOf = (req: Request): Initiator => {
+    const page = pageOf(req);
+    if (page && browserNavigations.has(page)) {
+      const expected = browserNavigations.get(page);
+      if (expected === null || withoutHash(expected!) === withoutHash(req.url())) {
+        browserNavigations.delete(page);
+        return { kind: 'browser' };
+      }
+    }
+    const origin = originOf(req.headers().referer) ?? originOf(pageOf(req) ? frameUrl(req) : undefined);
+    return origin ? { kind: 'site', origin } : { kind: 'opaque' };
+  };
   const block = async (
     route: Route,
     url: string,
@@ -108,15 +165,40 @@ export async function installRequestGuard(
   /** Makes a top-level navigation without following redirects; judges and hands on each redirect. */
   const navigate = async (route: Route, req: Request) => {
     const scope = options.targetHeaders;
+    const key = withoutHash(req.url());
+    // A hand-over navigation continues its chain (same initiator, hop count); anything else starts a new one.
+    const prior = chains.get(key);
+    chains.delete(key);
+    const continued =
+      prior &&
+      Date.now() - prior.at < 60_000 &&
+      (!req.headers().referer || originOf(req.headers().referer) === originOf(prior.from))
+        ? prior
+        : undefined;
+    const hops = continued?.hops ?? 0;
+    const initiator = continued?.initiator ?? initiatorOf(req);
     let response: APIResponse;
     try {
+      const names = new Set(Object.keys(scope?.headers ?? {}).map((n) => n.toLowerCase()));
       const own = scope && new URL(req.url()).origin === scope.origin;
-      if (own) {
-        const names = new Set(Object.keys(scope.headers).map((n) => n.toLowerCase()));
-        const headers: Record<string, string> = {};
-        for (const [k, v] of Object.entries(req.headers())) if (!names.has(k.toLowerCase())) headers[k] = v;
-        response = await route.fetch({ headers: { ...headers, ...scope.headers }, maxRedirects: 0 });
-      } else response = await route.fetch({ maxRedirects: 0 });
+      const headers: Record<string, string> = {};
+      for (const [k, v] of Object.entries(req.headers()))
+        if (k.toLowerCase() !== 'cookie' && !(own && names.has(k.toLowerCase()))) headers[k] = v;
+      // The browser's SameSite rules, not Playwright's fetch (which sends every matching cookie).
+      const sameSite = isSameSiteNavigation(
+        initiator,
+        req.url(),
+        continued ? undefined : req.headers()['sec-fetch-site'],
+      );
+      const jar = await context.cookies(req.url());
+      headers.cookie = navigationCookies(jar, sameSite, req.method(), browserName)
+        .map((c) => `${c.name}=${c.value}`)
+        .join('; ');
+      response = await route.fetch({
+        headers: { ...headers, ...(own ? scope.headers : {}) },
+        maxRedirects: 0,
+        ...(options.timeoutMs ? { timeout: options.timeoutMs } : {}),
+      });
     } catch {
       // Playwright's fetch errors can list request headers, values included: no detail.
       await route.abort('failed').catch(() => undefined);
@@ -134,6 +216,7 @@ export async function installRequestGuard(
     const handOver = () =>
       route.fulfill({ response }).catch(() => route.abort('failed').catch(() => undefined));
     if (!REDIRECT.has(response.status()) || !location) {
+      handOvers.delete(key);
       await handOver();
       return;
     }
@@ -186,6 +269,16 @@ export async function installRequestGuard(
       });
       return;
     }
+    // Every hop is a new navigation, so the browser's own limit never applies: apply it here.
+    if (hops >= MAX_REDIRECTS) {
+      redirectLoops.push({ url: redactUrl(req.url()), at: Date.now() });
+      handOvers.delete(key);
+      urls.add(req.url());
+      await route.abort('failed').catch(() => undefined);
+      return;
+    }
+    chains.set(withoutHash(next.toString()), { hops: hops + 1, initiator, from: req.url(), at: Date.now() });
+    handOvers.add(key);
     await route
       .fulfill({
         status: 200,
@@ -225,6 +318,10 @@ export async function installRequestGuard(
     blocked,
     isBlocked: (u) => urls.has(u) || urls.has(u.split('#')[0]!),
     since: (t) => blocked.filter((b) => b.at >= t),
+    redirectLoops,
+    expectBrowserNavigation: (page, url) => browserNavigations.set(page, url ?? null),
+    clearBrowserNavigations: () => browserNavigations.clear(),
+    handingOver: (u) => handOvers.has(withoutHash(u)),
     detach: () => target.unroute('**/*', handler).catch(() => undefined),
   };
 }

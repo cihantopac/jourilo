@@ -68,6 +68,14 @@ The safety policy holds in every tab, including a popup the page opens on its ow
   `--allow-destructive`.
 - A redirect that resends a form (307 or 308 after a POST) is followed only for URL-encoded forms; any other is
   stopped and reported, because it cannot be rebuilt hop by hop.
+- Because Jourilo makes these navigations itself, it applies two browser rules by hand. A chain of more than 20
+  redirects fails the step as a redirect loop (a browser's ERR_TOO_MANY_REDIRECTS). Cookies follow the SameSite rules,
+  judged against the page or browser action that started the chain: `Strict` cookies only when that was the same site
+  (or `page.goto`, `back`), `Lax` cookies also on a cross-site GET, never on a cross-site POST. Where the browser's
+  decision cannot be reproduced, the cookie is withheld, so a journey can fail where a browser succeeds but never the
+  other way round: two different host names count as different sites unless the browser itself says otherwise
+  (subdomains of one site included), a popup opened without a referrer counts as cross-site, and Chromium's
+  two-minute allowance for POSTs with new cookies that have no SameSite attribute is not applied.
 
 A sign-in through an OAuth popup, against a test identity provider you are authorized to use:
 

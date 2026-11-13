@@ -403,6 +403,8 @@ describe('journeys across tabs and popups', () => {
   // origin, so a blocked popup can be shown never to have reached the IdP.
   const lab = join(root, 'fixtures', 'apps', 'journey-lab');
   const requests: string[] = [];
+  /** The Cookie header each /oauth/echo request carried, by its `via` parameter. */
+  const echoed = new Map<string, string>();
   const servers: Server[] = [];
   let app = '';
   let idp = '';
@@ -410,6 +412,29 @@ describe('journeys across tabs and popups', () => {
   beforeAll(async () => {
     const handler: RequestListener = (req, res) => {
       requests.push(`${req.headers.host} ${req.url}`);
+      const url = new URL(req.url ?? '/', 'http://x');
+      if (url.pathname === '/oauth/hop') {
+        res.writeHead(302, { location: '/oauth/help.html' }).end();
+        return;
+      }
+      if (url.pathname === '/oauth/loop') {
+        res.writeHead(302, { location: '/oauth/loop' }).end();
+        return;
+      }
+      if (url.pathname === '/oauth/set-cookies') {
+        res
+          .writeHead(200, {
+            'content-type': 'text/html',
+            'set-cookie': ['strict=1; Path=/; SameSite=Strict', 'lax=1; Path=/; SameSite=Lax'],
+          })
+          .end('<h1>Cookies set</h1>');
+        return;
+      }
+      if (url.pathname === '/oauth/echo') {
+        echoed.set(url.searchParams.get('via') ?? '', req.headers.cookie ?? '');
+        res.writeHead(200, { 'content-type': 'text/html' }).end('<h1>Echo</h1>');
+        return;
+      }
       // Like a real "/auth/provider" route: a 302 to the IdP on the other loopback name.
       if (req.url === '/oauth/start') {
         const [host, port] = (req.headers.host ?? '').split(':');
@@ -577,6 +602,56 @@ describe('journeys across tabs and popups', () => {
     expect(mj.steps[0]!.error).toContain(`--allow-origin ${idp}`);
     expect(requests.some((r) => r.endsWith(' /oauth/start'))).toBe(true);
     expect(idpHits()).toEqual([]);
+  }, 120_000);
+
+  it('a start URL that redirects lands on the final page in step 1', async () => {
+    const out = await runTabs('start-redirects', '/oauth/hop', [
+      { action: 'expect', visible: { role: 'heading', name: 'Help' } },
+    ]);
+    const j = out.journeys[0]!;
+    expect(j.status, JSON.stringify(j.steps)).toBe('passed');
+    // The step's URL and screenshot are the final page, not the hand-over page for the redirect.
+    expect(j.steps[0]!.url).toBe(`${app}/oauth/help.html`);
+    const shot = readFileSync(join(out.runDir, j.steps[0]!.screenshot!));
+    const help = readFileSync(join(out.runDir, j.steps[1]!.screenshot!));
+    expect(shot.equals(help)).toBe(true);
+  }, 120_000);
+
+  it('stops a redirect loop at 20 hops with a clear error', async () => {
+    requests.length = 0;
+    const out = await runTabs('redirect-loop', '/oauth/loop', [
+      { action: 'expect', visible: { role: 'heading', name: 'Help' } },
+    ]);
+    const j = out.journeys[0]!;
+    expect(j.status).toBe('failed');
+    expect(j.steps[0]!.error).toMatch(/redirects more than 20 times.*ERR_TOO_MANY_REDIRECTS/);
+    // The first request and 20 redirects, as a browser does; no retry of the loop.
+    expect(requests.filter((r) => r.endsWith(' /oauth/loop'))).toHaveLength(21);
+  }, 120_000);
+
+  it('sends cookies on proxied navigations by the SameSite rules', async () => {
+    echoed.clear();
+    const out = await runTabs(
+      'samesite',
+      '/oauth/cookies.html',
+      [
+        { action: 'goto', url: `${idp}/oauth/set-cookies` },
+        { action: 'goto', url: '/oauth/cookies.html' },
+        { action: 'click', target: { role: 'link', name: 'Visit the IdP' } },
+        { action: 'goto', url: '/oauth/cookies.html' },
+        { action: 'click', target: { role: 'button', name: 'Post to the IdP' } },
+        { action: 'goto', url: `${idp}/oauth/echo?via=goto` },
+      ],
+      '--allow-origin',
+      idp,
+    );
+    const j = out.journeys[0]!;
+    expect(j.status, JSON.stringify(j.steps)).toBe('passed');
+    const has = (via: string) => (echoed.get(via) ?? '').split(/;\s*/).filter(Boolean).sort();
+    // Cross-site GET link: Lax only. Cross-site POST: neither. Typed address (page.goto): both.
+    expect(has('link')).toEqual(['lax=1']);
+    expect(has('post')).toEqual([]);
+    expect(has('goto')).toEqual(['lax=1', 'strict=1']);
   }, 120_000);
 
   it('a target=_blank link to an origin not in allowOrigins is blocked', async () => {

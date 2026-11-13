@@ -2,6 +2,11 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { emptyInventory } from '../../src/audit/engine.js';
 import type { PageInventory } from '../../src/core/types.js';
+import {
+  isSameSiteNavigation,
+  type JarCookie,
+  navigationCookies,
+} from '../../src/journeys/navigation-cookies.js';
 import type { BlockedRequest } from '../../src/journeys/request-guard.js';
 import { chargeStops, keyEffect, matchesUrl, stopLedger, tabPolicy } from '../../src/journeys/runner.js';
 import {
@@ -276,6 +281,45 @@ describe('safety policy: requests (network backstop)', () => {
         ro,
       ).allowed,
     ).toBe(false);
+  });
+});
+
+describe('cookies on navigations the guard makes itself', () => {
+  const app = { kind: 'site' as const, origin: 'http://127.0.0.1:3000' };
+  it("judges same-site by the initiator, the browser's own Sec-Fetch-Site first", () => {
+    expect(isSameSiteNavigation({ kind: 'browser' }, 'http://localhost:3000/')).toBe(true);
+    expect(isSameSiteNavigation(app, 'http://127.0.0.1:3000/a')).toBe(true);
+    expect(isSameSiteNavigation(app, 'http://localhost:3000/a')).toBe(false);
+    expect(isSameSiteNavigation({ kind: 'opaque' }, 'http://127.0.0.1:3000/a')).toBe(false);
+    expect(isSameSiteNavigation(app, 'https://127.0.0.1:3000/a')).toBe(false);
+    // Fail closed without the public suffix list, unless the browser says otherwise.
+    expect(
+      isSameSiteNavigation({ kind: 'site', origin: 'https://app.example.com' }, 'https://auth.example.com/'),
+    ).toBe(false);
+    expect(
+      isSameSiteNavigation(
+        { kind: 'site', origin: 'https://app.example.com' },
+        'https://auth.example.com/',
+        'same-site',
+      ),
+    ).toBe(true);
+    expect(isSameSiteNavigation(app, 'http://127.0.0.1:3000/a', 'cross-site')).toBe(false);
+    expect(isSameSiteNavigation({ kind: 'opaque' }, 'http://x.test/', 'none')).toBe(true);
+  });
+  it('sends Strict same-site only, Lax also on a cross-site GET, None as each browser stores it', () => {
+    const jar: JarCookie[] = [
+      { name: 'strict', value: '1', secure: false, sameSite: 'Strict' },
+      { name: 'lax', value: '1', secure: false, sameSite: 'Lax' },
+      { name: 'none', value: '1', secure: false, sameSite: 'None' },
+      { name: 'noneSecure', value: '1', secure: true, sameSite: 'None' },
+    ];
+    const names = (sameSite: boolean, method: string, browser = 'chromium') =>
+      navigationCookies(jar, sameSite, method, browser).map((c) => c.name);
+    expect(names(true, 'POST')).toEqual(['strict', 'lax', 'noneSecure']);
+    expect(names(false, 'GET')).toEqual(['lax', 'noneSecure']);
+    expect(names(false, 'POST')).toEqual(['noneSecure']);
+    // Firefox and WebKit report a cookie without a SameSite attribute as None, and send it.
+    expect(names(false, 'POST', 'firefox')).toEqual(['none', 'noneSecure']);
   });
 });
 
