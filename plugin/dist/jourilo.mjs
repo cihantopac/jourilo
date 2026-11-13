@@ -47328,6 +47328,26 @@ async function loadTsParser() {
   }
 }
 
+// src/discovery/ast/route-files.ts
+var basename2 = (file2) => file2.slice(file2.lastIndexOf("/") + 1);
+function isRouteFile(file2, codeRouter = false) {
+  const base2 = basename2(file2);
+  if (/(^|\/)app\/(.*\/)?page\.[jt]sx?$/.test(file2) || base2 === "+page.svelte") return true;
+  if (codeRouter) return false;
+  if (/(^|\/)pages\/(?!_|api\/).+\.([jt]sx?|vue|svelte)$/.test(file2)) return true;
+  return /(^|\/)routes\/.+\.([jt]sx?|vue|svelte)$/.test(file2) && !base2.startsWith("+");
+}
+var DIR_LAYOUT = /(^|\/)(app\/(.*\/)?layout\.[jt]sx?|(.*\/)?\+layout\.svelte|pages\/_app\.[jt]sx?|app\/root\.[jt]sx?)$/;
+var ROOT_LAYOUT = /(^|\/)(App\.(vue|svelte|[jt]sx)|layouts\/[^/]+\.vue|app\.vue)$/;
+function isStructuralFile(file2) {
+  return isRouteFile(file2) || DIR_LAYOUT.test(file2) || ROOT_LAYOUT.test(file2) || /(^|[/.])(routes?|router)\b/i.test(file2);
+}
+function isRouterConfigFile(file2, text) {
+  return /routes|router/i.test(file2) || /\b(RouteRecordRaw|RouteObject|RouterModule|VueRouter|create(Browser|Hash|Memory|Static)?Router)\b|:\s*Routes\b|\b(const|let|var)\s+routes\b|\broutes\s*:/.test(
+    text.slice(0, 2e3)
+  );
+}
+
 // src/repair/locate.ts
 var SOURCE_EXT = /* @__PURE__ */ new Set([
   ".html",
@@ -47767,6 +47787,7 @@ function locate(f, files, max = 3) {
     };
   });
 }
+var GRAPH_FAILED = "The component graph could not be built, so findings in shared components are grouped per source line instead of per component.";
 var COMPONENT_FILE = /\.(tsx?|jsx?|mjs|vue|svelte)$/;
 var isMinified = (rel, lines) => /\.min\.[cm]?js$/.test(rel) || lines.some((l) => l.length >= 2e3);
 function componentAt(byFile, file2, line) {
@@ -47807,9 +47828,7 @@ async function addComponents(run, files) {
     byFile = index.byFile;
     skipped.push(...index.failed);
   } catch {
-    run.limitations.push(
-      "The component graph could not be built, so findings in shared components are grouped per source line instead of per component."
-    );
+    run.limitations.push(GRAPH_FAILED);
     return;
   }
   for (const src of best) {
@@ -47818,7 +47837,8 @@ async function addComponents(run, files) {
     src.component = { name: c.name, file: c.file, usedBy: c.usedBy };
     src.reason += `; in component ${c.name}, used by ${c.usedBy} routes`;
   }
-  const unread = [...new Set(skipped)].sort();
+  const sourceFiles = new Set(best.map((b) => b.file));
+  const unread = [...new Set(skipped)].filter((f) => sourceFiles.has(f) || isStructuralFile(f)).sort();
   if (unread.length)
     run.limitations.push(
       `${unread.length} code file(s) were left out of the component graph (broken or newer syntax, or code the parser could not walk), so findings in them are grouped per source line: ${unread.slice(0, 3).join(", ")}${unread.length > 3 ? ` and ${unread.length - 3} more` : ""}.`
@@ -47837,6 +47857,7 @@ async function locateFindings(run, repoRoot) {
   try {
     await addComponents(run, files);
   } catch {
+    if (!run.limitations.includes(GRAPH_FAILED)) run.limitations.push(GRAPH_FAILED);
   }
   return n;
 }
@@ -49653,7 +49674,12 @@ function groupHtml(run, g, status, base2) {
   const stds = f.standards.map(
     (s) => s.url ? `<a href="${safeHref(s.url)}" target="_blank" rel="noopener">${esc(s.standard)} ${esc(s.id)} ${esc(s.title)}</a>` : `${esc(s.standard)} ${esc(s.id)} ${esc(s.title)}`
   ).map((x) => `<li>${x}</li>`).join("");
-  const sources = f.sources?.length ? `<h4>${T("fd.sources")}</h4><ul class="sources">${f.sources.map(
+  const listed = [...f.sources ?? []];
+  for (const m of g.members) {
+    const s = m.sources?.[0];
+    if (s && !listed.some((x) => x.file === s.file && x.line === s.line)) listed.push(s);
+  }
+  const sources = listed.length ? `<h4>${T("fd.sources")}</h4><ul class="sources">${listed.map(
     (s) => `<li><code>${esc(s.file)}:${s.line}</code> <span class="chip">${T(`conf.${s.confidence}`)}</span> <span lang="en">${esc(s.reason)}</span>${s.excerpt ? `<pre>${esc(s.excerpt)}</pre>` : ""}</li>`
   ).join("")}</ul>` : "";
   const instances = g.members.length > 1 ? `<h4>${T("fd.instances")}</h4><ul class="instances">${g.members.map(
@@ -50245,7 +50271,7 @@ function writeReports(dir, run, cmp, opts = {}) {
 
 // src/cli/commands/journeys.ts
 import { existsSync as existsSync11, mkdirSync as mkdirSync6, readdirSync as readdirSync8, readFileSync as readFileSync11, writeFileSync as writeFileSync9 } from "node:fs";
-import { basename as basename3, join as join18, resolve as resolve5 } from "node:path";
+import { basename as basename4, join as join18, resolve as resolve5 } from "node:path";
 init_errors();
 init_fs_safety();
 init_types();
@@ -50472,13 +50498,13 @@ import {
   unlinkSync,
   writeSync
 } from "node:fs";
-import { basename as basename2, dirname as dirname5, join as join16 } from "node:path";
+import { basename as basename3, dirname as dirname5, join as join16 } from "node:path";
 var sha256 = (b) => createHash3("sha256").update(b).digest("hex");
 var recordsDir = (wsRoot) => join16(wsRoot, "checkpoints");
 var txDir = (wsRoot, id) => join16(recordsDir(wsRoot), id);
 function atomicWrite(path2, data, mode) {
   mkdirSync4(dirname5(path2), { recursive: true });
-  const tmp = join16(dirname5(path2), `.${basename2(path2)}.jourilo-${randomBytes3(4).toString("hex")}.tmp`);
+  const tmp = join16(dirname5(path2), `.${basename3(path2)}.jourilo-${randomBytes3(4).toString("hex")}.tmp`);
   const fd = openSync(tmp, "wx", mode ?? 420);
   try {
     let off = 0;
@@ -50819,9 +50845,9 @@ function loadJourneys(ws, refs) {
     try {
       raw = JSON.parse(readFileSync11(f, "utf8"));
     } catch (err) {
-      throw new JouriloError("INVALID_INPUT", `${basename3(f)} is not valid JSON: ${err.message}`);
+      throw new JouriloError("INVALID_INPUT", `${basename4(f)} is not valid JSON: ${err.message}`);
     }
-    return validateJourney(raw, basename3(f));
+    return validateJourney(raw, basename4(f));
   });
 }
 function parseVars(ctx) {
@@ -51692,12 +51718,12 @@ import { join as join22, resolve as resolve8 } from "node:path";
 // src/discovery/repo.ts
 init_fs_safety();
 import { existsSync as existsSync15, readdirSync as readdirSync11, readFileSync as readFileSync14, statSync as statSync6 } from "node:fs";
-import { basename as basename5, dirname as dirname8, join as join21, relative as relative5 } from "node:path";
+import { basename as basename6, dirname as dirname8, join as join21, relative as relative5 } from "node:path";
 
 // src/discovery/laravel.ts
 init_fs_safety();
 import { existsSync as existsSync14, readdirSync as readdirSync10, readFileSync as readFileSync13, statSync as statSync5 } from "node:fs";
-import { basename as basename4, dirname as dirname7, join as join20, relative as relative4 } from "node:path";
+import { basename as basename5, dirname as dirname7, join as join20, relative as relative4 } from "node:path";
 function read(file2) {
   try {
     return statSync5(file2).size > 4e5 ? "" : readFileSync13(file2, "utf8");
@@ -51859,7 +51885,7 @@ function filamentPanels(appRoot, routes) {
       ["app/Filament/Pages", false]
     ]) {
       for (const file2 of phpFiles(join20(appRoot, sub), 2)) {
-        const name = basename4(file2, ".php");
+        const name = basename5(file2, ".php");
         if (isResource ? !name.endsWith("Resource") : name === "Dashboard") continue;
         const relFile = toPosix(join20(sub, relative4(join20(appRoot, sub), file2)));
         if (!isResource && /\/(Concerns|Widgets)\//.test(relFile)) continue;
@@ -52085,7 +52111,7 @@ function fileRoutes(appRoot, files, frameworks, ast) {
     [
       "Next.js",
       /^(?:src\/)?pages\/(.+)\.(tsx|jsx|ts|js|mdx|md)$/,
-      (m) => /^_(app|document|error)/.test(basename5(m[1])) ? null : { segs: m[1].split("/"), kind: m[1].startsWith("api/") ? "api" : "page" }
+      (m) => /^_(app|document|error)/.test(basename6(m[1])) ? null : { segs: m[1].split("/"), kind: m[1].startsWith("api/") ? "api" : "page" }
     ],
     ["Nuxt", /^(?:app\/)?pages\/(.+)\.vue$/, (m) => ({ segs: m[1].split("/"), kind: "page" })],
     [
@@ -52162,7 +52188,7 @@ function fileRoutes(appRoot, files, frameworks, ast) {
         const raw = m[1].trim();
         if (!raw || raw.includes("*") || raw.length > 120) continue;
         const path2 = raw.startsWith("/") ? raw : `/${raw}`;
-        if (label === "Router config" && !/routes|router/i.test(f + text.slice(0, 2e3))) continue;
+        if (label === "Router config" && !isRouterConfigFile(f, text)) continue;
         add(path2.replace(/\{(\w+)\??\}/g, ":$1"), f, "page", label, /[:{]/.test(path2));
       }
     }
@@ -52247,7 +52273,7 @@ function profileApp(repoRoot, appRoot, files, ast) {
   );
   return {
     root: rel || ".",
-    name: pkg?.name ?? basename5(appRoot),
+    name: pkg?.name ?? basename6(appRoot),
     frameworks,
     routes,
     devCommand: devCommand(appRoot, pkg, names, rel),
@@ -52346,7 +52372,7 @@ async function discoverRepository(root) {
   let cssVariables = 0;
   for (const f of files) {
     if (/(^|\/)(tokens?|design-tokens|theme)\.(json|ts|js|css)$/i.test(f) || /\.tokens\.json$/.test(f))
-      tokens.push(fact(basename5(f), f));
+      tokens.push(fact(basename6(f), f));
     if (/\.(css|scss)$/.test(f)) {
       const t = read2(join21(root, f), 3e5);
       cssVariables += (t.match(/--[a-z0-9-]+\s*:/gi) ?? []).length;
@@ -52445,7 +52471,7 @@ async function discoverRepository(root) {
     schemaVersion: 1,
     kind: "repository",
     root,
-    name: rootPkg?.name ?? basename5(root),
+    name: rootPkg?.name ?? basename6(root),
     description,
     readmeSummary,
     monorepo,

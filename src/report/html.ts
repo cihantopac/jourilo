@@ -232,8 +232,15 @@ function groupHtml(run: Run, g: Group, status?: string, base?: string): string {
     )
     .map((x) => `<li>${x}</li>`)
     .join('');
-  const sources = f.sources?.length
-    ? `<h4>${T('fd.sources')}</h4><ul class="sources">${f.sources
+  // A component root cause merges findings on different lines of one component: every member's best line stays
+  // listed after the lead's candidates, so no offending line disappears from the report.
+  const listed = [...(f.sources ?? [])];
+  for (const m of g.members) {
+    const s = m.sources?.[0];
+    if (s && !listed.some((x) => x.file === s.file && x.line === s.line)) listed.push(s);
+  }
+  const sources = listed.length
+    ? `<h4>${T('fd.sources')}</h4><ul class="sources">${listed
         .map(
           (s) =>
             `<li><code>${esc(s.file)}:${s.line}</code> <span class="chip">${T(`conf.${s.confidence}` as MsgKey)}</span> <span lang="en">${esc(s.reason)}</span>${s.excerpt ? `<pre>${esc(s.excerpt)}</pre>` : ''}</li>`,

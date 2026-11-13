@@ -306,7 +306,7 @@
           "properties": {
             "name": { "type": "string" },
             "file": { "type": "string" },
-            "usedBy": { "type": "integer" }
+            "usedBy": { "type": "integer", "minimum": 2 }
           }
         }
       }

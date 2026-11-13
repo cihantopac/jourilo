@@ -453,11 +453,20 @@ export default function About() {
     const html = renderHtml(r);
     expect(html.match(/<article class="rc /g)).toHaveLength(1);
     expect(html).toContain('component Header, used by 3 routes');
+    // The merged card keeps both offending lines of the header visible.
+    expect(html).toContain('<code>src/components/Header.tsx:9</code>');
+    expect(html).toContain('<code>src/components/Header.tsx:10</code>');
   });
 
-  it('a code file the parser cannot read never fails locating: it is named in one limitation line', async () => {
+  it('a code file the parser cannot read never fails locating: only files that matter are named', async () => {
     const root = repo();
+    // An unrelated broken sample is not reported; a broken route file is (it can hide one of Header's routes).
     writeFileSync(join(root, 'src/components/Broken.tsx'), 'export const Broken = () => <div>{</div>;\n');
+    mkdirSync(join(root, 'src/app/contact'), { recursive: true });
+    writeFileSync(
+      join(root, 'src/app/contact/page.tsx'),
+      'export default function C() { return <main>{</main>; }\n',
+    );
     const findings = [contrast('/', '/pricing', 'Pricing'), contrast('/about', '/about', 'About us')];
     const r = run(findings);
     expect(await locateFindings(r, root)).toBe(2);
@@ -466,7 +475,7 @@ export default function About() {
       'axe/color-contrast|component|src/components/Header.tsx#Header',
     ]);
     expect(r.limitations.filter((l) => l.includes('component graph'))).toEqual([
-      '1 code file(s) were left out of the component graph (broken or newer syntax, or code the parser could not walk), so findings in them are grouped per source line: src/components/Broken.tsx.',
+      '1 code file(s) were left out of the component graph (broken or newer syntax, or code the parser could not walk), so findings in them are grouped per source line: src/app/contact/page.tsx.',
     ]);
   });
 

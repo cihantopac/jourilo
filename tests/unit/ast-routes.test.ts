@@ -149,4 +149,18 @@ export const seed = { path: 'data/seed.json', encoding: 'utf8' };`;
     ).toBeNull();
     expect(parseSource('README.md', '# routes')).toBeNull();
   });
+
+  it('a nav array in a file that imports useRouter is not a router: no routes', () => {
+    const src = `import { useRouter } from 'next/router';
+const links = [
+  { path: '/a', label: 'A' },
+  { path: '/b', label: 'B' },
+];
+export function Nav() {
+  const router = useRouter();
+  return <nav>{links.map((l) => <a key={l.path} href={l.path}>{l.label}</a>)}</nav>;
+}
+`;
+    expect(paths('components/Nav.tsx', src)).toEqual([]);
+  });
 });

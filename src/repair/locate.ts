@@ -6,6 +6,7 @@ import { toPosix } from '../core/fs-safety.js';
 import type { Confidence, Finding, Run, SourceLocation } from '../core/types.js';
 import type { ComponentDef } from '../discovery/ast/components.js';
 import { loadTsParser } from '../discovery/ast/load.js';
+import { isStructuralFile } from '../discovery/ast/route-files.js';
 
 const SOURCE_EXT = new Set([
   '.html',
@@ -533,6 +534,9 @@ export function locate(f: Finding, files: SourceFile[], max = 3): SourceLocation
   });
 }
 
+const GRAPH_FAILED =
+  'The component graph could not be built, so findings in shared components are grouped per source line instead of per component.';
+
 /** Files the component graph reads (the parser's languages). */
 const COMPONENT_FILE = /\.(tsx?|jsx?|mjs|vue|svelte)$/;
 const isMinified = (rel: string, lines: string[]) =>
@@ -589,9 +593,7 @@ async function addComponents(run: Run, files: SourceFile[]): Promise<void> {
     byFile = index.byFile;
     skipped.push(...index.failed);
   } catch {
-    run.limitations.push(
-      'The component graph could not be built, so findings in shared components are grouped per source line instead of per component.',
-    );
+    run.limitations.push(GRAPH_FAILED);
     return;
   }
   for (const src of best) {
@@ -600,8 +602,10 @@ async function addComponents(run: Run, files: SourceFile[]): Promise<void> {
     src.component = { name: c.name, file: c.file, usedBy: c.usedBy };
     src.reason += `; in component ${c.name}, used by ${c.usedBy} routes`;
   }
-  // A file left out can hide a component or one of its routes, so the usedBy counts may be low.
-  const unread = [...new Set(skipped)].sort();
+  // Only files that matter are named: one holding a finding's source, or a route, layout or router file (which
+  // decides how many routes render a component). Unrelated broken samples and fixtures stay out of the report.
+  const sourceFiles = new Set(best.map((b) => b.file));
+  const unread = [...new Set(skipped)].filter((f) => sourceFiles.has(f) || isStructuralFile(f)).sort();
   if (unread.length)
     run.limitations.push(
       `${unread.length} code file(s) were left out of the component graph (broken or newer syntax, or code the parser could not walk), so findings in them are grouped per source line: ${unread.slice(0, 3).join(', ')}${unread.length > 3 ? ` and ${unread.length - 3} more` : ''}.`,
@@ -623,6 +627,7 @@ export async function locateFindings(run: Run, repoRoot: string): Promise<number
     await addComponents(run, files);
   } catch {
     // The component graph only refines grouping; locating never fails because of it.
+    if (!run.limitations.includes(GRAPH_FAILED)) run.limitations.push(GRAPH_FAILED);
   }
   return n;
 }

@@ -5,6 +5,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { toPosix } from '../core/fs-safety.js';
 import { loadTsParser, type TsParser } from './ast/load.js';
+import { isRouterConfigFile } from './ast/route-files.js';
 import { laravelProfile } from './laravel.js';
 
 export interface Fact {
@@ -361,7 +362,7 @@ function fileRoutes(appRoot: string, files: string[], frameworks: string[], ast:
         const raw = m[1]!.trim();
         if (!raw || raw.includes('*') || raw.length > 120) continue;
         const path = raw.startsWith('/') ? raw : `/${raw}`;
-        if (label === 'Router config' && !/routes|router/i.test(f + text.slice(0, 2000))) continue;
+        if (label === 'Router config' && !isRouterConfigFile(f, text)) continue;
         add(path.replace(/\{(\w+)\??\}/g, ':$1'), f, 'page', label, /[:{]/.test(path));
       }
     }

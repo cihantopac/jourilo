@@ -2,6 +2,7 @@
 // JSX), Vue Router route records and TanStack Router createRoute(). Nested routes are joined to their parent, and
 // anything inside a comment or a string is never a route. Part of the plugin/dist/ts-parser.mjs chunk.
 import ts from 'typescript-js';
+import { isRouterConfigFile } from './route-files.js';
 
 export interface AstRoute {
   path: string;
@@ -103,7 +104,7 @@ export function astRoutes(file: string, sf: ts.SourceFile): AstRoute[] {
     routes.push({ path, line: lineOf(node), router, ...(component ? { component } : {}) });
   // Route records (`{ path: '/a', children: [...] }`) count in files that look like router configuration, the same
   // rule the regular expressions used; createBrowserRouter([...]) and friends always count.
-  const routerFile = /routes|router/i.test(file + sf.text.slice(0, 2000));
+  const routerFile = isRouterConfigFile(file, sf.text);
   const tanstack = new Map<string, { path: string; parent?: string; node: ts.Node; component?: string }>();
   const tanstackArgs = new Set<ts.Node>();
 

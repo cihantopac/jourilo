@@ -126,6 +126,62 @@ import AppBanner from '../components/AppBanner.vue';
     expect(idx.components.get('src/components/UnusedCard.vue#UnusedCard')?.usedBy).toBe(0);
   });
 
+  it('a navigation array with paths is not a route: Next pages router keeps Header on 3 routes, Promo on 1', () => {
+    const idx = index({
+      // Field shape: a nav with path-shaped links in a file that imports useRouter from next/router.
+      'components/Nav.tsx': `import { useRouter } from 'next/router';
+const links = [
+  { path: '/a', label: 'A' },
+  { path: '/b', label: 'B' },
+];
+export function Nav() {
+  const router = useRouter();
+  return <nav>{links.map((l) => <a key={l.path} href={l.path} aria-current={router.pathname === l.path}>{l.label}</a>)}</nav>;
+}
+`,
+      // A path-named config file with plain records is not a router either, and must not turn off pages/.
+      'lib/routes.ts': `export const routes = [{ path: '/a' }, { path: '/b' }];\n`,
+      'components/Header.tsx': `import { Nav } from './Nav';\nexport function Header() { return <header><Nav /></header>; }\n`,
+      'components/Promo.tsx': `export function Promo() { return <aside>Save 20%</aside>; }\n`,
+      'pages/index.tsx': `import { Header } from '../components/Header';\nexport default function Home() { return <><Header /><main /></>; }\n`,
+      'pages/pricing.tsx': `import { Header } from '../components/Header';
+import { Promo } from '../components/Promo';
+export default function Pricing() { return <><Header /><Promo /></>; }
+`,
+      'pages/about.tsx': `import { Header } from '../components/Header';\nexport default function About() { return <><Header /><main /></>; }\n`,
+    });
+    expect(idx.components.get('components/Header.tsx#Header')?.usedBy).toBe(3);
+    expect(idx.components.get('components/Nav.tsx#Nav')?.usedBy).toBe(3);
+    expect(idx.components.get('components/Promo.tsx#Promo')?.usedBy).toBe(1);
+  });
+
+  it('settings tabs with paths in an app-router page are on that page only', () => {
+    const idx = index({
+      'src/app/layout.tsx': `export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return <html lang="en"><body>{children}</body></html>;
+}
+`,
+      'src/app/page.tsx': `export default function Home() { return <main>Home</main>; }\n`,
+      'src/app/settings/page.tsx': `import { SettingsTabs } from './SettingsTabs';
+export default function Settings() { return <SettingsTabs />; }
+`,
+      'src/app/settings/SettingsTabs.tsx': `'use client';
+import { useRouter } from 'next/navigation';
+const tabs = [
+  { path: '/settings/profile', label: 'Profile' },
+  { path: '/settings/billing', label: 'Billing' },
+  { path: '/settings/team', label: 'Team' },
+];
+export function SettingsTabs() {
+  const router = useRouter();
+  return <div role="tablist">{tabs.map((t) => <button key={t.path} role="tab" onClick={() => router.push(t.path)}>{t.label}</button>)}</div>;
+}
+`,
+    });
+    expect(idx.components.get('src/app/settings/SettingsTabs.tsx#SettingsTabs')?.usedBy).toBe(1);
+    expect(idx.components.get('src/app/layout.tsx#RootLayout')?.usedBy).toBe(2);
+  });
+
   it('never fails on a file it cannot read: that file is listed, the rest is indexed', () => {
     const parsed = new Map<string, NonNullable<ReturnType<typeof parseSource>>>();
     parsed.set('src/ok.tsx', parseSource('src/ok.tsx', 'export const Ok = () => <b />;\n')!);

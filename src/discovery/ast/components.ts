@@ -3,6 +3,7 @@
 // in a comment or a string is never a render. Part of the plugin/dist/ts-parser.mjs chunk.
 import { posix } from 'node:path';
 import ts from 'typescript-js';
+import { DIR_LAYOUT, isRouteFile, ROOT_LAYOUT } from './route-files.js';
 import { astRoutes } from './routes.js';
 
 export interface ComponentDef {
@@ -32,24 +33,9 @@ export const componentKey = (file: string, name: string) => `${file}#${name}`;
 
 const SFC = /\.(vue|svelte)$/;
 const EXTS = ['.tsx', '.ts', '.jsx', '.js', '.mjs', '.vue', '.svelte'];
-/**
- * File-based routers: Next.js app/ and pages/, Nuxt pages/, SvelteKit +page, Remix and SolidStart routes/. In a
- * project that declares its routes in code, a pages/ or routes/ folder is only a naming habit, not a router.
- */
-function isRouteFile(file: string, codeRoutes: boolean): boolean {
-  const base = posix.basename(file);
-  if (/(^|\/)app\/(.*\/)?page\.[jt]sx?$/.test(file) || base === '+page.svelte') return true;
-  if (codeRoutes) return false;
-  if (/(^|\/)pages\/(?!_|api\/).+\.([jt]sx?|vue|svelte)$/.test(file)) return true;
-  // routes/: every module is a route, except SvelteKit's +layout, +page.ts (load) and +server files.
-  return /(^|\/)routes\/.+\.([jt]sx?|vue|svelte)$/.test(file) && !base.startsWith('+');
-}
-
-/** Layouts that wrap the routes in and below their directory. */
-const DIR_LAYOUT =
-  /(^|\/)(app\/(.*\/)?layout\.[jt]sx?|(.*\/)?\+layout\.svelte|pages\/_app\.[jt]sx?|app\/root\.[jt]sx?)$/;
-/** Layouts that wrap every route: the application root and Nuxt layouts. */
-const ROOT_LAYOUT = /(^|\/)(App\.(vue|svelte|[jt]sx)|layouts\/[^/]+\.vue|app\.vue)$/;
+/** A router created in code: React Router, Vue Router, Angular, or the routes hook. */
+const ROUTER_CALL =
+  /\b(create(Browser|Hash|Memory|Static)?Router|useRoutes|RouterModule\.for(Root|Child)|new\s+VueRouter)\s*\(/;
 
 const isComponentName = (n: string) => /^[A-Z]/.test(n);
 const kebab = (n: string) => n.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
@@ -253,7 +239,17 @@ export function componentIndex(
   };
 
   /** The component a module exports under `name` ("default" for the default export). */
+  // Memoised by file#name; an entry is set before recursing, so a cycle of barrels ends at once.
+  const exportMemo = new Map<string, string | undefined>();
   const exportedComponent = (file: string, name: string, depth = 0): string | undefined => {
+    const memoKey = componentKey(file, name);
+    if (exportMemo.has(memoKey)) return exportMemo.get(memoKey);
+    exportMemo.set(memoKey, undefined);
+    const hit = findExport(file, name, depth);
+    exportMemo.set(memoKey, hit);
+    return hit;
+  };
+  const findExport = (file: string, name: string, depth: number): string | undefined => {
     const info = infos.get(file);
     if (!info || depth > 5) return undefined;
     const local = name === 'default' ? info.defaultName : name;
@@ -314,6 +310,7 @@ export function componentIndex(
     s.add(route);
     entries.set(key, s);
   };
+  let codeRouter = false;
   for (const [file, sf] of files) {
     const info = infos.get(file);
     if (!info) continue;
@@ -324,8 +321,13 @@ export function componentIndex(
       failed.push(file);
       continue;
     }
+    // Only router constructs count: <Route>, TanStack createRoute(), and route records passed to a router call or
+    // naming a component. A navigation or tab array ({ path: '/a', label }) in some file is not a route.
+    const routerCall = ROUTER_CALL.test(sf.text);
+    if (routerCall || declared.some((r) => r.router !== 'Router config')) codeRouter = true;
     const ids: string[] = [];
     for (const r of declared) {
+      if (r.router === 'Router config' && !routerCall && !r.component) continue;
       const id = `${file}:${r.path}`;
       ids.push(id);
       allRoutes.add(id);
@@ -346,9 +348,8 @@ export function componentIndex(
         if (prev !== 'all') layouts.set(key, new Set([...(prev ?? []), ...ids]));
       }
   }
-  const codeRoutes = allRoutes.size > 0;
   for (const info of infos.values())
-    if (isRouteFile(info.file, codeRoutes))
+    if (isRouteFile(info.file, codeRouter))
       for (const c of info.components) addEntry(componentKey(c.file, c.name), info.file);
   for (const info of infos.values()) {
     const keys = info.components.map((c) => componentKey(c.file, c.name));
