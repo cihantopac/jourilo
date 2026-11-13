@@ -350,7 +350,8 @@
         "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
         "reproduction": { "type": "array", "items": { "type": "string" } },
         "sources": { "type": "array", "items": { "$ref": "#/$defs/sourceLocation" } },
-        "occurrences": { "type": "integer" }
+        "occurrences": { "type": "integer" },
+        "pages": { "type": "array", "items": { "type": "string" } }
       }
     },
     "dismissal": {

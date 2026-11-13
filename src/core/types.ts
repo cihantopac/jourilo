@@ -98,8 +98,13 @@ export interface Finding {
   severity: Severity;
   confidence: Confidence;
   provenance: Provenance;
-  /** Page URL (redacted) the finding was observed on. */
+  /** Page URL (redacted) the finding was observed on; the first affected page when `pages` is set. */
   url: string;
+  /**
+   * Every affected page (redacted, in capture order) when one cause was seen on several pages with the same evidence,
+   * volatile tokens such as CSP nonces ignored. Absent for a finding seen on one page.
+   */
+  pages?: string[];
   viewport?: string;
   journey?: string;
   description: string;

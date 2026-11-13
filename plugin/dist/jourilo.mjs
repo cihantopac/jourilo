@@ -139,7 +139,8 @@ function trendSlice(run) {
       kind: f.kind,
       severity: f.severity,
       url: f.url,
-      viewport: f.viewport
+      viewport: f.viewport,
+      ...f.pages ? { pages: f.pages } : {}
     }))
   };
 }
@@ -7702,7 +7703,7 @@ var require_axe = __commonJS({
           matchAncestry: function matchAncestry() {
             return _matchAncestry;
           },
-          matches: function matches3() {
+          matches: function matches() {
             return _matches;
           },
           matchesExpression: function matchesExpression() {
@@ -12002,14 +12003,14 @@ var require_axe = __commonJS({
                 };
               },
               serialize: function serialize2(coords2, alpha) {
-                var _ref27 = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : {}, _ref27$collapse = _ref27.collapse, collapse = _ref27$collapse === void 0 ? true : _ref27$collapse, alphaFormat = _ref27.alpha;
+                var _ref27 = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : {}, _ref27$collapse = _ref27.collapse, collapse2 = _ref27$collapse === void 0 ? true : _ref27$collapse, alphaFormat = _ref27.alpha;
                 if (alphaFormat !== false && alpha < 1 || alphaFormat === true) {
                   coords2.push(alpha);
                 }
                 coords2 = coords2.map(function(c4) {
                   return Math.round(c4 * 255);
                 });
-                var collapsible = collapse && coords2.every(function(c4) {
+                var collapsible = collapse2 && coords2.every(function(c4) {
                   return c4 % 17 === 0;
                 });
                 var hex = coords2.map(function(c4) {
@@ -29016,7 +29017,7 @@ var require_axe = __commonJS({
           forms: function forms() {
             return forms_exports;
           },
-          matches: function matches3() {
+          matches: function matches() {
             return matches_default2;
           },
           math: function math() {
@@ -44166,6 +44167,50 @@ function sanitizeInventory(inv) {
   }
 }
 
+// src/audit/volatile.ts
+var MARK = "*";
+var END = String.raw`(?=$|[\s"'(),;:#?<>\]])`;
+var escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function pageForms(pageUrl) {
+  try {
+    const u = new URL(pageUrl);
+    u.hash = "";
+    const bare = `${u.origin}${u.pathname}`;
+    const urls = /* @__PURE__ */ new Set([u.toString(), bare, bare.replace(/\/+$/, "")]);
+    urls.delete("");
+    const path2 = u.pathname.replace(/\/+$/, "");
+    return { urls: [...urls].sort((a, b) => b.length - a.length), path: path2.length > 1 ? path2 : null };
+  } catch {
+    return { urls: [], path: null };
+  }
+}
+var RULES = [
+  // Cache-busting query values: named busters, and any long numeric value.
+  [/([?&](?:v|t|_|ts|cb|ver|nonce)=)[^&#\s"'<>)]+/gi, `$1${MARK}`],
+  [/([?&][\w.-]+=)\d{8,}(?=$|[&#\s"'<>)])/g, `$1${MARK}`],
+  // CSP nonces and source hashes ('nonce-…', 'sha256-…'); the literal "'nonce-...'" of the message is kept.
+  [/nonce-[A-Za-z0-9+/_=-]+/g, `nonce-${MARK}`],
+  [/\b(sha256|sha384|sha512)-[A-Za-z0-9+/_=-]+/g, `$1-${MARK}`],
+  [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, MARK],
+  // Build hashes in file names: main-3f2a9c1b.js, app.9a8b7c6d5e.css.
+  [/([A-Za-z0-9_]+)[.-](?=[0-9a-f]*\d)[0-9a-f]{8,}(\.(?:m?js|css|map))(?![\w])/g, `$1-${MARK}$2`],
+  // Long hex runs, and long base64-like runs that mix letters and digits.
+  [/\b[0-9a-fA-F]{16,}\b/g, MARK],
+  [/(?<![A-Za-z0-9+])(?=[A-Za-z0-9+]*\d)(?=[A-Za-z0-9+]*[A-Za-z])[A-Za-z0-9+]{16,}=*(?![A-Za-z0-9+])/g, MARK],
+  // Numeric timestamps (seconds or milliseconds).
+  [/(?<![\w.])\d{10,}(?![\w])/g, MARK]
+];
+function normalizeVolatile(text, pageUrl) {
+  let out = text;
+  if (pageUrl) {
+    const { urls, path: path2 } = pageForms(pageUrl);
+    for (const u of urls) out = out.replace(new RegExp(`${escapeRe(u)}${END}`, "g"), "{page}");
+    if (path2) out = out.replace(new RegExp(`(^|[\\s"'(=])${escapeRe(path2)}${END}`, "g"), "$1{page}");
+  }
+  for (const [re, to] of RULES) out = out.replace(re, to);
+  return out;
+}
+
 // src/audit/finding.ts
 function pathOf2(url) {
   try {
@@ -44239,9 +44284,86 @@ function mergeFindings(findings) {
       if (e.type === "screenshot" || !dup) prev.evidence.push(e);
     }
   }
-  return [...byFp.values()].sort(
-    (a, b) => severityRank(a.severity) - severityRank(b.severity) || a.ruleId.localeCompare(b.ruleId)
+  return [...byFp.values()].sort(byImportance);
+}
+var byImportance = (a, b) => severityRank(a.severity) - severityRank(b.severity) || a.ruleId.localeCompare(b.ruleId);
+var COLLAPSIBLE_RULES = ["jourilo/console-errors", "jourilo/failed-requests"];
+function pagesOf(f) {
+  return f.pages?.length ? f.pages : [f.url];
+}
+function collapseKey(f) {
+  if (!COLLAPSIBLE_RULES.includes(f.ruleId)) return void 0;
+  const items = new Set(
+    f.evidence.filter((e) => (e.type === "console" || e.type === "network") && e.snippet).map((e) => `${e.type}:${normalizeVolatile(e.snippet, f.url)}`)
   );
+  if (!items.size) return void 0;
+  return [f.ruleId, f.journey ?? "", ...[...items].sort()].join("\n");
+}
+function sameCause(a, b) {
+  const k = collapseKey(a);
+  if (!k || k !== collapseKey(b)) return false;
+  const pages = new Set(pagesOf(a).map(fingerprintPath));
+  return pagesOf(b).some((p) => pages.has(fingerprintPath(p)));
+}
+function collapseVolatileFindings(findings, pageOrder = []) {
+  const groups = /* @__PURE__ */ new Map();
+  const slots = [];
+  for (const f of findings) {
+    const key = collapseKey(f);
+    if (!key) {
+      slots.push(f);
+      continue;
+    }
+    const g = groups.get(key);
+    if (g) g.push(f);
+    else {
+      groups.set(key, [f]);
+      slots.push(key);
+    }
+  }
+  const rank = (url) => {
+    const i = pageOrder.indexOf(url);
+    return i < 0 ? pageOrder.length : i;
+  };
+  const out = slots.flatMap((s) => {
+    if (typeof s !== "string") return [s];
+    const members = groups.get(s);
+    if (new Set(members.map((m) => fingerprintPath(m.url))).size < 2) return members;
+    return [
+      collapse(
+        [...members].sort((a, b) => rank(a.url) - rank(b.url)),
+        s
+      )
+    ];
+  });
+  return out.sort(byImportance);
+}
+function collapse(members, key) {
+  const first = members[0];
+  const top = members.reduce(
+    (best, m) => severityRank(m.severity) < severityRank(best.severity) ? m : best,
+    first
+  );
+  const pages = [...new Set(members.map((m) => m.url))];
+  const n = pages.length;
+  const viewports = new Set(members.flatMap((m) => (m.viewport ?? "").split(", ")));
+  viewports.delete("");
+  const note = `The same evidence appeared on ${n} pages (volatile tokens such as nonces ignored when comparing).`;
+  return {
+    ...first,
+    fingerprint: shortHash(first.ruleId, "pages", key, first.journey ?? ""),
+    title: top.title,
+    severity: top.severity,
+    description: `${top.description} Seen on ${n} pages with the same evidence (volatile tokens such as nonces ignored).`,
+    ...viewports.size ? { viewport: [...viewports].join(", ") } : {},
+    pages,
+    evidence: [...first.evidence, { type: first.evidence.find((e) => e.snippet)?.type ?? "console", note }],
+    reproduction: [
+      ...first.reproduction,
+      `The same evidence appears on the other ${n - 1} affected page(s).`
+    ],
+    occurrences: members.reduce((sum, m) => sum + m.occurrences, 0)
+  };
 }
 
 // src/audit/standards.ts
@@ -47860,7 +47982,10 @@ async function runAudit(ws, opts) {
       for (const e of obs.errors)
         if (!e.startsWith("navigation:")) limitations.push(`${obs.url} (${obs.viewport.name}): ${e}`);
     }
-    findings = mergeFindings(findings);
+    findings = collapseVolatileFindings(
+      mergeFindings(findings),
+      observations.map((o) => o.url)
+    );
     respectLockedBrand(findings, opts.context?.brand ?? null);
     if (opts.categories?.length) findings = findings.filter((f) => opts.categories.includes(f.category));
     const { kept, dismissed } = applyDismissals(findings, dismissals);
@@ -48302,8 +48427,8 @@ var VISUAL_STATE_RULES = /* @__PURE__ */ new Set([
   "jourilo/contrast-over-image",
   "jourilo/target-size"
 ]);
-var escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-var attrRe = (attr, value) => new RegExp(`\\b${attr}\\s*[=:]\\s*\\{?\\s*["'\`]${escapeRe(value)}["'\`]`, "i");
+var escapeRe2 = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+var attrRe = (attr, value) => new RegExp(`\\b${attr}\\s*[=:]\\s*\\{?\\s*["'\`]${escapeRe2(value)}["'\`]`, "i");
 function tokensFor(f) {
   const tokens = [];
   const add = (t) => {
@@ -48321,7 +48446,7 @@ function tokensFor(f) {
         weight: 4,
         reason: `id "${id}"`,
         regex: new RegExp(
-          `${attrRe("id", id).source}|#${escapeRe(id)}\\b|getElementById\\(\\s*["']${escapeRe(id)}`,
+          `${attrRe("id", id).source}|#${escapeRe2(id)}\\b|getElementById\\(\\s*["']${escapeRe2(id)}`,
           "i"
         )
       });
@@ -48373,7 +48498,7 @@ function tokensFor(f) {
           reason: `color token for .${c}`,
           scope: "style",
           primary: true,
-          regex: new RegExp(`--(?:color-)?${escapeRe(name)}\\s*:`)
+          regex: new RegExp(`--(?:color-)?${escapeRe2(name)}\\s*:`)
         });
       }
     }
@@ -48410,7 +48535,7 @@ function tokensFor(f) {
             reason: `state rule .${c}[${s.attr}] matches the element's ${s.attr}="${s.value}"`,
             scope: "style",
             regex: new RegExp(
-              `\\.${escapeRe(c)}(?![\\w-])[^{,]*\\[${escapeRe(s.attr)}(\\s*=\\s*["']?${escapeRe(s.value)}["']?)?\\s*\\]`,
+              `\\.${escapeRe2(c)}(?![\\w-])[^{,]*\\[${escapeRe2(s.attr)}(\\s*=\\s*["']?${escapeRe2(s.value)}["']?)?\\s*\\]`,
               "i"
             )
           });
@@ -48421,7 +48546,7 @@ function tokensFor(f) {
             reason: `sets the outline in a .${c} state rule`,
             scope: "style",
             regex: new RegExp(
-              `\\.${escapeRe(c)}(?![\\w-])[^{,]*\\[(aria-(pressed|expanded|selected|checked|current)|data-state)[^{]*\\{[^}]*\\b(outline|box-shadow)\\s*:`,
+              `\\.${escapeRe2(c)}(?![\\w-])[^{,]*\\[(aria-(pressed|expanded|selected|checked|current)|data-state)[^{]*\\{[^}]*\\b(outline|box-shadow)\\s*:`,
               "i"
             )
           });
@@ -48431,7 +48556,7 @@ function tokensFor(f) {
           reason: `state rule .${c}[\u2026]`,
           scope: "style",
           regex: new RegExp(
-            `\\.${escapeRe(c)}(?![\\w-])[^{,]*(\\[(aria-(pressed|expanded|selected|checked|current)|data-state)|:(focus|focus-visible|hover|active|checked))`,
+            `\\.${escapeRe2(c)}(?![\\w-])[^{,]*(\\[(aria-(pressed|expanded|selected|checked|current)|data-state)|:(focus|focus-visible|hover|active|checked))`,
             "i"
           )
         });
@@ -48441,7 +48566,7 @@ function tokensFor(f) {
             weight: 6,
             reason: `removes the outline in a .${c} rule`,
             scope: "style",
-            regex: new RegExp(`\\.${escapeRe(c)}(?![\\w-])[^{]*\\{[^}]*outline\\s*:\\s*(none|0)\\b`, "i")
+            regex: new RegExp(`\\.${escapeRe2(c)}(?![\\w-])[^{]*\\{[^}]*outline\\s*:\\s*(none|0)\\b`, "i")
           });
       }
     }
@@ -48510,7 +48635,7 @@ function tokensFor(f) {
             weight: 5,
             reason: `button text "${label}"`,
             scope: "markup",
-            regex: new RegExp(escapeRe(label), "i")
+            regex: new RegExp(escapeRe2(label), "i")
           });
       }
       break;
@@ -48528,7 +48653,7 @@ function tokensFor(f) {
             weight: 9,
             reason: `styles the ${kind} bar ${n}`,
             scope: "style",
-            regex: new RegExp(`(^|[^\\w-])${escapeRe(n)}($|[^\\w-])`)
+            regex: new RegExp(`(^|[^\\w-])${escapeRe2(n)}($|[^\\w-])`)
           });
         const tag = typeof d.coverBarSelector === "string" ? /^[a-z][a-z0-9-]*/i.exec(d.coverBarSelector.split(/\s*[>+~]\s*|\s+/).pop() ?? "")?.[0] : null;
         if (tag)
@@ -48537,7 +48662,7 @@ function tokensFor(f) {
             weight: 6,
             reason: `styles the ${kind} bar <${tag}>`,
             scope: "style",
-            regex: new RegExp(`^\\s*${escapeRe(tag)}\\s*[,{]`, "i")
+            regex: new RegExp(`^\\s*${escapeRe2(tag)}\\s*[,{]`, "i")
           });
       }
       break;
@@ -48557,7 +48682,7 @@ function tokensFor(f) {
             weight: 8,
             reason: `fixed width on .${m[1]}`,
             scope: "style",
-            regex: new RegExp(`\\.${escapeRe(m[1])}\\b[^{]*\\{[^}]*\\b(min-)?width\\s*:\\s*\\d{3,}px`, "i")
+            regex: new RegExp(`\\.${escapeRe2(m[1])}\\b[^{]*\\{[^}]*\\b(min-)?width\\s*:\\s*\\d{3,}px`, "i")
           });
       }
       add({
@@ -48598,7 +48723,7 @@ function routeFiles(url, files) {
         "_document",
         "_app"
       );
-    if (candidates.some((c) => noExt === c || noExt.endsWith(`/${c}`)) || last !== "index" && new RegExp(`(^|/)${escapeRe(last)}$`, "i").test(noExt))
+    if (candidates.some((c) => noExt === c || noExt.endsWith(`/${c}`)) || last !== "index" && new RegExp(`(^|/)${escapeRe2(last)}$`, "i").test(noExt))
       out.add(f.rel);
     if (/(^|\/)(layout|\+layout|_document|_app|app)\.(t|j)sx?$|(^|\/)layouts?\//i.test(f.rel)) out.add(f.rel);
   }
@@ -48618,7 +48743,7 @@ function locate(f, files, max = 3) {
   const hits = /* @__PURE__ */ new Map();
   const routed = routeFiles(f.url, files);
   for (const t of tokens) {
-    const re = t.regex ?? new RegExp(`(^|[^\\w-])${escapeRe(t.value)}($|[^\\w-])`);
+    const re = t.regex ?? new RegExp(`(^|[^\\w-])${escapeRe2(t.value)}($|[^\\w-])`);
     for (const file2 of files) {
       const isStyle = STYLE_EXT.has(file2.ext);
       if (t.scope === "style" && !isStyle && !/<style|styled\.|css`/.test(file2.lines.join("\n").slice(0, 2e5)))
@@ -49158,6 +49283,8 @@ var EN = {
   "fd.sources": "Likely source",
   "fd.evidence": "Evidence",
   "fd.instances": "Same root cause",
+  "fd.pages": "Affected pages ({n})",
+  "fd.pagesHint": "The same evidence on each page; volatile tokens such as CSP nonces were ignored when comparing.",
   "fd.rule": "rule",
   "fd.more": "+{n} more in run.json",
   "fd.shot": "Screenshot evidence",
@@ -49183,7 +49310,7 @@ var EN = {
   "history.hint": "Runs with the same target in this workspace. Different page sets or viewports make counts not directly comparable; use jourilo verify for like-for-like comparisons.",
   "history.this": "(this run)",
   "trend.title": "Trend per page and viewport",
-  "trend.hint": "Defects are counted per capture (one page at one viewport), so runs audited with different --pages stay comparable. A finding with no viewport counts at every viewport of its page. Values run from the oldest run to this one.",
+  "trend.hint": "Defects are counted per capture (one page at one viewport), so runs audited with different --pages stay comparable. A finding with no viewport counts at every viewport of its page, and a finding seen on several pages with the same evidence counts on each of them. Values run from the oldest run to this one.",
   "trend.skipped": "{n} partial or empty run(s) left out: their numbers are not comparable.",
   "trend.series": "Oldest to newest: {list}",
   "trend.noData": "no data",
@@ -49381,6 +49508,8 @@ var TR = {
   "fd.sources": "Olas\u0131 kaynak",
   "fd.evidence": "Kan\u0131t",
   "fd.instances": "Ayn\u0131 k\xF6k neden",
+  "fd.pages": "Etkilenen sayfalar ({n})",
+  "fd.pagesHint": "Her sayfada ayn\u0131 kan\u0131t; kar\u015F\u0131la\u015Ft\u0131rmada CSP nonce de\u011Ferleri gibi de\u011Fi\u015Fken par\xE7alar yok say\u0131ld\u0131.",
   "fd.rule": "kural",
   "fd.more": "run.json i\xE7inde {n} tane daha",
   "fd.shot": "Ekran g\xF6r\xFCnt\xFCs\xFC kan\u0131t\u0131",
@@ -49406,7 +49535,7 @@ var TR = {
   "history.hint": "Bu \xE7al\u0131\u015Fma alan\u0131nda ayn\u0131 hedefe ait \xE7al\u0131\u015Fmalar. Farkl\u0131 sayfa k\xFCmeleri veya g\xF6r\xFCn\xFCm alanlar\u0131 say\u0131lar\u0131 do\u011Frudan kar\u015F\u0131la\u015Ft\u0131r\u0131lamaz k\u0131lar; birebir kar\u015F\u0131la\u015Ft\u0131rma i\xE7in jourilo verify kullan\u0131n.",
   "history.this": "(bu \xE7al\u0131\u015Fma)",
   "trend.title": "Sayfa ve g\xF6r\xFCn\xFCm alan\u0131 ba\u015F\u0131na e\u011Filim",
-  "trend.hint": "Kusurlar yakalama ba\u015F\u0131na (bir sayfa, bir g\xF6r\xFCn\xFCm alan\u0131) say\u0131l\u0131r; bu y\xFCzden farkl\u0131 --pages ile yap\u0131lan \xE7al\u0131\u015Fmalar kar\u015F\u0131la\u015Ft\u0131r\u0131labilir kal\u0131r. G\xF6r\xFCn\xFCm alan\u0131 olmayan bir bulgu, sayfas\u0131n\u0131n her g\xF6r\xFCn\xFCm alan\u0131nda say\u0131l\u0131r. De\u011Ferler en eski \xE7al\u0131\u015Fmadan bu \xE7al\u0131\u015Fmaya do\u011Fru gider.",
+  "trend.hint": "Kusurlar yakalama ba\u015F\u0131na (bir sayfa, bir g\xF6r\xFCn\xFCm alan\u0131) say\u0131l\u0131r; bu y\xFCzden farkl\u0131 --pages ile yap\u0131lan \xE7al\u0131\u015Fmalar kar\u015F\u0131la\u015Ft\u0131r\u0131labilir kal\u0131r. G\xF6r\xFCn\xFCm alan\u0131 olmayan bir bulgu, sayfas\u0131n\u0131n her g\xF6r\xFCn\xFCm alan\u0131nda say\u0131l\u0131r; ayn\u0131 kan\u0131tla birden \xE7ok sayfada g\xF6r\xFClen bir bulgu da bu sayfalar\u0131n her birinde say\u0131l\u0131r. De\u011Ferler en eski \xE7al\u0131\u015Fmadan bu \xE7al\u0131\u015Fmaya do\u011Fru gider.",
   "trend.skipped": "{n} yar\u0131m veya bo\u015F \xE7al\u0131\u015Fma d\u0131\u015Far\u0131da b\u0131rak\u0131ld\u0131: say\u0131lar\u0131 kar\u015F\u0131la\u015Ft\u0131r\u0131lamaz.",
   "trend.series": "Eskiden yeniye: {list}",
   "trend.noData": "veri yok",
@@ -49552,7 +49681,7 @@ function evidenceLines(f) {
 
 /**
  * input: { lang, nonce, dir, run: { id, target, mode, startedAt, version, repo }, items: [finding] }
- * finding: { id, title, rule, kind, sev, cat, prov, conf, url, vp, journey, desc, impact, fix, std, repro, src, ev, occ, path, also }
+ * finding: { id, title, rule, kind, sev, cat, prov, conf, url, pages, vp, journey, desc, impact, fix, std, repro, src, ev, occ, path, also }
  */
 function build(input) {
   var run = input.run || {};
@@ -49603,7 +49732,7 @@ function build(input) {
     L.push('');
     L.push('### ' + idx + '. ' + line(f.title, 160) + ' (id ' + code(f.id, 40) + ')');
     L.push('- ' + line(f.kind, 20) + ' · ' + line(f.sev, 12) + ' · ' + line(f.cat, 20) + ' · ' + line(f.prov, 12) + ', ' + line(f.conf, 8) + ' confidence · rule ' + code(f.rule, 80) + (f.occ > 1 ? ' · ' + f.occ + ' occurrences' : ''));
-    var pages = [code(pathOf(f.url), 300) + (f.vp ? ' (' + line(f.vp, 60) + ')' : '')].concat((f.also || []).slice(0, 8).map(function (a) { return code(pathOf(a.url), 300) + (a.vp ? ' (' + line(a.vp, 60) + ')' : '') + ' id ' + code(a.id, 40); }));
+    var pages = [code(pathOf(f.url), 300) + (f.vp ? ' (' + line(f.vp, 60) + ')' : '')].concat((f.pages || []).slice(1, 9).map(function (p) { return code(pathOf(p), 300); }), (f.pages || []).length > 9 ? ['+' + (f.pages.length - 9) + ' more'] : []).concat((f.also || []).slice(0, 8).map(function (a) { return code(pathOf(a.url), 300) + (a.vp ? ' (' + line(a.vp, 60) + ')' : '') + ' id ' + code(a.id, 40); }));
     L.push('- Pages: ' + pages.join(', ') + (f.journey ? ' · journey ' + code(f.journey, 80) : ''));
     L.push('- Fix path: ' + PATH[f.path]);
     L.push('- Observed: ' + line(f.desc, 500));
@@ -50788,7 +50917,8 @@ ${p.viewport}`;
     for (const [k, caps] of captures) {
       const first = caps[0];
       const mine = run.findings.filter(
-        (f) => f.kind === "defect" && f.url === first.url && (f.viewport === void 0 || f.viewport === first.viewport)
+        (f) => f.kind === "defect" && pagesOf(f).includes(first.url) && // A finding merged over viewports names them all ("desktop, mobile"): it counts at each of them.
+        (f.viewport === void 0 || f.viewport.split(", ").includes(first.viewport))
       );
       const row = rows.get(k) ?? { url: first.url, viewport: first.viewport, points: [] };
       row.points.push({
@@ -50929,7 +51059,7 @@ function groupFindings(findings) {
       id: `rc-${slug2(lead.fingerprint)}`,
       lead,
       members: sorted,
-      pages: [...new Set(sorted.map((m) => m.url))],
+      pages: [...new Set(sorted.flatMap(pagesOf))],
       path: fixPathOf(lead)
     };
   }).sort(
@@ -50973,6 +51103,7 @@ function groupHtml(run, g, status, base2) {
   const instances = g.members.length > 1 ? `<h4>${T("fd.instances")}</h4><ul class="instances">${g.members.map(
     (m) => `<li>${base2 ? "" : `<label class="pick"><input type="checkbox" class="sel" data-ids="${esc(m.fingerprint)}"><span class="sr">${T("rc.selectOne")}: <span lang="en">${esc(m.title)}</span> ${esc(pathname(m.url))}</span></label>`}<code>${esc(pathname(m.url))}</code> <span class="muted">${esc(m.viewport ?? "")}</span> <span class="chip sev sev-${m.severity}">${T(`sev.${m.severity}`)}</span> <span class="muted">${T("fd.id")} <code>${esc(m.fingerprint)}</code></span></li>`
   ).join("")}</ul>` : "";
+  const affected = f.pages && f.pages.length > 1 ? `<h4>${T("fd.pages", { n: f.pages.length })}</h4><p class="muted">${T("fd.pagesHint")}</p><ul class="instances">${f.pages.map((p) => `<li><code>${esc(pathname(p))}</code></li>`).join("")}</ul>` : "";
   const data = base2 ? "" : ` data-kind="${f.kind}" data-sev="${f.severity}" data-cat="${esc(f.category)}" data-path="${g.path}" data-pages="${esc(g.pages.join(" "))}" data-n="${g.members.length}"`;
   return `<article class="rc sev-${f.severity} k-${f.kind}${status ? ` st-${esc(status)}` : ""}" id="${base2 ? "fixed-" : ""}${g.id}"${data}>
 ${base2 ? "<span></span>" : pick(g)}
@@ -50983,7 +51114,7 @@ ${base2 ? "<span></span>" : pick(g)}
 <dt>${T("fd.basis")}</dt><dd><span class="chip">${T(`prov.${f.provenance}`)}</span> <span class="chip">${T(`conf.${f.confidence}`)}</span> ${T("fd.rule")} <code>${esc(f.ruleId)}</code> \xB7 ${T("fd.id")} <code>${esc(f.fingerprint)}</code></dd>
 ${stds ? `<dt>${T("fd.standards")}</dt><dd><ul class="stds">${stds}</ul></dd>` : ""}
 <dt>${T("fd.repro")}</dt><dd><ol lang="en">${f.reproduction.map((r) => `<li>${esc(r)}</li>`).join("")}</ol></dd></dl>
-${sources}${instances}
+${sources}${affected}${instances}
 <h4>${T("fd.evidence")}</h4>${evidenceHtml(run, f, base2)}
 </div></details></article>`;
 }
@@ -51251,6 +51382,7 @@ function payload(run) {
     prov: f.provenance,
     conf: f.confidence,
     url: f.url,
+    ...f.pages ? { pages: f.pages } : {},
     vp: f.viewport,
     journey: f.journey,
     desc: f.description,
@@ -51305,7 +51437,7 @@ function renderHtml(run, cmp, history = []) {
   const autoGroups = defectGroups.filter((g) => g.path === "auto").length;
   const uniquePages = new Set(run.pages.map((p) => p.url)).size;
   const cats = [...new Set(findings.map((f) => f.category))].sort();
-  const pages = [...new Set(findings.map((f) => f.url))];
+  const pages = [...new Set(findings.flatMap(pagesOf))];
   const top = defectGroups.slice(0, 6);
   const sevTotal = SEVS.reduce((n, k) => n + s.findings[k], 0) || 1;
   const sevColor = {
@@ -51424,6 +51556,11 @@ function path(u) {
   }
 }
 var md = (s) => s.replace(/\|/g, "\\|").replace(/\n/g, " ");
+function pageCell(f) {
+  const pages = pagesOf(f);
+  const shown = pages.slice(0, 8).map((u) => `\`${md(path(u))}\``);
+  return `${shown.join(", ")}${pages.length > 8 ? ` +${pages.length - 8} more` : ""}`;
+}
 function renderMarkdown(run, cmp, limit = 25) {
   const s = run.summary;
   const lines = [
@@ -51482,7 +51619,7 @@ function renderMarkdown(run, cmp, limit = 25) {
     );
     for (const f of list2.slice(0, limit))
       lines.push(
-        `| ${f.severity} | ${md(f.title)}${f.occurrences > 1 ? ` (\xD7${f.occurrences})` : ""} | \`${md(path(f.url))}\` | ${f.viewport ?? ""} | ${f.provenance}/${f.confidence} | \`${f.fingerprint}\` |`
+        `| ${f.severity} | ${md(f.title)}${f.occurrences > 1 ? ` (\xD7${f.occurrences})` : ""} | ${pageCell(f)} | ${f.viewport ?? ""} | ${f.provenance}/${f.confidence} | \`${f.fingerprint}\` |`
       );
     if (list2.length > limit) lines.push(`| | \u2026 ${list2.length - limit} more in run.json | | | | |`);
     lines.push("");
@@ -52907,7 +53044,13 @@ var conversion = {
 import { existsSync as existsSync13, readdirSync as readdirSync9, readFileSync as readFileSync12, writeFileSync as writeFileSync10 } from "node:fs";
 import { join as join19, resolve as resolve7 } from "node:path";
 init_errors();
-var matches = (f, e) => f.ruleId === e.rule && (!e.kind || f.kind === e.kind) && pathOf2(f.url).split("?")[0].replace(/\/$/, "") === e.path.replace(/\/$/, "") && (!e.viewport || (f.viewport ?? "").split(", ").includes(e.viewport));
+var benchPath = (url) => pathOf2(url).split("?")[0].replace(/\/$/, "");
+var samePages = (f, want) => {
+  const got = new Set(pagesOf(f).map((u) => benchPath(u) || "/"));
+  const norm = new Set(want.map((p) => p.replace(/\/$/, "") || "/"));
+  return got.size === norm.size && [...norm].every((p) => got.has(p));
+};
+var benchMatches = (f, e) => f.ruleId === e.rule && (!e.kind || f.kind === e.kind) && pagesOf(f).some((u) => benchPath(u) === e.path.replace(/\/$/, "")) && (!e.viewport || (f.viewport ?? "").split(", ").includes(e.viewport)) && (!e.pagesExactly || samePages(f, e.pagesExactly));
 async function benchFixture(dir, wsRoot) {
   const expected = JSON.parse(readFileSync12(join19(dir, "expected.json"), "utf8"));
   const server = await serveStatic(dir);
@@ -52939,14 +53082,14 @@ async function benchFixture(dir, wsRoot) {
       return texts.length > 0 && texts.every((t) => e.evidenceExactly.some((n) => t.includes(n))) && e.evidenceExactly.every((n) => texts.some((t) => t.includes(n)));
     };
     const missed = expected.mustFind.filter(
-      (e) => !run.findings.some((f) => matches(f, e) && evidenceOk(f, e))
+      (e) => !run.findings.some((f) => benchMatches(f, e) && evidenceOk(f, e))
     );
     for (const r of expected.recommendations ?? []) {
-      const f = run.findings.find((x) => matches(x, r));
+      const f = run.findings.find((x) => benchMatches(x, r));
       if (!f?.recommendation.includes(r.includes))
         missed.push({ rule: r.rule, path: r.path, why: `recommendation should include "${r.includes}"` });
     }
-    const falsePositives = expected.mustNotFind.filter((e) => run.findings.some((f) => matches(f, e) && evidenceOk(f, e))).map((e) => ({ rule: e.rule, path: e.path, ...e.why ? { why: e.why } : {} }));
+    const falsePositives = expected.mustNotFind.filter((e) => run.findings.some((f) => benchMatches(f, e) && evidenceOk(f, e))).map((e) => ({ rule: e.rule, path: e.path, ...e.why ? { why: e.why } : {} }));
     const limits = expected.maxDefects ? [expected.maxDefects].flat() : [];
     const excessDefects = [];
     for (const lim of limits) {
@@ -52954,15 +53097,14 @@ async function benchFixture(dir, wsRoot) {
       for (const f of run.findings) {
         if (f.kind !== "defect" || severityRank(f.severity) > severityRank(lim.minSeverity)) continue;
         if (lim.rule && f.ruleId !== lim.rule) continue;
-        if (lim.paths && !lim.paths.includes(pathOf2(f.url).split("?")[0].replace(/\/$/, "") || "/"))
-          continue;
+        if (lim.paths && !pagesOf(f).some((u) => lim.paths.includes(benchPath(u) || "/"))) continue;
         over.push({ rule: f.ruleId, path: pathOf2(f.url), severity: f.severity });
       }
       excessDefects.push(...over.slice(0, Math.max(0, over.length - lim.count)));
     }
     const sourceMisses = [];
     for (const s of expected.sources ?? []) {
-      const f = run.findings.find((x) => matches(x, { rule: s.rule, path: s.path }));
+      const f = run.findings.find((x) => benchMatches(x, { rule: s.rule, path: s.path }));
       const got = f?.sources?.map((x) => x.file) ?? [];
       if (got[0] !== s.file) sourceMisses.push({ ...s, got });
     }
@@ -55468,12 +55610,16 @@ function compareRuns(base2, head) {
   const headPages = new Set(head.pages.filter((p) => p.status !== null).map((p) => pathKey(p.url)));
   const dismissedFps = new Set((head.dismissed ?? []).map((f) => f.fingerprint));
   const dismissed = base2.findings.filter((f) => dismissedFps.has(f.fingerprint));
+  const baseCauses = base2.findings.filter((f) => collapseKey(f));
+  const headCauses = head.findings.filter((f) => collapseKey(f));
+  const counterpart = (f) => before.get(f.fingerprint) ?? baseCauses.find((b) => sameCause(b, f));
+  const stillThere = (f) => after.has(f.fingerprint) || headCauses.some((h) => sameCause(f, h));
   const fixed = base2.findings.filter(
-    (f) => !after.has(f.fingerprint) && !dismissedFps.has(f.fingerprint) && headPages.has(pathKey(f.url))
+    (f) => !stillThere(f) && !dismissedFps.has(f.fingerprint) && pagesOf(f).every((p) => headPages.has(pathKey(p)))
   );
-  const introduced = head.findings.filter((f) => !before.has(f.fingerprint));
-  const persisting = head.findings.filter((f) => before.has(f.fingerprint));
-  const changed = persisting.map((f) => ({ before: before.get(f.fingerprint), after: f })).filter((c) => c.before.severity !== c.after.severity || c.before.occurrences !== c.after.occurrences);
+  const introduced = head.findings.filter((f) => !counterpart(f));
+  const persisting = head.findings.filter((f) => counterpart(f));
+  const changed = persisting.map((f) => ({ before: counterpart(f), after: f })).filter((c) => c.before.severity !== c.after.severity || c.before.occurrences !== c.after.occurrences);
   const metrics = [];
   for (const hp of head.pages) {
     const bp = base2.pages.find((p) => pathKey(p.url) === pathKey(hp.url) && p.viewport === hp.viewport);
@@ -55907,7 +56053,7 @@ var import_axe_core3 = __toESM(require_axe(), 1);
 function rule(id, category, kind, severity, title, standards) {
   return { id, category, severity, kind, title, standards };
 }
-var RULES = [
+var RULES2 = [
   rule(
     "jourilo/contrast-over-image",
     "accessibility",
@@ -56303,7 +56449,7 @@ var RULES = [
 // src/cli/commands/rules.ts
 init_errors();
 function allRules() {
-  const out = [...RULES];
+  const out = [...RULES2];
   for (const r of import_axe_core3.default.getRules(AXE_TAGS)) {
     const standards = wcagFromAxeTags(r.tags).map((s) => `${s.standard} ${s.id}`);
     out.push({

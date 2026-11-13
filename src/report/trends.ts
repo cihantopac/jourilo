@@ -1,5 +1,6 @@
 // Trends across runs of one target, normalized per page capture (URL x viewport), so runs audited with different
 // --pages or viewports still compare: every row follows one page at one viewport through the runs that captured it.
+import { pagesOf } from '../audit/finding.js';
 import { runOutcome } from '../audit/outcome.js';
 import type { TrendRun } from '../core/trend-run.js';
 
@@ -54,11 +55,14 @@ export function trendReport(runs: TrendRun[], key: { target: string }): TrendRep
     for (const [k, caps] of captures) {
       const first = caps[0]!;
       // A finding without a viewport (a page-level result) is counted at every viewport of its page: once per row.
+      // A finding collapsed over several pages (F44) counts on each of its pages, as it did before the collapse, so a
+      // page's defects per capture do not drop just because the same cause was also seen elsewhere.
       const mine = run.findings.filter(
         (f) =>
           f.kind === 'defect' &&
-          f.url === first.url &&
-          (f.viewport === undefined || f.viewport === first.viewport),
+          pagesOf(f).includes(first.url) &&
+          // A finding merged over viewports names them all ("desktop, mobile"): it counts at each of them.
+          (f.viewport === undefined || f.viewport.split(', ').includes(first.viewport)),
       );
       const row = rows.get(k) ?? { url: first.url, viewport: first.viewport, points: [] };
       row.points.push({

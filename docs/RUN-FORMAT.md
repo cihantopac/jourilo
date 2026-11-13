@@ -29,6 +29,21 @@ manifest is described there as `#/$defs/manifest`. The TypeScript source of trut
   `--timeout`; the page was still audited in the state it was in, and `limitations` says so. `settings.waitFor` holds
   the selector, and `jourilo verify` replays it. The field is absent in runs made before 1.3.0.
 
+## Findings seen on several pages
+
+- `findings[].pages` is present when one cause was seen on several pages with the same evidence once volatile tokens
+  (CSP nonces, `sha256-…` hashes, UUIDs, long hex or base64-like runs, cache-busting query values, chunk hashes in file
+  names, numeric timestamps and the page's own URL) are ignored. It lists every affected page, redacted like `url`, in
+  capture order; `url` is the first of them. Only `jourilo/console-errors` and `jourilo/failed-requests` collapse this
+  way, within one journey (or none).
+- Such a finding is counted once in `summary`; `occurrences` is the sum over its pages and `severity` the highest.
+- Its `fingerprint` depends on the rule, the normalized evidence and the journey, not on the pages, so it stays stable
+  whichever pages a run sampled. A finding seen on one page has no `pages` and keeps the per-page fingerprint of
+  earlier releases.
+- Run comparison (`jourilo verify`, `compare`) matches a collapsed finding with the same cause on any of its pages,
+  collapsed or not, and calls it fixed only when every one of its pages was checked again and none shows it. Trends
+  count it on each of its pages. The field is absent in runs made before 1.4.0.
+
 ## Budgets
 
 `--budget LCP=2000,CLS=0.05` records `budgets`: one entry per metric with the `limit`, the `worst` value and the

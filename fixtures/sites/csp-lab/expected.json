@@ -1,0 +1,33 @@
+{
+  "description": "One CSP-blocked script on several pages, each page with its own nonce and cache-buster (Frameva, field item F44): one finding per rule that lists the pages; a page with a genuinely different error stays its own finding.",
+  "mustFind": [
+    {
+      "rule": "jourilo/console-errors",
+      "path": "/team",
+      "pagesExactly": ["/team", "/pricing", "/contact"],
+      "why": "inline script blocked by a per-page CSP nonce plus React error #418 on three pages: one collapsed finding"
+    },
+    {
+      "rule": "jourilo/failed-requests",
+      "path": "/pricing",
+      "pagesExactly": ["/team", "/pricing", "/contact"],
+      "why": "the e-mail decoder script fails on three pages with a per-page ?v= cache-buster: one collapsed finding"
+    },
+    {
+      "rule": "jourilo/console-errors",
+      "path": "/control",
+      "evidenceExactly": ["cart is undefined"],
+      "why": "a different error message is its own finding, not part of the collapse"
+    },
+    {
+      "rule": "jourilo/failed-requests",
+      "path": "/control",
+      "evidenceExactly": ["/js/cart.js"],
+      "why": "a different failing URL is its own finding, not part of the collapse"
+    }
+  ],
+  "mustNotFind": [
+    { "rule": "jourilo/console-errors", "path": "/", "why": "the home page has no CSP and no errors" },
+    { "rule": "jourilo/failed-requests", "path": "/", "why": "the home page loads nothing that fails" }
+  ]
+}

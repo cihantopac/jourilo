@@ -168,6 +168,22 @@ describe('trends', () => {
     ]);
   });
 
+  it('counts a finding merged over viewports at each of its viewports', () => {
+    const both = { ...defect('/', 'desktop', 'serious', 9), viewport: 'desktop, mobile' } as Finding;
+    const a = mk(
+      'r1',
+      '2026-11-01T10:00:00Z',
+      [page('/', 'desktop'), page('/', 'mobile'), page('/', 'tablet')],
+      [both],
+    );
+    const rows = trends([trendSlice(a)], { target: TARGET });
+    expect(rows.map((r) => [r.viewport, r.points[0]!.defectsPerCapture])).toEqual([
+      ['desktop', 1],
+      ['mobile', 1],
+      ['tablet', 0],
+    ]);
+  });
+
   it('says nothing for a workspace without runs', async () => {
     const ws = new Workspace(mkdtempSync(join(tmpdir(), 'jourilo-trend-')));
     const ctx = parse(runsCommand, ['trend', '--json', '--workspace', ws.root]);

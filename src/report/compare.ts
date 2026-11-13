@@ -1,5 +1,5 @@
 // Before/after comparison of two runs by finding fingerprint, plus lab metric deltas per page and viewport.
-import { fingerprintPath } from '../audit/finding.js';
+import { collapseKey, fingerprintPath, pagesOf, sameCause } from '../audit/finding.js';
 import type { Finding, MetricValue, Run } from '../core/types.js';
 
 export interface MetricDelta {
@@ -56,13 +56,23 @@ export function compareRuns(base: Run, head: Run): RunComparison {
   const headPages = new Set(head.pages.filter((p) => p.status !== null).map((p) => pathKey(p.url)));
   const dismissedFps = new Set((head.dismissed ?? []).map((f) => f.fingerprint));
   const dismissed = base.findings.filter((f) => dismissedFps.has(f.fingerprint));
+  // A finding collapsed over several pages (F44) has a fingerprint of its own: it still matches the same cause seen on
+  // one of its pages, collapsed or not, so a collapse in either run is neither "fixed" nor "new".
+  const baseCauses = base.findings.filter((f) => collapseKey(f));
+  const headCauses = head.findings.filter((f) => collapseKey(f));
+  const counterpart = (f: Finding) => before.get(f.fingerprint) ?? baseCauses.find((b) => sameCause(b, f));
+  const stillThere = (f: Finding) => after.has(f.fingerprint) || headCauses.some((h) => sameCause(f, h));
+  // Fixed only when none of its pages shows it, and every one of them was checked again.
   const fixed = base.findings.filter(
-    (f) => !after.has(f.fingerprint) && !dismissedFps.has(f.fingerprint) && headPages.has(pathKey(f.url)),
+    (f) =>
+      !stillThere(f) &&
+      !dismissedFps.has(f.fingerprint) &&
+      pagesOf(f).every((p) => headPages.has(pathKey(p))),
   );
-  const introduced = head.findings.filter((f) => !before.has(f.fingerprint));
-  const persisting = head.findings.filter((f) => before.has(f.fingerprint));
+  const introduced = head.findings.filter((f) => !counterpart(f));
+  const persisting = head.findings.filter((f) => counterpart(f));
   const changed = persisting
-    .map((f) => ({ before: before.get(f.fingerprint)!, after: f }))
+    .map((f) => ({ before: counterpart(f)!, after: f }))
     .filter((c) => c.before.severity !== c.after.severity || c.before.occurrences !== c.after.occurrences);
 
   const metrics: MetricDelta[] = [];

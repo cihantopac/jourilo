@@ -3,7 +3,7 @@
 // The report is complete without JavaScript; the inline client only adds language, theme, filters and the repair
 // prompt, and a strict CSP keeps it offline.
 import { budgetLine } from '../audit/budget.js';
-import { severityRank } from '../audit/finding.js';
+import { pagesOf, severityRank } from '../audit/finding.js';
 import { MANUAL_REVIEW } from '../audit/standards.js';
 import type { Evidence, Finding, FindingKind, JourneyResult, Run, Severity } from '../core/types.js';
 import type { RunListing } from '../core/workspace.js';
@@ -200,7 +200,7 @@ function groupFindings(findings: Finding[]): Group[] {
         id: `rc-${slug(lead.fingerprint)}`,
         lead,
         members: sorted,
-        pages: [...new Set(sorted.map((m) => m.url))],
+        pages: [...new Set(sorted.flatMap(pagesOf))],
         path: fixPathOf(lead),
       };
     })
@@ -272,6 +272,13 @@ function groupHtml(run: Run, g: Group, status?: string, base?: string): string {
           )
           .join('')}</ul>`
       : '';
+  // A finding collapsed over several pages (F44) lists every page it was seen on.
+  const affected =
+    f.pages && f.pages.length > 1
+      ? `<h4>${T('fd.pages', { n: f.pages.length })}</h4><p class="muted">${T('fd.pagesHint')}</p><ul class="instances">${f.pages
+          .map((p) => `<li><code>${esc(pathname(p))}</code></li>`)
+          .join('')}</ul>`
+      : '';
   const data = base
     ? ''
     : ` data-kind="${f.kind}" data-sev="${f.severity}" data-cat="${esc(f.category)}" data-path="${g.path}" data-pages="${esc(g.pages.join(' '))}" data-n="${g.members.length}"`;
@@ -284,7 +291,7 @@ ${base ? '<span></span>' : pick(g)}
 <dt>${T('fd.basis')}</dt><dd><span class="chip">${T(`prov.${f.provenance}` as MsgKey)}</span> <span class="chip">${T(`conf.${f.confidence}` as MsgKey)}</span> ${T('fd.rule')} <code>${esc(f.ruleId)}</code> · ${T('fd.id')} <code>${esc(f.fingerprint)}</code></dd>
 ${stds ? `<dt>${T('fd.standards')}</dt><dd><ul class="stds">${stds}</ul></dd>` : ''}
 <dt>${T('fd.repro')}</dt><dd><ol lang="en">${f.reproduction.map((r) => `<li>${esc(r)}</li>`).join('')}</ol></dd></dl>
-${sources}${instances}
+${sources}${affected}${instances}
 <h4>${T('fd.evidence')}</h4>${evidenceHtml(run, f, base)}
 </div></details></article>`;
 }
@@ -661,6 +668,7 @@ function payload(run: Run): string {
     prov: f.provenance,
     conf: f.confidence,
     url: f.url,
+    ...(f.pages ? { pages: f.pages } : {}),
     vp: f.viewport,
     journey: f.journey,
     desc: f.description,
@@ -726,7 +734,7 @@ export function renderHtml(run: Run, cmp?: RunComparison, history: RunListing[] 
   const autoGroups = defectGroups.filter((g) => g.path === 'auto').length;
   const uniquePages = new Set(run.pages.map((p) => p.url)).size;
   const cats = [...new Set(findings.map((f) => f.category))].sort();
-  const pages = [...new Set(findings.map((f) => f.url))];
+  const pages = [...new Set(findings.flatMap(pagesOf))];
   const top = defectGroups.slice(0, 6);
   const sevTotal = SEVS.reduce((n, k) => n + s.findings[k], 0) || 1;
   const sevColor: Record<string, string> = {

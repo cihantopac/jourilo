@@ -9,7 +9,7 @@ export interface TrendRun {
   outcome?: Run['outcome'];
   stoppedBy?: Run['stoppedBy'];
   pages: Pick<PageCapture, 'url' | 'viewport' | 'status' | 'metrics'>[];
-  findings: Pick<Finding, 'kind' | 'severity' | 'url' | 'viewport'>[];
+  findings: Pick<Finding, 'kind' | 'severity' | 'url' | 'viewport' | 'pages'>[];
 }
 
 export function trendSlice(run: Run): TrendRun {
@@ -25,6 +25,7 @@ export function trendSlice(run: Run): TrendRun {
       severity: f.severity,
       url: f.url,
       viewport: f.viewport,
+      ...(f.pages ? { pages: f.pages } : {}),
     })),
   };
 }
