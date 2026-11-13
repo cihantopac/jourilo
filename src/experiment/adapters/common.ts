@@ -24,6 +24,8 @@ export interface AdapterDeps {
   /** `--start` / `--end` (YYYY-MM-DD), Amplitude only. */
   start?: string;
   end?: string;
+  /** `--control-key`: the control variant's key, Amplitude only (default `control`). */
+  controlKey?: string;
 }
 
 /** Raised while reading: the data is partial. The adapter returns what it has with `complete: false`. */
@@ -166,25 +168,41 @@ export const isCount = (n: unknown): n is number => typeof n === 'number' && Num
 export interface ReadState {
   metric: string;
   variants: ExperimentData['variants'];
+  /** Every note, informational or not. Completeness is `complete`, never the number of notes. */
   notes: string[];
+  /** False once `incomplete` was called. */
+  readonly complete: boolean;
   /** Records why the numbers cannot be trusted as complete, and keeps reading. */
   incomplete(note: string): void;
+  /** Records a note that does not make the data partial (e.g. users left out by design). */
+  note(text: string): void;
 }
 
-/** Runs a read and turns IncompleteData into `complete: false`, keeping every note. */
+/**
+ * Runs a read and turns IncompleteData into `complete: false`, keeping every note. A response of an unexpected shape
+ * (a TypeError while reading it) is incomplete data too, with a note that says so; JouriloErrors pass through scrubbed.
+ */
 export async function collect(
+  vendor: string,
   id: string,
   read: (state: ReadState) => Promise<void>,
   secrets: string[],
 ): Promise<ExperimentData> {
   let complete = true;
+  const notes: string[] = [];
   const state: ReadState = {
     metric: '',
     variants: [],
-    notes: [],
+    notes,
+    get complete() {
+      return complete;
+    },
     incomplete(note) {
       complete = false;
-      state.notes.push(note);
+      notes.push(note);
+    },
+    note(text) {
+      notes.push(text);
     },
   };
   try {
@@ -192,14 +210,17 @@ export async function collect(
   } catch (e) {
     if (e instanceof IncompleteData) state.incomplete(e.message);
     else if (e instanceof JouriloError) throw new JouriloError(e.code, scrub(e.message, secrets), e.hint);
-    else throw e;
+    else
+      state.incomplete(
+        `${vendor} sent a response Jourilo could not read (${(e as Error)?.message ?? String(e)}); its shape may have changed.`,
+      );
   }
   return {
     id,
     metric: state.metric,
     variants: state.variants,
     complete,
-    notes: state.notes.map((n) => scrub(n, secrets)),
+    notes: notes.map((n) => scrub(n, secrets)),
   };
 }
 
@@ -218,9 +239,10 @@ export function settleVariants(vendor: string, state: ReadState, expected: strin
     const extra = state.variants.filter((v) => !expected.includes(v.name));
     state.variants = [...expected.flatMap((n) => byName.get(n) ?? []), ...extra];
   }
-  if (state.variants.length < 2 && state.notes.length === 0)
+  // Fewer than two arms is always partial data, whatever else was noted.
+  if (state.variants.length < 2 && state.complete)
     state.incomplete(
-      `${vendor} returned ${state.variants.length} variant(s); a comparison needs at least two.`,
+      `${vendor} returned numbers for ${state.variants.length} variant(s)${state.variants.length ? ` (${state.variants.map((v) => v.name).join(', ')})` : ''}; the other arm is missing, and a comparison needs at least two.`,
     );
 }
 

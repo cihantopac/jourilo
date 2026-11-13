@@ -53015,15 +53015,22 @@ function client(vendor, deps, auth) {
   };
 }
 var isCount = (n) => typeof n === "number" && Number.isInteger(n) && n >= 0;
-async function collect(id, read3, secrets) {
+async function collect(vendor, id, read3, secrets) {
   let complete = true;
+  const notes = [];
   const state = {
     metric: "",
     variants: [],
-    notes: [],
+    notes,
+    get complete() {
+      return complete;
+    },
     incomplete(note) {
       complete = false;
-      state.notes.push(note);
+      notes.push(note);
+    },
+    note(text) {
+      notes.push(text);
     }
   };
   try {
@@ -53031,14 +53038,17 @@ async function collect(id, read3, secrets) {
   } catch (e) {
     if (e instanceof IncompleteData) state.incomplete(e.message);
     else if (e instanceof JouriloError) throw new JouriloError(e.code, scrub(e.message, secrets), e.hint);
-    else throw e;
+    else
+      state.incomplete(
+        `${vendor} sent a response Jourilo could not read (${e?.message ?? String(e)}); its shape may have changed.`
+      );
   }
   return {
     id,
     metric: state.metric,
     variants: state.variants,
     complete,
-    notes: state.notes.map((n) => scrub(n, secrets))
+    notes: notes.map((n) => scrub(n, secrets))
   };
 }
 function settleVariants(vendor, state, expected) {
@@ -53052,9 +53062,9 @@ function settleVariants(vendor, state, expected) {
     const extra = state.variants.filter((v) => !expected.includes(v.name));
     state.variants = [...expected.flatMap((n) => byName.get(n) ?? []), ...extra];
   }
-  if (state.variants.length < 2 && state.notes.length === 0)
+  if (state.variants.length < 2 && state.complete)
     state.incomplete(
-      `${vendor} returned ${state.variants.length} variant(s); a comparison needs at least two.`
+      `${vendor} returned numbers for ${state.variants.length} variant(s)${state.variants.length ? ` (${state.variants.map((v) => v.name).join(", ")})` : ""}; the other arm is missing, and a comparison needs at least two.`
     );
 }
 function pushVariant(state, name, exposures, conversions) {
@@ -53088,6 +53098,7 @@ function amplitudeAdapter(deps) {
   const event = deps.metric;
   const start = day(deps.start, "--start");
   const end = deps.end ? day(deps.end, "--end") : (/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "");
+  const controlKey = deps.controlKey ?? "control";
   const basic = Buffer.from(`${apiKey}:${secret}`).toString("base64");
   const http2 = client("Amplitude", deps, {
     header: `Basic ${basic}`,
@@ -53097,6 +53108,7 @@ function amplitudeAdapter(deps) {
   return {
     name: "amplitude",
     experiment: (flagKey) => collect(
+      "Amplitude",
       flagKey,
       async (state) => {
         state.metric = event;
@@ -53121,6 +53133,8 @@ function amplitudeAdapter(deps) {
         q.set("g", `gp:[Experiment] ${flagKey}`);
         q.set("limit", String(GROUP_LIMIT));
         const body = await http2.get(`${host.href.replace(/\/$/, "")}/api/2/funnels?${q}`);
+        if (body.data !== void 0 && !Array.isArray(body.data))
+          throw new IncompleteData("Amplitude sent a funnel answer whose `data` is not a list of groups.");
         const groups = body.data ?? [];
         if (groups.length >= GROUP_LIMIT)
           throw new IncompleteData(
@@ -53137,19 +53151,16 @@ function amplitudeAdapter(deps) {
           pushVariant(state, name, raw[0], raw.length > 1 ? raw.at(-1) : void 0);
         }
         if (unassigned)
-          state.notes.push(
+          state.note(
             `${unassigned} exposed user(s) had no [Experiment] ${flagKey} property and were left out.`
           );
-        if (!state.variants.some((v) => v.name === "control"))
+        const hasControl = state.variants.some((v) => v.name === controlKey);
+        if (!hasControl)
           state.incomplete(
-            "Amplitude returned no numbers for the control variant; a comparison without it would be partial."
+            `Amplitude returned no numbers for the control variant (${controlKey}); a comparison without it would be partial.`
           );
-        const others = state.variants.filter((v) => v.name !== "control").map((v) => v.name);
-        settleVariants(
-          "Amplitude",
-          state,
-          state.variants.some((v) => v.name === "control") ? ["control", ...others] : []
-        );
+        const others = state.variants.filter((v) => v.name !== controlKey).map((v) => v.name);
+        settleVariants("Amplitude", state, hasControl ? [controlKey, ...others] : []);
       },
       [apiKey, secret, basic]
     )
@@ -53182,23 +53193,54 @@ function growthbookAdapter(deps) {
       );
     throw new JouriloError("NOT_FOUND", `GrowthBook has no experiment with the tracking key ${trackingKey}.`);
   }
+  async function requireProportion(metricId, label, names) {
+    const fact2 = metricId.startsWith("fact__");
+    const body = await http2.get(
+      `${base2}/${fact2 ? "fact-metrics" : "metrics"}/${encodeURIComponent(metricId)}`
+    );
+    const type = fact2 ? body.factMetric?.metricType : body.metric?.type;
+    if (type === void 0)
+      throw new IncompleteData(`GrowthBook sent the metric ${metricId} without its type.`);
+    if (type !== (fact2 ? "proportion" : "binomial"))
+      throw new JouriloError(
+        "INVALID_INPUT",
+        `"${label}" is a ${type} metric; analyze needs a conversion metric (${fact2 ? "a proportion fact metric" : "a binomial metric"}) that counts converted users.`,
+        names.length > 1 ? `Pick a conversion metric with --metric (metrics in the results: ${names.join(", ")}).` : "Add a proportion (binomial) goal metric to the experiment in GrowthBook."
+      );
+  }
   return {
     name: "growthbook",
     experiment: (id) => collect(
+      "GrowthBook",
       id,
       async (state) => {
         state.metric = deps.metric ?? "";
         const exp = id.startsWith("exp_") ? (await http2.get(`${base2}/experiments/${encodeURIComponent(id)}`)).experiment : await find(id);
+        if (!exp?.id) throw new IncompleteData("GrowthBook sent an experiment without an id.");
         const raw = await http2.get(`${base2}/experiments/${encodeURIComponent(exp.id)}/results`);
         const slices = raw.result?.results ?? raw.results ?? [];
         const overall = slices.find((s) => !(s.dimensionValue ?? s.dimension)) ?? slices[0];
-        if (!overall) throw new IncompleteData("GrowthBook has no analysis for this experiment yet.");
-        const wanted = deps.metric ?? exp.settings?.goals?.[0]?.metricId;
-        const metric2 = wanted ? overall.metrics?.find((m) => m.metricId === wanted || m.metricName === wanted) : overall.metrics?.[0];
-        if (!metric2)
-          throw new IncompleteData(
-            wanted ? `Metric "${wanted}" is not in the experiment's results.` : "The results contain no metric."
+        if (!overall)
+          throw new JouriloError(
+            "INVALID_INPUT",
+            `GrowthBook has no analysis for experiment ${id} yet.`,
+            "Update the results in GrowthBook (or wait for the scheduled update), then rerun."
           );
+        const goal = exp.settings?.goals?.[0]?.metricId;
+        const wanted = deps.metric ?? goal;
+        const metric2 = wanted ? overall.metrics?.find((m) => m.metricId === wanted || m.metricName === wanted) : overall.metrics?.[0];
+        const names = (overall.metrics ?? []).map((m) => m.metricName || m.metricId);
+        if (!metric2)
+          throw deps.metric ? new JouriloError(
+            "USAGE",
+            `GrowthBook experiment ${id} has no results for a metric "${deps.metric}".`,
+            names.length ? `Metrics in its results: ${names.join(", ")}.` : "Its results contain no metric."
+          ) : new JouriloError(
+            "INVALID_INPUT",
+            `GrowthBook experiment ${id} has no results for ${goal ? `its goal metric ${goal}` : "any metric"} yet.`,
+            "Update the results in GrowthBook, or pick a metric with --metric."
+          );
+        await requireProportion(metric2.metricId, metric2.metricName || metric2.metricId, names);
         state.metric = metric2.metricName || metric2.metricId;
         const variations = exp.variations ?? [];
         const nameOf = (variationId) => {
@@ -53268,26 +53310,40 @@ function posthogAdapter(deps) {
   return {
     name: "posthog",
     experiment: (id) => collect(
+      "PostHog",
       id,
       async (state) => {
         state.metric = deps.metric ?? "";
         const exp = /^\d+$/.test(id) ? await http2.get(`${base2}/experiments/${id}/`) : await find(id);
         const metrics = exp.metrics ?? [];
         const metric2 = deps.metric ? metrics.find((m) => m.name === deps.metric || m.uuid === deps.metric) : metrics[0];
+        const names = metrics.map((m) => m.name || m.uuid).filter(Boolean);
         if (!metric2)
-          throw new IncompleteData(
-            deps.metric ? `Metric "${deps.metric}" is not among the experiment's primary metrics.` : "The experiment has no primary metric."
+          throw deps.metric ? new JouriloError(
+            "USAGE",
+            `PostHog experiment ${id} has no primary metric named "${deps.metric}".`,
+            names.length ? `Its primary metrics: ${names.join(", ")}.` : "It has no primary metrics."
+          ) : new JouriloError(
+            "INVALID_INPUT",
+            `PostHog experiment ${id} has no primary metric to analyze.`,
+            "Add a funnel metric to the experiment in PostHog, then rerun."
           );
         state.metric = metric2.name || metric2.series?.at(-1)?.name || metric2.series?.at(-1)?.event || metric2.source?.event || "primary metric";
         if (metric2.metric_type !== "funnel")
-          throw new IncompleteData(
-            `"${state.metric}" is a ${metric2.metric_type ?? "unknown"} metric; analyze needs a conversion (funnel) metric.`
+          throw new JouriloError(
+            "INVALID_INPUT",
+            `"${state.metric}" is a ${metric2.metric_type ?? "unknown"} metric; analyze needs a conversion (funnel) metric.`,
+            names.length > 1 ? `Pick a funnel metric with --metric (primary metrics: ${names.join(", ")}).` : "Add a funnel metric to the experiment in PostHog."
           );
         const res = await http2.post(`${base2}/query/`, {
           query: { kind: "ExperimentQuery", experiment_id: exp.id, metric: metric2 }
         });
         if (!res.baseline)
-          throw new IncompleteData("PostHog has not computed results for this metric yet.");
+          throw new JouriloError(
+            "INVALID_INPUT",
+            `PostHog has no results for "${state.metric}" in experiment ${id} yet.`,
+            "Wait until the experiment has exposures and PostHog has computed the metric, then rerun."
+          );
         for (const r of [res.baseline, ...res.variant_results ?? []])
           pushVariant(state, r.key, r.number_of_samples, r.sum);
         const excluded = new Set(exp.excluded_variants ?? []);
@@ -53677,7 +53733,19 @@ function analyzeOptions(ctx) {
     ...numOpt(ctx, "planned") ? { plannedPerVariant: numOpt(ctx, "planned") } : {}
   };
 }
-async function analyzeFrom(ctx, from) {
+var VENDOR = {
+  posthog: "PostHog",
+  growthbook: "GrowthBook",
+  amplitude: "Amplitude"
+};
+async function armsFrom(ctx) {
+  const from = str(ctx, "from");
+  const fromOnly = ["metric", "start", "end", "control-key"].filter((k) => str(ctx, k) !== void 0);
+  if (from === void 0) {
+    if (fromOnly.length)
+      throw new JouriloError("USAGE", `--${fromOnly[0]} applies only with --from <adapter>:<id>.`);
+    return { control: arm(str(ctx, "control"), "control"), variant: arm(str(ctx, "variant"), "variant") };
+  }
   if (str(ctx, "control") !== void 0 || str(ctx, "variant") !== void 0)
     throw new JouriloError("USAGE", "--from reads the numbers itself; leave out --control and --variant.");
   const m = from.match(/^([a-z]+):(.+)$/);
@@ -53687,15 +53755,21 @@ async function analyzeFrom(ctx, from) {
       `--from must be <adapter>:<id>, e.g. posthog:42 (adapters: ${ADAPTERS2.join(", ")}).`
     );
   const [, name, id] = m;
-  const metric2 = str(ctx, "metric");
-  const start = str(ctx, "start");
-  const end = str(ctx, "end");
+  const amplitudeOnly = ["start", "end", "control-key"].filter((k) => str(ctx, k) !== void 0);
+  if (name !== "amplitude" && amplitudeOnly.length && ADAPTERS2.includes(name))
+    throw new JouriloError(
+      "USAGE",
+      `--${amplitudeOnly[0]} applies only to amplitude; ${name} reads the experiment's own analysis window and control.`,
+      "Leave it out, or change the window in the experiment itself."
+    );
+  const opt = (k) => str(ctx, k);
   const adapter = adapterFor(name, {
     env: process.env,
     proxy: (url) => proxyFrom(ctx, url),
-    ...metric2 !== void 0 ? { metric: metric2 } : {},
-    ...start !== void 0 ? { start } : {},
-    ...end !== void 0 ? { end } : {}
+    ...opt("metric") !== void 0 ? { metric: opt("metric") } : {},
+    ...opt("start") !== void 0 ? { start: opt("start") } : {},
+    ...opt("end") !== void 0 ? { end: opt("end") } : {},
+    ...opt("control-key") !== void 0 ? { controlKey: opt("control-key") } : {}
   });
   const data = await adapter.experiment(id);
   const label = `${name}:${id}`;
@@ -53713,23 +53787,27 @@ ${data.notes.map((n) => `  - ${n}`).join("\n")}`,
       "Pass the two arms you want to compare with --control and --variant."
     );
   const [c, v] = data.variants;
+  const toArm = (x) => ({ name: x.name, visitors: x.exposures, conversions: x.conversions });
+  return { control: toArm(c), variant: toArm(v), source: { adapter: adapter.name, ...data } };
+}
+function analyzeArms(ctx, arms) {
+  const { control: c, variant: v, source } = arms;
   let r;
   try {
-    r = analyze(
-      { name: c.name, visitors: c.exposures, conversions: c.conversions },
-      { name: v.name, visitors: v.exposures, conversions: v.conversions },
-      analyzeOptions(ctx)
-    );
+    r = analyze(c, v, analyzeOptions(ctx));
   } catch (e) {
-    throw new JouriloError("INVALID_INPUT", `${label}: ${e.message}`);
+    if (e instanceof JouriloError) throw e;
+    const where = source ? `${source.adapter}:${source.id}: ` : "";
+    throw new JouriloError("INVALID_INPUT", `${where}${e.message}`);
   }
-  const vendor = { posthog: "PostHog", growthbook: "GrowthBook", amplitude: "Amplitude" }[adapter.name];
+  const bullets = r.interpretation.map((l) => `\u2022 ${l}`);
+  if (!source) return { data: r, text: bullets.join("\n") };
   return {
-    data: { ...r, source: { adapter: adapter.name, ...data } },
+    data: { ...r, source },
     text: [
-      `${vendor} experiment ${id}, metric ${data.metric}: ${c.name} ${c.conversions}/${c.exposures}, ${v.name} ${v.conversions}/${v.exposures}`,
-      ...data.notes.map((n) => `Note: ${n}`),
-      ...r.interpretation.map((l) => `\u2022 ${l}`)
+      `${VENDOR[source.adapter]} experiment ${source.id}, metric ${source.metric}: ${c.name} ${c.conversions}/${c.visitors}, ${v.name} ${v.conversions}/${v.visitors}`,
+      ...source.notes.map((n) => `Note: ${n}`),
+      ...bullets
     ].join("\n")
   };
 }
@@ -53754,23 +53832,30 @@ var experiment = {
     from: { type: "string" },
     metric: { type: "string" },
     start: { type: "string" },
-    end: { type: "string" }
+    end: { type: "string" },
+    "control-key": { type: "string" }
   },
   details: `Subcommands:
   size     --baseline 4% --mde 10% [--absolute] [--alpha 0.05] [--power 0.8] [--variants 2] [--daily-traffic N]
   plan     --finding <fingerprint> [--run latest] [--baseline 4%] [--mde 10%] [--daily-traffic N]
   analyze  --control 120/2400 --variant 150/2380 [--alpha 0.05] [--expected-share 0.5] [--planned N]
-  analyze  --from <adapter>:<id> [--metric M] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--alpha \u2026]
+  analyze  --from <adapter>:<id> [--metric M] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--control-key K]
+           [--alpha \u2026] [--expected-share \u2026] [--planned N]
 
 --from reads the numbers, read-only, from an analytics tool (keys from the environment only, never printed):
   posthog:<id|flag-key>      POSTHOG_API_KEY (personal key: experiment:read, query:read); POSTHOG_HOST
                              (default https://us.posthog.com), POSTHOG_PROJECT_ID (default @current).
-                             --metric picks a primary metric by name or uuid (default: the first); funnel only
+                             --metric picks a primary metric by name or uuid (default: the first); funnel
+                             metrics only
   growthbook:<exp_id|key>    GROWTHBOOK_API_KEY; GROWTHBOOK_HOST (default https://api.growthbook.io).
-                             --metric picks a metric by id or name (default: the first goal)
+                             --metric picks a metric by id or name (default: the first goal); binomial or
+                             proportion metrics only
   amplitude:<flag-key>       AMPLITUDE_API_KEY and AMPLITUDE_SECRET_KEY; AMPLITUDE_HOST (default
                              https://amplitude.com). --metric EVENT (the conversion event) and --start are
-                             required; --end defaults to today
+                             required; --end defaults to today; --control-key names the control variant
+                             (default control). Amplitude's funnel API does not list the flag's variants, so a
+                             missing third arm of a multi-arm experiment cannot be detected
+--start, --end and --control-key apply only to amplitude; PostHog and GrowthBook use the experiment's own window.
 Requests go through Jourilo's network guard and HTTPS_PROXY / NO_PROXY. A rate limit (429), a failed page or a
 missing variant makes the data incomplete: analyze then refuses and says why, instead of computing on partial numbers.
 
@@ -53836,19 +53921,7 @@ Jourilo never invents traffic, conversions or effects: every number comes from y
 Saved: ${md2}` };
     }
     if (sub === "analyze") {
-      const from = str(ctx, "from");
-      if (from !== void 0) return analyzeFrom(ctx, from);
-      try {
-        const r = analyze(
-          arm(str(ctx, "control"), "control"),
-          arm(str(ctx, "variant"), "variant"),
-          analyzeOptions(ctx)
-        );
-        return { data: r, text: r.interpretation.map((l) => `\u2022 ${l}`).join("\n") };
-      } catch (e) {
-        if (e instanceof JouriloError) throw e;
-        throw new JouriloError("INVALID_INPUT", e.message);
-      }
+      return analyzeArms(ctx, await armsFrom(ctx));
     }
     throw new JouriloError("USAGE", "Use: experiment size | plan | analyze (see --help).");
   }

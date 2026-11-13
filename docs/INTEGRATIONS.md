@@ -70,7 +70,12 @@ a local host. No SDK and no new dependency is used.
 | `growthbook:<exp_… id or tracking key>` | `GROWTHBOOK_API_KEY`; optional `GROWTHBOOK_HOST` (default `https://api.growthbook.io`)                                                                                   | `GET /api/v1/experiments/:id`, `GET /api/v1/experiments?limit=100&offset=N` (follows `hasMore`/`nextOffset`), `GET /api/v1/experiments/:id/results`  |
 | `amplitude:<flag key>`                  | `AMPLITUDE_API_KEY`, `AMPLITUDE_SECRET_KEY` (Basic auth); optional `AMPLITUDE_HOST` (default `https://amplitude.com`)                                                    | `GET /api/2/funnels`: `$exposure` for the flag → the `--metric` event, grouped by the `[Experiment] <flag>` user property, from `--start` to `--end` |
 
-Only conversion metrics are read (PostHog funnel metrics, GrowthBook proportion metrics, an Amplitude two-step funnel).
+Only conversion metrics are read: PostHog funnel metrics, GrowthBook `binomial` metrics and `proportion` fact metrics
+(the type is read from the metric definition), and an Amplitude two-step funnel. Another metric type is refused with
+a usage error that names the metrics to pick from. `--start`, `--end` and `--control-key` apply only to Amplitude.
+Amplitude's funnel endpoint does not list the flag's variants: the control is `--control-key` (default `control`), a
+missing control or a single arm is incomplete data, but a missing third arm of a multi-arm experiment cannot be
+detected.
 A key never appears in output, errors or progress lines; a refused key names its variable. A rate limit (429), a failed
 page (5xx), an unreachable host or a missing variant marks the data incomplete, and `analyze` refuses to compute and
 lists the reasons. Amplitude's funnel endpoint has no pages: an answer with as many groups as the limit (1000) is

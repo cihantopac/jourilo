@@ -392,17 +392,23 @@ Subcommands:
   size     --baseline 4% --mde 10% [--absolute] [--alpha 0.05] [--power 0.8] [--variants 2] [--daily-traffic N]
   plan     --finding <fingerprint> [--run latest] [--baseline 4%] [--mde 10%] [--daily-traffic N]
   analyze  --control 120/2400 --variant 150/2380 [--alpha 0.05] [--expected-share 0.5] [--planned N]
-  analyze  --from <adapter>:<id> [--metric M] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--alpha …]
+  analyze  --from <adapter>:<id> [--metric M] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--control-key K]
+           [--alpha …] [--expected-share …] [--planned N]
 
 --from reads the numbers, read-only, from an analytics tool (keys from the environment only, never printed):
   posthog:<id|flag-key>      POSTHOG_API_KEY (personal key: experiment:read, query:read); POSTHOG_HOST
                              (default https://us.posthog.com), POSTHOG_PROJECT_ID (default @current).
-                             --metric picks a primary metric by name or uuid (default: the first); funnel only
+                             --metric picks a primary metric by name or uuid (default: the first); funnel
+                             metrics only
   growthbook:<exp_id|key>    GROWTHBOOK_API_KEY; GROWTHBOOK_HOST (default https://api.growthbook.io).
-                             --metric picks a metric by id or name (default: the first goal)
+                             --metric picks a metric by id or name (default: the first goal); binomial or
+                             proportion metrics only
   amplitude:<flag-key>       AMPLITUDE_API_KEY and AMPLITUDE_SECRET_KEY; AMPLITUDE_HOST (default
                              https://amplitude.com). --metric EVENT (the conversion event) and --start are
-                             required; --end defaults to today
+                             required; --end defaults to today; --control-key names the control variant
+                             (default control). Amplitude's funnel API does not list the flag's variants, so a
+                             missing third arm of a multi-arm experiment cannot be detected
+--start, --end and --control-key apply only to amplitude; PostHog and GrowthBook use the experiment's own window.
 Requests go through Jourilo's network guard and HTTPS_PROXY / NO_PROXY. A rate limit (429), a failed page or a
 missing variant makes the data incomplete: analyze then refuses and says why, instead of computing on partial numbers.
 

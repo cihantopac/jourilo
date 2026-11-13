@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { JouriloError } from '../../core/errors.js';
 import type { ProductProfile } from '../../discovery/repo.js';
 import { ADAPTERS, adapterFor } from '../../experiment/adapters/index.js';
+import type { AnalyticsAdapter, ExperimentData } from '../../experiment/adapters/types.js';
 import { planExperiment, planMarkdown } from '../../experiment/plan.js';
 import { analyze, sampleSize } from '../../experiment/stats.js';
 import { type Command, type CommandResult, type Context, flag, proxyFrom, str } from '../framework.js';
@@ -36,11 +37,30 @@ function analyzeOptions(ctx: Context) {
   };
 }
 
+type Arm = { name: string; visitors: number; conversions: number };
+
+/** Where `--from` numbers came from: the adapter and its ExperimentData. */
+type Source = { adapter: AnalyticsAdapter['name'] } & ExperimentData;
+
+const VENDOR: Record<AnalyticsAdapter['name'], string> = {
+  posthog: 'PostHog',
+  growthbook: 'GrowthBook',
+  amplitude: 'Amplitude',
+};
+
 /**
- * `analyze --from <adapter>:<id>`: reads the numbers from PostHog, GrowthBook or Amplitude (read-only, keys from the
- * environment) and refuses to compute on data the adapter reports as incomplete.
+ * The two arms to analyze: typed in (`--control/--variant`), or read with `--from <adapter>:<id>` from PostHog,
+ * GrowthBook or Amplitude (read-only, keys from the environment). Data the adapter reports as incomplete is refused
+ * here, so no analysis ever runs on partial numbers.
  */
-async function analyzeFrom(ctx: Context, from: string): Promise<CommandResult> {
+export async function armsFrom(ctx: Context): Promise<{ control: Arm; variant: Arm; source?: Source }> {
+  const from = str(ctx, 'from');
+  const fromOnly = ['metric', 'start', 'end', 'control-key'].filter((k) => str(ctx, k) !== undefined);
+  if (from === undefined) {
+    if (fromOnly.length)
+      throw new JouriloError('USAGE', `--${fromOnly[0]} applies only with --from <adapter>:<id>.`);
+    return { control: arm(str(ctx, 'control'), 'control'), variant: arm(str(ctx, 'variant'), 'variant') };
+  }
   if (str(ctx, 'control') !== undefined || str(ctx, 'variant') !== undefined)
     throw new JouriloError('USAGE', '--from reads the numbers itself; leave out --control and --variant.');
   const m = from.match(/^([a-z]+):(.+)$/);
@@ -50,15 +70,22 @@ async function analyzeFrom(ctx: Context, from: string): Promise<CommandResult> {
       `--from must be <adapter>:<id>, e.g. posthog:42 (adapters: ${ADAPTERS.join(', ')}).`,
     );
   const [, name, id] = m as unknown as [string, string, string];
-  const metric = str(ctx, 'metric');
-  const start = str(ctx, 'start');
-  const end = str(ctx, 'end');
+  // Date range and control key exist only for Amplitude; PostHog and GrowthBook analyze the whole experiment.
+  const amplitudeOnly = ['start', 'end', 'control-key'].filter((k) => str(ctx, k) !== undefined);
+  if (name !== 'amplitude' && amplitudeOnly.length && (ADAPTERS as readonly string[]).includes(name))
+    throw new JouriloError(
+      'USAGE',
+      `--${amplitudeOnly[0]} applies only to amplitude; ${name} reads the experiment's own analysis window and control.`,
+      'Leave it out, or change the window in the experiment itself.',
+    );
+  const opt = (k: string) => str(ctx, k);
   const adapter = adapterFor(name, {
     env: process.env,
     proxy: (url) => proxyFrom(ctx, url),
-    ...(metric !== undefined ? { metric } : {}),
-    ...(start !== undefined ? { start } : {}),
-    ...(end !== undefined ? { end } : {}),
+    ...(opt('metric') !== undefined ? { metric: opt('metric')! } : {}),
+    ...(opt('start') !== undefined ? { start: opt('start')! } : {}),
+    ...(opt('end') !== undefined ? { end: opt('end')! } : {}),
+    ...(opt('control-key') !== undefined ? { controlKey: opt('control-key')! } : {}),
   });
   const data = await adapter.experiment(id);
   const label = `${name}:${id}`;
@@ -74,24 +101,33 @@ async function analyzeFrom(ctx: Context, from: string): Promise<CommandResult> {
       `Not analyzed: ${label} has ${data.variants.length} variants (${data.variants.map((v) => v.name).join(', ')}); analyze compares two arms.`,
       'Pass the two arms you want to compare with --control and --variant.',
     );
-  const [c, v] = data.variants as [(typeof data.variants)[0], (typeof data.variants)[0]];
+  const [c, v] = data.variants as [ExperimentData['variants'][0], ExperimentData['variants'][0]];
+  const toArm = (x: typeof c): Arm => ({ name: x.name, visitors: x.exposures, conversions: x.conversions });
+  return { control: toArm(c), variant: toArm(v), source: { adapter: adapter.name, ...data } };
+}
+
+/** The one analysis step for both paths: run the test on the arms and format the result. */
+export function analyzeArms(
+  ctx: Context,
+  arms: { control: Arm; variant: Arm; source?: Source },
+): CommandResult {
+  const { control: c, variant: v, source } = arms;
   let r: ReturnType<typeof analyze>;
   try {
-    r = analyze(
-      { name: c.name, visitors: c.exposures, conversions: c.conversions },
-      { name: v.name, visitors: v.exposures, conversions: v.conversions },
-      analyzeOptions(ctx),
-    );
+    r = analyze(c, v, analyzeOptions(ctx));
   } catch (e) {
-    throw new JouriloError('INVALID_INPUT', `${label}: ${(e as Error).message}`);
+    if (e instanceof JouriloError) throw e;
+    const where = source ? `${source.adapter}:${source.id}: ` : '';
+    throw new JouriloError('INVALID_INPUT', `${where}${(e as Error).message}`);
   }
-  const vendor = { posthog: 'PostHog', growthbook: 'GrowthBook', amplitude: 'Amplitude' }[adapter.name];
+  const bullets = r.interpretation.map((l) => `• ${l}`);
+  if (!source) return { data: r, text: bullets.join('\n') };
   return {
-    data: { ...r, source: { adapter: adapter.name, ...data } },
+    data: { ...r, source },
     text: [
-      `${vendor} experiment ${id}, metric ${data.metric}: ${c.name} ${c.conversions}/${c.exposures}, ${v.name} ${v.conversions}/${v.exposures}`,
-      ...data.notes.map((n) => `Note: ${n}`),
-      ...r.interpretation.map((l) => `• ${l}`),
+      `${VENDOR[source.adapter]} experiment ${source.id}, metric ${source.metric}: ${c.name} ${c.conversions}/${c.visitors}, ${v.name} ${v.conversions}/${v.visitors}`,
+      ...source.notes.map((n) => `Note: ${n}`),
+      ...bullets,
     ].join('\n'),
   };
 }
@@ -119,22 +155,29 @@ export const experiment: Command = {
     metric: { type: 'string' },
     start: { type: 'string' },
     end: { type: 'string' },
+    'control-key': { type: 'string' },
   },
   details: `Subcommands:
   size     --baseline 4% --mde 10% [--absolute] [--alpha 0.05] [--power 0.8] [--variants 2] [--daily-traffic N]
   plan     --finding <fingerprint> [--run latest] [--baseline 4%] [--mde 10%] [--daily-traffic N]
   analyze  --control 120/2400 --variant 150/2380 [--alpha 0.05] [--expected-share 0.5] [--planned N]
-  analyze  --from <adapter>:<id> [--metric M] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--alpha …]
+  analyze  --from <adapter>:<id> [--metric M] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--control-key K]
+           [--alpha …] [--expected-share …] [--planned N]
 
 --from reads the numbers, read-only, from an analytics tool (keys from the environment only, never printed):
   posthog:<id|flag-key>      POSTHOG_API_KEY (personal key: experiment:read, query:read); POSTHOG_HOST
                              (default https://us.posthog.com), POSTHOG_PROJECT_ID (default @current).
-                             --metric picks a primary metric by name or uuid (default: the first); funnel only
+                             --metric picks a primary metric by name or uuid (default: the first); funnel
+                             metrics only
   growthbook:<exp_id|key>    GROWTHBOOK_API_KEY; GROWTHBOOK_HOST (default https://api.growthbook.io).
-                             --metric picks a metric by id or name (default: the first goal)
+                             --metric picks a metric by id or name (default: the first goal); binomial or
+                             proportion metrics only
   amplitude:<flag-key>       AMPLITUDE_API_KEY and AMPLITUDE_SECRET_KEY; AMPLITUDE_HOST (default
                              https://amplitude.com). --metric EVENT (the conversion event) and --start are
-                             required; --end defaults to today
+                             required; --end defaults to today; --control-key names the control variant
+                             (default control). Amplitude's funnel API does not list the flag's variants, so a
+                             missing third arm of a multi-arm experiment cannot be detected
+--start, --end and --control-key apply only to amplitude; PostHog and GrowthBook use the experiment's own window.
 Requests go through Jourilo's network guard and HTTPS_PROXY / NO_PROXY. A rate limit (429), a failed page or a
 missing variant makes the data incomplete: analyze then refuses and says why, instead of computing on partial numbers.
 
@@ -204,19 +247,7 @@ Jourilo never invents traffic, conversions or effects: every number comes from y
       return { data: { plan, file: md }, text: `${planMarkdown(plan)}\nSaved: ${md}` };
     }
     if (sub === 'analyze') {
-      const from = str(ctx, 'from');
-      if (from !== undefined) return analyzeFrom(ctx, from);
-      try {
-        const r = analyze(
-          arm(str(ctx, 'control'), 'control'),
-          arm(str(ctx, 'variant'), 'variant'),
-          analyzeOptions(ctx),
-        );
-        return { data: r, text: r.interpretation.map((l) => `• ${l}`).join('\n') };
-      } catch (e) {
-        if (e instanceof JouriloError) throw e;
-        throw new JouriloError('INVALID_INPUT', (e as Error).message);
-      }
+      return analyzeArms(ctx, await armsFrom(ctx));
     }
     throw new JouriloError('USAGE', 'Use: experiment size | plan | analyze (see --help).');
   },

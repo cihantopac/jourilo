@@ -14,11 +14,17 @@ fetch.
 | `growthbook/experiment.json`                              | `GET /api/v1/experiments/:id`                                                                           | docs.growthbook.io/api (Experiments)                                            |
 | `growthbook/experiments-page-1.json`, `-page-2.json`      | `GET /api/v1/experiments?limit&offset` (`hasMore`, `nextOffset`)                                        | docs.growthbook.io/api (Pagination)                                             |
 | `growthbook/results.json`, `results-missing-variant.json` | `GET /api/v1/experiments/:id/results`                                                                   | docs.growthbook.io/api/experiments/operation/getExperimentResults               |
+| `growthbook/metric-signup.json`, `metric-pageviews.json`  | `GET /api/v1/metrics/:id` (`type`: binomial, count)                                                     | docs.growthbook.io/api/metrics/operation/getMetric                              |
+| `growthbook/fact-metric-checkout.json`                    | `GET /api/v1/fact-metrics/:id` (`metricType`: proportion)                                               | docs.growthbook.io/api/fact-metrics/operation/getFactMetric                     |
 | `amplitude/funnels.json`, `funnels-missing-control.json`  | `GET /api/2/funnels` grouped by a user property (`g`)                                                   | amplitude.com/docs/apis/analytics/dashboard-rest (Funnel analysis)              |
 
 Mapping assumptions, to be checked against a live account when one is available:
 
 - PostHog funnel metric: `number_of_samples` = exposed users, `sum` = users who reached the last step.
-- GrowthBook proportion metric: `users` = exposed users, the first analysis's `numerator` = converted users.
+- GrowthBook proportion metric: `users` = exposed users, the first analysis's `numerator` = converted users. Only
+  legacy `binomial` metrics and `proportion` fact metrics (ids starting `fact__`) are accepted; the type is read from
+  the metric definition.
 - Amplitude grouped funnel: one `data` element per group with `groupValue`; `cumulativeRaw[0]` = exposed users, the
-  last element = converted users. `(none)` is the group of users without the variant property.
+  last element = converted users. `(none)` is the group of users without the variant property. The endpoint does not
+  list the flag's variants: the control key comes from `--control-key` (default `control`), and a missing third arm
+  of a multi-arm experiment cannot be detected.

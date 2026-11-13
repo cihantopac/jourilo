@@ -16,7 +16,8 @@ Toolchain: `node "${CLAUDE_PLUGIN_ROOT}/dist/jourilo.mjs" <command> … --json` 
 - Plan: `jourilo experiment plan --finding <fingerprint> [--run id] [--baseline …] [--mde …] [--daily-traffic …]`.
 - Analyze: `jourilo experiment analyze --control conversions/visitors --variant conversions/visitors [--planned N]`.
 - Analyze from an analytics tool (read-only): `jourilo experiment analyze --from posthog:<id> | growthbook:<id> |
-  amplitude:<flag-key> [--metric M] [--start YYYY-MM-DD] --json`. Keys come from the user's environment
+  amplitude:<flag-key> [--metric M] [--start YYYY-MM-DD] [--control-key K] --json` (`--start`, `--end` and
+  `--control-key` are Amplitude-only). Keys come from the user's environment
   (`POSTHOG_API_KEY`, `GROWTHBOOK_API_KEY`, `AMPLITUDE_API_KEY` + `AMPLITUDE_SECRET_KEY`); never ask for a key in chat
   or put one on the command line. When the data is incomplete (rate limit, failed page, missing variant) the command
   refuses and lists why: report that, do not fill the gap with guesses.

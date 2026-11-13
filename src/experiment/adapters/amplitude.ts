@@ -4,6 +4,9 @@
 // flag, step two the conversion event (`--metric`); the funnel is grouped by the `[Experiment] <flag>` user property,
 // so each group is a variant: `cumulativeRaw[0]` the exposed users, the last element the converted users. The funnel
 // endpoint has no pages; a grouped answer is capped by `limit`, so a full page means variants may be cut off.
+// Limitation: the Dashboard REST API does not list a flag's variants, so the adapter knows only the control key
+// (`--control-key`, default `control`). A missing control, or fewer than two arms, is incomplete data; a missing third
+// arm of a multi-arm experiment cannot be detected from this endpoint.
 import { JouriloError } from '../../core/errors.js';
 import {
   type AdapterDeps,
@@ -39,6 +42,7 @@ export function amplitudeAdapter(deps: AdapterDeps): AnalyticsAdapter {
   const event = deps.metric;
   const start = day(deps.start, '--start');
   const end = deps.end ? day(deps.end, '--end') : new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const controlKey = deps.controlKey ?? 'control';
   const basic = Buffer.from(`${apiKey}:${secret}`).toString('base64');
   const http = client('Amplitude', deps, {
     header: `Basic ${basic}`,
@@ -50,6 +54,7 @@ export function amplitudeAdapter(deps: AdapterDeps): AnalyticsAdapter {
     name: 'amplitude',
     experiment: (flagKey) =>
       collect(
+        'Amplitude',
         flagKey,
         async (state) => {
           state.metric = event;
@@ -76,6 +81,8 @@ export function amplitudeAdapter(deps: AdapterDeps): AnalyticsAdapter {
           const body = (await http.get(`${host.href.replace(/\/$/, '')}/api/2/funnels?${q}`)) as {
             data?: { groupValue?: string; cumulativeRaw?: number[] }[];
           };
+          if (body.data !== undefined && !Array.isArray(body.data))
+            throw new IncompleteData('Amplitude sent a funnel answer whose `data` is not a list of groups.');
           const groups = body.data ?? [];
           if (groups.length >= GROUP_LIMIT)
             throw new IncompleteData(
@@ -92,19 +99,16 @@ export function amplitudeAdapter(deps: AdapterDeps): AnalyticsAdapter {
             pushVariant(state, name, raw[0], raw.length > 1 ? raw.at(-1) : undefined);
           }
           if (unassigned)
-            state.notes.push(
+            state.note(
               `${unassigned} exposed user(s) had no [Experiment] ${flagKey} property and were left out.`,
             );
-          if (!state.variants.some((v) => v.name === 'control'))
+          const hasControl = state.variants.some((v) => v.name === controlKey);
+          if (!hasControl)
             state.incomplete(
-              'Amplitude returned no numbers for the control variant; a comparison without it would be partial.',
+              `Amplitude returned no numbers for the control variant (${controlKey}); a comparison without it would be partial.`,
             );
-          const others = state.variants.filter((v) => v.name !== 'control').map((v) => v.name);
-          settleVariants(
-            'Amplitude',
-            state,
-            state.variants.some((v) => v.name === 'control') ? ['control', ...others] : [],
-          );
+          const others = state.variants.filter((v) => v.name !== controlKey).map((v) => v.name);
+          settleVariants('Amplitude', state, hasControl ? [controlKey, ...others] : []);
         },
         [apiKey, secret, basic],
       ),

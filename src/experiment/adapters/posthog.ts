@@ -84,6 +84,7 @@ export function posthogAdapter(deps: AdapterDeps): AnalyticsAdapter {
     name: 'posthog',
     experiment: (id) =>
       collect(
+        'PostHog',
         id,
         async (state) => {
           state.metric = deps.metric ?? '';
@@ -94,12 +95,19 @@ export function posthogAdapter(deps: AdapterDeps): AnalyticsAdapter {
           const metric = deps.metric
             ? metrics.find((m) => m.name === deps.metric || m.uuid === deps.metric)
             : metrics[0];
+          const names = metrics.map((m) => m.name || m.uuid).filter(Boolean);
           if (!metric)
-            throw new IncompleteData(
-              deps.metric
-                ? `Metric "${deps.metric}" is not among the experiment's primary metrics.`
-                : 'The experiment has no primary metric.',
-            );
+            throw deps.metric
+              ? new JouriloError(
+                  'USAGE',
+                  `PostHog experiment ${id} has no primary metric named "${deps.metric}".`,
+                  names.length ? `Its primary metrics: ${names.join(', ')}.` : 'It has no primary metrics.',
+                )
+              : new JouriloError(
+                  'INVALID_INPUT',
+                  `PostHog experiment ${id} has no primary metric to analyze.`,
+                  'Add a funnel metric to the experiment in PostHog, then rerun.',
+                );
           state.metric =
             metric.name ||
             metric.series?.at(-1)?.name ||
@@ -107,14 +115,22 @@ export function posthogAdapter(deps: AdapterDeps): AnalyticsAdapter {
             metric.source?.event ||
             'primary metric';
           if (metric.metric_type !== 'funnel')
-            throw new IncompleteData(
+            throw new JouriloError(
+              'INVALID_INPUT',
               `"${state.metric}" is a ${metric.metric_type ?? 'unknown'} metric; analyze needs a conversion (funnel) metric.`,
+              names.length > 1
+                ? `Pick a funnel metric with --metric (primary metrics: ${names.join(', ')}).`
+                : 'Add a funnel metric to the experiment in PostHog.',
             );
           const res = (await http.post(`${base}/query/`, {
             query: { kind: 'ExperimentQuery', experiment_id: exp.id, metric },
           })) as { baseline?: PhStats; variant_results?: PhStats[] };
           if (!res.baseline)
-            throw new IncompleteData('PostHog has not computed results for this metric yet.');
+            throw new JouriloError(
+              'INVALID_INPUT',
+              `PostHog has no results for "${state.metric}" in experiment ${id} yet.`,
+              'Wait until the experiment has exposures and PostHog has computed the metric, then rerun.',
+            );
           for (const r of [res.baseline, ...(res.variant_results ?? [])])
             pushVariant(state, r.key, r.number_of_samples, r.sum);
           const excluded = new Set(exp.excluded_variants ?? []);

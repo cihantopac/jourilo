@@ -89,6 +89,11 @@ const growthbookRoutes =
       );
     if (u.pathname === '/api/v1/experiments/exp_example1/results')
       return json(fixture('growthbook', results));
+    if (u.pathname === '/api/v1/metrics/met_signup') return json(fixture('growthbook', 'metric-signup'));
+    if (u.pathname === '/api/v1/metrics/met_pageviews')
+      return json(fixture('growthbook', 'metric-pageviews'));
+    if (u.pathname === '/api/v1/fact-metrics/fact__checkout')
+      return json(fixture('growthbook', 'fact-metric-checkout'));
     return undefined;
   };
 
@@ -113,7 +118,16 @@ describe('the fixtures', () => {
       ],
       [
         'growthbook',
-        ['experiment', 'experiments-page-1', 'experiments-page-2', 'results', 'results-missing-variant'],
+        [
+          'experiment',
+          'experiments-page-1',
+          'experiments-page-2',
+          'results',
+          'results-missing-variant',
+          'metric-signup',
+          'metric-pageviews',
+          'fact-metric-checkout',
+        ],
       ],
       ['amplitude', ['funnels', 'funnels-missing-control']],
     ] as const) {
@@ -183,14 +197,33 @@ describe('PostHog adapter', () => {
     expect(data.complete).toBe(false);
     expect(data.notes.join(' ')).toMatch(/HTTP 502/);
   });
-  it('a mean metric is not read as conversions', async () => {
-    const data = await posthogAdapter({
-      env,
-      fetch: stub(posthogRoutes()).fetch,
-      metric: 'Revenue per user',
-    }).experiment('42');
-    expect(data.complete).toBe(false);
-    expect(data.notes.join(' ')).toMatch(/mean metric; analyze needs a conversion/);
+  it('a mean metric is refused as INVALID_INPUT, with its own hint', async () => {
+    const e = await rejection(
+      posthogAdapter({ env, fetch: stub(posthogRoutes()).fetch, metric: 'Revenue per user' }).experiment(
+        '42',
+      ),
+    );
+    expect(e.code).toBe('INVALID_INPUT');
+    expect(e.message).toMatch(/mean metric; analyze needs a conversion \(funnel\) metric/);
+    expect(e.hint).toMatch(
+      /Pick a funnel metric with --metric \(primary metrics: Purchase completed, Revenue per user\)/,
+    );
+  });
+  it('an unknown --metric is a USAGE error listing the primary metrics', async () => {
+    const e = await rejection(
+      posthogAdapter({ env, fetch: stub(posthogRoutes()).fetch, metric: 'Signups' }).experiment('42'),
+    );
+    expect(e.code).toBe('USAGE');
+    expect(e.message).toMatch(/no primary metric named "Signups"/);
+    expect(e.hint).toMatch(/Purchase completed, Revenue per user/);
+  });
+  it('results not computed yet are INVALID_INPUT, not a rate-limit kind of incompleteness', async () => {
+    const s = stub((u, i) =>
+      u.pathname.endsWith('/query/') ? json('{"kind":"ExperimentQuery"}') : posthogRoutes()(u, i),
+    );
+    const e = await rejection(posthogAdapter({ env, fetch: s.fetch }).experiment('42'));
+    expect(e.code).toBe('INVALID_INPUT');
+    expect(e.hint).toMatch(/Wait until the experiment has exposures/);
   });
   it('a missing key is a usage error naming the variable', () => {
     expect(() => posthogAdapter({ env: {} })).toThrowError(/POSTHOG_API_KEY is not set/);
@@ -228,7 +261,53 @@ describe('GrowthBook adapter', () => {
       '?limit=100&offset=0',
       '?limit=100&offset=100',
       '',
+      '',
     ]);
+  });
+  it('reads the metric type and accepts binomial metrics and proportion fact metrics', async () => {
+    const s = stub(growthbookRoutes());
+    await growthbookAdapter({ env, fetch: s.fetch }).experiment('exp_example1');
+    expect(s.seen.map((r) => new URL(r.url).pathname).at(-1)).toBe('/api/v1/metrics/met_signup');
+    const fact = fixture('growthbook', 'results').replaceAll('met_signup', 'fact__checkout');
+    const f = stub((u, i) => (u.pathname.endsWith('/results') ? json(fact) : growthbookRoutes()(u, i)));
+    const data = await growthbookAdapter({ env, fetch: f.fetch, metric: 'fact__checkout' }).experiment(
+      'exp_example1',
+    );
+    expect(data.complete).toBe(true);
+    expect(f.seen.map((r) => new URL(r.url).pathname).at(-1)).toBe('/api/v1/fact-metrics/fact__checkout');
+  });
+  it('refuses a count metric even when its numbers look like user counts', async () => {
+    const e = await rejection(
+      growthbookAdapter({ env, fetch: stub(growthbookRoutes()).fetch, metric: 'met_pageviews' }).experiment(
+        'exp_example1',
+      ),
+    );
+    expect(e.code).toBe('INVALID_INPUT');
+    expect(e.message).toMatch(/"Page views" is a count metric; analyze needs a conversion metric/);
+    expect(e.hint).toMatch(/Pick a conversion metric with --metric/);
+  });
+  it('an unknown --metric is a USAGE error listing the metrics in the results', async () => {
+    const e = await rejection(
+      growthbookAdapter({ env, fetch: stub(growthbookRoutes()).fetch, metric: 'Revenue' }).experiment(
+        'exp_example1',
+      ),
+    );
+    expect(e.code).toBe('USAGE');
+    expect(e.hint).toMatch(/Page views, Signups/);
+  });
+  it('a malformed body gives complete: false saying why, never a raw TypeError', async () => {
+    const empty = stub((u, i) =>
+      u.pathname === '/api/v1/experiments/exp_example1' ? json('{}') : growthbookRoutes()(u, i),
+    );
+    const a = await growthbookAdapter({ env, fetch: empty.fetch }).experiment('exp_example1');
+    expect(a.complete).toBe(false);
+    expect(a.notes.join(' ')).toMatch(/experiment without an id/);
+    const odd = stub((u, i) =>
+      u.pathname.endsWith('/results') ? json('{"results":"x"}') : growthbookRoutes()(u, i),
+    );
+    const b = await growthbookAdapter({ env, fetch: odd.fetch }).experiment('exp_example1');
+    expect(b.complete).toBe(false);
+    expect(b.notes.join(' ')).toMatch(/GrowthBook sent a response Jourilo could not read/);
   });
   it('a 429 gives complete: false with a note', async () => {
     const s = stub((u, init) =>
@@ -310,6 +389,47 @@ describe('Amplitude adapter', () => {
     expect(data.complete).toBe(false);
     expect(data.notes.join(' ')).toMatch(/no numbers for the control variant/);
   });
+  it('a missing non-control variant gives complete: false, even next to an informational note', async () => {
+    const onlyControl = JSON.stringify({
+      data: [
+        { groupValue: 'control', cumulativeRaw: [2400, 120] },
+        { groupValue: '(none)', cumulativeRaw: [12, 0] },
+      ],
+    });
+    const data = await amplitudeAdapter({
+      env,
+      fetch: stub(() => json(onlyControl)).fetch,
+      ...opts,
+    }).experiment('f');
+    expect(data.complete).toBe(false);
+    expect(data.notes.join(' ')).toMatch(/12 exposed user\(s\) had no/);
+    expect(data.notes.join(' ')).toMatch(/numbers for 1 variant\(s\) \(control\); the other arm is missing/);
+  });
+  it('--control-key names a control that is not called control', async () => {
+    const body = JSON.stringify({
+      data: [
+        { groupValue: 'on', cumulativeRaw: [2380, 150] },
+        { groupValue: 'off', cumulativeRaw: [2400, 120] },
+      ],
+    });
+    const data = await amplitudeAdapter({
+      env,
+      fetch: stub(() => json(body)).fetch,
+      ...opts,
+      controlKey: 'off',
+    }).experiment('f');
+    expect(data.complete).toBe(true);
+    expect(data.variants.map((v) => v.name)).toEqual(['off', 'on']);
+  });
+  it('a malformed funnel answer gives complete: false saying why', async () => {
+    const data = await amplitudeAdapter({
+      env,
+      fetch: stub(() => json('{"data":{"x":1}}')).fetch,
+      ...opts,
+    }).experiment('f');
+    expect(data.complete).toBe(false);
+    expect(data.notes.join(' ')).toMatch(/`data` is not a list of groups/);
+  });
   it('missing keys are usage errors naming the variable', () => {
     expect(() => amplitudeAdapter({ env: {}, ...opts })).toThrowError(/AMPLITUDE_API_KEY is not set/);
     expect(() => amplitudeAdapter({ env: { AMPLITUDE_API_KEY: AMP_KEY }, ...opts })).toThrowError(
@@ -319,6 +439,15 @@ describe('Amplitude adapter', () => {
     expect(() => amplitudeAdapter({ env, start: '2026-10-01' })).toThrowError(/--metric EVENT/);
   });
 });
+
+async function rejection(p: Promise<unknown>) {
+  try {
+    await p;
+  } catch (e) {
+    return e as InstanceType<typeof JouriloError>;
+  }
+  throw new Error('expected a rejection');
+}
 
 describe('experiment analyze --from', () => {
   const saved = { ...process.env };
@@ -414,10 +543,79 @@ describe('experiment analyze --from', () => {
     ['growthbook:exp_example1', 'GROWTHBOOK_API_KEY'],
     ['amplitude:flag', 'AMPLITUDE_API_KEY'],
   ])('%s without its key is a USAGE error naming %s', async (from, name) => {
-    const e = await failure(run('--from', from, '--metric', 'm', '--start', '2026-10-01'));
+    const amp = from.startsWith('amplitude') ? ['--metric', 'm', '--start', '2026-10-01'] : [];
+    const e = await failure(run('--from', from, ...amp));
     expect(e.code).toBe('USAGE');
     expect(e.message).toContain(name);
     expect(guarded.calls).toEqual([]);
+  });
+  it.each([
+    {
+      from: 'growthbook:exp_example1',
+      args: [],
+      env: { GROWTHBOOK_API_KEY: GB_KEY },
+      route: growthbookRoutes(),
+      head: /GrowthBook experiment exp_example1, metric Signups: Control 120\/2400, Short form 150\/2380/,
+    },
+    {
+      from: 'amplitude:checkout-button-copy',
+      args: ['--metric', 'purchase_completed', '--start', '2026-10-01', '--end', '2026-10-31'],
+      env: { AMPLITUDE_API_KEY: AMP_KEY, AMPLITUDE_SECRET_KEY: AMP_SECRET },
+      route: amplitudeRoutes(),
+      head: /Amplitude experiment checkout-button-copy, metric purchase_completed: control 120\/2400, treatment 150\/2380/,
+    },
+  ])('$from: a complete analysis never prints a key', async ({ from, args, env, route, head }) => {
+    Object.assign(process.env, env);
+    serve(route);
+    const r = await run('--from', from, ...args, '--json');
+    expect(r.text).toMatch(head);
+    const all = JSON.stringify(r) + printed;
+    for (const k of ALL_KEYS) expect(all).not.toContain(k);
+  });
+  it('Amplitude with only the control arm is refused as incomplete data, not with a manual-numbers hint', async () => {
+    Object.assign(process.env, { AMPLITUDE_API_KEY: AMP_KEY, AMPLITUDE_SECRET_KEY: AMP_SECRET });
+    serve(() =>
+      json(
+        JSON.stringify({
+          data: [
+            { groupValue: 'control', cumulativeRaw: [2400, 120] },
+            { groupValue: '(none)', cumulativeRaw: [3, 0] },
+          ],
+        }),
+      ),
+    );
+    const e = await failure(run('--from', 'amplitude:f', '--metric', 'buy', '--start', '2026-10-01'));
+    expect(e.code).toBe('INVALID_INPUT');
+    expect(e.message).toMatch(/Not analyzed: amplitude:f returned incomplete data/);
+    expect(e.message).toMatch(/the other arm is missing/);
+    expect(e.hint).not.toMatch(/--control and --variant/);
+  });
+  it('a GrowthBook count metric is refused end to end', async () => {
+    process.env.GROWTHBOOK_API_KEY = GB_KEY;
+    serve(growthbookRoutes());
+    const e = await failure(run('--from', 'growthbook:exp_example1', '--metric', 'met_pageviews'));
+    expect(e.code).toBe('INVALID_INPUT');
+    expect(e.message).toMatch(/count metric/);
+  });
+  it('Amplitude-only flags are refused for PostHog and GrowthBook, and --from-only flags without --from', async () => {
+    process.env.POSTHOG_API_KEY = PH_KEY;
+    process.env.GROWTHBOOK_API_KEY = GB_KEY;
+    const a = await failure(run('--from', 'posthog:42', '--start', '2026-10-01'));
+    expect([a.code, a.message]).toEqual([
+      'USAGE',
+      expect.stringMatching(/--start applies only to amplitude; posthog/),
+    ]);
+    const b = await failure(run('--from', 'growthbook:exp_example1', '--control-key', 'off'));
+    expect(b.message).toMatch(/--control-key applies only to amplitude; growthbook/);
+    const c = await failure(run('--control', '120/2400', '--variant', '150/2380', '--metric', 'x'));
+    expect([c.code, c.message]).toEqual(['USAGE', '--metric applies only with --from <adapter>:<id>.']);
+    expect(guarded.calls).toEqual([]);
+  });
+  it('the manual path shares the analysis step and keeps its output shape', async () => {
+    const r = await run('--control', '120/2400', '--variant', '150/2380');
+    expect(r.data).not.toHaveProperty('source');
+    expect(r.text.startsWith('• ')).toBe(true);
+    expect((r.data as { pValue: number }).pValue).toBeCloseTo(0.0511, 3);
   });
   it('a refused key names the variable, not the value', async () => {
     process.env.POSTHOG_API_KEY = PH_KEY;
