@@ -124,6 +124,25 @@ describe('collapseVolatileFindings (F44)', () => {
     }
   });
 
+  it('keeps the console location in the key, except the line of an inline script on the page', () => {
+    const at = (path: string, location: string) =>
+      obs({ url: `${SITE}${path}`, console: [{ type: 'error', text: 'Something went wrong', location }] });
+    const key = (paths: string[], loc: (p: string) => string) =>
+      collapseVolatileFindings(
+        mergeFindings(paths.flatMap((p) => reliabilityFindings(at(p, loc(p))))),
+        order(paths),
+      );
+    // Inline script on each page, at a different line: one cause.
+    const inline = key(['/a', '/b'], (p) => `${SITE}${p}:${p === '/a' ? 12 : 48}`);
+    expect(inline).toHaveLength(1);
+    expect(inline[0]!.pages).toHaveLength(2);
+    // The same generic text from two different files: two findings.
+    const files = key(['/a', '/b'], (p) => `${SITE}/js${p}.js:3`);
+    expect(files).toHaveLength(2);
+    // The same file and line on both pages: one cause.
+    expect(key(['/a', '/b'], () => `${SITE}/js/app.js:3`)).toHaveLength(1);
+  });
+
   it('never collapses other rules or findings of different journeys', () => {
     const mk = (url: string, journey?: string) =>
       makeFinding({
@@ -208,6 +227,51 @@ describe('collapsed findings in compare, trends, bench and reports', () => {
     expect(cmp.introduced).toEqual([]);
     expect(cmp.fixed).toEqual([]);
     expect(cmp.persisting).toHaveLength(2);
+  });
+
+  // The reviewer's probes: a change in which errors a page logs keeps the 1.3.0 identity (rule + journey + page).
+  const cspOnly = (path: string, i: number, vp = VIEWPORTS.desktop!) => {
+    const o = fieldPage(path, i, vp);
+    return { ...o, console: o.console.filter((c) => c.type !== 'pageerror') };
+  };
+  const mixed =
+    (field: string[]) =>
+    (path: string, i: number, vp = VIEWPORTS.desktop!) =>
+      field.includes(path) ? fieldPage(path, i, vp) : cspOnly(path, i, vp);
+  const runOf = (id: string, make: typeof fieldPage) =>
+    run(collapseVolatileFindings(auditFindings(PATHS, make), order(PATHS)), {
+      id,
+      pages: PATHS.map((p) => capture(p)),
+    });
+
+  it('React #418 fixed everywhere while the CSP error stays: persisting and changed, not fixed + new', () => {
+    const cmp = compareRuns(runOf('base', fieldPage), runOf('head', cspOnly));
+    expect(cmp.fixed).toEqual([]);
+    expect(cmp.introduced).toEqual([]);
+    expect(cmp.persisting.map((f) => f.ruleId).sort()).toEqual([...COLLAPSIBLE_RULES].sort());
+    const c = cmp.changed.find((x) => x.after.ruleId === 'jourilo/console-errors')!;
+    expect([c.before.severity, c.after.severity]).toEqual(['serious', 'moderate']);
+  });
+
+  it('React #418 fixed on one page only: that page persists, it is not new', () => {
+    const cmp = compareRuns(runOf('base', fieldPage), runOf('head', mixed(['/', '/pricing'])));
+    expect(cmp.introduced).toEqual([]);
+    expect(cmp.fixed).toEqual([]);
+    const about = cmp.persisting.find(
+      (f) => f.ruleId === 'jourilo/console-errors' && f.url === `${SITE}/about`,
+    );
+    expect(about?.pages).toBeUndefined();
+    expect(cmp.changed.some((x) => x.after === about)).toBe(true);
+  });
+
+  it('an extra error on a page that already failed is changed, not a new serious defect', () => {
+    const cmp = compareRuns(runOf('base', cspOnly), runOf('head', mixed(['/about'])));
+    expect(cmp.introduced).toEqual([]);
+    expect(cmp.regressionFree).toBe(true);
+    const about = cmp.changed.find(
+      (x) => x.after.url === `${SITE}/about` && x.after.ruleId === 'jourilo/console-errors',
+    );
+    expect(about?.after.severity).toBe('serious');
   });
 
   it('counts a collapsed finding on every one of its pages in trends', () => {

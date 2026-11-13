@@ -38,7 +38,9 @@ describe('normalizeVolatile', () => {
       `script https://example.test/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js?v=${v} → net::ERR_BLOCKED_BY_CLIENT`;
     expect(normalizeVolatile(req('1731400000123'))).toBe(normalizeVolatile(req('1731400000999')));
     expect(normalizeVolatile('/api/data?_=1731400000123&lang=en')).toBe('/api/data?_=*&lang=en');
-    expect(normalizeVolatile('/app.js?t=abc')).toBe(normalizeVolatile('/app.js?t=xyz'));
+    expect(normalizeVolatile('/app.js?t=1731400000')).toBe(normalizeVolatile('/app.js?t=1731400999'));
+    expect(normalizeVolatile('/wp/style.css?ver=6.4.2')).toBe(normalizeVolatile('/wp/style.css?ver=6.4.3'));
+    expect(normalizeVolatile('/app.js?cb=3f2a9c')).toBe(normalizeVolatile('/app.js?cb=9e8d7c'));
     expect(normalizeVolatile('/feed?since=20261112')).toBe(normalizeVolatile('/feed?since=20261113'));
   });
 
@@ -83,5 +85,20 @@ describe('normalizeVolatile', () => {
       normalizeVolatile('script /js/cart.js → 404'),
     );
     expect(normalizeVolatile('Minified React error #418')).toBe('Minified React error #418');
+  });
+
+  it('never erases readable identifiers or words (near misses)', () => {
+    const differ = (a: string, b: string) => expect(normalizeVolatile(a)).not.toBe(normalizeVolatile(b));
+    differ('image /img/iphone15promax256gb.jpg → 404', 'image /img/galaxys24ultra512gb.jpg → 404');
+    differ('Hydration failed for ProductCard2024Summer', 'Hydration failed for ProductCard2024Winter');
+    differ('Error: localeEnGb2024edition missing', 'Error: localeDeDe2024edition missing');
+    differ('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'https://www.youtube.com/watch?v=abcdefghijk');
+    differ('/api/search?t=users → 500', '/api/search?t=orders → 500');
+    differ('/app.js?t=abc', '/app.js?t=xyz');
+    differ('/search?q=iphone+15+pro+max+256gb', '/search?q=galaxy+s24+ultra+512gb');
+    differ('fetch /api/v1/users → 500', 'fetch /api/v2/users → 500');
+    differ('ERR_HTTP2_PROTOCOL_ERROR', 'ERR_HTTP2_PING_FAILED');
+    // A random-looking token is still volatile.
+    expect(normalizeVolatile('/img/k3Jd9sLq0ZpX2mWv8nRt.jpg')).toBe('/img/*.jpg');
   });
 });

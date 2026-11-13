@@ -4,30 +4,60 @@
     {
       "rule": "jourilo/console-errors",
       "path": "/team",
-      "pagesExactly": ["/team", "/pricing", "/contact"],
-      "why": "inline script blocked by a per-page CSP nonce plus React error #418 on three pages: one collapsed finding"
+      "pagesExactly": [
+        "/team",
+        "/pricing",
+        "/contact",
+        "/near"
+      ],
+      "why": "inline script blocked by a per-page CSP nonce plus React error #418 on four pages (the near-miss page logs the same errors): one collapsed finding"
     },
     {
       "rule": "jourilo/failed-requests",
       "path": "/pricing",
-      "pagesExactly": ["/team", "/pricing", "/contact"],
-      "why": "the e-mail decoder script fails on three pages with a per-page ?v= cache-buster: one collapsed finding"
+      "pagesExactly": [
+        "/team",
+        "/pricing",
+        "/contact"
+      ],
+      "why": "the e-mail decoder script and the same product image fail on three pages with a per-page ?v= cache-buster: one collapsed finding"
+    },
+    {
+      "rule": "jourilo/failed-requests",
+      "path": "/near",
+      "evidenceExactly": [
+        "email-decode.min.js",
+        "galaxys24ultra512gb.jpg"
+      ],
+      "why": "near miss: same CSP, decoder and nonce pattern, but a different product image, a readable name that differs only in letters and digits, so it is its own finding"
     },
     {
       "rule": "jourilo/console-errors",
       "path": "/control",
-      "evidenceExactly": ["cart is undefined"],
+      "evidenceExactly": [
+        "cart is undefined"
+      ],
       "why": "a different error message is its own finding, not part of the collapse"
     },
     {
       "rule": "jourilo/failed-requests",
       "path": "/control",
-      "evidenceExactly": ["/js/cart.js"],
+      "evidenceExactly": [
+        "/js/cart.js"
+      ],
       "why": "a different failing URL is its own finding, not part of the collapse"
     }
   ],
   "mustNotFind": [
-    { "rule": "jourilo/console-errors", "path": "/", "why": "the home page has no CSP and no errors" },
-    { "rule": "jourilo/failed-requests", "path": "/", "why": "the home page loads nothing that fails" }
+    {
+      "rule": "jourilo/console-errors",
+      "path": "/",
+      "why": "the home page has no CSP and no errors"
+    },
+    {
+      "rule": "jourilo/failed-requests",
+      "path": "/",
+      "why": "the home page loads nothing that fails"
+    }
   ]
 }

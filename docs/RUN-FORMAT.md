@@ -40,9 +40,17 @@ manifest is described there as `#/$defs/manifest`. The TypeScript source of trut
 - Its `fingerprint` depends on the rule, the normalized evidence and the journey, not on the pages, so it stays stable
   whichever pages a run sampled. A finding seen on one page has no `pages` and keeps the per-page fingerprint of
   earlier releases.
-- Run comparison (`jourilo verify`, `compare`) matches a collapsed finding with the same cause on any of its pages,
-  collapsed or not, and calls it fixed only when every one of its pages was checked again and none shows it. Trends
-  count it on each of its pages. The field is absent in runs made before 1.4.0.
+- A console location (`file:line`) is part of the compared evidence, normalized the same way; for an inline script on
+  the page itself only the page counts, not the line, which depends on each page's HTML.
+- Run comparison (`jourilo verify`, `compare`, `optimize`) keeps the identity these two rules had before: rule, journey
+  and page. A finding matches a finding of the same rule and journey that shares at least one page, whatever the
+  evidence, so a collapse in either run, or a page that now logs fewer or more errors, is persisting (and changed),
+  never fixed plus new. A finding is fixed only when no finding of its rule and journey shows on any of its pages and
+  every one of them was checked again. Trends count it on each of its pages. The field is absent in runs made before
+  1.4.0.
+- Dismissals are keyed by fingerprint. A dismissal of a per-page finding does not hide the collapsed one, and the
+  collapsed fingerprint changes when the set of evidence changes (for example one more error on every page), or turns
+  back into the per-page fingerprint when a run samples only one affected page.
 
 ## Budgets
 

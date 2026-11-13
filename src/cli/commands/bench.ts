@@ -28,6 +28,9 @@ export interface Expectation {
   evidenceExactly?: string[];
   /** The matching finding was collapsed over exactly these pages (F44), in any order. */
   pagesExactly?: string[];
+  // Limits for a finding collapsed over several pages (F44): `path` matches any of its pages, but `viewport` is checked
+  // against the union of viewports of all its pages and `evidenceExactly` against the first page's evidence only (a
+  // collapsed finding does not keep either per page). Use them on per-page findings or on single-viewport fixtures.
 }
 
 interface DefectLimit {

@@ -118,6 +118,9 @@ export function pagesOf(f: Pick<Finding, 'url' | 'pages'>): string[] {
  * What a finding of a collapsible rule says, independent of its page: the rule, the journey and the distinct
  * console and network snippets with volatile tokens (and the page's own URL) normalized, in sorted order. A set,
  * not a list: the same message logged at two viewports, or twice on one page, is the same evidence.
+ * A console message's location (`file:line`) is part of it, normalized the same way, so one generic message logged
+ * from different files does not collapse. The line of an inline script on the page itself (`{page}:12`) is dropped:
+ * it depends on each page's HTML, while the script is the same.
  * Undefined for other rules and for findings without such evidence.
  */
 export function collapseKey(f: Finding): string | undefined {
@@ -125,18 +128,16 @@ export function collapseKey(f: Finding): string | undefined {
   const items = new Set(
     f.evidence
       .filter((e) => (e.type === 'console' || e.type === 'network') && e.snippet)
-      .map((e) => `${e.type}:${normalizeVolatile(e.snippet!, f.url)}`),
+      .map((e) => {
+        const at =
+          e.type === 'console' && e.note
+            ? normalizeVolatile(e.note, f.url).replace(/^\{page\}(:\d+)+$/, '{page}')
+            : '';
+        return `${e.type}:${normalizeVolatile(e.snippet!, f.url)}${at ? ` @ ${at}` : ''}`;
+      }),
   );
   if (!items.size) return undefined;
   return [f.ruleId, f.journey ?? '', ...[...items].sort()].join('\n');
-}
-
-/** Two findings show the same cause on at least one shared page (used to compare runs across a collapse). */
-export function sameCause(a: Finding, b: Finding): boolean {
-  const k = collapseKey(a);
-  if (!k || k !== collapseKey(b)) return false;
-  const pages = new Set(pagesOf(a).map(fingerprintPath));
-  return pagesOf(b).some((p) => pages.has(fingerprintPath(p)));
 }
 
 /**

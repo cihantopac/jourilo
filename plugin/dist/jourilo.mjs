@@ -44190,9 +44190,22 @@ function pageForms(pageUrl) {
     return { urls: [], path: null };
   }
 }
+var charClass = (c) => /\d/.test(c) ? 0 : c === c.toUpperCase() ? 1 : 2;
+function randomLooking(run) {
+  const body = run.replace(/=+$/, "");
+  if (!/\d/.test(body) || !/[A-Za-z]/.test(body)) return false;
+  let switches = 0;
+  for (let i = 1; i < body.length; i++) if (charClass(body[i]) !== charClass(body[i - 1])) switches++;
+  return switches >= 0.4 * (body.length - 1);
+}
+var volatileValue = (v) => /^[\d.]+$/.test(v) || /^[0-9a-f]{6,}$/i.test(v) && /\d/.test(v) || v.length >= 16 && randomLooking(v);
 var RULES = [
-  // Cache-busting query values: named busters, and any long numeric value.
-  [/([?&](?:v|t|_|ts|cb|ver|nonce)=)[^&#\s"'<>)]+/gi, `$1${MARK}`],
+  // Cache-busting query values: named busters whose value looks volatile (never a word or a readable id), and any
+  // long numeric value.
+  [
+    /([?&](?:v|t|_|ts|cb|ver|nonce)=)([^&#\s"'<>)]+)/gi,
+    (m, key, v) => volatileValue(v) ? `${key}${MARK}` : m
+  ],
   [/([?&][\w.-]+=)\d{8,}(?=$|[&#\s"'<>)])/g, `$1${MARK}`],
   // CSP nonces and source hashes ('nonce-…', 'sha256-…'); the literal "'nonce-...'" of the message is kept.
   [/nonce-[A-Za-z0-9+/_=-]+/g, `nonce-${MARK}`],
@@ -44200,9 +44213,9 @@ var RULES = [
   [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, MARK],
   // Build hashes in file names: main-3f2a9c1b.js, app.9a8b7c6d5e.css.
   [/([A-Za-z0-9_]+)[.-](?=[0-9a-f]*\d)[0-9a-f]{8,}(\.(?:m?js|css|map))(?![\w])/g, `$1-${MARK}$2`],
-  // Long hex runs, and long base64-like runs that mix letters and digits.
-  [/\b[0-9a-fA-F]{16,}\b/g, MARK],
-  [/(?<![A-Za-z0-9+])(?=[A-Za-z0-9+]*\d)(?=[A-Za-z0-9+]*[A-Za-z])[A-Za-z0-9+]{16,}=*(?![A-Za-z0-9+])/g, MARK],
+  // Long hex runs with a digit, and long base64-like runs that look random (see randomLooking).
+  [/\b(?=[0-9a-fA-F]*\d)[0-9a-fA-F]{16,}\b/g, MARK],
+  [/(?<![A-Za-z0-9])[A-Za-z0-9]{16,}=*(?![A-Za-z0-9=])/g, (m) => randomLooking(m) ? MARK : m],
   // Numeric timestamps (seconds or milliseconds).
   [/(?<![\w.])\d{10,}(?![\w])/g, MARK]
 ];
@@ -44213,7 +44226,7 @@ function normalizeVolatile(text, pageUrl) {
     for (const u of urls) out = out.replace(new RegExp(`${escapeRe(u)}${END}`, "g"), "{page}");
     if (path2) out = out.replace(new RegExp(`(^|[\\s"'(=])${escapeRe(path2)}${END}`, "g"), "$1{page}");
   }
-  for (const [re, to] of RULES) out = out.replace(re, to);
+  for (const [re, to] of RULES) out = typeof to === "string" ? out.replace(re, to) : out.replace(re, to);
   return out;
 }
 
@@ -44300,16 +44313,13 @@ function pagesOf(f) {
 function collapseKey(f) {
   if (!COLLAPSIBLE_RULES.includes(f.ruleId)) return void 0;
   const items = new Set(
-    f.evidence.filter((e) => (e.type === "console" || e.type === "network") && e.snippet).map((e) => `${e.type}:${normalizeVolatile(e.snippet, f.url)}`)
+    f.evidence.filter((e) => (e.type === "console" || e.type === "network") && e.snippet).map((e) => {
+      const at = e.type === "console" && e.note ? normalizeVolatile(e.note, f.url).replace(/^\{page\}(:\d+)+$/, "{page}") : "";
+      return `${e.type}:${normalizeVolatile(e.snippet, f.url)}${at ? ` @ ${at}` : ""}`;
+    })
   );
   if (!items.size) return void 0;
   return [f.ruleId, f.journey ?? "", ...[...items].sort()].join("\n");
-}
-function sameCause(a, b) {
-  const k = collapseKey(a);
-  if (!k || k !== collapseKey(b)) return false;
-  const pages = new Set(pagesOf(a).map(fingerprintPath));
-  return pagesOf(b).some((p) => pages.has(fingerprintPath(p)));
 }
 function collapseVolatileFindings(findings, pageOrder = []) {
   const groups = /* @__PURE__ */ new Map();
@@ -55633,10 +55643,32 @@ function compareRuns(base2, head) {
   const headPages = new Set(head.pages.filter((p) => p.status !== null).map((p) => pathKey(p.url)));
   const dismissedFps = new Set((head.dismissed ?? []).map((f) => f.fingerprint));
   const dismissed = base2.findings.filter((f) => dismissedFps.has(f.fingerprint));
-  const baseCauses = base2.findings.filter((f) => collapseKey(f));
-  const headCauses = head.findings.filter((f) => collapseKey(f));
-  const counterpart = (f) => before.get(f.fingerprint) ?? baseCauses.find((b) => sameCause(b, f));
-  const stillThere = (f) => after.has(f.fingerprint) || headCauses.some((h) => sameCause(f, h));
+  const byPage = (findings) => {
+    const index = /* @__PURE__ */ new Map();
+    for (const f of findings) {
+      if (!COLLAPSIBLE_RULES.includes(f.ruleId)) continue;
+      for (const p of pagesOf(f)) {
+        const k = `${f.ruleId}
+${f.journey ?? ""}
+${pathKey(p)}`;
+        index.set(k, [...index.get(k) ?? [], f]);
+      }
+    }
+    return (f) => {
+      if (!COLLAPSIBLE_RULES.includes(f.ruleId)) return void 0;
+      for (const p of pagesOf(f)) {
+        const hit = index.get(`${f.ruleId}
+${f.journey ?? ""}
+${pathKey(p)}`)?.[0];
+        if (hit) return hit;
+      }
+      return void 0;
+    };
+  };
+  const inBase = byPage(base2.findings);
+  const inHead = byPage(head.findings);
+  const counterpart = (f) => before.get(f.fingerprint) ?? inBase(f);
+  const stillThere = (f) => after.has(f.fingerprint) || inHead(f) !== void 0;
   const fixed = base2.findings.filter(
     (f) => !stillThere(f) && !dismissedFps.has(f.fingerprint) && pagesOf(f).every((p) => headPages.has(pathKey(p)))
   );
