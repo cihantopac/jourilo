@@ -1,7 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { emptyInventory } from '../../src/audit/engine.js';
 import type { PageInventory } from '../../src/core/types.js';
-import { keyEffect, matchesUrl } from '../../src/journeys/runner.js';
+import { keyEffect, matchesUrl, tabPolicy } from '../../src/journeys/runner.js';
 import {
   checkAction,
   checkRequest,
@@ -11,7 +12,7 @@ import {
   signalWords,
   testData,
 } from '../../src/journeys/safety.js';
-import { describeStep, validateJourney } from '../../src/journeys/schema.js';
+import { describeStep, STEP_ACTIONS, validateJourney } from '../../src/journeys/schema.js';
 import { suggestJourneys, valueFor } from '../../src/journeys/suggest.js';
 import { run } from '../helpers.js';
 
@@ -258,6 +259,111 @@ describe('journey schema', () => {
     expect(describeStep({ action: 'fill', target: { label: 'Password' }, value: '{{password}}' }, true)).toBe(
       'Type •••••• into field labelled "Password"',
     );
+  });
+
+  const journeyFiles = [
+    'fixtures/apps/journey-lab/dark.json',
+    'fixtures/apps/journey-lab/dark-broken.json',
+    'fixtures/apps/pulse-dashboard/journeys/refresh-report.json',
+    'fixtures/apps/pulse-dashboard/journeys/sign-in.json',
+  ];
+
+  it('old journeys still validate against the schema', () => {
+    const schema = JSON.parse(readFileSync('schemas/journey.schema.json', 'utf8'));
+    const enumActions: string[] = schema.$defs.step.properties.action.enum;
+    // The JSON schema and the validator accept the same actions, and the new ones are only additions.
+    expect([...enumActions].sort()).toEqual([...STEP_ACTIONS].sort());
+    const old = [
+      'goto',
+      'click',
+      'fill',
+      'select',
+      'check',
+      'press',
+      'hover',
+      'wait',
+      'back',
+      'expect',
+      'screenshot',
+    ];
+    for (const a of old) expect(enumActions).toContain(a);
+    for (const f of journeyFiles) {
+      const j = JSON.parse(readFileSync(f, 'utf8'));
+      expect(validateJourney(j, f).id).toBe(j.id);
+      for (const s of j.steps) expect(enumActions).toContain(s.action);
+    }
+    expect(
+      validateJourney({
+        version: 1,
+        id: 'every-old-action',
+        name: 'Every 1.3 action',
+        start: '/',
+        steps: [
+          { action: 'goto', url: '/' },
+          { action: 'click', target: { role: 'link', name: 'Go' } },
+          { action: 'fill', target: { label: 'Email' }, value: '{{email}}' },
+          { action: 'select', target: { label: 'Plan' }, value: 'pro' },
+          { action: 'check', target: { label: 'Terms' } },
+          { action: 'press', key: 'Enter' },
+          { action: 'hover', target: { text: 'Menu' } },
+          { action: 'wait', ms: 100 },
+          { action: 'back' },
+          { action: 'expect', url: '/next', title: 'Next' },
+          { action: 'screenshot', name: 'end' },
+        ],
+        success: [{ description: 'x', url: '/next' }],
+      }).steps,
+    ).toHaveLength(11);
+  });
+
+  it('validates and describes the tab actions', () => {
+    const spec = (steps: unknown[]) => ({
+      version: 1,
+      id: 'tabs',
+      name: 'Tabs',
+      start: '/',
+      steps,
+      success: [{ description: 'x', noPageErrors: true }],
+    });
+    expect(
+      validateJourney(
+        spec([
+          { action: 'waitForPopup' },
+          { action: 'waitForPopup', urlMatch: '/oauth/idp' },
+          { action: 'switchTab', index: 0 },
+          { action: 'switchTab', urlMatch: 're:help' },
+          { action: 'closeTab' },
+        ]),
+      ).steps,
+    ).toHaveLength(5);
+    expect(() => validateJourney(spec([{ action: 'switchTab' }]))).toThrow(/switchTab.*index or urlMatch/);
+    expect(() => validateJourney(spec([{ action: 'switchTab', index: -1 }]))).toThrow(/index/);
+    expect(() => validateJourney(spec([{ action: 'switchTab', index: 1.5 }]))).toThrow(/index/);
+    expect(() => validateJourney(spec([{ action: 'waitForPopup', urlMatch: 3 }]))).toThrow(/urlMatch/);
+    expect(describeStep({ action: 'waitForPopup' })).toBe('Wait for a popup or new tab');
+    expect(describeStep({ action: 'waitForPopup', urlMatch: '/oauth/idp' })).toBe(
+      'Wait for a popup or new tab at ~ /oauth/idp',
+    );
+    expect(describeStep({ action: 'switchTab', index: 0 })).toBe('Switch to tab 0');
+    expect(describeStep({ action: 'switchTab', urlMatch: '/help' })).toBe('Switch to the tab at ~ /help');
+    expect(describeStep({ action: 'closeTab' })).toBe('Close the current tab');
+  });
+
+  it("judges actions in a tab on another origin by that origin's host", () => {
+    const base = new URL('http://127.0.0.1:4000/');
+    // The journey's own origin and other local hosts keep the journey's policy.
+    expect(tabPolicy('http://127.0.0.1:4000/a', base, local)).toEqual(local);
+    expect(tabPolicy('http://localhost:4000/idp', base, local)).toEqual(local);
+    expect(tabPolicy('about:blank', base, local)).toEqual(local);
+    // A popup on a public test IdP is not a local host: submitting there needs --allow-submit, payments never run.
+    const idp = tabPolicy('https://dev-123.idp.example/login', base, { ...local, allowDestructive: true });
+    expect(idp.hostClass).toBe('public');
+    expect(
+      checkAction({ action: 'click', name: 'Sign in', submitsForm: true, paymentForm: false }, idp).allowed,
+    ).toBe(false);
+    expect(
+      checkAction({ action: 'click', name: 'Pay now', submitsForm: false, paymentForm: false }, idp).allowed,
+    ).toBe(false);
   });
 });
 

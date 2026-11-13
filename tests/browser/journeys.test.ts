@@ -1,6 +1,6 @@
 // Journeys end-to-end on the acme-saas fixture: suggestion derives the expected journeys from real pages, the
 // runner reports real outcomes, and the safety policy blocks risky steps.
-import { spawnSync } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import {
   copyFileSync,
   existsSync,
@@ -10,8 +10,11 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { createServer, type RequestListener, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { promisify } from 'node:util';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const root = join(import.meta.dirname, '..', '..');
 const cli = join(root, 'plugin', 'dist', 'jourilo.mjs');
@@ -393,4 +396,175 @@ describe('journeys --repeat --evidence minimal', () => {
       { selector: '#bold', name: 'Bold', state: 'pressed', controls: null },
     ]);
   });
+});
+
+describe('journeys across tabs and popups', () => {
+  // The app on 127.0.0.1 and the test IdP on localhost: one local server, two origins. Every request is logged by
+  // origin, so a blocked popup can be shown never to have reached the IdP.
+  const lab = join(root, 'fixtures', 'apps', 'journey-lab');
+  const requests: string[] = [];
+  const servers: Server[] = [];
+  let app = '';
+  let idp = '';
+
+  beforeAll(async () => {
+    const handler: RequestListener = (req, res) => {
+      requests.push(`${req.headers.host} ${req.url}`);
+      const path = join(lab, new URL(req.url ?? '/', 'http://x').pathname);
+      if (!path.startsWith(lab) || !existsSync(path)) {
+        res.writeHead(404).end();
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(readFileSync(path));
+    };
+    const v4 = createServer(handler);
+    await new Promise<void>((done) => v4.listen(0, '127.0.0.1', done));
+    servers.push(v4);
+    const { port } = v4.address() as AddressInfo;
+    // Jourilo's network guard connects to the first address "localhost" resolves to, which may be ::1.
+    const v6 = createServer(handler);
+    await new Promise<void>((done) => {
+      v6.once('error', () => done());
+      v6.listen(port, '::1', () => {
+        servers.push(v6);
+        done();
+      });
+    });
+    app = `http://127.0.0.1:${port}`;
+    idp = `http://localhost:${port}`;
+  });
+  afterAll(() => Promise.all(servers.map((s) => new Promise<void>((done) => s.close(() => done())))));
+
+  const runTabs = async (id: string, start: string, steps: unknown[], ...flags: string[]) => {
+    const dir = join(ws, 'journeys');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, `${id}.json`),
+      JSON.stringify({
+        version: 1,
+        id,
+        name: id,
+        start,
+        steps,
+        success: [{ description: 'No script errors', noPageErrors: true }],
+      }),
+    );
+    // Asynchronous: the fixture server lives in this process and must keep answering while the run goes on.
+    const r = await promisify(execFile)(
+      process.execPath,
+      [
+        cli,
+        'journeys',
+        'run',
+        id,
+        '--base',
+        app,
+        '--timeout',
+        '5',
+        ...flags,
+        '--workspace',
+        ws,
+        '--json',
+        '-q',
+      ],
+      { encoding: 'utf8', cwd: root },
+    ).catch((err: { stdout: string }) => err);
+    return JSON.parse(r.stdout) as {
+      journeys: {
+        status: string;
+        steps: { action: string; status: string; url: string; error?: string; screenshot?: string }[];
+        blockedRequests?: { url: string }[];
+      }[];
+      findings: { ruleId: string; description: string }[];
+      runDir: string;
+    };
+  };
+
+  const oauthSteps = [
+    { action: 'click', target: { role: 'button', name: 'Sign in with Test IdP' } },
+    { action: 'waitForPopup', urlMatch: '/oauth/idp' },
+    { action: 'fill', target: { label: 'Email' }, value: '{{email}}' },
+    { action: 'click', target: { role: 'button', name: 'Sign in', exact: true } },
+    { action: 'switchTab', index: 0 },
+    { action: 'expect', visible: { text: 'Signed in' } },
+  ];
+
+  it('a journey signs in through an OAuth popup on a local test IdP', async () => {
+    const out = await runTabs('oauth-popup', '/oauth/index.html', oauthSteps, '--allow-origin', idp);
+    const j = out.journeys[0]!;
+    expect(j.status, JSON.stringify(j.steps)).toBe('passed');
+    expect(j.steps.map((s) => s.action)).toEqual([
+      'goto',
+      'click',
+      'waitForPopup',
+      'fill',
+      'click',
+      'switchTab',
+      'expect',
+    ]);
+    // Each step's screenshot and URL come from the tab that was current after it: the IdP popup while it is open,
+    // the app once the popup has closed itself.
+    for (const s of j.steps) {
+      expect(s.screenshot, s.action).toBeTruthy();
+      expect(existsSync(join(out.runDir, s.screenshot!)), s.screenshot).toBe(true);
+    }
+    expect(j.steps[2]!.url).toContain(`${idp}/oauth/idp.html`);
+    expect(j.steps[3]!.url).toContain(`${idp}/oauth/idp.html`);
+    expect(j.steps[4]!.url).toContain(`${app}/oauth/index.html`);
+    expect(j.steps[6]!.url).toContain(`${app}/oauth/index.html`);
+    expect(j.blockedRequests).toBeUndefined();
+  }, 120_000);
+
+  it('a popup to an origin not in allowOrigins is blocked', async () => {
+    requests.length = 0;
+    const out = await runTabs('oauth-popup-blocked', '/oauth/index.html', oauthSteps);
+    const j = out.journeys[0]!;
+    expect(j.status).toBe('blocked');
+    const step = j.steps.find((s) => s.status === 'blocked')!;
+    expect(step.action).toBe('click');
+    expect(step.error).toContain(`--allow-origin ${idp}`);
+    expect(out.findings.some((f) => f.ruleId === 'journey/blocked-by-policy')).toBe(true);
+    // Stopped before the request left the browser: the IdP origin never saw it.
+    expect(requests.some((r) => r.startsWith('127.0.0.1:'))).toBe(true);
+    expect(requests.filter((r) => r.startsWith('localhost:'))).toEqual([]);
+  }, 120_000);
+
+  it('a popup the page opens on its own is held to the same policy', async () => {
+    requests.length = 0;
+    const out = await runTabs('oauth-popup-unasked', '/oauth/index.html?auto=1', [
+      { action: 'expect', visible: { role: 'heading', name: 'Test app' } },
+    ]);
+    const j = out.journeys[0]!;
+    expect(j.status).toBe('blocked');
+    expect(j.steps.find((s) => s.status === 'blocked')!.error).toContain(`--allow-origin ${idp}`);
+    expect(requests.filter((r) => r.startsWith('localhost:'))).toEqual([]);
+  }, 120_000);
+
+  it('a target=_blank link journey switches tabs and back', async () => {
+    const out = await runTabs('new-tab', '/oauth/index.html', [
+      { action: 'click', target: { role: 'link', name: 'Open help in a new tab' } },
+      { action: 'switchTab', index: 1 },
+      { action: 'expect', visible: { role: 'heading', name: 'Help' } },
+      { action: 'switchTab', index: 0 },
+      { action: 'expect', visible: { role: 'heading', name: 'Test app' } },
+      { action: 'switchTab', urlMatch: '/oauth/help' },
+      { action: 'closeTab' },
+      { action: 'expect', visible: { role: 'heading', name: 'Test app' } },
+    ]);
+    const j = out.journeys[0]!;
+    expect(j.status, JSON.stringify(j.steps)).toBe('passed');
+    expect(j.steps.map((s) => new URL(s.url).pathname)).toEqual([
+      '/oauth/index.html',
+      '/oauth/index.html',
+      '/oauth/help.html',
+      '/oauth/help.html',
+      '/oauth/index.html',
+      '/oauth/index.html',
+      '/oauth/help.html',
+      // Closing the current tab makes its opener current again.
+      '/oauth/index.html',
+      '/oauth/index.html',
+    ]);
+    for (const s of j.steps) expect(s.screenshot, s.action).toBeTruthy();
+  }, 120_000);
 });

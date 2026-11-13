@@ -44831,6 +44831,7 @@ async function probeFormValidation(ctx, url, form, vp, policy, runDir, wait) {
 
 // src/journeys/runner.ts
 import { join as join10 } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 
 // src/browser/viewports.ts
 init_errors();
@@ -44928,7 +44929,7 @@ async function coverAt(handle) {
 
 // src/journeys/schema.ts
 init_errors();
-var ACTIONS = /* @__PURE__ */ new Set([
+var STEP_ACTIONS = [
   "goto",
   "click",
   "fill",
@@ -44939,8 +44940,12 @@ var ACTIONS = /* @__PURE__ */ new Set([
   "wait",
   "back",
   "expect",
-  "screenshot"
-]);
+  "screenshot",
+  "waitForPopup",
+  "switchTab",
+  "closeTab"
+];
+var ACTIONS = new Set(STEP_ACTIONS);
 var NEEDS_TARGET = /* @__PURE__ */ new Set(["click", "fill", "select", "check", "hover"]);
 function validTarget(t) {
   if (!t || typeof t !== "object") return false;
@@ -44975,6 +44980,15 @@ function validateJourney(raw, source = "journey") {
       errs.push(`steps[${i}] (goto): url is required`);
     else if (step.action === "press" && typeof step.key !== "string")
       errs.push(`steps[${i}] (press): key is required`);
+    else if (step.action === "waitForPopup" || step.action === "switchTab") {
+      const { index, urlMatch } = step;
+      if (urlMatch !== void 0 && (typeof urlMatch !== "string" || !urlMatch))
+        errs.push(`steps[${i}] (${step.action}): urlMatch must be a non-empty string`);
+      else if (step.action === "switchTab" && index !== void 0 && !(Number.isInteger(index) && index >= 0))
+        errs.push(`steps[${i}] (switchTab): index must be a whole number from 0`);
+      else if (step.action === "switchTab" && index === void 0 && urlMatch === void 0)
+        errs.push(`steps[${i}] (switchTab): index or urlMatch is required`);
+    }
   });
   (j.success ?? []).forEach((c, i) => {
     if (!c?.description) errs.push(`success[${i}]: description is required`);
@@ -45019,6 +45033,12 @@ function describeStep(s, secret = false) {
       return `Expect ${[s.url ? `URL ~ ${s.url}` : "", s.visible ? `${describeTarget(s.visible)} visible` : "", s.hidden ? `${describeTarget(s.hidden)} hidden` : "", s.title ? `title ~ "${s.title}"` : ""].filter(Boolean).join(", ")}`;
     case "screenshot":
       return `Screenshot${s.name ? ` "${s.name}"` : ""}`;
+    case "waitForPopup":
+      return `Wait for a popup or new tab${s.urlMatch ? ` at ~ ${s.urlMatch}` : ""}`;
+    case "switchTab":
+      return s.index !== void 0 ? `Switch to tab ${s.index}` : `Switch to the tab at ~ ${s.urlMatch}`;
+    case "closeTab":
+      return "Close the current tab";
   }
 }
 
@@ -45112,11 +45132,32 @@ function matchesUrl(actual, expected) {
   }
   return actual.includes(expected);
 }
+function tabPolicy(url, base2, policy) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return policy;
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:" || u.origin === base2.origin || isLocalHostname(u.hostname))
+    return policy;
+  return { ...policy, hostClass: "public" };
+}
+async function waitForTab(find, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  for (; ; ) {
+    const p = find();
+    if (p || Date.now() >= deadline) return p;
+    await sleep(100);
+  }
+}
 var Blocked = class extends Error {
 };
-async function act(page, step, opts) {
+async function act(tabs, step, opts) {
   const t = opts.stepTimeoutMs;
   const value = (v) => interpolate(v, opts.data);
+  const page = tabs.current();
+  if (!page) throw new Error("No open tab: every tab of the journey has been closed.");
   switch (step.action) {
     case "goto": {
       const url = new URL(value(step.url), opts.base);
@@ -45139,22 +45180,26 @@ async function act(page, step, opts) {
       const f = handle ? await handle.evaluate(facts(ELEMENT_FACTS)) : null;
       const effect = step.action === "click" ? f?.submits ? "submit" : "activate" : keyEffect(step.key, f);
       if (f && effect !== "none") {
-        const verdict = verdictFor(f, effect, step.action, opts.policy);
+        const verdict = verdictFor(f, effect, step.action, tabPolicy(page.url(), opts.base, opts.policy));
         if (!verdict.allowed) throw new Blocked(verdict.reason);
       }
       let note;
-      if (step.action === "click") {
-        const c = await coverAt(handle);
-        if (c.covered && c.visiblePoint) {
-          note = `center covered by ${c.cover ?? "another element"}; clicked the visible part`;
-          await handle.click({ timeout: t, position: c.visiblePoint });
-        } else if (c.covered) {
-          throw new Error(
-            `${describeTarget(step.target)} is covered by ${c.cover ?? "another element"}; nothing of it is visible to click.`
-          );
-        } else await handle.click({ timeout: t });
-      } else if (loc && handle) await handle.press(step.key, { timeout: t });
-      else await page.keyboard.press(step.key);
+      try {
+        if (step.action === "click") {
+          const c = await coverAt(handle);
+          if (c.covered && c.visiblePoint) {
+            note = `center covered by ${c.cover ?? "another element"}; clicked the visible part`;
+            await handle.click({ timeout: t, position: c.visiblePoint });
+          } else if (c.covered) {
+            throw new Error(
+              `${describeTarget(step.target)} is covered by ${c.cover ?? "another element"}; nothing of it is visible to click.`
+            );
+          } else await handle.click({ timeout: t });
+        } else if (loc && handle) await handle.press(step.key, { timeout: t });
+        else await page.keyboard.press(step.key);
+      } catch (err) {
+        if (!page.isClosed()) throw err;
+      }
       await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
       return note;
     }
@@ -45197,6 +45242,34 @@ async function act(page, step, opts) {
     }
     case "screenshot":
       return;
+    case "waitForPopup": {
+      const popup = await waitForTab(
+        () => tabs.fresh().find((p) => !step.urlMatch || matchesUrl(p.url(), step.urlMatch)),
+        t
+      );
+      if (!popup)
+        throw new Error(
+          `No popup or new tab${step.urlMatch ? ` at ~ ${step.urlMatch}` : ""} opened within ${Math.round(t / 1e3)} s.`
+        );
+      await tabs.select(popup);
+      await popup.waitForLoadState("load", { timeout: t }).catch(() => void 0);
+      await popup.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
+      return;
+    }
+    case "switchTab": {
+      const find = () => step.index !== void 0 ? tabs.all()[step.index] : tabs.all().find((p) => matchesUrl(p.url(), step.urlMatch ?? ""));
+      const tab = await waitForTab(find, t);
+      if (!tab)
+        throw new Error(
+          `${step.index !== void 0 ? `There is no tab ${step.index}` : `No tab at ~ ${step.urlMatch}`}; open tabs: ${tabs.all().map((p, i) => `${i} ${redactUrl(p.url())}`).join(", ")}.`
+        );
+      await tabs.select(tab);
+      return;
+    }
+    case "closeTab":
+      if (tabs.all().length < 2) throw new Error("closeTab would close the journey's last tab.");
+      await page.close();
+      return;
   }
 }
 var TRANSIENT = /detached|not stable|intercepts pointer events|Execution context was destroyed|navigation/i;
@@ -45219,9 +45292,42 @@ async function runJourney(browser, spec, opts) {
     ...opts.allowOrigins ? { allowOrigins: opts.allowOrigins } : {},
     mode: "journey"
   });
-  const page = await ctx.newPage();
-  const live = observe(page, opts.base.origin);
-  live.ignore(guard.isBlocked);
+  const open = [];
+  const fresh = [];
+  const openers = /* @__PURE__ */ new Map();
+  const observers = [];
+  let current;
+  const track = (p) => {
+    open.push(p);
+    const live = observe(p, opts.base.origin);
+    live.ignore(guard.isBlocked);
+    observers.push(live);
+    p.opener().then((o) => openers.set(p, o)).catch(() => void 0);
+    p.on("close", () => {
+      for (const list2 of [open, fresh]) if (list2.includes(p)) list2.splice(list2.indexOf(p), 1);
+      if (current !== p) return;
+      let o = openers.get(p) ?? null;
+      while (o?.isClosed()) o = openers.get(o) ?? null;
+      current = o ?? open[open.length - 1];
+    });
+  };
+  current = await ctx.newPage();
+  track(current);
+  ctx.on("page", (p) => {
+    if (open.includes(p) || p.isClosed()) return;
+    track(p);
+    fresh.push(p);
+  });
+  const tabs = {
+    current: () => current,
+    all: () => open.filter((p) => !p.isClosed()),
+    fresh: () => fresh.filter((p) => !p.isClosed()),
+    select: async (p) => {
+      current = p;
+      if (fresh.includes(p)) fresh.splice(fresh.indexOf(p), 1);
+      await p.bringToFront().catch(() => void 0);
+    }
+  };
   const steps = [];
   const findings = [];
   const t0 = Date.now();
@@ -45233,21 +45339,34 @@ async function runJourney(browser, spec, opts) {
       "screenshots",
       `journey-${spec.id}-${vp.name}${opts.attempt === void 0 ? "" : `-a${opts.attempt}`}-${String(i).padStart(2, "0")}.jpg`
     );
-    try {
-      await page.screenshot({
-        path: join10(opts.runDir, file2),
-        type: "jpeg",
-        quality: opts.evidence === "minimal" ? EVIDENCE_QUALITY.minimal : 70,
-        animations: "disabled",
-        caret: "hide",
-        mask: DEFAULT_MASK.map((s) => page.locator(s)),
-        maskColor: "#FF00FF"
-      });
-      return toPosix(file2);
-    } catch {
-      return void 0;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const page = tabs.current();
+      if (!page) return void 0;
+      try {
+        await page.screenshot({
+          path: join10(opts.runDir, file2),
+          type: "jpeg",
+          quality: opts.evidence === "minimal" ? EVIDENCE_QUALITY.minimal : 70,
+          animations: "disabled",
+          caret: "hide",
+          mask: DEFAULT_MASK.map((s) => page.locator(s)),
+          maskColor: "#FF00FF"
+        });
+        return toPosix(file2);
+      } catch {
+        if (!page.isClosed()) await sleep(300);
+        if (!page.isClosed() || tabs.current() === page) return void 0;
+      }
     }
+    return void 0;
   };
+  let checkedUpTo = Date.now();
+  const stoppedNavigation = () => {
+    const stopped = guard.since(checkedUpTo).filter((b) => b.navigation || b.kind !== "submit");
+    checkedUpTo = Date.now();
+    return stopped;
+  };
+  const stopNote = (stopped) => excerpt(`${stopped[0].reason}${stopped.length > 1 ? ` (+${stopped.length - 1} more)` : ""}`, 300);
   try {
     for (let i = 0; i < allSteps.length; i++) {
       const step = allSteps[i];
@@ -45265,27 +45384,24 @@ async function runJourney(browser, spec, opts) {
       let note;
       try {
         try {
-          note = await act(page, step, opts);
+          note = await act(tabs, step, opts);
         } catch (err) {
           if (err instanceof Blocked || !TRANSIENT.test(err.message)) throw err;
-          await page.waitForTimeout(500);
-          note = await act(page, step, opts);
+          await sleep(500);
+          note = await act(tabs, step, opts);
         }
         if (note) res.description = `${res.description} (${note})`;
       } catch (err) {
         res.status = err instanceof Blocked ? "blocked" : "failed";
         res.error = excerpt(err.message.split("\n")[0], 300);
       }
-      const stopped = guard.since(s0).filter((b) => b.navigation || b.kind !== "submit");
+      const stopped = stoppedNavigation();
       if (stopped.length && res.status !== "blocked") {
         res.status = "blocked";
-        res.error = excerpt(
-          `${stopped[0].reason}${stopped.length > 1 ? ` (+${stopped.length - 1} more)` : ""}`,
-          300
-        );
+        res.error = stopNote(stopped);
       }
       res.durationMs = Date.now() - s0;
-      res.url = redactUrl(page.url());
+      res.url = redactUrl(tabs.current()?.url() ?? "");
       const s = await shot(i);
       if (s) res.screenshot = s;
       steps.push(res);
@@ -45303,22 +45419,31 @@ async function runJourney(browser, spec, opts) {
         break;
       }
     }
-    const pageErrors = live.console.filter((c) => c.type === "pageerror");
-    const failedFirstParty = live.network.filter((n) => n.firstParty);
+    const late = status === "passed" ? stoppedNavigation() : [];
+    const last = steps[steps.length - 1];
+    if (late.length && last) {
+      last.status = "blocked";
+      last.error = stopNote(late);
+      status = "blocked";
+    }
+    const page = tabs.current();
+    const finalUrl = page?.url() ?? "";
+    const pageErrors = observers.flatMap((o) => o.console).filter((c) => c.type === "pageerror");
+    const failedFirstParty = observers.flatMap((o) => o.network).filter((n) => n.firstParty);
     const criteria = [];
     for (const c of spec.success) {
       let met = true;
       const details = [];
-      if (c.url && !matchesUrl(page.url(), c.url)) {
+      if (c.url && !matchesUrl(finalUrl, c.url)) {
         met = false;
-        details.push(`ended at ${redactUrl(page.url())}`);
+        details.push(`ended at ${redactUrl(finalUrl)}`);
       }
-      if (c.urlNot && matchesUrl(page.url(), c.urlNot)) {
+      if (c.urlNot && matchesUrl(finalUrl, c.urlNot)) {
         met = false;
-        details.push(`still at ${redactUrl(page.url())}`);
+        details.push(`still at ${redactUrl(finalUrl)}`);
       }
       if (c.visible) {
-        const vis = await locatorFor(page, c.visible).first().isVisible().catch(() => false);
+        const vis = page ? await locatorFor(page, c.visible).first().isVisible().catch(() => false) : false;
         if (!vis) {
           met = false;
           details.push(`${describeTarget(c.visible)} not visible`);
@@ -45339,7 +45464,7 @@ async function runJourney(browser, spec, opts) {
       });
     }
     if (status === "passed" && criteria.some((c) => !c.met)) status = "failed";
-    const vitals = await page.evaluate(READ_VITALS_SCRIPT).catch(() => null);
+    const vitals = await page?.evaluate(READ_VITALS_SCRIPT).catch(() => null);
     const durationMs = Date.now() - t0;
     if (tracePath) {
       await ctx.tracing.stop({ path: join10(opts.runDir, tracePath) });
@@ -45362,7 +45487,7 @@ async function runJourney(browser, spec, opts) {
     const reproduction = steps.filter((s) => s.status !== "skipped").map((s) => s.description);
     const failedStep = steps.find((s) => s.status === "failed");
     const blockedStep = steps.find((s) => s.status === "blocked");
-    const url = redactUrl(page.url());
+    const url = redactUrl(finalUrl);
     if (failedStep || criteria.some((c) => !c.met)) {
       const unmet = criteria.filter((c) => !c.met);
       findings.push(
@@ -51433,7 +51558,8 @@ Run options:
   --var key=value        Test data for {{key}} placeholders (also JOURILO_VAR_KEY env vars)
   --allow-submit         Allow form submission on non-local hosts (authorized test environments only)
   --allow-destructive    Allow irreversible/payment actions \u2014 local hosts with sandbox data only
-  --allow-origin ORIGIN  Let the page navigate to another origin you are authorized to test (e.g. a test IdP)
+  --allow-origin ORIGIN  Let the page, its popups and new tabs navigate to another origin you are authorized to test
+                         (e.g. a test IdP); any other origin is blocked in every tab
   --trace                Record a Playwright trace per journey (contains typed values; keep private);
                          refused with --extra-header, since a trace records header values
   --auth FILE            Playwright storage state for signed-in journeys
