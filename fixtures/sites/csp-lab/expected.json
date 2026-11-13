@@ -1,5 +1,5 @@
 {
-  "description": "One CSP-blocked script on several pages, each page with its own nonce and cache-buster (Frameva, field item F44): one finding per rule that lists the pages; a page with a genuinely different error stays its own finding.",
+  "description": "One CSP-blocked script on several pages, each page with its own nonce and cache-buster (Frameva, field item F44): one finding per rule that lists the pages; a page with a genuinely different error stays its own finding. A page with a strict nonce CSP for scripts and styles (Task 15): axe still runs there, and Jourilo's own instrumentation is never reported as the site's console error.",
   "mustFind": [
     {
       "rule": "jourilo/console-errors",
@@ -46,6 +46,11 @@
         "/js/cart.js"
       ],
       "why": "a different failing URL is its own finding, not part of the collapse"
+    },
+    {
+      "rule": "axe/button-name",
+      "path": "/downloads",
+      "why": "an icon-only share button with no accessible name on a page whose CSP allows only nonce scripts and styles: axe must run despite the CSP"
     }
   ],
   "mustNotFind": [
@@ -58,6 +63,16 @@
       "rule": "jourilo/failed-requests",
       "path": "/",
       "why": "the home page loads nothing that fails"
+    },
+    {
+      "rule": "jourilo/console-errors",
+      "path": "/downloads",
+      "why": "the strict-CSP page runs only its own nonce script, which works; a CSP refusal of Jourilo's injected axe or of Playwright's screenshot style is not a site error"
+    },
+    {
+      "rule": "jourilo/failed-requests",
+      "path": "/downloads",
+      "why": "the strict-CSP page loads nothing that fails"
     }
   ]
 }

@@ -41881,6 +41881,30 @@ async function installRequestGuard(target, policy, options = {}) {
   };
 }
 
+// src/browser/own-activity.ts
+var INPAGE_SCHEME = "jourilo-inpage://";
+var inpageSource = (name, source) => `${source}
+//# sourceURL=${INPAGE_SCHEME}${name}.js`;
+var acting = /* @__PURE__ */ new WeakMap();
+async function asJourilo(page, act2) {
+  acting.set(page, (acting.get(page) ?? 0) + 1);
+  try {
+    return await act2();
+  } finally {
+    acting.set(page, (acting.get(page) ?? 1) - 1);
+  }
+}
+var CSP = /Content[- ]Security[- ]Policy/i;
+var STYLE = /\bstyle(sheet)?\b|style-src/i;
+function isOwnConsoleMessage(page, text, sourceUrl) {
+  if (sourceUrl.startsWith(INPAGE_SCHEME)) return true;
+  return (acting.get(page) ?? 0) > 0 && CSP.test(text) && STYLE.test(text);
+}
+function isOwnException(err) {
+  const top = (err.stack ?? "").split("\n").find((l) => /^\s+at\b/.test(l));
+  return top?.includes(INPAGE_SCHEME) === true;
+}
+
 // src/browser/contrast-sample.ts
 var SAMPLED_REASONS = /* @__PURE__ */ new Set(["bgImage", "bgGradient", "bgOverlap"]);
 var CONTRAST_SAMPLE_CAP = 30;
@@ -42011,12 +42035,15 @@ async function sampleContrast(page, target) {
     );
     if (!style || style.width < 1 || style.height < 1) return null;
     if (style.width * style.height * style.dpr * style.dpr > MAX_DEVICE_PIXELS) return null;
-    const png = await locator.screenshot({
-      type: "png",
-      animations: "disabled",
-      caret: "hide",
-      timeout: 2e3
-    });
+    const png = await asJourilo(
+      page,
+      () => locator.screenshot({
+        type: "png",
+        animations: "disabled",
+        caret: "hide",
+        timeout: 2e3
+      })
+    );
     const arg = {
       url: `data:image/png;base64,${png.toString("base64")}`,
       rgb: style.rgb,
@@ -42879,7 +42906,10 @@ async function shotAround(page, r) {
     height: r.height + pad * 2
   };
   if (r.width < 1 || r.height < 1 || clip.width * clip.height > 640 * 480) return null;
-  return page.screenshot({ clip, fullPage: true, animations: "disabled", caret: "hide", type: "png" }).catch(() => null);
+  return asJourilo(
+    page,
+    () => page.screenshot({ clip, fullPage: true, animations: "disabled", caret: "hide", type: "png" })
+  ).catch(() => null);
 }
 async function keyboardWalk(page, maxTabs = 60) {
   const focusableCount = await page.evaluate(COUNT_FOCUSABLE);
@@ -43748,7 +43778,7 @@ async function newContext(browser, vp, opts) {
     await sendTargetHeaders(ctx, opts.extraHeaders, opts.timeoutMs ?? 3e4);
   if (opts.clock) await ctx.clock.setFixedTime(new Date(opts.clock));
   await ctx.addInitScript({ content: NAME_SHIM });
-  await ctx.addInitScript({ content: VITALS_INIT_SCRIPT });
+  await ctx.addInitScript({ content: inpageSource("vitals-init", VITALS_INIT_SCRIPT) });
   return ctx;
 }
 function observe(page, origin) {
@@ -43762,12 +43792,13 @@ function observe(page, origin) {
     if (consoleEntries.length >= 100) return;
     if (/^Failed to load resource/i.test(msg.text())) return;
     const loc = msg.location();
+    if (isOwnConsoleMessage(page, msg.text(), loc.url)) return;
     const entry = { type: t, text: excerpt(msg.text(), 400) };
     if (loc.url) entry.location = `${redactUrl(loc.url)}:${loc.lineNumber}`;
     consoleEntries.push(entry);
   });
   page.on("pageerror", (err) => {
-    if (consoleEntries.length >= 100) return;
+    if (consoleEntries.length >= 100 || isOwnException(err)) return;
     consoleEntries.push({ type: "pageerror", text: excerpt(`${err.name}: ${err.message}`, 400) });
   });
   const firstParty = (u) => {
@@ -43828,8 +43859,9 @@ async function waitForElement(page, selector, timeoutMs) {
 }
 var AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"];
 var HIDDEN_SKIP_RULES = /* @__PURE__ */ new Set(["color-contrast", "color-contrast-enhanced"]);
+var AXE_SOURCE = inpageSource("axe", import_axe_core.default.source);
 async function runAxe(page) {
-  await page.addScriptTag({ content: import_axe_core.default.source });
+  await page.evaluate(AXE_SOURCE);
   const raw = await page.evaluate(
     `axe.run(document, { runOnly: { type: 'tag', values: ${JSON.stringify(AXE_TAGS)} }, resultTypes: ['violations', 'incomplete'], elementRef: false, rules: { 'target-size': { enabled: true } } })`
   );
@@ -44034,7 +44066,10 @@ async function capturePage(ctx, url, vp, opts) {
       return null;
     });
     obs.probe = await page.evaluate(
-      `(${probe_default.trim().replace(/;$/, "")})(${JSON.stringify({ maxItems: 40, viewportWidth: vp.width, viewportHeight: vp.height, lex: lexiconSources() })})`
+      inpageSource(
+        "probe",
+        `(${probe_default.trim().replace(/;$/, "")})(${JSON.stringify({ maxItems: 40, viewportWidth: vp.width, viewportHeight: vp.height, lex: lexiconSources() })})`
+      )
     ).catch((e) => {
       obs.errors.push(`probe: ${e.message.split("\n")[0]}`);
       return null;
@@ -44042,7 +44077,7 @@ async function capturePage(ctx, url, vp, opts) {
     if (obs.probe) sanitizeInventory(obs.probe.inventory);
     if (opts.axe !== false) {
       obs.axe = await runAxe(page).catch((e) => {
-        obs.errors.push(`axe: ${e.message.split("\n")[0]}`);
+        obs.errors.push(`axe could not run on this page: ${e.message.split("\n")[0]}`);
         return null;
       });
     }
@@ -44051,43 +44086,45 @@ async function capturePage(ctx, url, vp, opts) {
       const mode = opts.evidence ?? "full";
       const { full, fold } = captureScreenshotFiles(url, vp, opts.primaryOrigin);
       try {
-        const height = Math.min(obs.probe?.scroll.height ?? vp.height, FULL_PAGE_MAX_HEIGHT[mode]);
-        if (mode === "minimal" && height <= vp.height) {
-          await page.screenshot({
-            path: join7(opts.runDir, full),
-            type: "jpeg",
-            quality: EVIDENCE_QUALITY[mode],
-            animations: "disabled",
-            caret: "hide",
-            mask,
-            maskColor: "#FF00FF"
-          });
-          obs.screenshot = toPosix(full);
-          obs.foldScreenshot = obs.screenshot;
-        } else {
-          await page.screenshot({
-            path: join7(opts.runDir, full),
-            type: "jpeg",
-            quality: EVIDENCE_QUALITY[mode],
-            fullPage: true,
-            clip: { x: 0, y: 0, width: vp.width, height },
-            animations: "disabled",
-            caret: "hide",
-            mask,
-            maskColor: "#FF00FF"
-          });
-          obs.screenshot = toPosix(full);
-          await page.screenshot({
-            path: join7(opts.runDir, fold),
-            type: "jpeg",
-            quality: EVIDENCE_QUALITY[mode],
-            animations: "disabled",
-            caret: "hide",
-            mask,
-            maskColor: "#FF00FF"
-          });
-          obs.foldScreenshot = toPosix(fold);
-        }
+        await asJourilo(page, async () => {
+          const height = Math.min(obs.probe?.scroll.height ?? vp.height, FULL_PAGE_MAX_HEIGHT[mode]);
+          if (mode === "minimal" && height <= vp.height) {
+            await page.screenshot({
+              path: join7(opts.runDir, full),
+              type: "jpeg",
+              quality: EVIDENCE_QUALITY[mode],
+              animations: "disabled",
+              caret: "hide",
+              mask,
+              maskColor: "#FF00FF"
+            });
+            obs.screenshot = toPosix(full);
+            obs.foldScreenshot = obs.screenshot;
+          } else {
+            await page.screenshot({
+              path: join7(opts.runDir, full),
+              type: "jpeg",
+              quality: EVIDENCE_QUALITY[mode],
+              fullPage: true,
+              clip: { x: 0, y: 0, width: vp.width, height },
+              animations: "disabled",
+              caret: "hide",
+              mask,
+              maskColor: "#FF00FF"
+            });
+            obs.screenshot = toPosix(full);
+            await page.screenshot({
+              path: join7(opts.runDir, fold),
+              type: "jpeg",
+              quality: EVIDENCE_QUALITY[mode],
+              animations: "disabled",
+              caret: "hide",
+              mask,
+              maskColor: "#FF00FF"
+            });
+            obs.foldScreenshot = toPosix(fold);
+          }
+        });
       } catch (e) {
         obs.errors.push(`screenshot: ${e.message.split("\n")[0]}`);
       }
@@ -46162,15 +46199,18 @@ async function runJourney(browser, spec, opts) {
       const page = tabs.current();
       if (!page) return void 0;
       try {
-        await page.screenshot({
-          path: join10(opts.runDir, file2),
-          type: "jpeg",
-          quality: opts.evidence === "minimal" ? EVIDENCE_QUALITY.minimal : 70,
-          animations: "disabled",
-          caret: "hide",
-          mask: DEFAULT_MASK.map((s) => page.locator(s)),
-          maskColor: "#FF00FF"
-        });
+        await asJourilo(
+          page,
+          () => page.screenshot({
+            path: join10(opts.runDir, file2),
+            type: "jpeg",
+            quality: opts.evidence === "minimal" ? EVIDENCE_QUALITY.minimal : 70,
+            animations: "disabled",
+            caret: "hide",
+            mask: DEFAULT_MASK.map((s) => page.locator(s)),
+            maskColor: "#FF00FF"
+          })
+        );
         return toPosix(file2);
       } catch {
         if (!page.isClosed()) await sleep(300);

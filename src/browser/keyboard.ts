@@ -2,6 +2,7 @@
 // whether focus is visible (WCAG 2.4.7), hidden behind sticky content (2.4.11) or trapped (2.1.2).
 import type { ElementHandle, Page } from 'playwright-core';
 import type { Rect } from '../core/types.js';
+import { asJourilo } from './own-activity.js';
 
 export interface FocusStop {
   index: number;
@@ -306,9 +307,9 @@ async function shotAround(page: Page, r: Rect): Promise<Buffer | null> {
     height: r.height + pad * 2,
   };
   if (r.width < 1 || r.height < 1 || clip.width * clip.height > 640 * 480) return null;
-  return page
-    .screenshot({ clip, fullPage: true, animations: 'disabled', caret: 'hide', type: 'png' })
-    .catch(() => null);
+  return asJourilo(page, () =>
+    page.screenshot({ clip, fullPage: true, animations: 'disabled', caret: 'hide', type: 'png' }),
+  ).catch(() => null);
 }
 
 export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWalk> {

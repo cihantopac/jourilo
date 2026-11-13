@@ -8,6 +8,7 @@ import { EVIDENCE_QUALITY, type EvidenceMode } from '../audit/evidence.js';
 import { makeFinding } from '../audit/finding.js';
 import { CWV, nielsen } from '../audit/standards.js';
 import { DEFAULT_MASK, newContext, observe } from '../browser/capture.js';
+import { asJourilo } from '../browser/own-activity.js';
 import type { TargetHeaders } from '../browser/target-headers.js';
 import { parseViewports } from '../browser/viewports.js';
 import { type RawVitals, READ_VITALS_SCRIPT, rate } from '../browser/vitals.js';
@@ -495,15 +496,17 @@ export async function runJourney(
       const page = tabs.current();
       if (!page) return undefined;
       try {
-        await page.screenshot({
-          path: join(opts.runDir, file),
-          type: 'jpeg',
-          quality: opts.evidence === 'minimal' ? EVIDENCE_QUALITY.minimal : 70,
-          animations: 'disabled',
-          caret: 'hide',
-          mask: DEFAULT_MASK.map((s) => page.locator(s)),
-          maskColor: '#FF00FF',
-        });
+        await asJourilo(page, () =>
+          page.screenshot({
+            path: join(opts.runDir, file),
+            type: 'jpeg',
+            quality: opts.evidence === 'minimal' ? EVIDENCE_QUALITY.minimal : 70,
+            animations: 'disabled',
+            caret: 'hide',
+            mask: DEFAULT_MASK.map((s) => page.locator(s)),
+            maskColor: '#FF00FF',
+          }),
+        );
         return toPosix(file);
       } catch {
         if (!page.isClosed()) await sleep(300);

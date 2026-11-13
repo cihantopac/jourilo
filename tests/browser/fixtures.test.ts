@@ -1,7 +1,9 @@
 // End-to-end: real Chromium against fixture sites with seeded defects. This is the quality gate for detection:
 // every seeded defect must be found, nothing may be reported on the clean control site, and root causes must
 // point at the right files.
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
+import axe from 'axe-core';
 import { describe, expect, it } from 'vitest';
 import { benchFixture } from '../../src/cli/commands/bench.js';
 import { Workspace } from '../../src/core/workspace.js';
@@ -72,6 +74,22 @@ describe('fixture benchmark', () => {
     // Review Focus 1: the dark half passes, the light half does not; the worst case decides.
     expect(at('/mixed')!.worstRatio).toBeLessThan(3);
     expect(at('/mixed')!.bestRatio).toBeGreaterThanOrEqual(7);
+  });
+  it("runs axe under a strict CSP and never reports Jourilo's own injection as the site's error", async () => {
+    const r = await benchFixture(join(import.meta.dirname, '../../fixtures/sites/csp-lab'), ws);
+    expect(r.missed).toEqual([]);
+    expect(r.falsePositives).toEqual([]);
+    const { run } = new Workspace(ws).loadRun('latest');
+    // axe ran on every page, the nonce-only ones included.
+    expect(run.limitations.filter((l) => /axe/i.test(l))).toEqual([]);
+    // The site's own CSP refusal (its inline e-mail decoder) is still evidence; a refusal of Jourilo's injected
+    // axe (an inline script whose hash is the axe source's) never is.
+    const axeHash = createHash('sha256').update(axe.source).digest('base64');
+    const consoleTexts = run.findings
+      .filter((f) => f.ruleId === 'jourilo/console-errors')
+      .flatMap((f) => f.evidence.map((e) => e.snippet ?? ''));
+    expect(consoleTexts.some((t) => /inline script/i.test(t))).toBe(true);
+    expect(consoleTexts.filter((t) => t.includes(axeHash))).toEqual([]);
   });
   it('reports no moderate-or-worse defects on the clean control site', async () => {
     const r = await benchFixture(join(import.meta.dirname, '../../fixtures/sites/clean-shop'), ws);
