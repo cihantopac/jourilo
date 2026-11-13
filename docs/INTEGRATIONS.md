@@ -57,7 +57,10 @@ URL. The HTML report lists search findings for pages that the run also audited, 
 ## Analytics adapters (read-only)
 
 `jourilo experiment analyze --from <adapter>:<id>` reads an experiment's exposures and conversions from PostHog,
-GrowthBook or Amplitude and runs the same analysis as `--control/--variant`. The adapters only read: GET requests, plus
+GrowthBook or Amplitude and runs the same analysis as `--control/--variant`, sequential by default: a live experiment
+is checked repeatedly, so the always-valid mSPRT p-value and confidence sequence are reported
+([standards §4.4](research/standards.md#44-sequential-testing-msprt-with-always-valid-p-values)); `--fixed` gives the
+fixed-horizon test instead. The adapters only read: GET requests, plus
 PostHog's documented read-only query endpoint (`POST /api/projects/:project/query/`, which uses POST to carry the query).
 Every request goes through Jourilo's guarded fetch (`guardedFetch` in `src/core/net-guard.ts`): the host is resolved and
 checked like every other outbound request (no LAN or metadata addresses; loopback only for a local self-hosted

@@ -216,9 +216,46 @@ Worked examples (α = 0.05 two-sided, power = 0.80; computed with the formula ab
 
 ### 4.3 Jourilo implications (assessment)
 
-- Provide an MDE and sample-size feasibility helper with these inputs and the same caveats. Do not compute live significance.
+- Provide an MDE and sample-size feasibility helper with these inputs and the same caveats. Live significance is
+  computed only with a sequential (always-valid) test (§4.4), never by re-running a fixed-horizon test at each look.
 - Offer local guardrail checks: each variant must meet the same a11y, CWV-lab and error thresholds as control before traffic is allocated.
 - SRM detection belongs to the experimentation platform. Jourilo can only link to the concept.
+
+### 4.4 Sequential testing: mSPRT with always-valid p-values
+
+`experiment analyze --sequential` (the default with `--from`) uses the mixture sequential probability ratio test
+(mSPRT) of Johari, Koomen, Pekelis and Walsh, the method behind Optimizely's Stats Engine
+([Always Valid Inference, Operations Research 70(3), 2022](https://doi.org/10.1287/opre.2021.2135),
+[arXiv:1512.04922](https://arxiv.org/abs/1512.04922);
+[Optimizely Stats Engine](https://www.optimizely.com/insights/blog/statistics-for-the-internet-age-the-story-behind-optimizelys-new-stats-engine/)).
+For two conversion rates it applies the paper's normal-approximation form to the difference θ = p_b − p_a, with a
+normal mixing distribution N(0, τ²) (Jourilo default τ = 0.1):
+
+```
+θ̂ = x_b/n_b − x_a/n_a          V = p̂_a(1 − p̂_a)/n_a + p̂_b(1 − p̂_b)/n_b
+Λ_n(θ0) = sqrt(V / (V + τ²)) · exp( τ² (θ̂ − θ0)² / (2 V (V + τ²)) )
+p_n = min(p_{n−1}, 1 / Λ_n(0)),  p_0 = 1                          (always-valid p-value)
+CS_n = θ̂ ± sqrt( V (V + τ²) / τ² · (2 ln(1/α) + ln((V + τ²) / V)) ),  intersected with CS_{n−1}
+```
+
+Under no difference Λ_n(0) is a nonnegative martingale with mean 1, so by Ville's inequality the chance that 1/Λ_n
+ever falls to α or below, at any look, is at most α. Stopping at the first look with p_n ≤ α therefore keeps the false
+positive rate at α however often the data is checked, and the confidence sequence covers θ at every look at once
+with probability at least 1 − α. The price is a wider interval at any one look than a fixed-horizon test at its
+planned sample. τ sets which effect sizes the test is most sensitive to; Optimizely tunes it from historical
+experiments, Jourilo uses a fixed default that the user can change with `--tau`.
+
+Jourilo notes (assessment):
+
+- The guarantee holds for repeated independent calls on cumulative totals: the event "some look shows p ≤ α" is
+  the same with or without the running minimum. The running minimum only makes the reported p-value monotone.
+  `sequentialTest` takes an optional `previous` result (its p-value and interval) to apply the minimum and the
+  intersection across calls; the CLI keeps no history, so each `analyze` run reports one look, and a stop decision
+  should be acted on when it appears.
+- The variance is the plug-in normal approximation, so very small samples (a handful of conversions) are
+  approximate; with no variance at all (every visitor in both arms did the same thing) the test reports no
+  evidence. A seeded simulation in `tests/unit/stats.test.ts` (A/A, 1000 looks, 200 experiments) keeps the false
+  stop rate under α.
 
 ---
 
@@ -229,4 +266,4 @@ Worked examples (α = 0.05 two-sided, power = 0.80; computed with the formula ab
 - web.dev: [vitals](https://web.dev/articles/vitals) · [thresholds](https://web.dev/articles/defining-core-web-vitals-thresholds) · [INP](https://web.dev/articles/inp) · [FCP](https://web.dev/articles/fcp) · [TTFB](https://web.dev/articles/ttfb) · [lab vs field](https://web.dev/articles/lab-and-field-data-differences) · [INP March 12](https://web.dev/blog/inp-cwv-march-12)
 - Chrome: [DevTools Performance](https://developer.chrome.com/docs/devtools/performance/overview) · [Lighthouse a11y scoring](https://developer.chrome.com/docs/lighthouse/accessibility/scoring) · [Lighthouse user flows](https://github.com/GoogleChrome/lighthouse/blob/main/docs/user-flows.md) · [web-vitals](https://github.com/GoogleChrome/web-vitals)
 - NN/g: [10 heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/)
-- Stats: [Evan Miller — How Not To Run an A/B Test](https://www.evanmiller.org/how-not-to-run-an-ab-test.html) · [Evan Miller sample size](https://www.evanmiller.org/ab-testing/sample-size.html) · [OriginLab two-proportion power](https://docs.originlab.com/origin-help/pss-two-prop-algorithm/) · [MS ExP SRM](https://www.microsoft.com/en-us/research/articles/diagnosing-sample-ratio-mismatch-in-a-b-testing/) · [MS ExP during-experiment](https://www.microsoft.com/en-us/research/articles/patterns-of-trustworthy-experimentation-during-experiment-stage/) · [Fabijan et al. 2019](https://dl.acm.org/doi/10.1145/3292500.3330722)
+- Stats: [Evan Miller — How Not To Run an A/B Test](https://www.evanmiller.org/how-not-to-run-an-ab-test.html) · [Evan Miller sample size](https://www.evanmiller.org/ab-testing/sample-size.html) · [OriginLab two-proportion power](https://docs.originlab.com/origin-help/pss-two-prop-algorithm/) · [MS ExP SRM](https://www.microsoft.com/en-us/research/articles/diagnosing-sample-ratio-mismatch-in-a-b-testing/) · [MS ExP during-experiment](https://www.microsoft.com/en-us/research/articles/patterns-of-trustworthy-experimentation-during-experiment-stage/) · [Fabijan et al. 2019](https://dl.acm.org/doi/10.1145/3292500.3330722) · [Johari et al., Always Valid Inference](https://doi.org/10.1287/opre.2021.2135) ([arXiv](https://arxiv.org/abs/1512.04922))

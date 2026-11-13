@@ -392,8 +392,18 @@ Subcommands:
   size     --baseline 4% --mde 10% [--absolute] [--alpha 0.05] [--power 0.8] [--variants 2] [--daily-traffic N]
   plan     --finding <fingerprint> [--run latest] [--baseline 4%] [--mde 10%] [--daily-traffic N]
   analyze  --control 120/2400 --variant 150/2380 [--alpha 0.05] [--expected-share 0.5] [--planned N]
+           [--sequential [--tau 0.1]]
   analyze  --from <adapter>:<id> [--metric M] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--control-key K]
-           [--alpha …] [--expected-share …] [--planned N]
+           [--alpha …] [--expected-share …] [--planned N] [--tau 0.1 | --fixed]
+
+analyze modes:
+  fixed        one look at a planned sample: two-proportion z-test, p-value and CI. Default for --control/--variant.
+  --sequential mSPRT (mixture sequential probability ratio test): an always-valid p-value and confidence sequence,
+               so the experiment may be checked after every batch and stopped at the first look that says stop.
+               Default with --from, since a live experiment is checked repeatedly; --fixed opts out there.
+  --tau T      standard deviation of the normal mixing distribution on the difference in rates (default 0.1);
+               sequential only. Each run is one look without history: once a look says stop, act on it.
+  --planned N  fixed only: warns about peeking while fewer than N visitors per arm have arrived.
 
 --from reads the numbers, read-only, from an analytics tool (keys from the environment only, never printed):
   posthog:<id|flag-key>      POSTHOG_API_KEY (personal key: experiment:read, query:read); POSTHOG_HOST

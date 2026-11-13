@@ -49736,9 +49736,9 @@ function cropAt(run, vpName, e, o = {}) {
   const x0 = Math.min(Math.max(0, r.x + r.width / 2 - rw / 2), Math.max(0, vp.width - rw));
   const rh = o.ratio ? rw * o.ratio : Math.min(rw * 0.75, Math.max(160, r.height + pad * 2));
   const y0 = Math.max(0, r.height + pad * 2 <= rh ? r.y + r.height / 2 - rh / 2 : r.y - pad);
-  const pct = (n, of) => `${(n / of * 100).toFixed(2)}%`;
-  const box = `left:${pct(r.x - x0, rw)};top:${pct(r.y - y0, rh)};width:${pct(Math.max(3, r.width), rw)};height:${pct(Math.max(3, r.height), rh)}`;
-  return `<div class="crop" style="aspect-ratio:${Math.round(rw)}/${Math.round(rh)}"><img loading="lazy" alt="" src="${src}" style="width:${pct(vp.width, rw)};left:-${pct(x0, rw)};top:-${pct(y0, rh)}"><div class="box" style="${box}"></div></div>`;
+  const pct2 = (n, of) => `${(n / of * 100).toFixed(2)}%`;
+  const box = `left:${pct2(r.x - x0, rw)};top:${pct2(r.y - y0, rh)};width:${pct2(Math.max(3, r.width), rw)};height:${pct2(Math.max(3, r.height), rh)}`;
+  return `<div class="crop" style="aspect-ratio:${Math.round(rw)}/${Math.round(rh)}"><img loading="lazy" alt="" src="${src}" style="width:${pct2(vp.width, rw)};left:-${pct2(x0, rw)};top:-${pct2(y0, rh)}"><div class="box" style="${box}"></div></div>`;
 }
 var shotOf = (p) => p.screenshot ?? p.foldScreenshot;
 function visualOf(run, f, o = {}) {
@@ -53526,7 +53526,7 @@ function analyze(control, variant, opts = {}) {
   const srmP = chiSquareP(chi, 1);
   const srm = { chiSquare: chi, pValue: srmP, mismatch: srmP < 5e-4, expectedShare: share };
   const significant = pValue < alpha;
-  const pct = (x) => `${(x * 100).toFixed(2)}%`;
+  const pct2 = (x) => `${(x * 100).toFixed(2)}%`;
   const interpretation = [];
   if (srm.mismatch)
     interpretation.push(
@@ -53537,7 +53537,7 @@ function analyze(control, variant, opts = {}) {
       `Only ${Math.min(control.visitors, variant.visitors)} of the planned ${opts.plannedPerVariant} visitors per arm so far: stopping now inflates false positives (peeking). Wait for the planned sample.`
     );
   interpretation.push(
-    significant ? `${variant.name} converted at ${pct(p2)} vs ${pct(p1)} for ${control.name} (difference ${pct(p2 - p1)}, ${(1 - alpha) * 100}% CI ${pct(ciAbsolute[0])} to ${pct(ciAbsolute[1])}); p = ${pValue.toPrecision(3)} < ${alpha}. The difference is statistically significant for this sample.` : `No statistically significant difference: ${pct(p2)} vs ${pct(p1)}, p = ${pValue.toPrecision(3)} \u2265 ${alpha}. The ${(1 - alpha) * 100}% CI for the difference (${pct(ciAbsolute[0])} to ${pct(ciAbsolute[1])}) includes effects of either sign or zero; "no evidence of a difference" is not evidence of no difference.`
+    significant ? `${variant.name} converted at ${pct2(p2)} vs ${pct2(p1)} for ${control.name} (difference ${pct2(p2 - p1)}, ${(1 - alpha) * 100}% CI ${pct2(ciAbsolute[0])} to ${pct2(ciAbsolute[1])}); p = ${pValue.toPrecision(3)} < ${alpha}. The difference is statistically significant for this sample.` : `No statistically significant difference: ${pct2(p2)} vs ${pct2(p1)}, p = ${pValue.toPrecision(3)} \u2265 ${alpha}. The ${(1 - alpha) * 100}% CI for the difference (${pct2(ciAbsolute[0])} to ${pct2(ciAbsolute[1])}) includes effects of either sign or zero; "no evidence of a difference" is not evidence of no difference.`
   );
   interpretation.push(
     "Check guardrail metrics (errors, latency, refunds, retention) before shipping; statistical significance is not business significance."
@@ -53556,6 +53556,46 @@ function analyze(control, variant, opts = {}) {
     srm,
     interpretation
   };
+}
+function sequentialTest(a, b, opts) {
+  for (const [name, arm2] of [
+    ["a", a],
+    ["b", b]
+  ]) {
+    if (!Number.isInteger(arm2.n) || !Number.isInteger(arm2.x) || arm2.n <= 0 || arm2.x < 0 || arm2.x > arm2.n)
+      throw new RangeError(`${name}: n must be a positive integer and 0 \u2264 x \u2264 n`);
+  }
+  const { alpha, previous } = opts;
+  const tau = opts.tau ?? 0.1;
+  if (!(alpha > 0 && alpha < 1)) throw new RangeError("alpha must be between 0 and 1");
+  if (!(tau > 0 && Number.isFinite(tau))) throw new RangeError("tau must be a positive number");
+  if (previous && !(previous.pValue >= 0 && previous.pValue <= 1))
+    throw new RangeError("previous.pValue must be between 0 and 1");
+  const pa = a.x / a.n;
+  const pb = b.x / b.n;
+  const diff = pb - pa;
+  const v = pa * (1 - pa) / a.n + pb * (1 - pb) / b.n;
+  const t2 = tau * tau;
+  let pNow = 1;
+  let interval = [-1, 1];
+  if (v > 0) {
+    const logLambda = 0.5 * Math.log(v / (v + t2)) + t2 * diff * diff / (2 * v * (v + t2));
+    pNow = Math.min(1, Math.exp(-logLambda));
+    const half = Math.sqrt(v * (v + t2) / t2 * (2 * Math.log(1 / alpha) + Math.log((v + t2) / v)));
+    interval = [Math.max(-1, diff - half), Math.min(1, diff + half)];
+  }
+  const pValue = previous ? Math.min(previous.pValue, pNow) : pNow;
+  if (previous) {
+    const lo = Math.max(interval[0], previous.confidenceInterval[0]);
+    const hi = Math.min(interval[1], previous.confidenceInterval[1]);
+    interval = lo <= hi ? [lo, hi] : [...previous.confidenceInterval];
+  }
+  let decision = "continue";
+  if (pValue <= alpha) {
+    const bBetter = interval[0] > 0 || interval[1] >= 0 && diff > 0;
+    decision = bBetter ? "stop-b-better" : "stop-a-better";
+  }
+  return { pValue, decision, confidenceInterval: interval };
 }
 
 // src/experiment/plan.ts
@@ -53790,11 +53830,62 @@ ${data.notes.map((n) => `  - ${n}`).join("\n")}`,
   const toArm = (x) => ({ name: x.name, visitors: x.exposures, conversions: x.conversions });
   return { control: toArm(c), variant: toArm(v), source: { adapter: adapter.name, ...data } };
 }
+function analysisMode(ctx, fromAdapter) {
+  const seq = flag(ctx, "sequential");
+  const fixed = flag(ctx, "fixed");
+  if (seq && fixed) throw new JouriloError("USAGE", "Choose one of --sequential and --fixed.");
+  if (str(ctx, "tau") !== void 0 && (fixed || !seq && !fromAdapter))
+    throw new JouriloError("USAGE", "--tau applies only to a sequential analysis (--sequential, or --from).");
+  const mode = seq ? "sequential" : fixed ? "fixed" : fromAdapter ? "sequential" : "fixed";
+  if (mode === "sequential" && str(ctx, "planned") !== void 0)
+    throw new JouriloError(
+      "USAGE",
+      "--planned applies only to a fixed-horizon analysis; a sequential analysis is valid at every look.",
+      fromAdapter ? "Add --fixed to analyze at the planned sample instead." : void 0
+    );
+  return mode;
+}
+var pct = (x) => `${(x * 100).toFixed(2)}%`;
+function sequentialAnalysis(c, v, fixed, tau) {
+  const alpha = fixed.alpha;
+  const s = sequentialTest(
+    { n: c.visitors, x: c.conversions },
+    { n: v.visitors, x: v.conversions },
+    { alpha, tau }
+  );
+  const level = `${(1 - alpha) * 100}%`;
+  const ci = `${pct(s.confidenceInterval[0])} to ${pct(s.confidenceInterval[1])}`;
+  const rates = `${v.name} ${pct(fixed.variant.rate)} vs ${c.name} ${pct(fixed.control.rate)}`;
+  const interpretation = [];
+  interpretation.push(...fixed.interpretation.filter((l) => l.startsWith("Sample ratio mismatch")));
+  interpretation.push(
+    s.decision === "continue" ? `Continue: ${rates}, always-valid p = ${s.pValue.toPrecision(3)} > ${alpha}; the ${level} confidence sequence for the difference (${ci}) still includes zero. Check again as data arrives; every look is allowed.` : `Stop: ${s.decision === "stop-b-better" ? v.name : c.name} is better (${rates}, always-valid p = ${s.pValue.toPrecision(3)} \u2264 ${alpha}; ${level} confidence sequence for the difference ${ci}). This holds however often the experiment was checked.`,
+    `Sequential test (mSPRT, mixing \u03C4 = ${tau}): valid at every look, so peeking is safe, at the cost of a wider interval than a fixed-horizon test at its planned sample. Each run is one look with no memory: once a look says stop, act on it rather than waiting for a later look to agree.`,
+    fixed.interpretation.at(-1)
+  );
+  return {
+    mode: "sequential",
+    control: fixed.control,
+    variant: fixed.variant,
+    absoluteDiff: fixed.absoluteDiff,
+    relativeLift: fixed.relativeLift,
+    pValue: s.pValue,
+    decision: s.decision,
+    confidenceInterval: s.confidenceInterval,
+    alpha,
+    tau,
+    srm: fixed.srm,
+    interpretation
+  };
+}
 function analyzeArms(ctx, arms) {
   const { control: c, variant: v, source } = arms;
+  const mode = analysisMode(ctx, source !== void 0);
+  const tau = numOpt(ctx, "tau") ?? 0.1;
   let r;
   try {
-    r = analyze(c, v, analyzeOptions(ctx));
+    const fixed = analyze(c, v, analyzeOptions(ctx));
+    r = mode === "sequential" ? sequentialAnalysis(c, v, fixed, tau) : { mode, ...fixed };
   } catch (e) {
     if (e instanceof JouriloError) throw e;
     const where = source ? `${source.adapter}:${source.id}: ` : "";
@@ -53833,14 +53924,27 @@ var experiment = {
     metric: { type: "string" },
     start: { type: "string" },
     end: { type: "string" },
-    "control-key": { type: "string" }
+    "control-key": { type: "string" },
+    sequential: { type: "boolean" },
+    fixed: { type: "boolean" },
+    tau: { type: "string" }
   },
   details: `Subcommands:
   size     --baseline 4% --mde 10% [--absolute] [--alpha 0.05] [--power 0.8] [--variants 2] [--daily-traffic N]
   plan     --finding <fingerprint> [--run latest] [--baseline 4%] [--mde 10%] [--daily-traffic N]
   analyze  --control 120/2400 --variant 150/2380 [--alpha 0.05] [--expected-share 0.5] [--planned N]
+           [--sequential [--tau 0.1]]
   analyze  --from <adapter>:<id> [--metric M] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--control-key K]
-           [--alpha \u2026] [--expected-share \u2026] [--planned N]
+           [--alpha \u2026] [--expected-share \u2026] [--planned N] [--tau 0.1 | --fixed]
+
+analyze modes:
+  fixed        one look at a planned sample: two-proportion z-test, p-value and CI. Default for --control/--variant.
+  --sequential mSPRT (mixture sequential probability ratio test): an always-valid p-value and confidence sequence,
+               so the experiment may be checked after every batch and stopped at the first look that says stop.
+               Default with --from, since a live experiment is checked repeatedly; --fixed opts out there.
+  --tau T      standard deviation of the normal mixing distribution on the difference in rates (default 0.1);
+               sequential only. Each run is one look without history: once a look says stop, act on it.
+  --planned N  fixed only: warns about peeking while fewer than N visitors per arm have arrived.
 
 --from reads the numbers, read-only, from an analytics tool (keys from the environment only, never printed):
   posthog:<id|flag-key>      POSTHOG_API_KEY (personal key: experiment:read, query:read); POSTHOG_HOST
@@ -53921,6 +54025,7 @@ Jourilo never invents traffic, conversions or effects: every number comes from y
 Saved: ${md2}` };
     }
     if (sub === "analyze") {
+      analysisMode(ctx, str(ctx, "from") !== void 0);
       return analyzeArms(ctx, await armsFrom(ctx));
     }
     throw new JouriloError("USAGE", "Use: experiment size | plan | analyze (see --help).");

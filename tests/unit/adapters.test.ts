@@ -617,6 +617,36 @@ describe('experiment analyze --from', () => {
     expect(r.text.startsWith('• ')).toBe(true);
     expect((r.data as { pValue: number }).pValue).toBeCloseTo(0.0511, 3);
   });
+  it('--from is sequential by default, and --fixed opts out', async () => {
+    process.env.POSTHOG_API_KEY = PH_KEY;
+    serve(posthogRoutes());
+    const seq = await run('--from', 'posthog:42');
+    expect(seq.data).toMatchObject({ mode: 'sequential', decision: 'continue', tau: 0.1, alpha: 0.05 });
+    expect((seq.data as { pValue: number }).pValue).toBeGreaterThan(0.0511);
+    expect(seq.data).not.toHaveProperty('significant');
+    expect(seq.text).toMatch(/• Continue: .*always-valid p = /);
+    expect(seq.text).toMatch(/mSPRT, mixing τ = 0\.1/);
+    const fixed = await run('--from', 'posthog:42', '--fixed', '--planned', '5000');
+    expect(fixed.data).toMatchObject({ mode: 'fixed', significant: false });
+    expect((fixed.data as { pValue: number }).pValue).toBeCloseTo(0.0511, 3);
+    expect(fixed.text).toMatch(/peeking/);
+  });
+  it('--sequential opts in for typed-in numbers; conflicting or misplaced flags are usage errors', async () => {
+    const r = await run('--control', '500/10000', '--variant', '650/10000', '--sequential', '--tau', '0.05');
+    expect(r.data).toMatchObject({ mode: 'sequential', decision: 'stop-b-better', tau: 0.05 });
+    expect(r.text).toMatch(/^• Stop: variant is better/);
+    const usage = async (...argv: string[]) => (await failure(run(...argv))).message;
+    const manual = ['--control', '120/2400', '--variant', '150/2380'];
+    expect(await usage(...manual, '--sequential', '--fixed')).toMatch(/one of --sequential and --fixed/);
+    expect(await usage(...manual, '--tau', '0.2')).toMatch(/--tau applies only to a sequential/);
+    expect(await usage(...manual, '--sequential', '--planned', '5000')).toMatch(/--planned applies only/);
+    expect((await failure(run(...manual, '--sequential', '--tau', '0'))).code).toBe('INVALID_INPUT');
+    process.env.POSTHOG_API_KEY = PH_KEY;
+    serve(posthogRoutes());
+    const e = await failure(run('--from', 'posthog:42', '--planned', '5000'));
+    expect([e.code, e.hint]).toEqual(['USAGE', expect.stringMatching(/--fixed/)]);
+    expect(guarded.calls).toEqual([]);
+  });
   it('a refused key names the variable, not the value', async () => {
     process.env.POSTHOG_API_KEY = PH_KEY;
     serve(() => json(`{"detail":"Invalid key ${PH_KEY}"}`, 401));

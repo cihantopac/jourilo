@@ -245,3 +245,80 @@ export function analyze(
     interpretation,
   };
 }
+
+export interface SequentialResult {
+  /** Always-valid p-value for "no difference" (running minimum of 1/Λ over the looks this call knows about). */
+  pValue: number;
+  decision: 'continue' | 'stop-b-better' | 'stop-a-better';
+  /** Always-valid (1 − alpha) confidence sequence for rate(b) − rate(a), as an interval at this look. */
+  confidenceInterval: [number, number];
+}
+
+/**
+ * Mixture sequential probability ratio test (mSPRT) for the difference of two conversion rates, with a normal
+ * mixing distribution N(0, tau²) on the difference (Johari, Koomen, Pekelis & Walsh, "Always Valid Inference",
+ * Operations Research 2022; the method behind Optimizely's Stats Engine). Source: docs/research/standards.md §4.4.
+ *
+ * With θ̂ = x_b/n_b − x_a/n_a and V = p_a(1−p_a)/n_a + p_b(1−p_b)/n_b (the normal approximation), the mixture
+ * likelihood ratio against θ = θ0 is
+ *   Λ(θ0) = sqrt(V / (V + τ²)) · exp( τ² (θ̂ − θ0)² / (2 V (V + τ²)) ),
+ * the always-valid p-value is min over looks of 1/Λ(0), and the confidence sequence is {θ0 : Λ(θ0) < 1/alpha}:
+ *   θ̂ ± sqrt( V (V + τ²) / τ² · (2 ln(1/alpha) + ln((V + τ²) / V)) ).
+ *
+ * "Always valid" means: under no difference, the chance that ANY look ever shows p ≤ alpha is at most alpha, so the
+ * rule "stop at the first look with p ≤ alpha" may be applied after every new batch of data. That already holds for
+ * independent calls on cumulative totals. A single call has no history, though, so its p-value is 1/Λ at this look
+ * and can rise between looks. Pass the previous look's result as `previous` to get the running minimum (p never
+ * increases) and the running intersection of the intervals (the interval never widens). If the intersection is empty
+ * (the normal approximation drifted), the previous interval is kept.
+ */
+export function sequentialTest(
+  a: { n: number; x: number },
+  b: { n: number; x: number },
+  opts: {
+    alpha: number;
+    tau?: number;
+    previous?: Pick<SequentialResult, 'pValue' | 'confidenceInterval'>;
+  },
+): SequentialResult {
+  for (const [name, arm] of [
+    ['a', a],
+    ['b', b],
+  ] as const) {
+    if (!Number.isInteger(arm.n) || !Number.isInteger(arm.x) || arm.n <= 0 || arm.x < 0 || arm.x > arm.n)
+      throw new RangeError(`${name}: n must be a positive integer and 0 ≤ x ≤ n`);
+  }
+  const { alpha, previous } = opts;
+  const tau = opts.tau ?? 0.1;
+  if (!(alpha > 0 && alpha < 1)) throw new RangeError('alpha must be between 0 and 1');
+  if (!(tau > 0 && Number.isFinite(tau))) throw new RangeError('tau must be a positive number');
+  if (previous && !(previous.pValue >= 0 && previous.pValue <= 1))
+    throw new RangeError('previous.pValue must be between 0 and 1');
+
+  const pa = a.x / a.n;
+  const pb = b.x / b.n;
+  const diff = pb - pa;
+  const v = (pa * (1 - pa)) / a.n + (pb * (1 - pb)) / b.n;
+  const t2 = tau * tau;
+  let pNow = 1;
+  let interval: [number, number] = [-1, 1];
+  // V = 0 only when every visitor in both arms did the same thing: no information about the difference yet.
+  if (v > 0) {
+    const logLambda = 0.5 * Math.log(v / (v + t2)) + (t2 * diff * diff) / (2 * v * (v + t2));
+    pNow = Math.min(1, Math.exp(-logLambda));
+    const half = Math.sqrt(((v * (v + t2)) / t2) * (2 * Math.log(1 / alpha) + Math.log((v + t2) / v)));
+    interval = [Math.max(-1, diff - half), Math.min(1, diff + half)];
+  }
+  const pValue = previous ? Math.min(previous.pValue, pNow) : pNow;
+  if (previous) {
+    const lo = Math.max(interval[0], previous.confidenceInterval[0]);
+    const hi = Math.min(interval[1], previous.confidenceInterval[1]);
+    interval = lo <= hi ? [lo, hi] : [...previous.confidenceInterval];
+  }
+  let decision: SequentialResult['decision'] = 'continue';
+  if (pValue <= alpha) {
+    const bBetter = interval[0] > 0 || (interval[1] >= 0 && diff > 0);
+    decision = bBetter ? 'stop-b-better' : 'stop-a-better';
+  }
+  return { pValue, decision, confidenceInterval: interval };
+}
