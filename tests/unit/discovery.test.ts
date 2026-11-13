@@ -209,11 +209,51 @@ export const router = createBrowserRouter([
     });
     const p = await discoverRepository(root);
     expect(pagePaths(p)).toEqual(['/ok', '/pricing', '/signup']);
-    expect(p.limitations).toHaveLength(1);
-    expect(p.limitations[0]).toMatch(
-      /^src\/App\.tsx: the bundled TypeScript parser could not parse this file/,
+    expect(p.limitations).toEqual([
+      '1 code file(s) were read with the regex fallback instead of the bundled TypeScript parser (broken or newer syntax, minified code, or code it could not walk), so their routes can include ones in comments or strings: src/App.tsx.',
+    ]);
+  });
+
+  it('never fails on a minified bundle with a route (the shape that overflowed the AST walk)', async () => {
+    // Field shape: a one-line minified bundle in public/ whose comma sequence nests ~1,500+ levels deep; Flow-typed
+    // .js files (older React apps) do not parse as TypeScript.
+    const terms = Array.from({ length: 5_000 }, (_, i) => `a${i}()`).join(',');
+    const root = reactApp({
+      'public/assets/router.js': `const routes=[{path:"/bundled",component:B}];x=(${terms});`,
+      'public/assets/vendor.min.js': 'var routes=[{path:"/vendored",component:V}];',
+      'src/router.ts': "export const routes = [{ path: '/ok', component: Ok }];",
+      'src/broken.tsx': 'export const App = () => <Routes><Route path="/b"></Routes>;',
+      'src/flow1.js': "// @flow\ntype Props = {| id: number |};\nexport const routes = [{ path: '/f1' }];",
+      'src/flow2.js': "// @flow\ntype Props = {| id: number |};\nexport const routes = [{ path: '/f2' }];",
+    });
+    const p = await discoverRepository(root);
+    expect(pagePaths(p)).toEqual(
+      expect.arrayContaining(['/bundled', '/vendored', '/ok', '/b', '/f1', '/f2']),
     );
-    expect(p.limitations[0]).toMatch(/regex fallback/);
+    // One aggregated line with a count and the first three files.
+    expect(p.limitations).toEqual([
+      '5 code file(s) were read with the regex fallback instead of the bundled TypeScript parser (broken or newer syntax, minified code, or code it could not walk), so their routes can include ones in comments or strings: public/assets/router.js, public/assets/vendor.min.js, src/broken.tsx and 2 more.',
+    ]);
+  });
+
+  it('falls back to the regexes when the AST walk throws', async () => {
+    const real = await import('../../src/discovery/ast/parser.js');
+    vi.mocked(loadTsParser).mockResolvedValueOnce({
+      parser: {
+        parseSource: real.parseSource,
+        astRoutes: () => {
+          throw new RangeError('Maximum call stack size exceeded');
+        },
+      },
+    });
+    const p = await discoverRepository(
+      reactApp({ 'src/router.ts': "export const routes = [{ path: '/still-found' }];" }),
+    );
+    expect(pagePaths(p)).toEqual(['/still-found']);
+    expect(p.limitations).toHaveLength(1);
+    expect(p.limitations![0]).toMatch(
+      /^1 code file\(s\) were read with the regex fallback.*: src\/router\.ts\.$/,
+    );
   });
 
   it('does not load the parser when no code file declares routes', async () => {

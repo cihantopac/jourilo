@@ -120,9 +120,26 @@ const router = createRouter({ history: createWebHistory(), routes });
     const src = `export const routes: Routes = [
   { path: 'heroes', component: HeroesComponent },
   { path: '', redirectTo: '/heroes', pathMatch: 'full' },
+  { 'path': 'villains', 'loadComponent': () => import('./villains') },
 ];
 export const seed = { path: 'data/seed.json', encoding: 'utf8' };`;
-    expect(paths('src/app/app.routes.ts', src)).toEqual(['/heroes', '/']);
+    expect(paths('src/app/app.routes.ts', src)).toEqual(['/heroes', '/villains']);
+  });
+
+  it('skips records that only redirect', () => {
+    const src = `const routes = [
+  { path: '/old', redirect: '/new' },
+  { path: '/new', component: New },
+  { path: '/docs', redirect: '/docs/intro', children: [{ path: 'intro', component: Intro }] },
+];`;
+    expect(paths('src/router/index.ts', src)).toEqual(['/new', '/docs', '/docs/intro']);
+  });
+
+  it('walks code nested far deeper than the call stack allows', () => {
+    // A minifier's comma sequence is one left-nested binary expression: 20,000 terms overflow a recursive walk.
+    const terms = Array.from({ length: 20_000 }, (_, i) => `a${i}()`).join(',\n');
+    const src = `const routes = [{ path: '/deep', component: Deep }];\nx = (${terms});\n`;
+    expect(paths('src/router.ts', src)).toEqual(['/deep']);
   });
 
   it('returns null for a broken file', () => {

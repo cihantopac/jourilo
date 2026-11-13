@@ -42,17 +42,26 @@ function componentOf(node: ts.Node | undefined): string | undefined {
   if (ts.isJsxElement(node)) return node.openingElement.tagName.getText();
   if (ts.isParenthesizedExpression(node)) return componentOf(node.expression);
   if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
-    let found: string | undefined;
-    const visit = (n: ts.Node) => {
-      if (found) return;
+    // Iterative: a lazy component's body may be arbitrarily deep.
+    const stack: ts.Node[] = [node];
+    while (stack.length) {
+      const n = stack.pop()!;
       if (ts.isCallExpression(n) && n.expression.kind === ts.SyntaxKind.ImportKeyword)
-        found = literal(n.arguments[0]);
-      else ts.forEachChild(n, visit);
-    };
-    visit(node);
-    return found;
+        return literal(n.arguments[0]);
+      stack.push(...childrenOf(n).reverse());
+    }
+    return undefined;
   }
   return undefined;
+}
+
+/** A node's children in source order (ts.forEachChild stops early when the callback returns a truthy value). */
+function childrenOf(node: ts.Node): ts.Node[] {
+  const out: ts.Node[] = [];
+  ts.forEachChild(node, (c) => {
+    out.push(c);
+  });
+  return out;
 }
 
 function calleeName(call: ts.CallExpression): string | undefined {
@@ -71,20 +80,18 @@ function jsxAttr(attrs: ts.JsxAttributes, name: string): ts.Node | undefined {
   return undefined;
 }
 
-/** Keys that make an object with a relative `path` a route record rather than some other configuration. */
-const ROUTE_KEYS = new Set([
+/** Keys that make a route record render a page. */
+const PAGE_KEYS = new Set([
   'component',
   'Component',
   'element',
   'children',
-  'redirect',
-  'redirectTo',
-  'name',
   'lazy',
   'loadComponent',
   'loadChildren',
-  'meta',
 ]);
+/** Keys that make an object with a relative `path` a route record rather than some other configuration. */
+const ROUTE_KEYS = new Set([...PAGE_KEYS, 'redirect', 'redirectTo', 'name', 'meta']);
 
 /** TanStack Router: `$postId` → `:postId`. */
 const tanstackPath = (p: string) => p.replace(/(^|\/)\$([A-Za-z_]\w*)/g, '$1:$2');
@@ -100,7 +107,16 @@ export function astRoutes(file: string, sf: ts.SourceFile): AstRoute[] {
   const tanstack = new Map<string, { path: string; parent?: string; node: ts.Node; component?: string }>();
   const tanstackArgs = new Set<ts.Node>();
 
-  const visit = (node: ts.Node, prefix: string, inRouter: boolean): void => {
+  // An explicit stack, not recursion: minified code nests thousands of levels deep (a long comma sequence is one
+  // left-nested binary expression), which would overflow the call stack.
+  const stack: { node: ts.Node; prefix: string; inRouter: boolean }[] = [
+    { node: sf, prefix: '', inRouter: false },
+  ];
+  const queue = (nodes: readonly ts.Node[], prefix: string, inRouter: boolean) => {
+    for (let i = nodes.length - 1; i >= 0; i--) stack.push({ node: nodes[i]!, prefix, inRouter });
+  };
+  while (stack.length) {
+    const { node, prefix, inRouter } = stack.pop()!;
     // TanStack Router: const postRoute = createRoute({ getParentRoute: () => postsRoute, path: '$postId' })
     if (ts.isCallExpression(node) && calleeName(node) === 'createRoute') {
       const arg = node.arguments[0];
@@ -128,17 +144,19 @@ export function astRoutes(file: string, sf: ts.SourceFile): AstRoute[] {
       ts.isCallExpression(node) &&
       /^create(Browser|Hash|Memory|Static)?Router$|^useRoutes$/.test(calleeName(node) ?? '')
     ) {
-      ts.forEachChild(node, (c) => visit(c, prefix, true));
-      return;
+      queue(childrenOf(node), prefix, true);
+      continue;
     }
     // Route records: { path: 'settings', component: Settings, children: [{ path: 'profile' }] }
     if (ts.isObjectLiteralExpression(node) && !tanstackArgs.has(node) && (inRouter || routerFile)) {
       const path = literal(prop(node, 'path'));
       // A top-level relative path ('heroes', Angular style) counts only on an object that looks like a route.
-      const routeLike =
-        path?.startsWith('/') ||
-        prefix ||
-        node.properties.some((p) => p.name && ROUTE_KEYS.has(p.name.getText()));
+      const keys = node.properties.map((p) => (p.name ? propName(p.name) : undefined));
+      const routeLike = path?.startsWith('/') || prefix || keys.some((k) => k && ROUTE_KEYS.has(k));
+      // A record that only redirects (`{ path: '', redirectTo: '/heroes' }`) is not a page.
+      const redirectOnly =
+        keys.some((k) => k === 'redirect' || k === 'redirectTo') && !keys.some((k) => k && PAGE_KEYS.has(k));
+      if (path !== undefined && redirectOnly) continue;
       if (path !== undefined && routeLike) {
         const full = joinPath(prefix, path);
         push(
@@ -147,8 +165,8 @@ export function astRoutes(file: string, sf: ts.SourceFile): AstRoute[] {
           'Router config',
           componentOf(prop(node, 'component') ?? prop(node, 'Component') ?? prop(node, 'element')),
         );
-        ts.forEachChild(node, (c) => visit(c, full, inRouter));
-        return;
+        queue(childrenOf(node), full, inRouter);
+        continue;
       }
     }
     // <Route path="/a"><Route path="b" /></Route>
@@ -165,13 +183,12 @@ export function astRoutes(file: string, sf: ts.SourceFile): AstRoute[] {
             'React Router',
             componentOf(jsxAttr(opening.attributes, 'element') ?? jsxAttr(opening.attributes, 'component')),
           );
-        if (ts.isJsxElement(node)) for (const c of node.children) visit(c, full, inRouter);
-        return;
+        if (ts.isJsxElement(node)) queue(node.children, full, inRouter);
+        continue;
       }
     }
-    ts.forEachChild(node, (c) => visit(c, prefix, inRouter));
-  };
-  visit(sf, '', false);
+    queue(childrenOf(node), prefix, inRouter);
+  }
 
   // TanStack routes join their parent's path (a leading "/" does not make them absolute); the root route
   // (createRootRoute) has none.

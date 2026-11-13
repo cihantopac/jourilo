@@ -51616,6 +51616,16 @@ function roleOf(path2) {
 }
 var AST_FILE = /\.(tsx?|jsx?|mjs|vue|svelte)$/;
 var MAY_DECLARE_ROUTES = /<Route\b|\bpath\s*:/;
+var isMinified = (file2, text) => /\.min\.[cm]?js$/.test(file2) || /^.{2000}/m.test(text);
+function astFileRoutes(ast, file2, text) {
+  if (!ast.parser || isMinified(file2, text)) return null;
+  try {
+    const sf = ast.parser.parseSource(file2, text);
+    return sf ? ast.parser.astRoutes(file2, sf) : null;
+  } catch {
+    return null;
+  }
+}
 function fileRoutes(appRoot, files, frameworks, ast) {
   const routes = [];
   const add = (path2, file2, kind, framework, dynamic) => {
@@ -51692,18 +51702,15 @@ function fileRoutes(appRoot, files, frameworks, ast) {
     if (AST_FILE.test(f)) {
       const text = read2(join21(appRoot, f));
       if (!MAY_DECLARE_ROUTES.test(text)) continue;
-      const sf = ast.parser?.parseSource(f, text);
-      if (sf) {
-        for (const r of ast.parser.astRoutes(f, sf)) {
+      const astRoutes = astFileRoutes(ast, f, text);
+      if (astRoutes) {
+        for (const r of astRoutes) {
           if (!r.path || r.path.includes("*") || r.path.length > 120) continue;
           add(r.path, f, "page", r.router ?? "Router config", /[:{]/.test(r.path));
         }
         continue;
       }
-      if (ast.parser)
-        ast.limitations.push(
-          `${f}: the bundled TypeScript parser could not parse this file (broken or newer syntax); its routes were read with the regex fallback, which can include routes in comments or strings.`
-        );
+      if (ast.parser) ast.fallback.add(toPosix(relative5(ast.root, join21(appRoot, f))));
     }
     for (const [fileRe, re, label] of codeRoute) {
       if (!fileRe.test(f)) continue;
@@ -51812,7 +51819,7 @@ async function discoverRepository(root) {
   const files = walk(root);
   const gaps = [];
   const limitations = [];
-  const ast = { parser: null, limitations };
+  const ast = { root, parser: null, fallback: /* @__PURE__ */ new Set() };
   if (files.some((f) => AST_FILE.test(f) && MAY_DECLARE_ROUTES.test(read2(join21(root, f))))) {
     const loaded = await loadTsParser();
     if ("parser" in loaded) ast.parser = loaded.parser;
@@ -51983,6 +51990,11 @@ async function discoverRepository(root) {
     gaps.push(
       "No analytics library detected: funnel metrics for experiments must be instrumented or supplied."
     );
+  const fallback = [...ast.fallback].sort();
+  if (fallback.length)
+    limitations.push(
+      `${fallback.length} code file(s) were read with the regex fallback instead of the bundled TypeScript parser (broken or newer syntax, minified code, or code it could not walk), so their routes can include ones in comments or strings: ${fallback.slice(0, 3).join(", ")}${fallback.length > 3 ? ` and ${fallback.length - 3} more` : ""}.`
+    );
   const markilo = files.find(
     (f) => /(^|\/)(brand|branding)\/brands\/[^/]+\/(exports\/tokens\/)?tokens\.json$/.test(f) || /(^|\/)branding\/markilo\.json$/.test(f)
   ) ?? null;
@@ -52012,7 +52024,7 @@ async function discoverRepository(root) {
     candidateJourneys,
     integrations: { markilo, searvex },
     gaps,
-    limitations: [...new Set(limitations)]
+    limitations
   };
 }
 
@@ -52131,7 +52143,7 @@ function repoText(p) {
     p.integrations.searvex ? `  Searvex data: ${p.integrations.searvex}` : "",
     "  Gaps:",
     ...p.gaps.map((g) => `    - ${g}`),
-    ...p.limitations.length ? ["  Limitations:", ...p.limitations.map((l) => `    - ${l}`)] : []
+    ...p.limitations?.length ? ["  Limitations:", ...p.limitations.map((l) => `    - ${l}`)] : []
   );
   return lines.filter(Boolean).join("\n");
 }

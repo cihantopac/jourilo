@@ -46,7 +46,7 @@ function repoText(p: ProductProfile): string {
     p.integrations.searvex ? `  Searvex data: ${p.integrations.searvex}` : '',
     '  Gaps:',
     ...p.gaps.map((g) => `    - ${g}`),
-    ...(p.limitations.length ? ['  Limitations:', ...p.limitations.map((l) => `    - ${l}`)] : []),
+    ...(p.limitations?.length ? ['  Limitations:', ...p.limitations.map((l) => `    - ${l}`)] : []),
   );
   return lines.filter(Boolean).join('\n');
 }

@@ -57,7 +57,7 @@ export interface ProductProfile {
   integrations: { markilo: string | null; searvex: string | null };
   gaps: string[];
   /** What discovery could not do as intended, e.g. a file read with the regex fallback instead of the parser. */
-  limitations: string[];
+  limitations?: string[];
 }
 
 const SKIP = new Set([
@@ -224,10 +224,27 @@ const AST_FILE = /\.(tsx?|jsx?|mjs|vue|svelte)$/;
 /** A code file that may declare routes: the parser is only loaded (and run) for these. */
 const MAY_DECLARE_ROUTES = /<Route\b|\bpath\s*:/;
 
-/** The bundled parser for this discovery (null when it could not be loaded) and the limitations it records. */
+/** Minified or generated code: not parsed (a single huge line is slow to parse and deep to walk). */
+const isMinified = (file: string, text: string) => /\.min\.[cm]?js$/.test(file) || /^.{2000}/m.test(text);
+
+/** The bundled parser for this discovery (null when it could not be loaded) and the files read without it. */
 interface AstContext {
+  root: string;
   parser: TsParser | null;
-  limitations: string[];
+  /** Repository-relative files whose routes were read with the regex fallback. */
+  fallback: Set<string>;
+}
+
+/** Routes from the syntax tree, or null when the file must use the regex fallback. Never throws. */
+function astFileRoutes(ast: AstContext, file: string, text: string) {
+  if (!ast.parser || isMinified(file, text)) return null;
+  try {
+    const sf = ast.parser.parseSource(file, text);
+    return sf ? ast.parser.astRoutes(file, sf) : null;
+  } catch {
+    // Review Focus 2: e.g. a RangeError on code nested too deeply. The file falls back; discovery goes on.
+    return null;
+  }
 }
 
 function fileRoutes(appRoot: string, files: string[], frameworks: string[], ast: AstContext): RouteInfo[] {
@@ -325,19 +342,16 @@ function fileRoutes(appRoot: string, files: string[], frameworks: string[], ast:
     if (AST_FILE.test(f)) {
       const text = read(join(appRoot, f));
       if (!MAY_DECLARE_ROUTES.test(text)) continue;
-      const sf = ast.parser?.parseSource(f, text);
-      if (sf) {
-        for (const r of ast.parser!.astRoutes(f, sf)) {
+      const astRoutes = astFileRoutes(ast, f, text);
+      if (astRoutes) {
+        for (const r of astRoutes) {
           if (!r.path || r.path.includes('*') || r.path.length > 120) continue;
           add(r.path, f, 'page', r.router ?? 'Router config', /[:{]/.test(r.path));
         }
         continue;
       }
-      // Review Focus 2: syntax the bundled parser cannot read never fails discovery; the regexes take over.
-      if (ast.parser)
-        ast.limitations.push(
-          `${f}: the bundled TypeScript parser could not parse this file (broken or newer syntax); its routes were read with the regex fallback, which can include routes in comments or strings.`,
-        );
+      // Review Focus 2: a file the parser cannot handle never fails discovery; the regexes take over.
+      if (ast.parser) ast.fallback.add(toPosix(relative(ast.root, join(appRoot, f))));
     }
     for (const [fileRe, re, label] of codeRoute) {
       if (!fileRe.test(f)) continue;
@@ -466,7 +480,7 @@ export async function discoverRepository(root: string): Promise<ProductProfile> 
   const gaps: string[] = [];
   const limitations: string[] = [];
   // The parser chunk is loaded only when a code file may declare routes.
-  const ast: AstContext = { parser: null, limitations };
+  const ast: AstContext = { root, parser: null, fallback: new Set() };
   if (files.some((f) => AST_FILE.test(f) && MAY_DECLARE_ROUTES.test(read(join(root, f))))) {
     const loaded = await loadTsParser();
     if ('parser' in loaded) ast.parser = loaded.parser;
@@ -680,6 +694,12 @@ export async function discoverRepository(root: string): Promise<ProductProfile> 
       'No analytics library detected: funnel metrics for experiments must be instrumented or supplied.',
     );
 
+  const fallback = [...ast.fallback].sort();
+  if (fallback.length)
+    limitations.push(
+      `${fallback.length} code file(s) were read with the regex fallback instead of the bundled TypeScript parser (broken or newer syntax, minified code, or code it could not walk), so their routes can include ones in comments or strings: ${fallback.slice(0, 3).join(', ')}${fallback.length > 3 ? ` and ${fallback.length - 3} more` : ''}.`,
+    );
+
   const markilo =
     files.find(
       (f) =>
@@ -713,6 +733,6 @@ export async function discoverRepository(root: string): Promise<ProductProfile> 
     candidateJourneys,
     integrations: { markilo, searvex },
     gaps,
-    limitations: [...new Set(limitations)],
+    limitations,
   };
 }
