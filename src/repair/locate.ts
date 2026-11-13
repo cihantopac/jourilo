@@ -345,6 +345,57 @@ export function tokensFor(f: Finding): Token[] {
         regex: /onpaste\s*=|addEventListener\(\s*['"]paste['"]|onPaste\s*=/i,
       });
       break;
+    case 'jourilo/button-implicit-submit':
+      add({
+        value: '<button>',
+        weight: 4,
+        reason: '<button> without a type',
+        scope: 'markup',
+        regex: /<button\b(?![^>]*\btype\s*=)/i,
+      });
+      for (const e of f.evidence) {
+        const label = e.data?.buttonName;
+        if (typeof label === 'string')
+          add({
+            value: label,
+            weight: 5,
+            reason: `button text "${label}"`,
+            scope: 'markup',
+            regex: new RegExp(escapeRe(label), 'i'),
+          });
+      }
+      break;
+    case 'jourilo/focus-obscured':
+      // The root cause is the covering bar's own rule (sticky or fixed), not the element that was covered.
+      for (const e of f.evidence) {
+        const d = e.data ?? {};
+        const kind = String(d.coverPosition ?? 'covering');
+        const names: string[] = [];
+        if (typeof d.coverBarId === 'string' && d.coverBarId) names.push(`#${d.coverBarId}`);
+        if (typeof d.coverBarClasses === 'string')
+          for (const c of d.coverBarClasses.split(/\s+/).filter(Boolean)) names.push(`.${c}`);
+        for (const n of names)
+          add({
+            value: n,
+            weight: 9,
+            reason: `styles the ${kind} bar ${n}`,
+            scope: 'style',
+            regex: new RegExp(`(^|[^\\w-])${escapeRe(n)}($|[^\\w-])`),
+          });
+        const tag =
+          typeof d.coverBarSelector === 'string'
+            ? /([a-z][a-z0-9-]*)(?::[\w-()]+)?$/i.exec(d.coverBarSelector)?.[1]
+            : null;
+        if (tag)
+          add({
+            value: tag,
+            weight: 6,
+            reason: `styles the ${kind} bar <${tag}>`,
+            scope: 'style',
+            regex: new RegExp(`^\\s*${escapeRe(tag)}\\s*[,{]`, 'i'),
+          });
+      }
+      break;
     case 'axe/meta-viewport':
       add({
         value: 'user-scalable',

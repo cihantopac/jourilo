@@ -295,6 +295,16 @@ export function keyboardFindings(obs: PageObservation): Finding[] {
           selector: s.selector,
           rect: s.rect,
           snippet: stopSnippet(s),
+          // What a fixer needs to size scroll-padding-top; none of it is page text.
+          data: {
+            ...(s.coverSelector ? { coverSelector: s.coverSelector } : {}),
+            ...(s.coverBarSelector ? { coverBarSelector: s.coverBarSelector } : {}),
+            ...(s.coverBarId ? { coverBarId: s.coverBarId } : {}),
+            ...(s.coverBarClasses ? { coverBarClasses: s.coverBarClasses } : {}),
+            ...(s.coverPosition ? { coverPosition: s.coverPosition } : {}),
+            ...(s.coverTop !== undefined ? { coverTop: s.coverTop } : {}),
+            ...(s.coverHeight !== undefined ? { coverHeight: s.coverHeight } : {}),
+          },
           ...shot,
         })),
         occurrences: obscured.length,

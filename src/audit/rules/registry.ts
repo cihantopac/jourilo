@@ -48,6 +48,14 @@ export const RULES: RuleInfo[] = [
     ['WCAG 2.2 2.4.11'],
   ),
   rule(
+    'jourilo/button-implicit-submit',
+    'usability',
+    'defect',
+    'moderate',
+    'A button with no type submits its form although its name is not a submit word',
+    ['Nielsen usability heuristic #5'],
+  ),
+  rule(
     'jourilo/keyboard-trap',
     'accessibility',
     'varies',

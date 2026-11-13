@@ -20,7 +20,8 @@ export type Concept =
   | 'trustLogos'
   | 'pricingPeriod'
   | 'freeTrial'
-  | 'toggle-ui';
+  | 'toggle-ui'
+  | 'submit';
 
 const LEX: Record<Concept, string[]> = {
   destructive: [
@@ -112,7 +113,6 @@ const LEX: Record<Concept, string[]> = {
   vagueCta: [
     'submit',
     'send',
-    'go',
     'click here',
     'here',
     'ok',
@@ -180,7 +180,6 @@ const LEX: Record<Concept, string[]> = {
     'register',
     'create( an)? account',
     'get started',
-    'join',
     'new-password',
     'kayıt ol',
     'üye ol',
@@ -409,6 +408,80 @@ const LEX: Record<Concept, string[]> = {
     'prueba gratuita',
     'essai gratuit',
     'essayer gratuitement',
+  ],
+  // What a form's submit button says: a typeless button with one of these names is the form's submit button, not a
+  // control that submits by accident (jourilo/button-implicit-submit). Grows with the lexicon (it/pt/nl in 1.4.0).
+  submit: [
+    // en
+    'submit',
+    'send( message)?',
+    'save( changes)?',
+    'continue',
+    'next',
+    'log ?in',
+    'sign ?in',
+    'sign ?up',
+    'register',
+    'create( an?)? account',
+    'subscribe',
+    'search',
+    'go',
+    'apply',
+    'confirm',
+    'update',
+    'join',
+    'pay( now)?',
+    'place (the )?order',
+    'checkout',
+    // tr
+    'gönder',
+    'kaydet',
+    'devam( et)?',
+    'ileri',
+    'giriş( yap)?',
+    'oturum aç',
+    'kayıt ol',
+    'üye ol',
+    'abone ol',
+    'ara',
+    'onayla',
+    'tamam',
+    'güncelle',
+    'öde',
+    // de
+    'absenden',
+    'senden',
+    'speichern',
+    'weiter',
+    'anmelden',
+    'einloggen',
+    'registrieren',
+    'suchen',
+    'bestätigen',
+    'abonnieren',
+    // es
+    'enviar',
+    'guardar',
+    'continuar',
+    'siguiente',
+    'iniciar sesión',
+    'acceder',
+    'registrarse',
+    'crear( una)? cuenta',
+    'buscar',
+    'confirmar',
+    'suscribirse',
+    // fr
+    'envoyer',
+    'enregistrer',
+    'continuer',
+    'suivant',
+    'se connecter',
+    's.inscrire',
+    'rechercher',
+    'valider',
+    'confirmer',
+    's.abonner',
   ],
   // Appearance and language switches: controls that change how the page looks, not where the funnel goes.
   'toggle-ui': [

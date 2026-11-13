@@ -39750,7 +39750,6 @@ var LEX = {
   vagueCta: [
     "submit",
     "send",
-    "go",
     "click here",
     "here",
     "ok",
@@ -39818,7 +39817,6 @@ var LEX = {
     "register",
     "create( an)? account",
     "get started",
-    "join",
     "new-password",
     "kay\u0131t ol",
     "\xFCye ol",
@@ -40047,6 +40045,80 @@ var LEX = {
     "prueba gratuita",
     "essai gratuit",
     "essayer gratuitement"
+  ],
+  // What a form's submit button says: a typeless button with one of these names is the form's submit button, not a
+  // control that submits by accident (jourilo/button-implicit-submit). Grows with the lexicon (it/pt/nl in 1.4.0).
+  submit: [
+    // en
+    "submit",
+    "send( message)?",
+    "save( changes)?",
+    "continue",
+    "next",
+    "log ?in",
+    "sign ?in",
+    "sign ?up",
+    "register",
+    "create( an?)? account",
+    "subscribe",
+    "search",
+    "go",
+    "apply",
+    "confirm",
+    "update",
+    "join",
+    "pay( now)?",
+    "place (the )?order",
+    "checkout",
+    // tr
+    "g\xF6nder",
+    "kaydet",
+    "devam( et)?",
+    "ileri",
+    "giri\u015F( yap)?",
+    "oturum a\xE7",
+    "kay\u0131t ol",
+    "\xFCye ol",
+    "abone ol",
+    "ara",
+    "onayla",
+    "tamam",
+    "g\xFCncelle",
+    "\xF6de",
+    // de
+    "absenden",
+    "senden",
+    "speichern",
+    "weiter",
+    "anmelden",
+    "einloggen",
+    "registrieren",
+    "suchen",
+    "best\xE4tigen",
+    "abonnieren",
+    // es
+    "enviar",
+    "guardar",
+    "continuar",
+    "siguiente",
+    "iniciar sesi\xF3n",
+    "acceder",
+    "registrarse",
+    "crear( una)? cuenta",
+    "buscar",
+    "confirmar",
+    "suscribirse",
+    // fr
+    "envoyer",
+    "enregistrer",
+    "continuer",
+    "suivant",
+    "se connecter",
+    "s.inscrire",
+    "rechercher",
+    "valider",
+    "confirmer",
+    "s.abonner"
   ],
   // Appearance and language switches: controls that change how the page looks, not where the funnel goes.
   "toggle-ui": [
@@ -41965,6 +42037,12 @@ var FOCUS_INFO = `(el) => {
     if (!hit || hit === el || el.contains(hit) || hit.contains(el)) { visiblePts++; continue; }
     if (isCover(hit)) cover = cover || hit;
   }
+  let bar = cover;
+  for (let a = cover; a && a.nodeType === 1; a = a.parentElement) {
+    const pos = getComputedStyle(a).position;
+    if (pos === 'fixed' || pos === 'sticky') { bar = a; break; }
+  }
+  const barRect = bar ? bar.getBoundingClientRect() : null;
   const noBox = (e) => { const b = e.getBoundingClientRect(); return b.width <= 1 || b.height <= 1; };
   const rootHost = el.getRootNode && el.getRootNode().host;
   // A stop with text or an accessible name is content a person can reach, so a hidden one is a real focus-visible
@@ -41987,6 +42065,12 @@ var FOCUS_INFO = `(el) => {
     rect: { x: Math.round(r.left + sx), y: Math.round(r.top + sy), width: Math.round(r.width), height: Math.round(r.height) },
     obscured: !selfHidden && inViewport > 0 && visiblePts === 0 && !!cover,
     coverSelector: cover ? sel(cover) : undefined,
+    coverBarSelector: bar ? sel(bar) : undefined,
+    coverBarId: bar && bar.id ? bar.id : undefined,
+    coverBarClasses: bar && typeof bar.className === 'string' && bar.className.trim() ? bar.className.trim().replace(/\\s+/g, ' ').slice(0, 120) : undefined,
+    coverPosition: bar ? getComputedStyle(bar).position : undefined,
+    coverTop: barRect ? Math.round(barRect.top) : undefined,
+    coverHeight: barRect ? Math.ceil(barRect.height) : undefined,
     inModal: !!el.closest('[aria-modal="true"], dialog[open], [role="dialog"], [role="alertdialog"]'),
     boxless,
   };
@@ -44391,7 +44475,7 @@ function formScreenshotFile(url, selector, vp, primaryOrigin) {
   const hash = shortHash(originFreeName(url, primaryOrigin), selector);
   return toPosix(`screenshots/form-${hash.slice(0, 8)}-${vp.name}.jpg`);
 }
-async function probeFormValidation(ctx, url, form, vp, policy, runDir, wait) {
+async function probeEmptySubmission(ctx, url, form, vp, policy, runDir, wait) {
   const page = await ctx.newPage();
   const guard = await installRequestGuard(page, {
     ...policy,
@@ -44574,6 +44658,113 @@ async function probeFormValidation(ctx, url, form, vp, policy, runDir, wait) {
     await guard.detach();
     await page.close().catch(() => void 0);
   }
+}
+var IMPLICIT_BUTTONS = `(sel) => {
+  const form = document.querySelector(sel);
+  if (!form) return [];
+  const path = (e) => {
+    if (e.id && document.querySelectorAll('#' + CSS.escape(e.id)).length === 1) return '#' + CSS.escape(e.id);
+    const same = Array.from(form.querySelectorAll('button:not([type])'));
+    return sel + ' button:not([type]):nth-of-type(' + (same.indexOf(e) + 1) + ')';
+  };
+  return Array.from(form.querySelectorAll('button:not([type])')).map((b, index) => {
+    const attrs = ['id', 'class', 'aria-label', 'name']
+      .filter((a) => b.hasAttribute(a))
+      .map((a) => ' ' + a + '="' + b.getAttribute(a).replace(/\\s+/g, ' ').trim().slice(0, 80).replace(/"/g, '&quot;') + '"');
+    return {
+      index,
+      selector: path(b),
+      name: (b.getAttribute('aria-label') || b.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 80),
+      markup: '<button' + attrs.join('') + '>',
+      disabled: b.disabled,
+    };
+  });
+}`;
+var WATCH_SUBMIT = `(() => {
+  window.__jouriloSubmits = 0;
+  window.addEventListener('submit', (e) => { window.__jouriloSubmits++; e.preventDefault(); }, true);
+})()`;
+async function probeImplicitSubmit(ctx, url, form, vp, policy, wait) {
+  const page = await ctx.newPage();
+  const guard = await installRequestGuard(page, {
+    ...policy,
+    allowDestructive: false,
+    origin: new URL(url).origin,
+    mode: policy.allowSubmit ? "journey" : "read-only"
+  });
+  const findings = [];
+  try {
+    await page.goto(url, { waitUntil: "load", timeout: 3e4 });
+    await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
+    if (wait?.waitFor && !await waitForElement(page, wait.waitFor, wait.timeoutMs ?? 3e4))
+      return findings;
+    const buttons = await page.evaluate(`(${IMPLICIT_BUTTONS})(${JSON.stringify(form.selector)})`).catch(() => []);
+    const submitWord = lexicon("submit");
+    const candidates = buttons.filter((b) => !b.disabled && b.name && !submitWord.test(b.name));
+    if (!candidates.length) return findings;
+    await page.evaluate(WATCH_SUBMIT);
+    for (const b of candidates.slice(0, 5)) {
+      const payment = await page.evaluate(
+        `(() => { const f = document.querySelector(${JSON.stringify(form.selector)}); return !!f && !!f.querySelector('input[autocomplete^="cc-"], input[name*="card" i], input[name*="cvc" i]'); })()`
+      ).catch(() => false);
+      const verdict = checkAction(
+        { action: "click", name: b.name, submitsForm: true, paymentForm: payment },
+        policy
+      );
+      if (!verdict.allowed) continue;
+      const button = page.locator(form.selector).locator("button:not([type])").nth(b.index);
+      await page.evaluate(
+        `(() => { window.__jouriloSubmits = 0; const f = document.querySelector(${JSON.stringify(form.selector)}); if (f) f.noValidate = true; })()`
+      );
+      await button.click({ timeout: 5e3 }).catch(() => void 0);
+      await page.waitForTimeout(150);
+      const submits = await page.evaluate("window.__jouriloSubmits").catch(() => 0);
+      if (!submits) continue;
+      findings.push(
+        makeFinding({
+          ruleId: "jourilo/button-implicit-submit",
+          key: `${form.selector} ${b.selector}`,
+          title: `"${excerpt(b.name, 40)}" button submits the form because it has no type`,
+          category: "usability",
+          kind: "defect",
+          severity: "moderate",
+          confidence: "high",
+          provenance: "observed",
+          url: redactUrl(url),
+          viewport: vp.name,
+          description: `A <button> with no type attribute inside \`${form.selector}\` fired a submit event when clicked. Its name, "${excerpt(b.name, 60)}", is not a submit word, so the form is sent by accident.`,
+          impact: "A control that is meant to do something else (reveal a password, open a menu, close a panel) also sends the form, with whatever is typed so far.",
+          recommendation: 'Give the button type="button". A button that should send the form keeps type="submit".',
+          standards: [nielsen(5)],
+          evidence: [
+            {
+              type: "element",
+              selector: b.selector,
+              snippet: excerpt(`${b.markup}${b.name}`, 240),
+              data: { buttonName: b.name, form: form.selector }
+            }
+          ],
+          reproduction: [
+            `Open ${redactUrl(url)} (${vp.name}).`,
+            `Click "${b.name}" in \`${form.selector}\`.`,
+            "Observe that the form fires a submit event."
+          ]
+        })
+      );
+    }
+    return findings;
+  } catch {
+    return findings;
+  } finally {
+    await guard.detach();
+    await page.close().catch(() => void 0);
+  }
+}
+async function probeFormValidation(ctx, url, form, vp, policy, runDir, wait) {
+  const out = await probeEmptySubmission(ctx, url, form, vp, policy, runDir, wait);
+  if (out.result.outcome !== "blocked" && out.result.outcome !== "skipped" && out.result.outcome !== "error")
+    out.findings.push(...await probeImplicitSubmit(ctx, url, form, vp, policy, wait));
+  return out;
 }
 
 // src/journeys/runner.ts
@@ -45472,6 +45663,16 @@ function keyboardFindings(obs) {
           selector: s.selector,
           rect: s.rect,
           snippet: stopSnippet(s),
+          // What a fixer needs to size scroll-padding-top; none of it is page text.
+          data: {
+            ...s.coverSelector ? { coverSelector: s.coverSelector } : {},
+            ...s.coverBarSelector ? { coverBarSelector: s.coverBarSelector } : {},
+            ...s.coverBarId ? { coverBarId: s.coverBarId } : {},
+            ...s.coverBarClasses ? { coverBarClasses: s.coverBarClasses } : {},
+            ...s.coverPosition ? { coverPosition: s.coverPosition } : {},
+            ...s.coverTop !== void 0 ? { coverTop: s.coverTop } : {},
+            ...s.coverHeight !== void 0 ? { coverHeight: s.coverHeight } : {}
+          },
           ...shot
         })),
         occurrences: obscured.length
@@ -47410,6 +47611,53 @@ function tokensFor(f) {
         regex: /onpaste\s*=|addEventListener\(\s*['"]paste['"]|onPaste\s*=/i
       });
       break;
+    case "jourilo/button-implicit-submit":
+      add({
+        value: "<button>",
+        weight: 4,
+        reason: "<button> without a type",
+        scope: "markup",
+        regex: /<button\b(?![^>]*\btype\s*=)/i
+      });
+      for (const e of f.evidence) {
+        const label = e.data?.buttonName;
+        if (typeof label === "string")
+          add({
+            value: label,
+            weight: 5,
+            reason: `button text "${label}"`,
+            scope: "markup",
+            regex: new RegExp(escapeRe(label), "i")
+          });
+      }
+      break;
+    case "jourilo/focus-obscured":
+      for (const e of f.evidence) {
+        const d = e.data ?? {};
+        const kind = String(d.coverPosition ?? "covering");
+        const names = [];
+        if (typeof d.coverBarId === "string" && d.coverBarId) names.push(`#${d.coverBarId}`);
+        if (typeof d.coverBarClasses === "string")
+          for (const c of d.coverBarClasses.split(/\s+/).filter(Boolean)) names.push(`.${c}`);
+        for (const n of names)
+          add({
+            value: n,
+            weight: 9,
+            reason: `styles the ${kind} bar ${n}`,
+            scope: "style",
+            regex: new RegExp(`(^|[^\\w-])${escapeRe(n)}($|[^\\w-])`)
+          });
+        const tag = typeof d.coverBarSelector === "string" ? /([a-z][a-z0-9-]*)(?::[\w-()]+)?$/i.exec(d.coverBarSelector)?.[1] : null;
+        if (tag)
+          add({
+            value: tag,
+            weight: 6,
+            reason: `styles the ${kind} bar <${tag}>`,
+            scope: "style",
+            regex: new RegExp(`^\\s*${escapeRe(tag)}\\s*[,{]`, "i")
+          });
+      }
+      break;
     case "axe/meta-viewport":
       add({
         value: "user-scalable",
@@ -49042,6 +49290,134 @@ var placeholderLabel = (f, _root, read3) => {
     ]
   };
 };
+function buttonTags(text) {
+  const out = [];
+  for (const m of text.matchAll(/<button(?=[\s>/])/g)) {
+    let i = m.index + m[0].length;
+    let quote = "";
+    let depth = 0;
+    for (; i < text.length; i++) {
+      const c = text[i];
+      if (quote) {
+        if (c === quote) quote = "";
+      } else if (c === '"' || c === "'" || depth > 0 && c === "`") quote = c;
+      else if (c === "{") depth++;
+      else if (c === "}") depth = Math.max(0, depth - 1);
+      else if (c === ">" && depth === 0) break;
+    }
+    if (i < text.length) out.push({ start: m.index, end: i + 1, tag: text.slice(m.index, i + 1) });
+  }
+  return out;
+}
+var buttonType = (f, _root, read3) => {
+  const e = f.evidence.find((x) => typeof x.data?.buttonName === "string");
+  if (!e) return null;
+  const name = String(e.data.buttonName);
+  const id = e.snippet?.match(/\bid="([^"]+)"/)?.[1];
+  for (const s of f.sources ?? []) {
+    const text = read3(s.file);
+    if (!text) continue;
+    const scored = buttonTags(text).filter((t) => !/\stype\s*=/.test(t.tag) && !/\{\s*\.\.\./.test(t.tag)).map((t) => {
+      const after2 = text.slice(t.end, t.end + name.length + 200).replace(/\s+/g, " ");
+      const label = new RegExp(`^\\s*(?:<[^>]+>\\s*)*${escRe(name)}`).test(after2);
+      const named = new RegExp(`aria-label=["']${escRe(name)}["']`).test(t.tag);
+      const byId = !!id && new RegExp(`\\bid=["']${escRe(id)}["']`).test(t.tag);
+      const line = text.slice(0, t.start).split("\n").length;
+      return { t, score: (byId ? 4 : 0) + (label || named ? 2 : 0), dist: Math.abs(line - s.line) };
+    }).filter((x) => x.score > 0).sort((a, b) => b.score - a.score || a.dist - b.dist);
+    const best = scored[0];
+    if (!best || scored[1] && scored[1].score === best.score && scored[1].dist === best.dist) continue;
+    const after = `${text.slice(0, best.t.start)}<button type="button"${text.slice(best.t.start + "<button".length)}`;
+    return {
+      ...base(
+        f,
+        `Add type="button" to the "${name}" button`,
+        'A button with no type is a submit button inside a form. type="button" keeps it from sending the form.',
+        "Clicking the button no longer fires a submit event; the form is sent only by its submit button."
+      ),
+      edits: [{ file: s.file, before: text, after }],
+      assumptions: [
+        `Confirm "${name}" is not meant to submit the form. If it is, give it type="submit" instead of this change.`
+      ]
+    };
+  }
+  return null;
+};
+var GLOBAL_CSS = [
+  "src/app/globals.css",
+  "app/globals.css",
+  "src/styles/globals.css",
+  "styles/globals.css",
+  "src/styles/global.css",
+  "src/global.css",
+  "src/index.css",
+  "src/styles.css",
+  "src/style.css",
+  "src/main.css",
+  "styles.css",
+  "style.css",
+  "site.css",
+  "main.css",
+  "global.css",
+  "index.css"
+];
+var isCss = (file2) => /\.(css|scss|less)$/.test(file2);
+function withScrollPadding(css, px) {
+  const decl = `scroll-padding-top: ${px}px`;
+  const rule2 = /(^|[}\s,;])(html)(\s*)\{([^}]*)\}/g;
+  for (const m of css.matchAll(rule2)) {
+    const body = m[4];
+    const cur = body.match(/scroll-padding-top\s*:\s*([^;}]+)/);
+    let nextBody;
+    if (cur) {
+      if (cur[1].trim() === `${px}px`) return null;
+      nextBody = body.replace(/scroll-padding-top\s*:\s*[^;}]+/, decl);
+    } else {
+      const indent = body.match(/\n([ \t]+)\S/)?.[1] ?? "  ";
+      const kept = body.replace(/\s*$/, "");
+      const semi = kept.trim() && !kept.trim().endsWith(";") ? ";" : "";
+      nextBody = body.includes("\n") ? `${kept}${semi}
+${indent}${decl};
+` : `${kept}${semi} ${decl}; `;
+    }
+    const start = m.index + m[1].length;
+    return `${css.slice(0, start)}html${m[3]}{${nextBody}}${css.slice(m.index + m[0].length)}`;
+  }
+  return `${css.replace(/\n*$/, "\n")}
+html {
+  ${decl};
+}
+`;
+}
+var scrollPadding = (f, _root, read3) => {
+  const bars = f.evidence.map((e) => e.data).filter(
+    (d) => d && (d.coverPosition === "sticky" || d.coverPosition === "fixed") && Number(d.coverTop) <= 8 && Number(d.coverHeight) > 0
+  );
+  if (!bars.length) return null;
+  const px = Math.max(...bars.map((d) => Number(d.coverHeight)));
+  const located = (f.sources ?? []).map((s) => s.file).find(isCss);
+  const candidates = [...located ? [located] : [], ...GLOBAL_CSS];
+  for (const file2 of candidates) {
+    const text = read3(file2);
+    if (text === null) continue;
+    const after = withScrollPadding(text, px);
+    if (after === null) return null;
+    return {
+      ...base(
+        f,
+        `Set scroll-padding-top: ${px}px on html`,
+        `The ${String(bars[0].coverPosition)} bar covers elements that scroll to the top edge. scroll-padding-top keeps scrolled-to and focused elements clear of it.`,
+        "Focused elements are no longer hidden behind the bar (WCAG 2.4.11)."
+      ),
+      edits: [{ file: file2, before: text, after }],
+      assumptions: [
+        `${px}px is the bar's measured height at the audited viewport; if it changes with the breakpoint, set scroll-padding-top there too (or from a CSS variable).`,
+        ...file2 === located ? [] : [`No located stylesheet defines the bar; ${file2} is the global stylesheet by convention.`]
+      ]
+    };
+  }
+  return null;
+};
 var FIXERS = {
   "axe/html-has-lang": htmlLang,
   "jourilo/missing-viewport-meta": viewportMeta,
@@ -49049,7 +49425,9 @@ var FIXERS = {
   "jourilo/focus-visible": focusVisible,
   "jourilo/paste-blocked": pasteAllowed,
   "jourilo/unsized-images": imageDimensions,
-  "jourilo/placeholder-label": placeholderLabel
+  "jourilo/placeholder-label": placeholderLabel,
+  "jourilo/button-implicit-submit": buttonType,
+  "jourilo/focus-obscured": scrollPadding
 };
 function utf8OrNull(buf) {
   const text = buf.toString("utf8");
@@ -51207,7 +51585,7 @@ async function benchFixture(dir, wsRoot) {
       if (!f?.recommendation.includes(r.includes))
         missed.push({ rule: r.rule, path: r.path, why: `recommendation should include "${r.includes}"` });
     }
-    const falsePositives = expected.mustNotFind.filter((e) => run.findings.some((f) => matches(f, e))).map((e) => ({ rule: e.rule, path: e.path, ...e.why ? { why: e.why } : {} }));
+    const falsePositives = expected.mustNotFind.filter((e) => run.findings.some((f) => matches(f, e) && evidenceOk(f, e))).map((e) => ({ rule: e.rule, path: e.path, ...e.why ? { why: e.why } : {} }));
     const limits = expected.maxDefects ? [expected.maxDefects].flat() : [];
     const excessDefects = [];
     for (const lim of limits) {
@@ -53087,7 +53465,7 @@ var optimize = {
   },
   details: `Deterministic fixers (others are reported with source candidates for a person or agent to fix):
   axe/html-has-lang, jourilo/missing-viewport-meta, jourilo/input-purpose, jourilo/focus-visible, jourilo/paste-blocked,
-  jourilo/unsized-images, jourilo/placeholder-label
+  jourilo/unsized-images, jourilo/placeholder-label, jourilo/button-implicit-submit, jourilo/focus-obscured
 Options:
   --repo PATH      Repository to fix (default: the run's repo, else the current directory)
   --rule ID        Only fix findings of this rule (repeatable)
@@ -53500,6 +53878,14 @@ var RULES = [
     "serious",
     "Focused element is hidden behind other content",
     ["WCAG 2.2 2.4.11"]
+  ),
+  rule(
+    "jourilo/button-implicit-submit",
+    "usability",
+    "defect",
+    "moderate",
+    "A button with no type submits its form although its name is not a submit word",
+    ["Nielsen usability heuristic #5"]
   ),
   rule(
     "jourilo/keyboard-trap",

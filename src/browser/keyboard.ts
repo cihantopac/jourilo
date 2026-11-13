@@ -17,6 +17,16 @@ export interface FocusStop {
   obscured: boolean;
   /** Selector of the content covering the element, when obscured. */
   coverSelector?: string;
+  /**
+   * The bar doing the covering: the cover itself, or its nearest fixed or sticky ancestor. Its computed position, its
+   * top edge in the viewport and its height let a fixer size scroll-padding-top.
+   */
+  coverBarSelector?: string;
+  coverBarId?: string;
+  coverBarClasses?: string;
+  coverPosition?: string;
+  coverTop?: number;
+  coverHeight?: number;
   inModal: boolean;
   /**
    * The stop has no box to draw an indicator on (its rect, measured while focused, is at most 1 px wide or tall and
@@ -115,6 +125,12 @@ const FOCUS_INFO = `(el) => {
     if (!hit || hit === el || el.contains(hit) || hit.contains(el)) { visiblePts++; continue; }
     if (isCover(hit)) cover = cover || hit;
   }
+  let bar = cover;
+  for (let a = cover; a && a.nodeType === 1; a = a.parentElement) {
+    const pos = getComputedStyle(a).position;
+    if (pos === 'fixed' || pos === 'sticky') { bar = a; break; }
+  }
+  const barRect = bar ? bar.getBoundingClientRect() : null;
   const noBox = (e) => { const b = e.getBoundingClientRect(); return b.width <= 1 || b.height <= 1; };
   const rootHost = el.getRootNode && el.getRootNode().host;
   // A stop with text or an accessible name is content a person can reach, so a hidden one is a real focus-visible
@@ -137,6 +153,12 @@ const FOCUS_INFO = `(el) => {
     rect: { x: Math.round(r.left + sx), y: Math.round(r.top + sy), width: Math.round(r.width), height: Math.round(r.height) },
     obscured: !selfHidden && inViewport > 0 && visiblePts === 0 && !!cover,
     coverSelector: cover ? sel(cover) : undefined,
+    coverBarSelector: bar ? sel(bar) : undefined,
+    coverBarId: bar && bar.id ? bar.id : undefined,
+    coverBarClasses: bar && typeof bar.className === 'string' && bar.className.trim() ? bar.className.trim().replace(/\\s+/g, ' ').slice(0, 120) : undefined,
+    coverPosition: bar ? getComputedStyle(bar).position : undefined,
+    coverTop: barRect ? Math.round(barRect.top) : undefined,
+    coverHeight: barRect ? Math.ceil(barRect.height) : undefined,
     inModal: !!el.closest('[aria-modal="true"], dialog[open], [role="dialog"], [role="alertdialog"]'),
     boxless,
   };

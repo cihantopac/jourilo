@@ -113,7 +113,7 @@ export async function benchFixture(dir: string, wsRoot: string): Promise<Fixture
         missed.push({ rule: r.rule, path: r.path, why: `recommendation should include "${r.includes}"` });
     }
     const falsePositives = expected.mustNotFind
-      .filter((e) => run.findings.some((f) => matches(f, e)))
+      .filter((e) => run.findings.some((f) => matches(f, e) && evidenceOk(f, e)))
       .map((e) => ({ rule: e.rule, path: e.path, ...(e.why ? { why: e.why } : {}) }));
     const limits = expected.maxDefects ? [expected.maxDefects].flat() : [];
     const excessDefects: FixtureResult['excessDefects'] = [];

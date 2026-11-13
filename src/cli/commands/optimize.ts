@@ -55,7 +55,7 @@ export const optimize: Command = {
   },
   details: `Deterministic fixers (others are reported with source candidates for a person or agent to fix):
   axe/html-has-lang, jourilo/missing-viewport-meta, jourilo/input-purpose, jourilo/focus-visible, jourilo/paste-blocked,
-  jourilo/unsized-images, jourilo/placeholder-label
+  jourilo/unsized-images, jourilo/placeholder-label, jourilo/button-implicit-submit, jourilo/focus-obscured
 Options:
   --repo PATH      Repository to fix (default: the run's repo, else the current directory)
   --rule ID        Only fix findings of this rule (repeatable)
