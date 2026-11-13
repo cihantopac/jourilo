@@ -43754,6 +43754,7 @@ async function newContext(browser, vp, opts) {
 function observe(page, origin) {
   const consoleEntries = [];
   const network = [];
+  const scripts = { firstParty: 0 };
   let ignored = () => false;
   page.on("console", (msg) => {
     const t = msg.type();
@@ -43776,6 +43777,9 @@ function observe(page, origin) {
       return false;
     }
   };
+  page.on("request", (req) => {
+    if (req.resourceType() === "script" && !ignored(req.url()) && firstParty(req.url())) scripts.firstParty++;
+  });
   page.on("requestfailed", (req) => {
     if (ignored(req.url())) return;
     const failure = req.failure()?.errorText ?? "failed";
@@ -43802,6 +43806,7 @@ function observe(page, origin) {
   return {
     console: consoleEntries,
     network,
+    scripts,
     ignore: (fn) => {
       ignored = fn;
     }
@@ -43972,6 +43977,7 @@ async function capturePage(ctx, url, vp, opts) {
     loadMs: 0,
     console: live.console,
     network: live.network,
+    scriptRequests: live.scripts,
     vitals: null,
     probe: null,
     axe: null,
@@ -47504,6 +47510,21 @@ function performanceFindings(obs) {
   return out;
 }
 
+// src/audit/stale-server.ts
+var STALE_SERVER_LIMITATION = "Every page's own scripts failed (5xx or no answer) \u2014 this looks like a stale or different server on the port, not a site defect. Check that the dev server you meant to test is the one listening, then rerun.";
+function staleServerSuspect(observations) {
+  const pages = new Set(observations.map((o) => o.finalUrl));
+  if (pages.size < 2) return null;
+  for (const o of observations) {
+    const failed = o.network.filter(
+      (n) => n.firstParty && n.resourceType === "script" && ((n.status ?? 0) >= 500 || n.failure !== void 0)
+    ).length;
+    const total = o.scriptRequests?.firstParty ?? 0;
+    if (failed === 0 || failed < total) return null;
+  }
+  return STALE_SERVER_LIMITATION;
+}
+
 // src/audit/engine.ts
 var PAGE_RULES = {
   axe: axeFindings,
@@ -47974,6 +47995,8 @@ async function runAudit(ws, opts) {
         );
       }
     }
+    const staleServer = staleServerSuspect(observations);
+    if (staleServer) limitations.push(staleServer);
     let findings = [...formFindings];
     for (const obs of opts.inventoryOnly ? [] : observations) {
       const rules2 = obs.status !== null && obs.status >= 400 ? [PAGE_RULES.reliability] : Object.values(PAGE_RULES);

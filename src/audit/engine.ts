@@ -68,6 +68,7 @@ import {
   widgetFindings,
 } from './rules/accessibility.js';
 import { performanceFindings, reliabilityFindings, responsiveFindings } from './rules/experience.js';
+import { staleServerSuspect } from './stale-server.js';
 
 export type Rule = (obs: PageObservation) => Finding[];
 
@@ -702,6 +703,9 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
         );
       }
     }
+
+    const staleServer = staleServerSuspect(observations);
+    if (staleServer) limitations.push(staleServer);
 
     // 4. Findings.
     let findings: Finding[] = [...formFindings];

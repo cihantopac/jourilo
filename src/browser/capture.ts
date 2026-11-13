@@ -129,6 +129,8 @@ export interface PageObservation {
   foldScreenshot?: string;
   console: ConsoleEntry[];
   network: NetworkFailure[];
+  /** Own-origin script requests the page made (live count, like `network`); lets a run tell "all failed" from "some". */
+  scriptRequests?: { firstParty: number };
   vitals: RawVitals | null;
   /** Min/max per vital when vitals are medians of several runs. */
   vitalsSpread?: Record<string, [number, number]>;
@@ -212,9 +214,15 @@ export async function newContext(
 export function observe(
   page: Page,
   origin: string,
-): { console: ConsoleEntry[]; network: NetworkFailure[]; ignore(fn: (url: string) => boolean): void } {
+): {
+  console: ConsoleEntry[];
+  network: NetworkFailure[];
+  scripts: { firstParty: number };
+  ignore(fn: (url: string) => boolean): void;
+} {
   const consoleEntries: ConsoleEntry[] = [];
   const network: NetworkFailure[] = [];
+  const scripts = { firstParty: 0 };
   // Requests Jourilo itself aborted (safety guard) are not failures of the site.
   let ignored: (url: string) => boolean = () => false;
   page.on('console', (msg) => {
@@ -239,6 +247,9 @@ export function observe(
       return false;
     }
   };
+  page.on('request', (req) => {
+    if (req.resourceType() === 'script' && !ignored(req.url()) && firstParty(req.url())) scripts.firstParty++;
+  });
   page.on('requestfailed', (req) => {
     if (ignored(req.url())) return;
     const failure = req.failure()?.errorText ?? 'failed';
@@ -267,6 +278,7 @@ export function observe(
   return {
     console: consoleEntries,
     network,
+    scripts,
     ignore: (fn) => {
       ignored = fn;
     },
@@ -496,6 +508,7 @@ export async function capturePage(
     loadMs: 0,
     console: live.console,
     network: live.network,
+    scriptRequests: live.scripts,
     vitals: null,
     probe: null,
     axe: null,

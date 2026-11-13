@@ -136,6 +136,9 @@ Stated so nobody mistakes silence for a pass.
   reach only its own port. It does not cover other private ranges (use the default guard for public targets), and it
   is refused with `--browser webkit` because WebKit's HTTPS redirects bypass the proxy. A blocked request appears in
   the run's limitations and can show as an error page for that URL.
+- Jourilo does not start the server it audits. When at least two pages were captured and every own-origin script
+  request of every page failed (5xx or no answer), the run adds one limitation saying this looks like a stale or
+  different server on the port; the failures are still reported as findings.
 - `--proxy` (or `HTTPS_PROXY` / `HTTP_PROXY`) chains to an upstream HTTP proxy behind the guard. The guard still
   resolves and checks every destination, then asks the proxy for a tunnel to the checked address, never to the name:
   `CONNECT 93.184.216.34:443` for HTTPS and WebSockets, and `CONNECT 93.184.216.34:80` for plain HTTP, whose request
