@@ -275,14 +275,22 @@ const MENU_TRIGGERS = `(() => {
   const visible = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
   const out = [];
   for (const b of document.querySelectorAll('[aria-haspopup="menu"], [aria-haspopup="true"]')) {
-    if (out.length >= 4 || !visible(b) || b.disabled || b.getAttribute('aria-disabled') === 'true') continue;
+    if (out.length >= 12 || !visible(b) || b.disabled || b.getAttribute('aria-disabled') === 'true') continue;
     if (b.closest('[role="menu"], [role="menubar"]')) continue;
+    const name = (b.getAttribute('aria-label') || b.innerText || b.getAttribute('title') || '').replace(/\\s+/g, ' ').trim().slice(0, 80);
     const id = 'jourilo-menu-' + out.length;
     b.setAttribute('data-jourilo-menu', id);
     const r = b.getBoundingClientRect();
-    out.push({ id, name: (b.getAttribute('aria-label') || b.innerText || b.getAttribute('title') || '').replace(/\\s+/g, ' ').trim().slice(0, 80), rect: { x: Math.round(r.left + scrollX), y: Math.round(r.top + scrollY), width: Math.round(r.width), height: Math.round(r.height) } });
+    const href = b.tagName === 'A' ? b.getAttribute('href') || '' : '';
+    out.push({ id, name, link: b.tagName === 'A' && !/^(#.*)?$|^javascript:/i.test(href), rect: { x: Math.round(r.left + scrollX), y: Math.round(r.top + scrollY), width: Math.round(r.width), height: Math.round(r.height) } });
   }
   return out;
+})()`;
+
+// Visible menus before the trigger is operated: an always-visible role="menu" (a nav list) is not the popup.
+const MENU_SNAPSHOT = `(() => {
+  const visible = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+  window.__jouriloMenusBefore = Array.from(document.querySelectorAll('[role="menu"]')).filter(visible);
 })()`;
 
 const MENU_STATE = `(id) => {
@@ -290,9 +298,10 @@ const MENU_STATE = `(id) => {
   const b = document.querySelector('[data-jourilo-menu="' + id + '"]');
   if (!b) return null;
   const controls = (b.getAttribute('aria-controls') || '').split(/\\s+/).map((i) => document.getElementById(i)).filter(Boolean);
-  const menus = controls.filter((e) => e.getAttribute('role') === 'menu');
-  if (!menus.length) menus.push(...Array.from(document.querySelectorAll('[role="menu"]')));
-  const menu = menus.find(visible);
+  const before = window.__jouriloMenusBefore || [];
+  // The popup is a menu the trigger controls or labels, or one that became visible after the trigger was operated.
+  const mine = (m) => controls.includes(m) || (b.id && (m.getAttribute('aria-labelledby') || '').split(/\\s+/).includes(b.id)) || !before.includes(m);
+  const menu = Array.from(document.querySelectorAll('[role="menu"]')).find((m) => visible(m) && mine(m));
   const ae = document.activeElement;
   if (!menu) return { open: false, items: 0, pos: -1, onTrigger: ae === b };
   const items = Array.from(menu.querySelectorAll('[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]')).filter((e) => visible(e) && e.getAttribute('aria-disabled') !== 'true');
@@ -305,36 +314,57 @@ async function checkMenus(page: Page, out: WidgetCheck): Promise<void> {
   const found = (await page.evaluate(MENU_TRIGGERS).catch(() => [])) as {
     id: string;
     name: string;
+    link: boolean;
     rect: Rect;
   }[];
+  // Candidates are tagged by index (up to 12); at most 4 that pass the name filter are operated.
   type MenuState = { open: boolean; items: number; pos: number; onTrigger: boolean } | null;
   const startUrl = page.url();
-  for (const m of found) {
-    if (DESTRUCTIVE.test(m.name) || FINANCIAL.test(m.name) || AVOID.test(m.name)) continue;
+  // Leave the page as it was found after every attempt: back to the start URL if it navigated, and no popup, dialog or
+  // menu left open (Escape first, a reload if something is still showing). The marks are put back after a reload.
+  const settle = async (id: string): Promise<void> => {
+    let dirty = page.url() !== startUrl;
+    if (dirty) await page.goto(startUrl, { waitUntil: 'load' }).catch(() => undefined);
+    else {
+      await page.keyboard.press('Escape').catch(() => undefined);
+      await page.waitForTimeout(150);
+      dirty = !!(await page
+        .evaluate(
+          `(() => {
+            const visible = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+            const b = document.querySelector('[data-jourilo-menu="${id}"]');
+            const open = Array.from(document.querySelectorAll('[role="menu"], [role="dialog"], [role="alertdialog"], dialog[open]'));
+            const before = window.__jouriloMenusBefore || [];
+            return !b || b.getAttribute('aria-expanded') === 'true' || open.some((e) => visible(e) && !before.includes(e));
+          })()`,
+        )
+        .catch(() => true));
+      if (dirty) await page.reload({ waitUntil: 'load' }).catch(() => undefined);
+    }
+    if (dirty) await page.evaluate(MENU_TRIGGERS).catch(() => undefined);
+  };
+  const checkMenu = async (m: { id: string; name: string; link: boolean; rect: Rect }): Promise<void> => {
     const trigger = page.locator(`[data-jourilo-menu="${m.id}"]`).first();
     const selector = `[aria-haspopup][data-jourilo-menu="${m.id}"]`;
     const read = () => page.evaluate(`(${MENU_STATE})(${JSON.stringify(m.id)})`) as Promise<MenuState>;
     const issue = (kind: WidgetIssue['kind'], detail: string, steps: string[]) =>
       out.issues.push({ kind, trigger: selector, name: m.name, rect: m.rect, detail, steps });
     let opened: MenuState = null;
-    try {
-      await trigger.focus({ timeout: 2000 });
+    await page.evaluate(MENU_SNAPSHOT);
+    await trigger.focus({ timeout: 2000 });
+    // Enter on a link follows it; a link trigger is opened with ArrowDown only.
+    if (!m.link) {
       await page.keyboard.press('Enter');
       await page.waitForTimeout(300);
       opened = await read();
-      if (!opened?.open) {
-        await trigger.focus({ timeout: 2000 });
-        await page.keyboard.press('ArrowDown');
-        await page.waitForTimeout(300);
-        opened = await read();
-      }
-    } catch {
-      continue;
     }
-    if (!opened?.open || opened.items < 2) {
-      await restoreMenuPage(page, startUrl, !!opened?.open);
-      continue;
+    if (!opened?.open) {
+      await trigger.focus({ timeout: 2000 });
+      await page.keyboard.press('ArrowDown');
+      await page.waitForTimeout(300);
+      opened = await read();
     }
+    if (!opened?.open || opened.items < 2) return;
     const last = opened.items - 1;
     const open = [`Focus the menu button "${m.name}" and press Enter to open its menu.`];
     let cur = opened;
@@ -378,8 +408,7 @@ async function checkMenus(page: Page, out: WidgetCheck): Promise<void> {
         ...open,
         'Press Escape: the menu stays open.',
       ]);
-      await restoreMenuPage(page, startUrl, true);
-      continue;
+      return;
     }
     if (!closed?.onTrigger)
       issue(
@@ -387,21 +416,23 @@ async function checkMenus(page: Page, out: WidgetCheck): Promise<void> {
         'After Escape closed the menu, focus did not return to the menu button.',
         [...open, 'Press Escape: the menu closes, but focus is not on the menu button.'],
       );
+  };
+  let tested = 0;
+  for (const m of found) {
+    if (DESTRUCTIVE.test(m.name) || FINANCIAL.test(m.name) || AVOID.test(m.name)) continue;
+    if (tested++ >= 4) break;
+    try {
+      await checkMenu(m);
+    } catch {
+      // The page may have navigated or closed under the keyboard; it is restored below.
+    }
+    await settle(m.id);
   }
   await page
     .evaluate(
       `document.querySelectorAll('[data-jourilo-menu]').forEach((e) => e.removeAttribute('data-jourilo-menu'))`,
     )
     .catch(() => undefined);
-}
-
-// Leave the page as it was found: reload when the URL changed or a menu would not close.
-async function restoreMenuPage(page: Page, startUrl: string, menuStillOpen: boolean): Promise<void> {
-  if (page.url() !== startUrl) await page.goto(startUrl, { waitUntil: 'load' }).catch(() => undefined);
-  else if (menuStillOpen) await page.reload({ waitUntil: 'load' }).catch(() => undefined);
-  else return;
-  // The reload dropped the marks; the same selector walk puts the same ids back on the same buttons.
-  await page.evaluate(MENU_TRIGGERS).catch(() => undefined);
 }
 
 export async function checkWidgets(page: Page): Promise<WidgetCheck> {
@@ -506,6 +537,9 @@ export async function checkWidgets(page: Page): Promise<WidgetCheck> {
         });
       // Restore the original state.
       if (after.controlledVisible !== before.controlledVisible) {
+        // Focus may have moved into the opened content (a menu item that is a link): press Enter on the trigger,
+        // never on whatever has focus.
+        await loc.focus({ timeout: 2000 }).catch(() => undefined);
         await page.keyboard.press('Enter').catch(() => undefined);
         await page.waitForTimeout(200);
       }
