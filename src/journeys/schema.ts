@@ -126,8 +126,8 @@ export function validateJourney(raw: unknown, source = 'journey'): JourneySpec {
         !(Number.isInteger(index) && (index as number) >= 0)
       )
         errs.push(`steps[${i}] (switchTab): index must be a whole number from 0`);
-      else if (step.action === 'switchTab' && index === undefined && urlMatch === undefined)
-        errs.push(`steps[${i}] (switchTab): index or urlMatch is required`);
+      else if (step.action === 'switchTab' && (index === undefined) === (urlMatch === undefined))
+        errs.push(`steps[${i}] (switchTab): index or urlMatch is required, not both`);
     }
   });
   (j.success ?? []).forEach((c, i) => {

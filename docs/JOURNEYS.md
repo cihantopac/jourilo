@@ -47,17 +47,27 @@ Steps act on the current tab. A click that opens a popup or a `target="_blank"` 
 - `waitForPopup` makes the next popup or new tab the page opened (the first one whose URL matches `urlMatch`, if
   given) the current tab, and waits for it to load.
 - `switchTab` makes another open tab current: `index` counts the open tabs in the order they were opened (0 is the
-  journey's first tab), `urlMatch` picks the first open tab whose URL matches.
+  journey's first tab), `urlMatch` picks the first open tab whose URL matches. Give one of the two, not both.
 - `closeTab` closes the current tab. It refuses to close the last one.
 
 When the current tab closes (a sign-in popup that closes itself, or `closeTab`), the tab that opened it becomes
 current again. Each step's screenshot and URL come from the tab that is current after it.
 
-The safety policy holds in every tab. A popup or tab may only load the journey's own origin or an origin given with
-`--allow-origin`; any other navigation is stopped before the request leaves the browser and the step is `blocked`.
-This includes a popup the page opens on its own, without a step asking for it. Clicks and key presses in a tab on
-another origin are judged by that origin's host: on a non-local identity provider, submitting needs `--allow-submit`,
-and payments or deletions never run.
+The safety policy holds in every tab, including a popup the page opens on its own without a step asking for it:
+
+- A tab's top-level navigations may only go to the journey's own origin or an origin given with `--allow-origin`.
+  Every hop of a redirect chain is checked: Jourilo makes each top-level navigation itself without following
+  redirects, judges the redirect's target, and only then lets the browser go on (as a new navigation, checked the
+  same way). A navigation or redirect to any other origin is stopped before any request is sent to it, and the step
+  is `blocked`. Embedded frames, scripts, images and other subresources are not limited to these origins.
+- In a tab on a non-local origin other than the journey's (a popup on a hosted test identity provider), clicks, key
+  presses and the requests that page sends are judged by that host, not the journey's: submitting a form there needs
+  `--allow-submit`, and deletions and payments are never sent, even when a local journey runs with
+  `--allow-destructive`. A navigation to such an origin is judged the same way. Background requests of the
+  journey's own pages keep the journey's rules, so a local app can still call a payment provider in test mode with
+  `--allow-destructive`.
+- A redirect that resends a form (307 or 308 after a POST) is followed only for URL-encoded forms; any other is
+  stopped and reported, because it cannot be rebuilt hop by hop.
 
 A sign-in through an OAuth popup, against a test identity provider you are authorized to use:
 

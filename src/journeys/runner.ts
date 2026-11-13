@@ -347,6 +347,39 @@ async function act(tabs: Tabs, step: Step, opts: JourneyRunOptions): Promise<str
   }
 }
 
+/**
+ * Hands out what the request guard stopped, one step at a time. Each `take()` returns the stops since the previous
+ * one, so a stop between two steps (during a screenshot, or a popup the page opens a moment later) is charged to the
+ * next step, and one after the last step's check to the last step, instead of going unreported. Only navigations and
+ * destructive or financial requests count: a stopped background form post is reported with the journey, not a step.
+ */
+export function stopLedger(blocked: readonly BlockedRequest[]): { take(): BlockedRequest[] } {
+  let seen = 0;
+  return {
+    take() {
+      const fresh = blocked.slice(seen).filter((b) => b.navigation || b.kind !== 'submit');
+      seen = blocked.length;
+      return fresh;
+    },
+  };
+}
+
+/** Marks a step blocked by the stops charged to it (a step already blocked keeps its own reason). */
+export function chargeStops(
+  step: Pick<JourneyStepResult, 'status' | 'error'>,
+  stopped: BlockedRequest[],
+): boolean {
+  if (!stopped.length) return false;
+  if (step.status !== 'blocked') {
+    step.status = 'blocked';
+    step.error = excerpt(
+      `${stopped[0]!.reason}${stopped.length > 1 ? ` (+${stopped.length - 1} more)` : ''}`,
+      300,
+    );
+  }
+  return true;
+}
+
 const TRANSIENT = /detached|not stable|intercepts pointer events|Execution context was destroyed|navigation/i;
 
 export async function runJourney(
@@ -367,12 +400,17 @@ export async function runJourney(
   const tracePath = opts.trace ? join('traces', `${spec.id}-${vp.name}.zip`) : undefined;
   if (tracePath) await ctx.tracing.start({ screenshots: true, snapshots: true, title: spec.name });
   // Network backstop: whatever a step triggers, requests that the policy forbids never leave the browser.
-  const guard = await installRequestGuard(ctx, {
-    ...opts.policy,
-    origin: opts.base.origin,
-    ...(opts.allowOrigins ? { allowOrigins: opts.allowOrigins } : {}),
-    mode: 'journey',
-  });
+  // Every hop of a redirect chain is judged before it is sent (Playwright routes only a chain's first URL).
+  const guard = await installRequestGuard(
+    ctx,
+    {
+      ...opts.policy,
+      origin: opts.base.origin,
+      ...(opts.allowOrigins ? { allowOrigins: opts.allowOrigins } : {}),
+      mode: 'journey',
+    },
+    { checkRedirects: true, ...(opts.extraHeaders ? { targetHeaders: opts.extraHeaders } : {}) },
+  );
   // Every tab and popup of the context is tracked: the request guard above is context-wide, so the policy holds for
   // all of them, including a popup the page opens on its own (its off-origin navigation is aborted before the
   // request leaves the browser). Only waitForPopup and switchTab make another tab current.
@@ -386,9 +424,8 @@ export async function runJourney(
     const live = observe(p, opts.base.origin);
     live.ignore(guard.isBlocked);
     observers.push(live);
-    p.opener()
-      .then((o) => openers.set(p, o))
-      .catch(() => undefined);
+    // Recorded synchronously when the popup appears, before it can close itself.
+    p.on('popup', (child) => openers.set(child, p));
     p.on('close', () => {
       for (const list of [open, fresh]) if (list.includes(p)) list.splice(list.indexOf(p), 1);
       if (current !== p) return;
@@ -450,16 +487,7 @@ export async function runJourney(
     return undefined;
   };
 
-  // Navigations the guard stops are charged to the step running when they happen, or to the next one when they
-  // happen between steps (a popup the page opens on its own a moment later).
-  let checkedUpTo = Date.now();
-  const stoppedNavigation = () => {
-    const stopped = guard.since(checkedUpTo).filter((b) => b.navigation || b.kind !== 'submit');
-    checkedUpTo = Date.now();
-    return stopped;
-  };
-  const stopNote = (stopped: BlockedRequest[]) =>
-    excerpt(`${stopped[0]!.reason}${stopped.length > 1 ? ` (+${stopped.length - 1} more)` : ''}`, 300);
+  const stops = stopLedger(guard.blocked);
 
   try {
     for (let i = 0; i < allSteps.length; i++) {
@@ -493,11 +521,7 @@ export async function runJourney(
       }
       // A navigation or an irreversible/payment request the step caused was stopped: the step did not do what it
       // would have done. (Background data requests that were stopped are reported with the journey, not here.)
-      const stopped = stoppedNavigation();
-      if (stopped.length && res.status !== 'blocked') {
-        res.status = 'blocked';
-        res.error = stopNote(stopped);
-      }
+      chargeStops(res, stops.take());
       res.durationMs = Date.now() - s0;
       res.url = redactUrl(tabs.current()?.url() ?? '');
       const s = await shot(i);
@@ -518,13 +542,8 @@ export async function runJourney(
       }
     }
     // A navigation stopped after the last step's check (a popup that opened late) still stops the journey.
-    const late = status === 'passed' ? stoppedNavigation() : [];
-    const last = steps[steps.length - 1];
-    if (late.length && last) {
-      last.status = 'blocked';
-      last.error = stopNote(late);
+    if (status === 'passed' && steps.length && chargeStops(steps[steps.length - 1]!, stops.take()))
       status = 'blocked';
-    }
 
     // Success criteria are evaluated even after a failure so the report shows which goals were missed.
     const page = tabs.current();

@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { emptyInventory } from '../../src/audit/engine.js';
 import type { PageInventory } from '../../src/core/types.js';
-import { keyEffect, matchesUrl, tabPolicy } from '../../src/journeys/runner.js';
+import type { BlockedRequest } from '../../src/journeys/request-guard.js';
+import { chargeStops, keyEffect, matchesUrl, stopLedger, tabPolicy } from '../../src/journeys/runner.js';
 import {
   checkAction,
   checkRequest,
@@ -196,6 +197,56 @@ describe('safety policy: requests (network backstop)', () => {
     // Third-party beacons are not the target's data.
     expect(checkRequest(req('POST', 'https://analytics.example/collect'), journey()).allowed).toBe(true);
   });
+  it('judges requests from or to a non-local allowed origin by that host, not the local journey', () => {
+    const p = journey({
+      hostClass: 'local',
+      origin: 'http://127.0.0.1:3000',
+      allowOrigins: ['https://idp.example'],
+      allowDestructive: true,
+    });
+    const inIdp = { frameUrl: 'https://idp.example/login' };
+    // From a popup on the public IdP: no deletion or payment, and no form post without --allow-submit.
+    expect(checkRequest(req('DELETE', 'https://idp.example/api/account', inIdp), p)).toMatchObject({
+      allowed: false,
+      kind: 'destructive',
+    });
+    expect(checkRequest(req('POST', 'https://idp.example/api/payments', inIdp), p).allowed).toBe(false);
+    expect(
+      checkRequest(req('POST', 'https://idp.example/login', { ...inIdp, isNavigation: true }), p).allowed,
+    ).toBe(false);
+    expect(
+      checkRequest(
+        req('POST', 'https://idp.example/login', { ...inIdp, isNavigation: true }),
+        journey({ ...p, allowSubmit: true }),
+      ).allowed,
+    ).toBe(true);
+    // A navigation to it that looks destructive, from the local app.
+    expect(
+      checkRequest(
+        req('GET', 'https://idp.example/account/delete', {
+          isNavigation: true,
+          frameUrl: 'http://127.0.0.1:3000/settings',
+        }),
+        p,
+      ).allowed,
+    ).toBe(false);
+    // The local app's own background call to a payment provider's test mode keeps the local journey's rules.
+    expect(
+      checkRequest(
+        req('POST', 'https://api.payments.example/v1/payment_intents', {
+          frameUrl: 'http://127.0.0.1:3000/checkout',
+        }),
+        p,
+      ).allowed,
+    ).toBe(true);
+    // A popup on a local IdP stays local.
+    expect(
+      checkRequest(
+        req('DELETE', 'http://localhost:3000/api/x', { frameUrl: 'http://localhost:3000/idp' }),
+        journey({ ...p, allowOrigins: ['http://localhost:3000'] }),
+      ).allowed,
+    ).toBe(true);
+  });
   it('read-only mode (audits, form probes) sends nothing that changes data, on any host', () => {
     const ro = journey({ hostClass: 'local', origin: 'http://127.0.0.1:3000', mode: 'read-only' });
     expect(
@@ -219,6 +270,46 @@ describe('safety policy: requests (network backstop)', () => {
         ro,
       ).allowed,
     ).toBe(false);
+  });
+});
+
+describe('stopped requests per step', () => {
+  const stop = (url: string, over: Partial<BlockedRequest> = {}): BlockedRequest => ({
+    url,
+    method: 'GET',
+    reason: `Navigation to ${url} leaves the target origin`,
+    kind: 'off-origin',
+    navigation: true,
+    at: 0,
+    ...over,
+  });
+  it('charges a stop between two steps to the next step, once', () => {
+    const blocked: BlockedRequest[] = [];
+    const stops = stopLedger(blocked);
+    const step1 = { status: 'passed' as const, error: undefined as string | undefined };
+    expect(chargeStops(step1, stops.take())).toBe(false);
+    // Stopped after step 1 was checked (during its screenshot): step 1 stays passed, step 2 is blocked.
+    blocked.push(stop('http://idp.example/'));
+    const step2: { status: 'passed' | 'blocked' | 'failed'; error?: string } = { status: 'passed' };
+    expect(chargeStops(step2, stops.take())).toBe(true);
+    expect(step1.status).toBe('passed');
+    expect(step2).toEqual({
+      status: 'blocked',
+      error: 'Navigation to http://idp.example/ leaves the target origin',
+    });
+    // Not charged twice; stopped background form posts are not a step's doing.
+    blocked.push(stop('http://127.0.0.1/api', { kind: 'submit', navigation: false }));
+    expect(stops.take()).toEqual([]);
+  });
+  it('blocks the last step with a stop after its check', () => {
+    const blocked: BlockedRequest[] = [];
+    const stops = stopLedger(blocked);
+    stops.take();
+    blocked.push(stop('http://a.example/'), stop('http://b.example/'));
+    const last: { status: 'passed' | 'blocked' | 'failed'; error?: string } = { status: 'passed' };
+    expect(chargeStops(last, stops.take())).toBe(true);
+    expect(last.status).toBe('blocked');
+    expect(last.error).toMatch(/\(\+1 more\)$/);
   });
 });
 
@@ -337,6 +428,9 @@ describe('journey schema', () => {
       ).steps,
     ).toHaveLength(5);
     expect(() => validateJourney(spec([{ action: 'switchTab' }]))).toThrow(/switchTab.*index or urlMatch/);
+    expect(() => validateJourney(spec([{ action: 'switchTab', index: 0, urlMatch: '/help' }]))).toThrow(
+      /not both/,
+    );
     expect(() => validateJourney(spec([{ action: 'switchTab', index: -1 }]))).toThrow(/index/);
     expect(() => validateJourney(spec([{ action: 'switchTab', index: 1.5 }]))).toThrow(/index/);
     expect(() => validateJourney(spec([{ action: 'waitForPopup', urlMatch: 3 }]))).toThrow(/urlMatch/);

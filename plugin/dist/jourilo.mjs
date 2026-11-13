@@ -41137,7 +41137,14 @@ function checkRequest(r, policy) {
   if (u.protocol !== "http:" && u.protocol !== "https:") return { allowed: true };
   const method = r.method.toUpperCase();
   const firstParty = u.origin === policy.origin;
-  const safeHost = policy.hostClass === "local";
+  const elsewhere = (x) => !!x && (x.protocol === "http:" || x.protocol === "https:") && x.origin !== policy.origin && !isLocalHostname(x.hostname);
+  let frame;
+  try {
+    frame = r.frameUrl ? new URL(r.frameUrl) : void 0;
+  } catch {
+    frame = void 0;
+  }
+  const safeHost = policy.hostClass === "local" && !elsewhere(frame) && !(r.isNavigation && elsewhere(u));
   if (r.isNavigation && r.mainFrame && !firstParty && !(policy.allowOrigins ?? []).includes(u.origin))
     return {
       allowed: false,
@@ -41194,39 +41201,150 @@ function isSecretValue(raw) {
 }
 
 // src/journeys/request-guard.ts
-async function installRequestGuard(target, policy) {
+var REDIRECT = /* @__PURE__ */ new Set([301, 302, 303, 307, 308]);
+function onwardPage(next, method, body, contentType) {
+  const target = JSON.stringify(next.toString()).replace(/</g, "\\u003c");
+  if (method === "GET" || method === "HEAD")
+    return `<!doctype html><meta charset="utf-8"><title>Redirecting</title><script>location.replace(${target})</script>`;
+  if (!/^application\/x-www-form-urlencoded/i.test(contentType)) return null;
+  const esc2 = (v) => v.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const fields = [...new URLSearchParams(body ?? "")].map(([k, v]) => `<input type="hidden" name="${esc2(k)}" value="${esc2(v)}">`).join("");
+  return `<!doctype html><meta charset="utf-8"><title>Redirecting</title><form method="post" action="${esc2(next.toString())}">${fields}</form><script>document.forms[0].submit()</script>`;
+}
+function isMainFrame(req) {
+  try {
+    return req.frame().parentFrame() === null;
+  } catch {
+    return req.isNavigationRequest();
+  }
+}
+function frameUrl(req) {
+  try {
+    return req.frame().url();
+  } catch {
+    return void 0;
+  }
+}
+async function installRequestGuard(target, policy, options = {}) {
   const blocked = [];
   const urls = /* @__PURE__ */ new Set();
+  const block = async (route, url, method, navigation, verdict) => {
+    if (verdict.allowed) return;
+    if (blocked.length < 200)
+      blocked.push({
+        url: redactUrl(url),
+        method,
+        reason: verdict.reason,
+        kind: verdict.kind ?? "submit",
+        navigation,
+        at: Date.now()
+      });
+    urls.add(url);
+    urls.add(route.request().url());
+    await route.abort("blockedbyclient").catch(() => void 0);
+  };
+  const navigate = async (route, req) => {
+    const scope = options.targetHeaders;
+    let response;
+    try {
+      const own = scope && new URL(req.url()).origin === scope.origin;
+      if (own) {
+        const names = new Set(Object.keys(scope.headers).map((n) => n.toLowerCase()));
+        const headers = {};
+        for (const [k, v] of Object.entries(req.headers())) if (!names.has(k.toLowerCase())) headers[k] = v;
+        response = await route.fetch({ headers: { ...headers, ...scope.headers }, maxRedirects: 0 });
+      } else response = await route.fetch({ maxRedirects: 0 });
+    } catch {
+      await route.abort("failed").catch(() => void 0);
+      return;
+    }
+    if (response.headers()[GUARD_UPSTREAM_ERROR_HEADER] !== void 0 && req.url().startsWith("https:")) {
+      const status = response.status();
+      await response.dispose().catch(() => void 0);
+      await route.abort(status === 403 ? "blockedbyclient" : "connectionfailed").catch(() => void 0);
+      return;
+    }
+    const location = response.headers().location;
+    const handOver = () => route.fulfill({ response }).catch(() => route.abort("failed").catch(() => void 0));
+    if (!REDIRECT.has(response.status()) || !location) {
+      await handOver();
+      return;
+    }
+    let next;
+    try {
+      next = new URL(location, req.url());
+    } catch {
+      await handOver();
+      return;
+    }
+    await response.dispose().catch(() => void 0);
+    const method = req.method().toUpperCase();
+    const keep = (response.status() === 307 || response.status() === 308) && method !== "GET" && method !== "HEAD";
+    const nextMethod = keep ? method : "GET";
+    const verdict = checkRequest(
+      {
+        url: next.toString(),
+        method: nextMethod,
+        isNavigation: true,
+        mainFrame: true,
+        body: keep ? req.postData() : null,
+        frameUrl: req.url()
+      },
+      policy
+    );
+    if (!verdict.allowed) {
+      await block(route, next.toString(), nextMethod, true, verdict);
+      return;
+    }
+    if (next.protocol !== "http:" && next.protocol !== "https:") {
+      await block(route, next.toString(), nextMethod, true, {
+        allowed: false,
+        kind: "off-origin",
+        reason: `A redirect to a ${next.protocol} URL is not followed.`
+      });
+      return;
+    }
+    const body = onwardPage(
+      next,
+      nextMethod,
+      keep ? req.postData() : null,
+      req.headers()["content-type"] ?? ""
+    );
+    if (body === null) {
+      await block(route, next.toString(), nextMethod, true, {
+        allowed: false,
+        kind: "submit",
+        reason: `${nextMethod} ${next.pathname} is a ${response.status()} redirect that resends a form Jourilo cannot rebuild hop by hop, so it is not followed.`
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html; charset=utf-8",
+      headers: { "cache-control": "no-store" },
+      body
+    }).catch(() => void 0);
+  };
   const handler = async (route) => {
     const req = route.request();
-    let mainFrame = req.isNavigationRequest();
-    try {
-      const frame = req.frame();
-      mainFrame = frame.parentFrame() === null;
-    } catch {
-    }
+    const mainFrame = isMainFrame(req);
     const verdict = checkRequest(
       {
         url: req.url(),
         method: req.method(),
         isNavigation: req.isNavigationRequest(),
         mainFrame,
-        body: req.postData()
+        body: req.postData(),
+        ...frameUrl(req) ? { frameUrl: frameUrl(req) } : {}
       },
       policy
     );
     if (!verdict.allowed) {
-      if (blocked.length < 200)
-        blocked.push({
-          url: redactUrl(req.url()),
-          method: req.method(),
-          reason: verdict.reason,
-          kind: verdict.kind ?? "submit",
-          navigation: req.isNavigationRequest(),
-          at: Date.now()
-        });
-      urls.add(req.url());
-      await route.abort("blockedbyclient").catch(() => void 0);
+      await block(route, req.url(), req.method(), req.isNavigationRequest(), verdict);
+      return;
+    }
+    if (options.checkRedirects && req.isNavigationRequest() && mainFrame && /^https?:/.test(req.url())) {
+      await navigate(route, req);
       return;
     }
     await route.fallback().catch(() => void 0);
@@ -44986,8 +45104,8 @@ function validateJourney(raw, source = "journey") {
         errs.push(`steps[${i}] (${step.action}): urlMatch must be a non-empty string`);
       else if (step.action === "switchTab" && index !== void 0 && !(Number.isInteger(index) && index >= 0))
         errs.push(`steps[${i}] (switchTab): index must be a whole number from 0`);
-      else if (step.action === "switchTab" && index === void 0 && urlMatch === void 0)
-        errs.push(`steps[${i}] (switchTab): index or urlMatch is required`);
+      else if (step.action === "switchTab" && index === void 0 === (urlMatch === void 0))
+        errs.push(`steps[${i}] (switchTab): index or urlMatch is required, not both`);
     }
   });
   (j.success ?? []).forEach((c, i) => {
@@ -45272,6 +45390,27 @@ async function act(tabs, step, opts) {
       return;
   }
 }
+function stopLedger(blocked) {
+  let seen = 0;
+  return {
+    take() {
+      const fresh = blocked.slice(seen).filter((b) => b.navigation || b.kind !== "submit");
+      seen = blocked.length;
+      return fresh;
+    }
+  };
+}
+function chargeStops(step, stopped) {
+  if (!stopped.length) return false;
+  if (step.status !== "blocked") {
+    step.status = "blocked";
+    step.error = excerpt(
+      `${stopped[0].reason}${stopped.length > 1 ? ` (+${stopped.length - 1} more)` : ""}`,
+      300
+    );
+  }
+  return true;
+}
 var TRANSIENT = /detached|not stable|intercepts pointer events|Execution context was destroyed|navigation/i;
 async function runJourney(browser, spec, opts) {
   const vp = parseViewports(opts.viewportOverride ?? spec.viewport ?? "desktop")[0];
@@ -45286,12 +45425,16 @@ async function runJourney(browser, spec, opts) {
   });
   const tracePath = opts.trace ? join10("traces", `${spec.id}-${vp.name}.zip`) : void 0;
   if (tracePath) await ctx.tracing.start({ screenshots: true, snapshots: true, title: spec.name });
-  const guard = await installRequestGuard(ctx, {
-    ...opts.policy,
-    origin: opts.base.origin,
-    ...opts.allowOrigins ? { allowOrigins: opts.allowOrigins } : {},
-    mode: "journey"
-  });
+  const guard = await installRequestGuard(
+    ctx,
+    {
+      ...opts.policy,
+      origin: opts.base.origin,
+      ...opts.allowOrigins ? { allowOrigins: opts.allowOrigins } : {},
+      mode: "journey"
+    },
+    { checkRedirects: true, ...opts.extraHeaders ? { targetHeaders: opts.extraHeaders } : {} }
+  );
   const open = [];
   const fresh = [];
   const openers = /* @__PURE__ */ new Map();
@@ -45302,7 +45445,7 @@ async function runJourney(browser, spec, opts) {
     const live = observe(p, opts.base.origin);
     live.ignore(guard.isBlocked);
     observers.push(live);
-    p.opener().then((o) => openers.set(p, o)).catch(() => void 0);
+    p.on("popup", (child) => openers.set(child, p));
     p.on("close", () => {
       for (const list2 of [open, fresh]) if (list2.includes(p)) list2.splice(list2.indexOf(p), 1);
       if (current !== p) return;
@@ -45360,13 +45503,7 @@ async function runJourney(browser, spec, opts) {
     }
     return void 0;
   };
-  let checkedUpTo = Date.now();
-  const stoppedNavigation = () => {
-    const stopped = guard.since(checkedUpTo).filter((b) => b.navigation || b.kind !== "submit");
-    checkedUpTo = Date.now();
-    return stopped;
-  };
-  const stopNote = (stopped) => excerpt(`${stopped[0].reason}${stopped.length > 1 ? ` (+${stopped.length - 1} more)` : ""}`, 300);
+  const stops = stopLedger(guard.blocked);
   try {
     for (let i = 0; i < allSteps.length; i++) {
       const step = allSteps[i];
@@ -45395,11 +45532,7 @@ async function runJourney(browser, spec, opts) {
         res.status = err instanceof Blocked ? "blocked" : "failed";
         res.error = excerpt(err.message.split("\n")[0], 300);
       }
-      const stopped = stoppedNavigation();
-      if (stopped.length && res.status !== "blocked") {
-        res.status = "blocked";
-        res.error = stopNote(stopped);
-      }
+      chargeStops(res, stops.take());
       res.durationMs = Date.now() - s0;
       res.url = redactUrl(tabs.current()?.url() ?? "");
       const s = await shot(i);
@@ -45419,13 +45552,8 @@ async function runJourney(browser, spec, opts) {
         break;
       }
     }
-    const late = status === "passed" ? stoppedNavigation() : [];
-    const last = steps[steps.length - 1];
-    if (late.length && last) {
-      last.status = "blocked";
-      last.error = stopNote(late);
+    if (status === "passed" && steps.length && chargeStops(steps[steps.length - 1], stops.take()))
       status = "blocked";
-    }
     const page = tabs.current();
     const finalUrl = page?.url() ?? "";
     const pageErrors = observers.flatMap((o) => o.console).filter((c) => c.type === "pageerror");

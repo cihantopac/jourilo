@@ -84,7 +84,7 @@
         "index": {
           "type": "integer",
           "minimum": 0,
-          "description": "switchTab: open tabs in the order they were opened; 0 is the journey's first tab."
+          "description": "switchTab (instead of urlMatch): open tabs in the order they were opened; 0 is the journey's first tab."
         },
         "note": { "type": "string" }
       }

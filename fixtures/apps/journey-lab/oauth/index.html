@@ -9,7 +9,9 @@
       <h1>Test app</h1>
       <p id="status">Signed out</p>
       <button type="button" id="signin">Sign in with Test IdP</button>
+      <button type="button" id="signin-redirect">Sign in through the app</button>
       <p><a href="help.html" target="_blank">Open help in a new tab</a></p>
+      <p><a id="idp-help" href="help.html" target="_blank">Open the IdP's help in a new tab</a></p>
     </main>
     <script>
       // The test identity provider runs on a second local origin: the same server under the other loopback name
@@ -23,6 +25,12 @@
           'popup,width=480,height=600',
         );
       document.getElementById('signin').addEventListener('click', openIdp);
+      // /oauth/start is answered by the browser test's server with a 302 to the IdP, like a real "/auth/provider"
+      // route.
+      document
+        .getElementById('signin-redirect')
+        .addEventListener('click', () => window.open('/oauth/start', 'test-idp', 'popup,width=480,height=600'));
+      document.getElementById('idp-help').href = `${idpOrigin}/oauth/help.html`;
       // ?auto=1: the page opens the IdP popup on its own, without being asked (a journey must not follow it).
       if (new URLSearchParams(location.search).has('auto')) window.addEventListener('load', openIdp);
       window.addEventListener('message', (e) => {
