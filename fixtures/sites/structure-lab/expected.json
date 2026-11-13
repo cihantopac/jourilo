@@ -65,6 +65,15 @@
         "#show-pw"
       ],
       "why": "a Show password button with no type submits the login form; the Sign in button is a submit button by name"
+    },
+    {
+      "rule": "jourilo/button-implicit-submit",
+      "path": "/implicit-submit-plain",
+      "kind": "defect",
+      "evidenceExactly": [
+        "#plain > button:nth-of-type(2)"
+      ],
+      "why": "an id-less typeless button after a typed one: the evidence selector must match that button (nth-of-type counts every button)"
     }
   ],
   "mustNotFind": [
@@ -119,6 +128,6 @@
     ]
   },
   "audit": {
-    "maxPages": 12
+    "maxPages": 14
   }
 }

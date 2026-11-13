@@ -55,7 +55,7 @@ export interface KeyboardWalk {
 }
 
 // Plain JS: a CSS selector for an element (a unique id, or a short tag path with :nth-of-type).
-const SELECTOR_OF = `(e) => {
+export const SELECTOR_OF = `(e) => {
     if (e.id && document.querySelectorAll('#' + CSS.escape(e.id)).length === 1) return '#' + CSS.escape(e.id);
     const parts = []; let c = e;
     while (c && c.nodeType === 1 && c !== document.documentElement && parts.length < 6) {

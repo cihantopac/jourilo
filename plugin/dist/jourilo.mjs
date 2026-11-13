@@ -39750,6 +39750,7 @@ var LEX = {
   vagueCta: [
     "submit",
     "send",
+    "go",
     "click here",
     "here",
     "ok",
@@ -39817,6 +39818,7 @@ var LEX = {
     "register",
     "create( an)? account",
     "get started",
+    "join",
     "new-password",
     "kay\u0131t ol",
     "\xFCye ol",
@@ -40062,11 +40064,9 @@ var LEX = {
     "create( an?)? account",
     "subscribe",
     "search",
-    "go",
     "apply",
     "confirm",
     "update",
-    "join",
     "pay( now)?",
     "place (the )?order",
     "checkout",
@@ -44662,11 +44662,7 @@ async function probeEmptySubmission(ctx, url, form, vp, policy, runDir, wait) {
 var IMPLICIT_BUTTONS = `(sel) => {
   const form = document.querySelector(sel);
   if (!form) return [];
-  const path = (e) => {
-    if (e.id && document.querySelectorAll('#' + CSS.escape(e.id)).length === 1) return '#' + CSS.escape(e.id);
-    const same = Array.from(form.querySelectorAll('button:not([type])'));
-    return sel + ' button:not([type]):nth-of-type(' + (same.indexOf(e) + 1) + ')';
-  };
+  const path = ${SELECTOR_OF};
   return Array.from(form.querySelectorAll('button:not([type])')).map((b, index) => {
     const attrs = ['id', 'class', 'aria-label', 'name']
       .filter((a) => b.hasAttribute(a))
@@ -44697,11 +44693,11 @@ async function probeImplicitSubmit(ctx, url, form, vp, policy, wait) {
     await page.goto(url, { waitUntil: "load", timeout: 3e4 });
     await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
     if (wait?.waitFor && !await waitForElement(page, wait.waitFor, wait.timeoutMs ?? 3e4))
-      return findings;
+      return { findings };
     const buttons = await page.evaluate(`(${IMPLICIT_BUTTONS})(${JSON.stringify(form.selector)})`).catch(() => []);
     const submitWord = lexicon("submit");
     const candidates = buttons.filter((b) => !b.disabled && b.name && !submitWord.test(b.name));
-    if (!candidates.length) return findings;
+    if (!candidates.length) return { findings };
     await page.evaluate(WATCH_SUBMIT);
     for (const b of candidates.slice(0, 5)) {
       const payment = await page.evaluate(
@@ -44752,9 +44748,12 @@ async function probeImplicitSubmit(ctx, url, form, vp, policy, wait) {
         })
       );
     }
-    return findings;
-  } catch {
-    return findings;
+    return { findings };
+  } catch (err) {
+    return {
+      findings,
+      limitation: `Buttons without a type in ${form.selector} on ${redactUrl(url)} were not checked for accidental submission: ${excerpt(err.message, 160)}`
+    };
   } finally {
     await guard.detach();
     await page.close().catch(() => void 0);
@@ -44762,8 +44761,11 @@ async function probeImplicitSubmit(ctx, url, form, vp, policy, wait) {
 }
 async function probeFormValidation(ctx, url, form, vp, policy, runDir, wait) {
   const out = await probeEmptySubmission(ctx, url, form, vp, policy, runDir, wait);
-  if (out.result.outcome !== "blocked" && out.result.outcome !== "skipped" && out.result.outcome !== "error")
-    out.findings.push(...await probeImplicitSubmit(ctx, url, form, vp, policy, wait));
+  if (out.result.outcome !== "blocked" && out.result.outcome !== "skipped" && out.result.outcome !== "error") {
+    const implicit = await probeImplicitSubmit(ctx, url, form, vp, policy, wait);
+    out.findings.push(...implicit.findings);
+    if (implicit.limitation) out.limitation = implicit.limitation;
+  }
   return out;
 }
 
@@ -46948,6 +46950,7 @@ async function runAudit(ws, opts) {
               });
             });
             formFindings.push(...r.findings);
+            if (r.limitation) limitations.push(r.limitation);
             if (r.result.outcome === "blocked")
               limitations.push(`Form ${form.selector} on ${o.url} was not submitted: ${r.result.detail}`);
             if (r.result.outcome === "simulated") simulated.push(`${form.selector} on ${o.url}`);
@@ -47667,7 +47670,7 @@ function tokensFor(f) {
             scope: "style",
             regex: new RegExp(`(^|[^\\w-])${escapeRe(n)}($|[^\\w-])`)
           });
-        const tag = typeof d.coverBarSelector === "string" ? /([a-z][a-z0-9-]*)(?::[\w-()]+)?$/i.exec(d.coverBarSelector)?.[1] : null;
+        const tag = typeof d.coverBarSelector === "string" ? /^[a-z][a-z0-9-]*/i.exec(d.coverBarSelector.split(/\s*[>+~]\s*|\s+/).pop() ?? "")?.[0] : null;
         if (tag)
           add({
             value: tag,
@@ -49382,12 +49385,44 @@ var GLOBAL_CSS = [
   "global.css",
   "index.css"
 ];
-var isCss = (file2) => /\.(css|scss|less)$/.test(file2);
+var isCss = (file2) => /\.(css|scss|less)$/.test(file2) && !/\.module\.(css|scss|less)$/.test(file2);
+function topLevelHtmlRule(css) {
+  let depth = 0;
+  let boundary = 0;
+  for (let i = 0; i < css.length; i++) {
+    const c = css[i];
+    if (c === "/" && css[i + 1] === "*") {
+      const end = css.indexOf("*/", i + 2);
+      i = end < 0 ? css.length : end + 1;
+    } else if (c === '"' || c === "'") {
+      const end = css.indexOf(c, i + 1);
+      i = end < 0 ? css.length : end;
+    } else if (c === "{") {
+      if (depth === 0) {
+        const sel = css.slice(boundary, i).replace(/\/\*[\s\S]*?\*\//g, "").trim();
+        if (sel === "html") {
+          let d = 1;
+          let j = i + 1;
+          for (; j < css.length && d > 0; j++) {
+            if (css[j] === "{") d++;
+            else if (css[j] === "}") d--;
+          }
+          return d === 0 ? { open: i, close: j - 1 } : null;
+        }
+      }
+      depth++;
+    } else if (c === "}") {
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) boundary = i + 1;
+    } else if (c === ";" && depth === 0) boundary = i + 1;
+  }
+  return null;
+}
 function withScrollPadding(css, px) {
   const decl = `scroll-padding-top: ${px}px`;
-  const rule2 = /(^|[}\s,;])(html)(\s*)\{([^}]*)\}/g;
-  for (const m of css.matchAll(rule2)) {
-    const body = m[4];
+  const rule2 = topLevelHtmlRule(css);
+  if (rule2) {
+    const body = css.slice(rule2.open + 1, rule2.close);
     const cur = body.match(/scroll-padding-top\s*:\s*([^;}]+)/);
     let nextBody;
     if (cur) {
@@ -49401,8 +49436,7 @@ function withScrollPadding(css, px) {
 ${indent}${decl};
 ` : `${kept}${semi} ${decl}; `;
     }
-    const start = m.index + m[1].length;
-    return `${css.slice(0, start)}html${m[3]}{${nextBody}}${css.slice(m.index + m[0].length)}`;
+    return `${css.slice(0, rule2.open + 1)}${nextBody}${css.slice(rule2.close)}`;
   }
   return `${css.replace(/\n*$/, "\n")}
 html {

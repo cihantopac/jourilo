@@ -657,6 +657,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
               });
             });
             formFindings.push(...r.findings);
+            if (r.limitation) limitations.push(r.limitation);
             if (r.result.outcome === 'blocked')
               limitations.push(`Form ${form.selector} on ${o.url} was not submitted: ${r.result.detail}`);
             if (r.result.outcome === 'simulated') simulated.push(`${form.selector} on ${o.url}`);

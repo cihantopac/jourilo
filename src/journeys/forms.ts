@@ -9,6 +9,7 @@ import type { BrowserContext } from 'playwright-core';
 import { makeFinding } from '../audit/finding.js';
 import { nielsen, wcag } from '../audit/standards.js';
 import { DEFAULT_MASK, originFreeName, waitForElement } from '../browser/capture.js';
+import { SELECTOR_OF } from '../browser/keyboard.js';
 import { toPosix } from '../core/fs-safety.js';
 import { shortHash } from '../core/hash.js';
 import { lexicon, lexiconSource } from '../core/lexicon.js';
@@ -314,11 +315,7 @@ async function probeEmptySubmission(
 const IMPLICIT_BUTTONS = `(sel) => {
   const form = document.querySelector(sel);
   if (!form) return [];
-  const path = (e) => {
-    if (e.id && document.querySelectorAll('#' + CSS.escape(e.id)).length === 1) return '#' + CSS.escape(e.id);
-    const same = Array.from(form.querySelectorAll('button:not([type])'));
-    return sel + ' button:not([type]):nth-of-type(' + (same.indexOf(e) + 1) + ')';
-  };
+  const path = ${SELECTOR_OF};
   return Array.from(form.querySelectorAll('button:not([type])')).map((b, index) => {
     const attrs = ['id', 'class', 'aria-label', 'name']
       .filter((a) => b.hasAttribute(a))
@@ -354,7 +351,7 @@ async function probeImplicitSubmit(
   vp: Viewport,
   policy: SafetyPolicy,
   wait?: { waitFor?: string; timeoutMs?: number },
-): Promise<Finding[]> {
+): Promise<{ findings: Finding[]; limitation?: string }> {
   const page = await ctx.newPage();
   const guard = await installRequestGuard(page, {
     ...policy,
@@ -367,7 +364,7 @@ async function probeImplicitSubmit(
     await page.goto(url, { waitUntil: 'load', timeout: 30_000 });
     await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => undefined);
     if (wait?.waitFor && !(await waitForElement(page, wait.waitFor, wait.timeoutMs ?? 30_000)))
-      return findings;
+      return { findings };
     const buttons = (await page
       .evaluate(`(${IMPLICIT_BUTTONS})(${JSON.stringify(form.selector)})`)
       .catch(() => [])) as {
@@ -379,7 +376,7 @@ async function probeImplicitSubmit(
     }[];
     const submitWord = lexicon('submit');
     const candidates = buttons.filter((b) => !b.disabled && b.name && !submitWord.test(b.name));
-    if (!candidates.length) return findings;
+    if (!candidates.length) return { findings };
     await page.evaluate(WATCH_SUBMIT);
     for (const b of candidates.slice(0, 5)) {
       const payment = await page
@@ -434,9 +431,12 @@ async function probeImplicitSubmit(
         }),
       );
     }
-    return findings;
-  } catch {
-    return findings;
+    return { findings };
+  } catch (err) {
+    return {
+      findings,
+      limitation: `Buttons without a type in ${form.selector} on ${redactUrl(url)} were not checked for accidental submission: ${excerpt((err as Error).message, 160)}`,
+    };
   } finally {
     await guard.detach();
     await page.close().catch(() => undefined);
@@ -451,10 +451,18 @@ export async function probeFormValidation(
   policy: SafetyPolicy,
   runDir: string,
   wait?: { waitFor?: string; timeoutMs?: number; primaryOrigin?: string },
-): Promise<{ result: FormProbeResult; findings: Finding[] }> {
-  const out = await probeEmptySubmission(ctx, url, form, vp, policy, runDir, wait);
+): Promise<{ result: FormProbeResult; findings: Finding[]; limitation?: string }> {
+  const out: { result: FormProbeResult; findings: Finding[]; limitation?: string } =
+    await probeEmptySubmission(ctx, url, form, vp, policy, runDir, wait);
   // Only where the empty submission was allowed to run: the same safety policy covers the probe clicks.
-  if (out.result.outcome !== 'blocked' && out.result.outcome !== 'skipped' && out.result.outcome !== 'error')
-    out.findings.push(...(await probeImplicitSubmit(ctx, url, form, vp, policy, wait)));
+  if (
+    out.result.outcome !== 'blocked' &&
+    out.result.outcome !== 'skipped' &&
+    out.result.outcome !== 'error'
+  ) {
+    const implicit = await probeImplicitSubmit(ctx, url, form, vp, policy, wait);
+    out.findings.push(...implicit.findings);
+    if (implicit.limitation) out.limitation = implicit.limitation;
+  }
   return out;
 }

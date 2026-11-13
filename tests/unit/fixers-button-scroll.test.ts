@@ -116,3 +116,28 @@ describe('scroll-padding fixer', () => {
     ).toEqual([]);
   });
 });
+
+describe('scroll-padding fixer: where it writes', () => {
+  const sticky = { coverPosition: 'sticky', coverTop: 0, coverHeight: 56 };
+
+  it('never writes into a CSS module, even when it is the located stylesheet', () => {
+    const root = repo({ 'src/Header.module.css': '.bar { position: sticky; }\n', 'styles.css': 'body {}\n' });
+    const [plan] = planFixes([barFinding('src/Header.module.css', sticky)], root);
+    expect(plan!.edits[0]!.file).toBe('styles.css');
+  });
+
+  it('ignores scoped html rules and html inside @media', () => {
+    const css =
+      '.dark html { color: #fff; }\n@media (min-width: 40em) {\n  html { scroll-padding-top: 99px; }\n}\n';
+    const root = repo({ 'a.css': css });
+    const [plan] = planFixes([barFinding('a.css', sticky)], root);
+    expect(plan!.edits[0]!.after).toBe(`${css}\nhtml {\n  scroll-padding-top: 56px;\n}\n`);
+  });
+
+  it('finds the top-level html rule after other rules', () => {
+    const css = '.a { color: red; }\nhtml { scroll-padding-top: 10px; }\n';
+    const root = repo({ 'a.css': css });
+    const [plan] = planFixes([barFinding('a.css', sticky)], root);
+    expect(plan!.edits[0]!.after).toBe(css.replace('10px', '56px'));
+  });
+});

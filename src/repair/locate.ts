@@ -385,7 +385,7 @@ export function tokensFor(f: Finding): Token[] {
           });
         const tag =
           typeof d.coverBarSelector === 'string'
-            ? /([a-z][a-z0-9-]*)(?::[\w-()]+)?$/i.exec(d.coverBarSelector)?.[1]
+            ? /^[a-z][a-z0-9-]*/i.exec(d.coverBarSelector.split(/\s*[>+~]\s*|\s+/).pop() ?? '')?.[0]
             : null;
         if (tag)
           add({

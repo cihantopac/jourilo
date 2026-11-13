@@ -394,14 +394,52 @@ const GLOBAL_CSS = [
   'index.css',
 ];
 
-const isCss = (file: string) => /\.(css|scss|less)$/.test(file);
+// CSS modules are excluded: a bare `html` selector is not pure and Next.js rejects it.
+const isCss = (file: string) => /\.(css|scss|less)$/.test(file) && !/\.module\.(css|scss|less)$/.test(file);
 
-/** Adds or updates `scroll-padding-top` on `html` in a stylesheet; null when it already holds that value. */
+/** The body span of the first top-level rule whose selector is exactly `html` (not `.dark html`, not inside @media). */
+function topLevelHtmlRule(css: string): { open: number; close: number } | null {
+  let depth = 0;
+  let boundary = 0;
+  for (let i = 0; i < css.length; i++) {
+    const c = css[i]!;
+    if (c === '/' && css[i + 1] === '*') {
+      const end = css.indexOf('*/', i + 2);
+      i = end < 0 ? css.length : end + 1;
+    } else if (c === '"' || c === "'") {
+      const end = css.indexOf(c, i + 1);
+      i = end < 0 ? css.length : end;
+    } else if (c === '{') {
+      if (depth === 0) {
+        const sel = css
+          .slice(boundary, i)
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .trim();
+        if (sel === 'html') {
+          let d = 1;
+          let j = i + 1;
+          for (; j < css.length && d > 0; j++) {
+            if (css[j] === '{') d++;
+            else if (css[j] === '}') d--;
+          }
+          return d === 0 ? { open: i, close: j - 1 } : null;
+        }
+      }
+      depth++;
+    } else if (c === '}') {
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) boundary = i + 1;
+    } else if (c === ';' && depth === 0) boundary = i + 1;
+  }
+  return null;
+}
+
+/** Adds or updates `scroll-padding-top` on the top-level `html` rule; null when it already holds that value. */
 function withScrollPadding(css: string, px: number): string | null {
   const decl = `scroll-padding-top: ${px}px`;
-  const rule = /(^|[}\s,;])(html)(\s*)\{([^}]*)\}/g;
-  for (const m of css.matchAll(rule)) {
-    const body = m[4]!;
+  const rule = topLevelHtmlRule(css);
+  if (rule) {
+    const body = css.slice(rule.open + 1, rule.close);
     const cur = body.match(/scroll-padding-top\s*:\s*([^;}]+)/);
     let nextBody: string;
     if (cur) {
@@ -413,8 +451,7 @@ function withScrollPadding(css: string, px: number): string | null {
       const semi = kept.trim() && !kept.trim().endsWith(';') ? ';' : '';
       nextBody = body.includes('\n') ? `${kept}${semi}\n${indent}${decl};\n` : `${kept}${semi} ${decl}; `;
     }
-    const start = m.index! + m[1]!.length;
-    return `${css.slice(0, start)}html${m[3]}{${nextBody}}${css.slice(m.index! + m[0].length)}`;
+    return `${css.slice(0, rule.open + 1)}${nextBody}${css.slice(rule.close)}`;
   }
   return `${css.replace(/\n*$/, '\n')}\nhtml {\n  ${decl};\n}\n`;
 }
