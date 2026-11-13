@@ -1,0 +1,47 @@
+{
+  "description": "Italian shop: conversion heuristics and form error feedback; the account page's specific buttons are controls.",
+  "mustFind": [
+    {
+      "rule": "conv/unclear-value-proposition",
+      "path": "/",
+      "why": "h1 'Benvenuto'"
+    },
+    {
+      "rule": "conv/vague-cta-label",
+      "path": "/",
+      "why": "primary CTA 'Continua'"
+    },
+    {
+      "rule": "conv/vague-cta-label",
+      "path": "/iscrizione",
+      "why": "submit 'Invia'"
+    },
+    {
+      "rule": "conv/pricing-period-unclear",
+      "path": "/prezzi",
+      "why": "price without a billing period"
+    },
+    {
+      "rule": "conv/signup-friction",
+      "path": "/iscrizione",
+      "why": "6 fields, password repeat, required phone"
+    },
+    {
+      "rule": "conv/no-trust-signals",
+      "path": "/iscrizione",
+      "why": "no reassurance next to signup"
+    },
+    {
+      "rule": "a11y/errors-not-associated",
+      "path": "/iscrizione",
+      "why": "'Il campo email è obbligatorio.' not associated"
+    }
+  ],
+  "mustNotFind": [
+    {
+      "rule": "conv/vague-cta-label",
+      "path": "/account",
+      "why": "'Salva le modifiche' and 'Elimina account' are specific actions"
+    }
+  ]
+}

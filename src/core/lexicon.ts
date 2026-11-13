@@ -1,4 +1,5 @@
-// Multilingual vocabulary used by heuristics and by the safety policy: English, Turkish, German, Spanish, French.
+// Multilingual vocabulary used by heuristics and by the safety policy: English, Turkish, German, Spanish, French,
+// Italian, Portuguese, Dutch.
 // One source of truth so the in-page probe, the rules and the journey safety policy agree. Patterns are matched
 // case-insensitively with Unicode-aware word boundaries (JavaScript's \b does not understand letters such as ö or ı).
 
@@ -71,6 +72,33 @@ const LEX: Record<Concept, string[]> = {
     'fermer (mon )?compte',
     'annuler (l.abonnement|la commande)',
     'virement',
+    // it
+    'elimina(re)?',
+    'cancella(re)?',
+    'rimuovi',
+    'rimuovere',
+    'disattiva',
+    'disdici',
+    'chiudi (il mio )?account',
+    'annulla (l.abbonamento|l.ordine|il piano)',
+    'bonifico',
+    'trasferisci',
+    // pt
+    'excluir',
+    'deletar',
+    'apagar',
+    'remover',
+    'desativar',
+    'cancelar (a |minha )?(assinatura|conta|inscrição|encomenda)',
+    'encerrar (a |minha )?conta',
+    'transferência',
+    // nl
+    'verwijder(en)?',
+    'opzeggen',
+    'account (verwijderen|opheffen|sluiten)',
+    'abonnement (opzeggen|beëindigen)',
+    'uitschrijven',
+    'overmaken',
   ],
   financial: [
     'pay( now)?',
@@ -109,6 +137,37 @@ const LEX: Record<Concept, string[]> = {
     'valider (la )?commande',
     'confirmer (le )?paiement',
     'faire un don',
+    // it
+    'paga( ora)?',
+    'acquista( ora)?',
+    'compra ora',
+    'completa (l.ordine|l.acquisto|il pagamento)',
+    'conferma (l.ordine|il pagamento|l.acquisto)',
+    'procedi al pagamento',
+    'effettua (l.ordine|il pagamento)',
+    'dona ora',
+    'fai una donazione',
+    // pt
+    'pague( agora)?',
+    'pagar agora',
+    'comprar agora',
+    'finalizar (a )?compra',
+    'finalizar (o )?pedido',
+    'confirmar (o )?(pagamento|pedido)',
+    'efetuar (o )?pagamento',
+    'fazer (o )?pedido',
+    'doar',
+    // nl
+    'betaal( nu)?',
+    'betalen',
+    'afrekenen',
+    'koop( nu)?',
+    'kopen',
+    'bestel( nu)?',
+    'bestelling (plaatsen|afronden|bevestigen)',
+    'betaling (bevestigen|afronden)',
+    'doneer',
+    'doneren',
   ],
   vagueCta: [
     'submit',
@@ -156,6 +215,38 @@ const LEX: Record<Concept, string[]> = {
     'plus',
     'commencer',
     'valider',
+    // it
+    'invia',
+    'vai',
+    'clicca qui',
+    'continua',
+    'avanti',
+    'altro',
+    'scopri di più',
+    'leggi di più',
+    'inizia',
+    // pt
+    'clique aqui',
+    'próximo',
+    'seguinte',
+    'saiba mais',
+    'leia mais',
+    'mais',
+    'começar',
+    'iniciar',
+    'ir',
+    // nl
+    'verzenden',
+    'verstuur',
+    'ga',
+    'klik hier',
+    'verder',
+    'volgende',
+    'meer',
+    'meer informatie',
+    'lees meer',
+    'start',
+    'begin',
   ],
   genericHeadline: [
     'welcome',
@@ -175,6 +266,23 @@ const LEX: Record<Concept, string[]> = {
     'inicio',
     'bienvenue',
     'accueil',
+    // it
+    'benvenuto',
+    'benvenuta',
+    'benvenuti',
+    'pagina iniziale',
+    'ciao',
+    // pt
+    'bem-vindo',
+    'bem-vinda',
+    'bem-vindos',
+    'página inicial',
+    'início',
+    'olá',
+    // nl
+    'welkom',
+    'startpagina',
+    'hallo',
   ],
   signup: [
     'sign ?up',
@@ -195,6 +303,23 @@ const LEX: Record<Concept, string[]> = {
     's.inscrire',
     'inscription',
     'créer un compte',
+    // it
+    'registrati',
+    'iscriviti',
+    'crea( un)? account',
+    'inizia ora',
+    // pt
+    'cadastre-se',
+    'cadastrar',
+    'registe-se',
+    'registar',
+    'inscreva-se',
+    'criar( uma)? conta',
+    // nl
+    'registreren',
+    'account (aanmaken|maken)',
+    'inschrijven',
+    'meld je aan',
   ],
   login: [
     'log ?in',
@@ -207,6 +332,17 @@ const LEX: Record<Concept, string[]> = {
     'acceder',
     'se connecter',
     'connexion',
+    // it
+    'accedi',
+    'accesso',
+    // pt
+    'entrar',
+    'iniciar sessão',
+    'fazer login',
+    'acessar',
+    // nl
+    'inloggen',
+    'aanmelden',
   ],
   recovery: [
     'forgot',
@@ -220,6 +356,20 @@ const LEX: Record<Concept, string[]> = {
     'restablecer',
     'oublié',
     'réinitialiser',
+    // it
+    'password dimenticata',
+    'recupera',
+    'reimposta',
+    'ripristina',
+    // pt
+    'esqueci',
+    'redefinir',
+    'recuperar',
+    // nl
+    'vergeten',
+    'herstellen',
+    'opnieuw instellen',
+    'resetten',
   ],
   search: [
     'search',
@@ -232,6 +382,16 @@ const LEX: Record<Concept, string[]> = {
     'búsqueda',
     'rechercher',
     'recherche',
+    // it
+    'cerca',
+    'ricerca',
+    // pt
+    'pesquisar',
+    'pesquisa',
+    'busca',
+    // nl
+    'zoeken',
+    'zoek',
   ],
   newsletter: [
     'subscribe',
@@ -243,6 +403,15 @@ const LEX: Record<Concept, string[]> = {
     'boletín',
     's.abonner',
     'lettre d.information',
+    // it
+    'iscrizione alla newsletter',
+    // pt
+    'subscrever',
+    'assinar',
+    'boletim',
+    // nl
+    'nieuwsbrief',
+    'abonneren',
   ],
   checkout: [
     'checkout',
@@ -262,6 +431,21 @@ const LEX: Record<Concept, string[]> = {
     'paiement',
     'facturation',
     'carte',
+    // it
+    'cassa',
+    'pagamento',
+    'fatturazione',
+    'carta',
+    // pt
+    'pagamento',
+    'faturação',
+    'faturamento',
+    'cartão',
+    // nl
+    'afrekenen',
+    'betaling',
+    'facturatie',
+    'kaart',
   ],
   formError: [
     'error',
@@ -311,6 +495,30 @@ const LEX: Record<Concept, string[]> = {
     'incorrect',
     'veuillez',
     'ne peut pas être vide',
+    // it
+    'errore',
+    'obbligatori',
+    'richiest',
+    'non valido',
+    'non valida',
+    'non corretto',
+    'sbagliat',
+    'per favore',
+    'non può essere vuoto',
+    // pt
+    'erro(?!\\p{L})',
+    'obrigatóri',
+    'inválid',
+    'incorret',
+    'não pode estar vazio',
+    // nl
+    'fout',
+    'verplicht',
+    'ongeldig',
+    'onjuist',
+    'alsjeblieft',
+    'graag',
+    'mag niet leeg',
   ],
   trustTestimonials: [
     'testimonial',
@@ -325,6 +533,23 @@ const LEX: Record<Concept, string[]> = {
     'reseñas',
     'témoignages',
     'avis',
+    // it
+    'testimonianze',
+    'recensioni',
+    'opinioni',
+    'cosa dicono i nostri clienti',
+    // pt
+    'depoimentos',
+    'testemunhos',
+    'avaliações',
+    'opiniões',
+    'o que dizem os nossos clientes',
+    // nl
+    'getuigenissen',
+    'recensies',
+    'beoordelingen',
+    'klantervaringen',
+    'wat onze klanten zeggen',
   ],
   trustGuarantee: [
     'money.back',
@@ -342,6 +567,22 @@ const LEX: Record<Concept, string[]> = {
     'cancela cuando quieras',
     'satisfait ou remboursé',
     'résiliable à tout moment',
+    // it
+    'garanzia',
+    'soddisfatti o rimborsati',
+    'rimborso',
+    'disdici quando vuoi',
+    'senza rischi',
+    // pt
+    'garantia',
+    'reembolso',
+    'devolução do dinheiro',
+    'cancele quando quiser',
+    'sem riscos?',
+    // nl
+    'geld.terug',
+    'op elk moment opzegbaar',
+    'risicovrij',
   ],
   trustSecurity: [
     'secure',
@@ -363,6 +604,17 @@ const LEX: Record<Concept, string[]> = {
     'rgpd',
     'sécurisé',
     'chiffré',
+    // it
+    'sicur',
+    'crittograf',
+    // pt
+    'segur',
+    'criptograf',
+    'lgpd',
+    // nl
+    'veilig',
+    'versleuteld',
+    'beveiligd',
   ],
   trustLogos: [
     'trusted by',
@@ -375,6 +627,20 @@ const LEX: Record<Concept, string[]> = {
     'vertrauen uns',
     'confían en nosotros',
     'ils nous font confiance',
+    // it
+    'scelto da',
+    'usato da',
+    'amato da',
+    'si fidano di noi',
+    // pt
+    'confiam em nós',
+    'usado por',
+    'escolhido por',
+    'empresas que confiam',
+    // nl
+    'vertrouwd door',
+    'gebruikt door',
+    'bedrijven die ons vertrouwen',
   ],
   pricingPeriod: [
     '/ ?(mo|month|yr|year)',
@@ -397,6 +663,22 @@ const LEX: Record<Concept, string[]> = {
     'par (mois|an|utilisateur)',
     'mensuel',
     'annuel',
+    // it
+    '/ ?(mese|anno)',
+    'al (mese|anno)',
+    'per (mese|anno|utente)',
+    'mensile',
+    'annuale',
+    // pt
+    '/ ?(mês|ano)',
+    'ao (mês|ano)',
+    'por (mês|ano|utilizador|usuário)',
+    'mensal',
+    // nl
+    '/ ?(maand|jaar)',
+    'per (maand|jaar|gebruiker)',
+    'maandelijks',
+    'jaarlijks',
   ],
   freeTrial: [
     'free trial',
@@ -410,9 +692,24 @@ const LEX: Record<Concept, string[]> = {
     'prueba gratuita',
     'essai gratuit',
     'essayer gratuitement',
+    // it
+    'prova gratuit',
+    'prova gratis',
+    'inizia gratis',
+    // pt
+    'teste grátis',
+    'teste gratuito',
+    'experimente grátis',
+    'experimente gratuitamente',
+    'comece grátis',
+    // nl
+    'gratis proberen',
+    'probeer gratis',
+    'gratis uitproberen',
+    'proefperiode',
   ],
   // What a form's submit button says: a typeless button with one of these names is the form's submit button, not a
-  // control that submits by accident (jourilo/button-implicit-submit). Grows with the lexicon (it/pt/nl in 1.4.0).
+  // control that submits by accident (jourilo/button-implicit-submit). Covers en, tr, de, es, fr, it, pt, nl.
   submit: [
     // en
     'submit',
@@ -482,6 +779,54 @@ const LEX: Record<Concept, string[]> = {
     'valider',
     'confirmer',
     's.abonner',
+    // it
+    'invia',
+    'salva',
+    'continua',
+    'avanti',
+    'accedi',
+    'registrati',
+    'iscriviti',
+    'crea( un)? account',
+    'cerca',
+    'conferma',
+    'applica',
+    'aggiorna',
+    'paga( ora)?',
+    // pt
+    'salvar',
+    'próximo',
+    'seguinte',
+    'entrar',
+    'iniciar sessão',
+    'cadastre-se',
+    'cadastrar',
+    'registe-se',
+    'criar( uma)? conta',
+    'pesquisar',
+    'confirmar',
+    'assinar',
+    'subscrever',
+    'aplicar',
+    'atualizar',
+    'pagar( agora)?',
+    // nl
+    'verzenden',
+    'verstuur',
+    'opslaan',
+    'verder',
+    'volgende',
+    'inloggen',
+    'aanmelden',
+    'registreren',
+    'account aanmaken',
+    'zoeken',
+    'bevestigen',
+    'abonneren',
+    'toepassen',
+    'bijwerken',
+    'betaal( nu)?',
+    'afrekenen',
   ],
   // Appearance and language switches: controls that change how the page looks, not where the funnel goes.
   'toggle-ui': [
@@ -523,6 +868,23 @@ const LEX: Record<Concept, string[]> = {
     'clair',
     'langue',
     'apparence',
+    // it
+    'scuro',
+    'chiaro',
+    'modalità',
+    'lingua',
+    'aspetto',
+    // pt
+    'escuro',
+    'modo',
+    'língua',
+    'aparência',
+    // nl
+    'donker',
+    'licht',
+    'donkere modus',
+    'weergave',
+    'taal',
   ],
 };
 

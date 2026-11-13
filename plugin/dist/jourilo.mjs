@@ -39733,7 +39733,34 @@ var LEX = {
     "se d\xE9sabonner",
     "fermer (mon )?compte",
     "annuler (l.abonnement|la commande)",
-    "virement"
+    "virement",
+    // it
+    "elimina(re)?",
+    "cancella(re)?",
+    "rimuovi",
+    "rimuovere",
+    "disattiva",
+    "disdici",
+    "chiudi (il mio )?account",
+    "annulla (l.abbonamento|l.ordine|il piano)",
+    "bonifico",
+    "trasferisci",
+    // pt
+    "excluir",
+    "deletar",
+    "apagar",
+    "remover",
+    "desativar",
+    "cancelar (a |minha )?(assinatura|conta|inscri\xE7\xE3o|encomenda)",
+    "encerrar (a |minha )?conta",
+    "transfer\xEAncia",
+    // nl
+    "verwijder(en)?",
+    "opzeggen",
+    "account (verwijderen|opheffen|sluiten)",
+    "abonnement (opzeggen|be\xEBindigen)",
+    "uitschrijven",
+    "overmaken"
   ],
   financial: [
     "pay( now)?",
@@ -39771,7 +39798,38 @@ var LEX = {
     "commander",
     "valider (la )?commande",
     "confirmer (le )?paiement",
-    "faire un don"
+    "faire un don",
+    // it
+    "paga( ora)?",
+    "acquista( ora)?",
+    "compra ora",
+    "completa (l.ordine|l.acquisto|il pagamento)",
+    "conferma (l.ordine|il pagamento|l.acquisto)",
+    "procedi al pagamento",
+    "effettua (l.ordine|il pagamento)",
+    "dona ora",
+    "fai una donazione",
+    // pt
+    "pague( agora)?",
+    "pagar agora",
+    "comprar agora",
+    "finalizar (a )?compra",
+    "finalizar (o )?pedido",
+    "confirmar (o )?(pagamento|pedido)",
+    "efetuar (o )?pagamento",
+    "fazer (o )?pedido",
+    "doar",
+    // nl
+    "betaal( nu)?",
+    "betalen",
+    "afrekenen",
+    "koop( nu)?",
+    "kopen",
+    "bestel( nu)?",
+    "bestelling (plaatsen|afronden|bevestigen)",
+    "betaling (bevestigen|afronden)",
+    "doneer",
+    "doneren"
   ],
   vagueCta: [
     "submit",
@@ -39818,7 +39876,39 @@ var LEX = {
     "en savoir plus",
     "plus",
     "commencer",
-    "valider"
+    "valider",
+    // it
+    "invia",
+    "vai",
+    "clicca qui",
+    "continua",
+    "avanti",
+    "altro",
+    "scopri di pi\xF9",
+    "leggi di pi\xF9",
+    "inizia",
+    // pt
+    "clique aqui",
+    "pr\xF3ximo",
+    "seguinte",
+    "saiba mais",
+    "leia mais",
+    "mais",
+    "come\xE7ar",
+    "iniciar",
+    "ir",
+    // nl
+    "verzenden",
+    "verstuur",
+    "ga",
+    "klik hier",
+    "verder",
+    "volgende",
+    "meer",
+    "meer informatie",
+    "lees meer",
+    "start",
+    "begin"
   ],
   genericHeadline: [
     "welcome",
@@ -39837,7 +39927,24 @@ var LEX = {
     "bienvenida",
     "inicio",
     "bienvenue",
-    "accueil"
+    "accueil",
+    // it
+    "benvenuto",
+    "benvenuta",
+    "benvenuti",
+    "pagina iniziale",
+    "ciao",
+    // pt
+    "bem-vindo",
+    "bem-vinda",
+    "bem-vindos",
+    "p\xE1gina inicial",
+    "in\xEDcio",
+    "ol\xE1",
+    // nl
+    "welkom",
+    "startpagina",
+    "hallo"
   ],
   signup: [
     "sign ?up",
@@ -39857,7 +39964,24 @@ var LEX = {
     "crear( una)? cuenta",
     "s.inscrire",
     "inscription",
-    "cr\xE9er un compte"
+    "cr\xE9er un compte",
+    // it
+    "registrati",
+    "iscriviti",
+    "crea( un)? account",
+    "inizia ora",
+    // pt
+    "cadastre-se",
+    "cadastrar",
+    "registe-se",
+    "registar",
+    "inscreva-se",
+    "criar( uma)? conta",
+    // nl
+    "registreren",
+    "account (aanmaken|maken)",
+    "inschrijven",
+    "meld je aan"
   ],
   login: [
     "log ?in",
@@ -39869,7 +39993,18 @@ var LEX = {
     "iniciar sesi\xF3n",
     "acceder",
     "se connecter",
-    "connexion"
+    "connexion",
+    // it
+    "accedi",
+    "accesso",
+    // pt
+    "entrar",
+    "iniciar sess\xE3o",
+    "fazer login",
+    "acessar",
+    // nl
+    "inloggen",
+    "aanmelden"
   ],
   recovery: [
     "forgot",
@@ -39882,7 +40017,21 @@ var LEX = {
     "olvid\xE9",
     "restablecer",
     "oubli\xE9",
-    "r\xE9initialiser"
+    "r\xE9initialiser",
+    // it
+    "password dimenticata",
+    "recupera",
+    "reimposta",
+    "ripristina",
+    // pt
+    "esqueci",
+    "redefinir",
+    "recuperar",
+    // nl
+    "vergeten",
+    "herstellen",
+    "opnieuw instellen",
+    "resetten"
   ],
   search: [
     "search",
@@ -39894,7 +40043,17 @@ var LEX = {
     "buscar",
     "b\xFAsqueda",
     "rechercher",
-    "recherche"
+    "recherche",
+    // it
+    "cerca",
+    "ricerca",
+    // pt
+    "pesquisar",
+    "pesquisa",
+    "busca",
+    // nl
+    "zoeken",
+    "zoek"
   ],
   newsletter: [
     "subscribe",
@@ -39905,7 +40064,16 @@ var LEX = {
     "suscribirse",
     "bolet\xEDn",
     "s.abonner",
-    "lettre d.information"
+    "lettre d.information",
+    // it
+    "iscrizione alla newsletter",
+    // pt
+    "subscrever",
+    "assinar",
+    "boletim",
+    // nl
+    "nieuwsbrief",
+    "abonneren"
   ],
   checkout: [
     "checkout",
@@ -39924,7 +40092,22 @@ var LEX = {
     "tarjeta",
     "paiement",
     "facturation",
-    "carte"
+    "carte",
+    // it
+    "cassa",
+    "pagamento",
+    "fatturazione",
+    "carta",
+    // pt
+    "pagamento",
+    "fatura\xE7\xE3o",
+    "faturamento",
+    "cart\xE3o",
+    // nl
+    "afrekenen",
+    "betaling",
+    "facturatie",
+    "kaart"
   ],
   formError: [
     "error",
@@ -39973,7 +40156,31 @@ var LEX = {
     "invalide",
     "incorrect",
     "veuillez",
-    "ne peut pas \xEAtre vide"
+    "ne peut pas \xEAtre vide",
+    // it
+    "errore",
+    "obbligatori",
+    "richiest",
+    "non valido",
+    "non valida",
+    "non corretto",
+    "sbagliat",
+    "per favore",
+    "non pu\xF2 essere vuoto",
+    // pt
+    "erro(?!\\p{L})",
+    "obrigat\xF3ri",
+    "inv\xE1lid",
+    "incorret",
+    "n\xE3o pode estar vazio",
+    // nl
+    "fout",
+    "verplicht",
+    "ongeldig",
+    "onjuist",
+    "alsjeblieft",
+    "graag",
+    "mag niet leeg"
   ],
   trustTestimonials: [
     "testimonial",
@@ -39987,7 +40194,24 @@ var LEX = {
     "opiniones",
     "rese\xF1as",
     "t\xE9moignages",
-    "avis"
+    "avis",
+    // it
+    "testimonianze",
+    "recensioni",
+    "opinioni",
+    "cosa dicono i nostri clienti",
+    // pt
+    "depoimentos",
+    "testemunhos",
+    "avalia\xE7\xF5es",
+    "opini\xF5es",
+    "o que dizem os nossos clientes",
+    // nl
+    "getuigenissen",
+    "recensies",
+    "beoordelingen",
+    "klantervaringen",
+    "wat onze klanten zeggen"
   ],
   trustGuarantee: [
     "money.back",
@@ -40004,7 +40228,23 @@ var LEX = {
     "devoluci\xF3n",
     "cancela cuando quieras",
     "satisfait ou rembours\xE9",
-    "r\xE9siliable \xE0 tout moment"
+    "r\xE9siliable \xE0 tout moment",
+    // it
+    "garanzia",
+    "soddisfatti o rimborsati",
+    "rimborso",
+    "disdici quando vuoi",
+    "senza rischi",
+    // pt
+    "garantia",
+    "reembolso",
+    "devolu\xE7\xE3o do dinheiro",
+    "cancele quando quiser",
+    "sem riscos?",
+    // nl
+    "geld.terug",
+    "op elk moment opzegbaar",
+    "risicovrij"
   ],
   trustSecurity: [
     "secure",
@@ -40025,7 +40265,18 @@ var LEX = {
     "cifrado",
     "rgpd",
     "s\xE9curis\xE9",
-    "chiffr\xE9"
+    "chiffr\xE9",
+    // it
+    "sicur",
+    "crittograf",
+    // pt
+    "segur",
+    "criptograf",
+    "lgpd",
+    // nl
+    "veilig",
+    "versleuteld",
+    "beveiligd"
   ],
   trustLogos: [
     "trusted by",
@@ -40037,7 +40288,21 @@ var LEX = {
     "kullanan \u015Firketler",
     "vertrauen uns",
     "conf\xEDan en nosotros",
-    "ils nous font confiance"
+    "ils nous font confiance",
+    // it
+    "scelto da",
+    "usato da",
+    "amato da",
+    "si fidano di noi",
+    // pt
+    "confiam em n\xF3s",
+    "usado por",
+    "escolhido por",
+    "empresas que confiam",
+    // nl
+    "vertrouwd door",
+    "gebruikt door",
+    "bedrijven die ons vertrouwen"
   ],
   pricingPeriod: [
     "/ ?(mo|month|yr|year)",
@@ -40059,7 +40324,23 @@ var LEX = {
     "/ ?(mois|an)",
     "par (mois|an|utilisateur)",
     "mensuel",
-    "annuel"
+    "annuel",
+    // it
+    "/ ?(mese|anno)",
+    "al (mese|anno)",
+    "per (mese|anno|utente)",
+    "mensile",
+    "annuale",
+    // pt
+    "/ ?(m\xEAs|ano)",
+    "ao (m\xEAs|ano)",
+    "por (m\xEAs|ano|utilizador|usu\xE1rio)",
+    "mensal",
+    // nl
+    "/ ?(maand|jaar)",
+    "per (maand|jaar|gebruiker)",
+    "maandelijks",
+    "jaarlijks"
   ],
   freeTrial: [
     "free trial",
@@ -40072,10 +40353,25 @@ var LEX = {
     "prueba gratis",
     "prueba gratuita",
     "essai gratuit",
-    "essayer gratuitement"
+    "essayer gratuitement",
+    // it
+    "prova gratuit",
+    "prova gratis",
+    "inizia gratis",
+    // pt
+    "teste gr\xE1tis",
+    "teste gratuito",
+    "experimente gr\xE1tis",
+    "experimente gratuitamente",
+    "comece gr\xE1tis",
+    // nl
+    "gratis proberen",
+    "probeer gratis",
+    "gratis uitproberen",
+    "proefperiode"
   ],
   // What a form's submit button says: a typeless button with one of these names is the form's submit button, not a
-  // control that submits by accident (jourilo/button-implicit-submit). Grows with the lexicon (it/pt/nl in 1.4.0).
+  // control that submits by accident (jourilo/button-implicit-submit). Covers en, tr, de, es, fr, it, pt, nl.
   submit: [
     // en
     "submit",
@@ -40144,7 +40440,55 @@ var LEX = {
     "rechercher",
     "valider",
     "confirmer",
-    "s.abonner"
+    "s.abonner",
+    // it
+    "invia",
+    "salva",
+    "continua",
+    "avanti",
+    "accedi",
+    "registrati",
+    "iscriviti",
+    "crea( un)? account",
+    "cerca",
+    "conferma",
+    "applica",
+    "aggiorna",
+    "paga( ora)?",
+    // pt
+    "salvar",
+    "pr\xF3ximo",
+    "seguinte",
+    "entrar",
+    "iniciar sess\xE3o",
+    "cadastre-se",
+    "cadastrar",
+    "registe-se",
+    "criar( uma)? conta",
+    "pesquisar",
+    "confirmar",
+    "assinar",
+    "subscrever",
+    "aplicar",
+    "atualizar",
+    "pagar( agora)?",
+    // nl
+    "verzenden",
+    "verstuur",
+    "opslaan",
+    "verder",
+    "volgende",
+    "inloggen",
+    "aanmelden",
+    "registreren",
+    "account aanmaken",
+    "zoeken",
+    "bevestigen",
+    "abonneren",
+    "toepassen",
+    "bijwerken",
+    "betaal( nu)?",
+    "afrekenen"
   ],
   // Appearance and language switches: controls that change how the page looks, not where the funnel goes.
   "toggle-ui": [
@@ -40185,7 +40529,24 @@ var LEX = {
     "sombre",
     "clair",
     "langue",
-    "apparence"
+    "apparence",
+    // it
+    "scuro",
+    "chiaro",
+    "modalit\xE0",
+    "lingua",
+    "aspetto",
+    // pt
+    "escuro",
+    "modo",
+    "l\xEDngua",
+    "apar\xEAncia",
+    // nl
+    "donker",
+    "licht",
+    "donkere modus",
+    "weergave",
+    "taal"
   ]
 };
 var STEMS = /* @__PURE__ */ new Set([
@@ -43889,7 +44250,9 @@ function isLandingPath(url) {
 }
 function isPricingPage(obs) {
   const inv = obs.probe?.inventory;
-  return /pric|plans|subscribe|fiyat|preise|precios|tarifs|abonelik/i.test(pathOf2(obs.url)) || (inv?.pricingSignals.length ?? 0) >= 2;
+  return /pric|plans|subscribe|fiyat|preise|precios|tarifs|abonelik|prezzi|pre[cç]os|prijzen/i.test(
+    pathOf2(obs.url)
+  ) || (inv?.pricingSignals.length ?? 0) >= 2;
 }
 function hypothesis(obs, ruleId, title, description, recommendation, metric2, evidence, opts = {}) {
   return makeFinding({
