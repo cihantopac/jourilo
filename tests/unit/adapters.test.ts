@@ -640,7 +640,11 @@ describe('experiment analyze --from', () => {
     expect(await usage(...manual, '--sequential', '--fixed')).toMatch(/one of --sequential and --fixed/);
     expect(await usage(...manual, '--tau', '0.2')).toMatch(/--tau applies only to a sequential/);
     expect(await usage(...manual, '--sequential', '--planned', '5000')).toMatch(/--planned applies only/);
-    expect((await failure(run(...manual, '--sequential', '--tau', '0'))).code).toBe('INVALID_INPUT');
+    for (const tau of ['0', '1.5', '1e200'])
+      expect(await usage(...manual, '--sequential', '--tau', tau)).toMatch(/--tau must be greater than 0/);
+    const extreme = await run('--control', '0/1000', '--variant', '1000/1000', '--sequential');
+    expect(extreme.data).toMatchObject({ decision: 'stop-b-better' });
+    expect(extreme.text).toMatch(/always-valid p < 1e-6 ≤ 0\.05/);
     process.env.POSTHOG_API_KEY = PH_KEY;
     serve(posthogRoutes());
     const e = await failure(run('--from', 'posthog:42', '--planned', '5000'));

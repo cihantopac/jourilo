@@ -232,14 +232,16 @@ For two conversion rates it applies the paper's normal-approximation form to the
 normal mixing distribution N(0, τ²) (Jourilo default τ = 0.1):
 
 ```
-θ̂ = x_b/n_b − x_a/n_a          V = p̂_a(1 − p̂_a)/n_a + p̂_b(1 − p̂_b)/n_b
+θ̂ = x_b/n_b − x_a/n_a          q = (x_a + x_b) / (n_a + n_b)
+V = max( p̂_a(1 − p̂_a)/n_a + p̂_b(1 − p̂_b)/n_b ,  q(1 − q)(1/n_a + 1/n_b) )
 Λ_n(θ0) = sqrt(V / (V + τ²)) · exp( τ² (θ̂ − θ0)² / (2 V (V + τ²)) )
 p_n = min(p_{n−1}, 1 / Λ_n(0)),  p_0 = 1                          (always-valid p-value)
 CS_n = θ̂ ± sqrt( V (V + τ²) / τ² · (2 ln(1/α) + ln((V + τ²) / V)) ),  intersected with CS_{n−1}
 ```
 
-Under no difference Λ_n(0) is a nonnegative martingale with mean 1, so by Ville's inequality the chance that 1/Λ_n
-ever falls to α or below, at any look, is at most α. Stopping at the first look with p_n ≤ α therefore keeps the false
+Under no difference Λ_n(0) is approximately (in the normal approximation, with V estimated from the data) a
+nonnegative martingale with mean 1, so by Ville's inequality the chance that 1/Λ_n ever falls to α or below, at any
+look, is at most about α. Stopping at the first look with p_n ≤ α therefore keeps the false
 positive rate at α however often the data is checked, and the confidence sequence covers θ at every look at once
 with probability at least 1 − α. The price is a wider interval at any one look than a fixed-horizon test at its
 planned sample. τ sets which effect sizes the test is most sensitive to; Optimizely tunes it from historical
@@ -252,10 +254,21 @@ Jourilo notes (assessment):
   `sequentialTest` takes an optional `previous` result (its p-value and interval) to apply the minimum and the
   intersection across calls; the CLI keeps no history, so each `analyze` run reports one look, and a stop decision
   should be acted on when it appears.
-- The variance is the plug-in normal approximation, so very small samples (a handful of conversions) are
-  approximate; with no variance at all (every visitor in both arms did the same thing) the test reports no
-  evidence. A seeded simulation in `tests/unit/stats.test.ts` (A/A, 1000 looks, 200 experiments) keeps the false
-  stop rate under α.
+- V is the larger of the unpooled plug-in variance and the pooled variance under "no difference". The unpooled
+  plug-in alone is anti-conservative at small n: a one-sided early sample (1/4 vs 4/4, or 0% vs 100%) makes it tiny
+  or zero, and in A/A simulations at rate 0.5, one visitor per arm per look and τ = 0.3 to 1 it stopped 12–14% of
+  the time. Wherever Λ ≥ 1, Λ decreases as the variance grows, so the larger variance can only lower a stopping
+  Λ: the test stays at least as conservative as with the pooled variance, which is the right one under the null,
+  and the interval at least as wide as with the unpooled one, which is the right one under an alternative. One
+  variance for both keeps the decision and the interval consistent: at one look, p ≤ α exactly when the interval
+  excludes 0. Only when every visitor in both arms did the same thing is V = 0, and the test then reports no
+  evidence.
+- τ is limited to (0, 1], since it is a spread on a difference of two rates. A large τ favours large effects; a
+  sample with 0% against 100% needs about 15 visitors per arm to stop at the default τ = 0.1 (0/10 against 10/10
+  continues).
+- Seeded simulations in `tests/unit/stats.test.ts` keep the A/A false stop rate under α: rate 0.1 with 20 visitors
+  per arm per look (default τ), and rate 0.5 with one visitor per arm per look at τ = 0.3, 0.5 and 1, each over
+  1000 looks.
 
 ---
 

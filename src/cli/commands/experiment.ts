@@ -5,7 +5,7 @@ import type { ProductProfile } from '../../discovery/repo.js';
 import { ADAPTERS, adapterFor } from '../../experiment/adapters/index.js';
 import type { AnalyticsAdapter, ExperimentData } from '../../experiment/adapters/types.js';
 import { planExperiment, planMarkdown } from '../../experiment/plan.js';
-import { analyze, sampleSize, sequentialTest } from '../../experiment/stats.js';
+import { analyze, GUARDRAIL_NOTE, sampleSize, sequentialTest, srmNote } from '../../experiment/stats.js';
 import { type Command, type CommandResult, type Context, flag, proxyFrom, str } from '../framework.js';
 
 function numOpt(ctx: Context, key: string): number | undefined {
@@ -117,6 +117,12 @@ function analysisMode(ctx: Context, fromAdapter: boolean): 'fixed' | 'sequential
   if (seq && fixed) throw new JouriloError('USAGE', 'Choose one of --sequential and --fixed.');
   if (str(ctx, 'tau') !== undefined && (fixed || (!seq && !fromAdapter)))
     throw new JouriloError('USAGE', '--tau applies only to a sequential analysis (--sequential, or --from).');
+  const tau = numOpt(ctx, 'tau');
+  if (tau !== undefined && !(tau > 0 && tau <= 1))
+    throw new JouriloError(
+      'USAGE',
+      '--tau must be greater than 0 and at most 1 (a spread on the difference of two rates, e.g. 0.1).',
+    );
   const mode = seq ? 'sequential' : fixed ? 'fixed' : fromAdapter ? 'sequential' : 'fixed';
   if (mode === 'sequential' && str(ctx, 'planned') !== undefined)
     throw new JouriloError(
@@ -138,17 +144,18 @@ function sequentialAnalysis(c: Arm, v: Arm, fixed: ReturnType<typeof analyze>, t
     { alpha, tau },
   );
   const level = `${(1 - alpha) * 100}%`;
+  const p = s.pValue < 1e-6 ? 'p < 1e-6' : `p = ${s.pValue.toPrecision(3)}`;
   const ci = `${pct(s.confidenceInterval[0])} to ${pct(s.confidenceInterval[1])}`;
   const rates = `${v.name} ${pct(fixed.variant.rate)} vs ${c.name} ${pct(fixed.control.rate)}`;
   const interpretation: string[] = [];
   // The SRM warning still applies; the planned-sample (peeking) warning does not, since every look is valid.
-  interpretation.push(...fixed.interpretation.filter((l) => l.startsWith('Sample ratio mismatch')));
+  if (fixed.srm.mismatch) interpretation.push(srmNote(fixed.srm));
   interpretation.push(
     s.decision === 'continue'
-      ? `Continue: ${rates}, always-valid p = ${s.pValue.toPrecision(3)} > ${alpha}; the ${level} confidence sequence for the difference (${ci}) still includes zero. Check again as data arrives; every look is allowed.`
-      : `Stop: ${s.decision === 'stop-b-better' ? v.name : c.name} is better (${rates}, always-valid p = ${s.pValue.toPrecision(3)} ≤ ${alpha}; ${level} confidence sequence for the difference ${ci}). This holds however often the experiment was checked.`,
+      ? `Continue: ${rates}, always-valid ${p} > ${alpha}; the ${level} confidence sequence for the difference (${ci}) still includes zero. Check again as data arrives; every look is allowed.`
+      : `Stop: ${s.decision === 'stop-b-better' ? v.name : c.name} is better (${rates}, always-valid ${p} ≤ ${alpha}; ${level} confidence sequence for the difference ${ci}). This holds however often the experiment was checked.`,
     `Sequential test (mSPRT, mixing τ = ${tau}): valid at every look, so peeking is safe, at the cost of a wider interval than a fixed-horizon test at its planned sample. Each run is one look with no memory: once a look says stop, act on it rather than waiting for a later look to agree.`,
-    fixed.interpretation.at(-1)!,
+    GUARDRAIL_NOTE,
   );
   return {
     mode: 'sequential' as const,
@@ -229,15 +236,15 @@ export const experiment: Command = {
   analyze  --control 120/2400 --variant 150/2380 [--alpha 0.05] [--expected-share 0.5] [--planned N]
            [--sequential [--tau 0.1]]
   analyze  --from <adapter>:<id> [--metric M] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--control-key K]
-           [--alpha …] [--expected-share …] [--planned N] [--tau 0.1 | --fixed]
+           [--alpha …] [--expected-share …] [--tau 0.1 | --fixed [--planned N]]
 
 analyze modes:
   fixed        one look at a planned sample: two-proportion z-test, p-value and CI. Default for --control/--variant.
   --sequential mSPRT (mixture sequential probability ratio test): an always-valid p-value and confidence sequence,
                so the experiment may be checked after every batch and stopped at the first look that says stop.
                Default with --from, since a live experiment is checked repeatedly; --fixed opts out there.
-  --tau T      standard deviation of the normal mixing distribution on the difference in rates (default 0.1);
-               sequential only. Each run is one look without history: once a look says stop, act on it.
+  --tau T      standard deviation of the normal mixing distribution on the difference in rates, in (0, 1]
+               (default 0.1); sequential only. Each run is one look without history: once a look says stop, act on it.
   --planned N  fixed only: warns about peeking while fewer than N visitors per arm have arrived.
 
 --from reads the numbers, read-only, from an analytics tool (keys from the environment only, never printed):

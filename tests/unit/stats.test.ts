@@ -55,6 +55,32 @@ describe('sequential testing (mSPRT)', () => {
     expect(stops / experiments).toBeLessThan(alpha);
   });
 
+  it.each([0.3, 0.5, 1])(
+    'with no difference at small samples and tau %f, one visitor per arm per look keeps false stops under alpha',
+    (tau) => {
+      // The hard regime for a plug-in variance: rate 0.5, tiny n, one-sided early samples like 1/4 vs 4/4.
+      const rand = mulberry32(1300 + tau * 10);
+      const alpha = 0.05;
+      const experiments = 1000;
+      let stops = 0;
+      for (let i = 0; i < experiments; i++) {
+        const a = { n: 0, x: 0 };
+        const b = { n: 0, x: 0 };
+        for (let look = 0; look < 1000; look++) {
+          a.n++;
+          b.n++;
+          if (rand() < 0.5) a.x++;
+          if (rand() < 0.5) b.x++;
+          if (sequentialTest(a, b, { alpha, tau }).decision !== 'continue') {
+            stops++;
+            break;
+          }
+        }
+      }
+      expect(stops / experiments).toBeLessThanOrEqual(alpha);
+    },
+  );
+
   it('a large true difference stops for the better variant', () => {
     const rand = mulberry32(7);
     for (let i = 0; i < 20; i++) {
@@ -103,6 +129,8 @@ describe('sequential testing (mSPRT)', () => {
       [10000, 500, 10000, 650],
       [10000, 650, 10000, 500],
       [2400, 120, 2380, 150],
+      [1000, 0, 1000, 1000],
+      [4, 1, 4, 4],
     ];
     for (const [na, xa, nb, xb] of cases) {
       const r = sequentialTest({ n: na, x: xa }, { n: nb, x: xb }, { alpha: 0.05 });
@@ -125,15 +153,30 @@ describe('sequential testing (mSPRT)', () => {
     );
   });
 
-  it('gives no evidence when the data carries no variance, and rejects impossible input', () => {
+  it('gives no evidence only when every visitor did the same thing, and rejects impossible input', () => {
     const r = sequentialTest({ n: 100, x: 0 }, { n: 100, x: 0 }, { alpha: 0.05 });
     expect(r).toEqual({ pValue: 1, decision: 'continue', confidenceInterval: [-1, 1] });
+    // Opposite extremes are the strongest evidence there is, not "no evidence".
+    for (const [a, b, decision] of [
+      [{ n: 1000, x: 0 }, { n: 1000, x: 1000 }, 'stop-b-better'],
+      [{ n: 1000, x: 1000 }, { n: 1000, x: 0 }, 'stop-a-better'],
+      [{ n: 30, x: 0 }, { n: 30, x: 30 }, 'stop-b-better'],
+    ] as const) {
+      const s = sequentialTest(a, b, { alpha: 0.05 });
+      expect(s.decision).toBe(decision);
+      expect(s.pValue).toBeLessThan(0.001);
+    }
+    // A one-sided small sample is not near-certain: 1/4 vs 4/4 (Fisher exact p ≈ 0.14) does not stop.
+    expect(sequentialTest({ n: 4, x: 1 }, { n: 4, x: 4 }, { alpha: 0.05, tau: 0.3 }).decision).toBe(
+      'continue',
+    );
     expect(() => sequentialTest({ n: 0, x: 0 }, { n: 10, x: 1 }, { alpha: 0.05 })).toThrow(RangeError);
     expect(() => sequentialTest({ n: 10, x: 11 }, { n: 10, x: 1 }, { alpha: 0.05 })).toThrow(RangeError);
     expect(() => sequentialTest({ n: 10, x: 1 }, { n: 10, x: 1 }, { alpha: 1 })).toThrow(RangeError);
-    expect(() => sequentialTest({ n: 10, x: 1 }, { n: 10, x: 1 }, { alpha: 0.05, tau: 0 })).toThrow(
-      RangeError,
-    );
+    for (const tau of [0, -0.1, 1.5, 1e200, Number.NaN])
+      expect(() => sequentialTest({ n: 10, x: 1 }, { n: 10, x: 1 }, { alpha: 0.05, tau })).toThrow(
+        RangeError,
+      );
     expect(() =>
       sequentialTest(
         { n: 10, x: 1 },

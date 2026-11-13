@@ -53623,6 +53623,10 @@ function sampleSize(i) {
     variants
   };
 }
+var GUARDRAIL_NOTE = "Check guardrail metrics (errors, latency, refunds, retention) before shipping; statistical significance is not business significance.";
+function srmNote(srm) {
+  return `Sample ratio mismatch (\u03C7\xB2 p = ${srm.pValue.toExponential(2)} < 0.0005): the traffic split is not what was configured. Do not trust the result until the cause (bucketing, redirects, logging) is found.`;
+}
 function analyze(control, variant, opts = {}) {
   for (const a of [control, variant]) {
     if (!Number.isInteger(a.visitors) || !Number.isInteger(a.conversions) || a.visitors <= 0 || a.conversions < 0 || a.conversions > a.visitors)
@@ -53654,10 +53658,7 @@ function analyze(control, variant, opts = {}) {
   const significant = pValue < alpha;
   const pct2 = (x) => `${(x * 100).toFixed(2)}%`;
   const interpretation = [];
-  if (srm.mismatch)
-    interpretation.push(
-      `Sample ratio mismatch (\u03C7\xB2 p = ${srmP.toExponential(2)} < 0.0005): the traffic split is not what was configured. Do not trust the result until the cause (bucketing, redirects, logging) is found.`
-    );
+  if (srm.mismatch) interpretation.push(srmNote(srm));
   if (opts.plannedPerVariant && Math.min(control.visitors, variant.visitors) < opts.plannedPerVariant)
     interpretation.push(
       `Only ${Math.min(control.visitors, variant.visitors)} of the planned ${opts.plannedPerVariant} visitors per arm so far: stopping now inflates false positives (peeking). Wait for the planned sample.`
@@ -53665,9 +53666,7 @@ function analyze(control, variant, opts = {}) {
   interpretation.push(
     significant ? `${variant.name} converted at ${pct2(p2)} vs ${pct2(p1)} for ${control.name} (difference ${pct2(p2 - p1)}, ${(1 - alpha) * 100}% CI ${pct2(ciAbsolute[0])} to ${pct2(ciAbsolute[1])}); p = ${pValue.toPrecision(3)} < ${alpha}. The difference is statistically significant for this sample.` : `No statistically significant difference: ${pct2(p2)} vs ${pct2(p1)}, p = ${pValue.toPrecision(3)} \u2265 ${alpha}. The ${(1 - alpha) * 100}% CI for the difference (${pct2(ciAbsolute[0])} to ${pct2(ciAbsolute[1])}) includes effects of either sign or zero; "no evidence of a difference" is not evidence of no difference.`
   );
-  interpretation.push(
-    "Check guardrail metrics (errors, latency, refunds, retention) before shipping; statistical significance is not business significance."
-  );
+  interpretation.push(GUARDRAIL_NOTE);
   return {
     control: { ...control, rate: p1 },
     variant: { ...variant, rate: p2 },
@@ -53694,13 +53693,14 @@ function sequentialTest(a, b, opts) {
   const { alpha, previous } = opts;
   const tau = opts.tau ?? 0.1;
   if (!(alpha > 0 && alpha < 1)) throw new RangeError("alpha must be between 0 and 1");
-  if (!(tau > 0 && Number.isFinite(tau))) throw new RangeError("tau must be a positive number");
+  if (!(tau > 0 && tau <= 1)) throw new RangeError("tau must be greater than 0 and at most 1");
   if (previous && !(previous.pValue >= 0 && previous.pValue <= 1))
     throw new RangeError("previous.pValue must be between 0 and 1");
   const pa = a.x / a.n;
   const pb = b.x / b.n;
   const diff = pb - pa;
-  const v = pa * (1 - pa) / a.n + pb * (1 - pb) / b.n;
+  const q = (a.x + b.x) / (a.n + b.n);
+  const v = Math.max(pa * (1 - pa) / a.n + pb * (1 - pb) / b.n, q * (1 - q) * (1 / a.n + 1 / b.n));
   const t2 = tau * tau;
   let pNow = 1;
   let interval = [-1, 1];
@@ -53962,6 +53962,12 @@ function analysisMode(ctx, fromAdapter) {
   if (seq && fixed) throw new JouriloError("USAGE", "Choose one of --sequential and --fixed.");
   if (str(ctx, "tau") !== void 0 && (fixed || !seq && !fromAdapter))
     throw new JouriloError("USAGE", "--tau applies only to a sequential analysis (--sequential, or --from).");
+  const tau = numOpt(ctx, "tau");
+  if (tau !== void 0 && !(tau > 0 && tau <= 1))
+    throw new JouriloError(
+      "USAGE",
+      "--tau must be greater than 0 and at most 1 (a spread on the difference of two rates, e.g. 0.1)."
+    );
   const mode = seq ? "sequential" : fixed ? "fixed" : fromAdapter ? "sequential" : "fixed";
   if (mode === "sequential" && str(ctx, "planned") !== void 0)
     throw new JouriloError(
@@ -53980,14 +53986,15 @@ function sequentialAnalysis(c, v, fixed, tau) {
     { alpha, tau }
   );
   const level = `${(1 - alpha) * 100}%`;
+  const p = s.pValue < 1e-6 ? "p < 1e-6" : `p = ${s.pValue.toPrecision(3)}`;
   const ci = `${pct(s.confidenceInterval[0])} to ${pct(s.confidenceInterval[1])}`;
   const rates = `${v.name} ${pct(fixed.variant.rate)} vs ${c.name} ${pct(fixed.control.rate)}`;
   const interpretation = [];
-  interpretation.push(...fixed.interpretation.filter((l) => l.startsWith("Sample ratio mismatch")));
+  if (fixed.srm.mismatch) interpretation.push(srmNote(fixed.srm));
   interpretation.push(
-    s.decision === "continue" ? `Continue: ${rates}, always-valid p = ${s.pValue.toPrecision(3)} > ${alpha}; the ${level} confidence sequence for the difference (${ci}) still includes zero. Check again as data arrives; every look is allowed.` : `Stop: ${s.decision === "stop-b-better" ? v.name : c.name} is better (${rates}, always-valid p = ${s.pValue.toPrecision(3)} \u2264 ${alpha}; ${level} confidence sequence for the difference ${ci}). This holds however often the experiment was checked.`,
+    s.decision === "continue" ? `Continue: ${rates}, always-valid ${p} > ${alpha}; the ${level} confidence sequence for the difference (${ci}) still includes zero. Check again as data arrives; every look is allowed.` : `Stop: ${s.decision === "stop-b-better" ? v.name : c.name} is better (${rates}, always-valid ${p} \u2264 ${alpha}; ${level} confidence sequence for the difference ${ci}). This holds however often the experiment was checked.`,
     `Sequential test (mSPRT, mixing \u03C4 = ${tau}): valid at every look, so peeking is safe, at the cost of a wider interval than a fixed-horizon test at its planned sample. Each run is one look with no memory: once a look says stop, act on it rather than waiting for a later look to agree.`,
-    fixed.interpretation.at(-1)
+    GUARDRAIL_NOTE
   );
   return {
     mode: "sequential",
@@ -54061,15 +54068,15 @@ var experiment = {
   analyze  --control 120/2400 --variant 150/2380 [--alpha 0.05] [--expected-share 0.5] [--planned N]
            [--sequential [--tau 0.1]]
   analyze  --from <adapter>:<id> [--metric M] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--control-key K]
-           [--alpha \u2026] [--expected-share \u2026] [--planned N] [--tau 0.1 | --fixed]
+           [--alpha \u2026] [--expected-share \u2026] [--tau 0.1 | --fixed [--planned N]]
 
 analyze modes:
   fixed        one look at a planned sample: two-proportion z-test, p-value and CI. Default for --control/--variant.
   --sequential mSPRT (mixture sequential probability ratio test): an always-valid p-value and confidence sequence,
                so the experiment may be checked after every batch and stopped at the first look that says stop.
                Default with --from, since a live experiment is checked repeatedly; --fixed opts out there.
-  --tau T      standard deviation of the normal mixing distribution on the difference in rates (default 0.1);
-               sequential only. Each run is one look without history: once a look says stop, act on it.
+  --tau T      standard deviation of the normal mixing distribution on the difference in rates, in (0, 1]
+               (default 0.1); sequential only. Each run is one look without history: once a look says stop, act on it.
   --planned N  fixed only: warns about peeking while fewer than N visitors per arm have arrived.
 
 --from reads the numbers, read-only, from an analytics tool (keys from the environment only, never printed):

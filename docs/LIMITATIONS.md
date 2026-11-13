@@ -109,8 +109,11 @@ Stated so nobody mistakes silence for a pass.
 - Conversion rules are text/structure heuristics. Vocabulary (calls to action, trust and pricing signals, form
   purposes, error messages, field names, and the safety policy's destructive/financial actions) covers English,
   Turkish, German, Spanish and French; other languages fall back to structure-only signals.
-- Experiment statistics: two-proportion z-test with fixed horizon only; no sequential testing, no continuous metrics,
-  no CUPED. Jourilo does not connect to analytics or flag providers yet; plans list detected tools only.
+- Experiment statistics: conversion (two-proportion) metrics only, with a fixed-horizon z-test or a sequential mSPRT
+  (always-valid p-value and confidence sequence, normal approximation); no continuous metrics, no CUPED. The CLI keeps
+  no history between `analyze` runs, so each run is one look. `--from` reads results read-only from PostHog,
+  GrowthBook and Amplitude; Jourilo does not create or change experiments or flags, and plans list the detected
+  tools only.
 
 ## Discovery and root causes
 
