@@ -42,6 +42,16 @@
       "rule": "conv/vague-cta-label",
       "path": "/conta",
       "why": "'Salvar alterações' and 'Excluir conta' are specific actions"
+    },
+    {
+      "rule": "conv/pricing-period-unclear",
+      "path": "/precos-anuais",
+      "why": "prices state their period in the local language"
+    },
+    {
+      "rule": "conv/no-trust-signals",
+      "path": "/cadastro-seguro",
+      "why": "'Pagamento protegido. Seus dados são criptografados.' is a security signal"
     }
   ]
 }

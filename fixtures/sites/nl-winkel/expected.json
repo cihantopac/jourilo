@@ -42,6 +42,16 @@
       "rule": "conv/vague-cta-label",
       "path": "/account",
       "why": "'Wijzigingen opslaan' and 'Account verwijderen' are specific actions"
+    },
+    {
+      "rule": "conv/pricing-period-unclear",
+      "path": "/prijzen-jaarlijks",
+      "why": "prices state their period in the local language"
+    },
+    {
+      "rule": "conv/no-trust-signals",
+      "path": "/registratie-veilig",
+      "why": "'Veilig betalen. Je gegevens zijn versleuteld.' is a security signal"
     }
   ]
 }

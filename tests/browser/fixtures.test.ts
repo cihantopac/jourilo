@@ -38,17 +38,17 @@ describe('fixture benchmark', () => {
     expect(r.missed).toEqual([]);
     expect(r.falsePositives).toEqual([]);
   });
-  it('applies conversion and form heuristics to an Italian sites', async () => {
+  it('applies conversion and form heuristics to an Italian site', async () => {
     const r = await benchFixture(join(import.meta.dirname, '../../fixtures/sites/it-negozio'), ws);
     expect(r.missed).toEqual([]);
     expect(r.falsePositives).toEqual([]);
   });
-  it('applies conversion and form heuristics to a Portuguese sites', async () => {
+  it('applies conversion and form heuristics to a Portuguese site', async () => {
     const r = await benchFixture(join(import.meta.dirname, '../../fixtures/sites/pt-loja'), ws);
     expect(r.missed).toEqual([]);
     expect(r.falsePositives).toEqual([]);
   });
-  it('applies conversion and form heuristics to a Dutch sites', async () => {
+  it('applies conversion and form heuristics to a Dutch site', async () => {
     const r = await benchFixture(join(import.meta.dirname, '../../fixtures/sites/nl-winkel'), ws);
     expect(r.missed).toEqual([]);
     expect(r.falsePositives).toEqual([]);

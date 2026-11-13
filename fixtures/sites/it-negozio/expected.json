@@ -42,6 +42,16 @@
       "rule": "conv/vague-cta-label",
       "path": "/account",
       "why": "'Salva le modifiche' and 'Elimina account' are specific actions"
+    },
+    {
+      "rule": "conv/pricing-period-unclear",
+      "path": "/prezzi-annuali",
+      "why": "prices state their period in the local language"
+    },
+    {
+      "rule": "conv/no-trust-signals",
+      "path": "/iscrizione-sicura",
+      "why": "'Pagamento sicuro. I tuoi dati sono crittografati.' is a security signal"
     }
   ]
 }

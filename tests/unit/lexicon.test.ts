@@ -187,6 +187,8 @@ describe('Italian, Portuguese and Dutch vocabulary', () => {
       'Cancellation policy',
       'Wissen',
       'Verwijderingen',
+      'Stain remover',
+      'Hair remover',
     ]);
     no('financial', ['Pagination', 'Pagani', 'Betaalbaar', 'Kopenhagen', 'Dona Maria']);
     no('signup', ['Registrar', 'Registered']);
@@ -220,6 +222,19 @@ describe('Italian, Portuguese and Dutch safety policy', () => {
     'Betaal nu',
     'Afrekenen',
     'Bestelling plaatsen',
+    'Bestellen',
+    'Bestel nu',
+    'Ordina',
+    'Ordina ora',
+    'Ordinare',
+    'Compra',
+    'Comprare',
+    'Comprar',
+    'Encomendar',
+    'Remover conta',
+    'Account wissen',
+    'Account deactiveren',
+    'Annulla abbonamento',
   ])('never performs "%s" on a public host', (name) => {
     for (const host of [publicHost, local])
       expect(
@@ -237,6 +252,8 @@ describe('Italian, Portuguese and Dutch safety policy', () => {
     'Eliminate duplicates',
     'Pagamentos aceitos em breve',
     'Kopenhagen',
+    'Stain remover',
+    'Hair remover',
   ])('does not block the harmless "%s"', (name) => {
     expect(
       checkAction({ action: 'click', name, submitsForm: false, paymentForm: false }, publicHost).allowed,
