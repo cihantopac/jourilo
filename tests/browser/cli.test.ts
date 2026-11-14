@@ -1732,9 +1732,11 @@ describe('cli structured progress (F35)', () => {
       for (const l of lines) expect(phases, l.message).toContain(l.phase);
       expect(lines[0]).toMatchObject({ phase: 'launch', message: 'Starting chromium …' });
 
-      // The plan line, then one line per capture: done counts the captures finished before it.
+      // The plan line (total only, so it and the first capture line are not both `done: 0`), then one line per
+      // capture: done counts the captures finished before it.
       const plan = lines.find((l) => l.message.startsWith('Auditing '));
-      expect(plan).toMatchObject({ phase: 'capture', done: 0, total: 4 });
+      expect(plan).toMatchObject({ phase: 'capture', total: 4 });
+      expect(plan?.done).toBeUndefined();
       const captures = lines.filter((l) => l.phase === 'capture' && l.url);
       const b = `${origin}/b?token=[redacted]`;
       expect(captures.map((l) => [l.done, l.total, l.viewport, l.url])).toEqual([
