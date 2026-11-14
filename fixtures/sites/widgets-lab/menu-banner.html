@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Menu with a popup that ignores Escape – Widgets lab</title><link rel="stylesheet" href="/style.css">
+<style>[role="menu"]{border:1px solid #555;padding:4px;display:inline-block;background:#fff} [role="menu"][hidden]{display:none} [role="menuitem"]{display:block;padding:6px 10px;color:#111;background:none;border:0;font:inherit;text-align:left;width:100%} [role="menuitem"]:focus-visible{outline:3px solid #0645ad}
+#banner{position:fixed;left:0;right:0;bottom:0;height:120px;background:#222;color:#fff;padding:16px} #banner[hidden]{display:none}</style></head>
+<body>
+<!-- A correct menu whose button also opens a role-less, aria-expanded-less banner that ignores Escape. The check must close it (reload) without clicking anything in it. -->
+<main><h1>Menus</h1><p><a href="/">Back to the lab</a></p>
+<div>
+  <button type="button" id="opt-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="opt-menu">Options</button>
+  <div role="menu" id="opt-menu" aria-labelledby="opt-btn" hidden>
+    <button type="button" role="menuitem" tabindex="-1">Compact view</button>
+    <button type="button" role="menuitem" tabindex="-1">Wide view</button>
+  </div>
+</div>
+<div id="banner" hidden><p>Newsletter: stay in touch.</p><button type="button" id="banner-go">Subscribe</button></div>
+</main>
+<script>
+  var btn = document.getElementById('opt-btn'), menu = document.getElementById('opt-menu');
+  var items = Array.prototype.slice.call(menu.querySelectorAll('[role="menuitem"]'));
+  function close() { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); btn.focus(); }
+  btn.addEventListener('click', function () {
+    menu.hidden = false; btn.setAttribute('aria-expanded', 'true'); items[0].focus();
+    document.getElementById('banner').hidden = false;
+  });
+  menu.addEventListener('keydown', function (e) {
+    var i = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+    else if (e.key === 'Home') { e.preventDefault(); items[0].focus(); }
+    else if (e.key === 'End') { e.preventDefault(); items[items.length - 1].focus(); }
+    else if (e.key === 'Escape') { e.preventDefault(); close(); }
+  });
+</script>
+</body>
+</html>

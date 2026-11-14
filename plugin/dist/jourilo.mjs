@@ -43336,6 +43336,7 @@ function requestLimitations(opts) {
 }
 
 // src/browser/widgets.ts
+var VISIBLE_FN = "const visible = (e) => !!e && e.isConnected && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';";
 var AVOID = /(?<![\p{L}])(add to (cart|basket|bag)|sepete ekle|in den warenkorb|añadir al carrito|ajouter au panier|like|beğen|follow|takip et|vote|oy ver|log ?out|sign ?out|çıkış yap|abmelden|cerrar sesión|déconnexion)(?![\p{L}])/iu;
 var TRIGGERS = `(() => {
   const sel = (e) => {
@@ -43387,7 +43388,7 @@ var SNAPSHOT_LAYERS = `(() => {
   window.__jouriloLayers = new Set(layers.map(sig));
 })()`;
 var STATE = `(controls, mode) => {
-  const visible = (e) => !!e && e.isConnected && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+  ${VISIBLE_FN}
   if (mode === 'same') {
     const d = window.__jouriloDialog;
     const ae = document.activeElement;
@@ -43445,7 +43446,7 @@ var WAIT_FOCUS_STABLE = `new Promise((resolve) => {
 })`;
 var COMPOSITES = `(() => {
   const ITEM = { tablist: 'tab', radiogroup: 'radio', listbox: 'option', menubar: 'menuitem, [role="menuitemcheckbox"], [role="menuitemradio"]', tree: 'treeitem' };
-  const visible = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+  ${VISIBLE_FN}
   const tabbable = (e) => e.tabIndex >= 0 && !e.disabled && e.getAttribute('aria-disabled') !== 'true' && visible(e);
   const out = [];
   for (const [role, item] of Object.entries(ITEM)) {
@@ -43515,27 +43516,39 @@ async function checkComposites(page, out) {
     `document.querySelectorAll('[data-jourilo-composite],[data-jourilo-composite-stop]').forEach((e) => { e.removeAttribute('data-jourilo-composite'); e.removeAttribute('data-jourilo-composite-stop'); })`
   ).catch(() => void 0);
 }
-var MENU_TRIGGERS = `(() => {
-  const visible = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+var MENU_TAG = `(wanted) => {
+  ${VISIBLE_FN}
+  const seen = new Map();
   const out = [];
   for (const b of document.querySelectorAll('[aria-haspopup="menu"], [aria-haspopup="true"]')) {
-    if (out.length >= 12 || !visible(b) || b.disabled || b.getAttribute('aria-disabled') === 'true') continue;
+    if (!visible(b) || b.disabled || b.getAttribute('aria-disabled') === 'true') continue;
     if (b.closest('[role="menu"], [role="menubar"]')) continue;
     const name = (b.getAttribute('aria-label') || b.innerText || b.getAttribute('title') || '').replace(/\\s+/g, ' ').trim().slice(0, 80);
-    const id = 'jourilo-menu-' + out.length;
-    b.setAttribute('data-jourilo-menu', id);
+    // A trigger is identified by element type, popup role and name, plus its position among identical ones, so a
+    // reload that reorders the DOM or adds a banner still finds the same triggers.
+    const key = b.tagName + '|' + b.getAttribute('aria-haspopup') + '|' + name;
+    const nth = seen.get(key) || 0;
+    seen.set(key, nth + 1);
+    const hit = wanted ? wanted.find((w) => w.key === key && w.nth === nth) : null;
+    if (wanted && !hit) continue;
+    if (hit) b.setAttribute('data-jourilo-menu', hit.id);
     const r = b.getBoundingClientRect();
     const href = b.tagName === 'A' ? b.getAttribute('href') || '' : '';
-    out.push({ id, name, link: b.tagName === 'A' && !/^(#.*)?$|^javascript:/i.test(href), rect: { x: Math.round(r.left + scrollX), y: Math.round(r.top + scrollY), width: Math.round(r.width), height: Math.round(r.height) } });
+    out.push({ key, nth, name, link: b.tagName === 'A' && !/^(#.*)?$|^javascript:/i.test(href), rect: { x: Math.round(r.left + scrollX), y: Math.round(r.top + scrollY), width: Math.round(r.width), height: Math.round(r.height) } });
+    if (!wanted && out.length >= 40) break;
   }
   return out;
-})()`;
+}`;
 var MENU_SNAPSHOT = `(() => {
-  const visible = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+  ${VISIBLE_FN}
+  const big = (e) => { const r = e.getBoundingClientRect(); return r.width * r.height >= innerWidth * innerHeight * 0.02; };
+  const sig = (e) => { const r = e.getBoundingClientRect(); const fixed = getComputedStyle(e).position === 'fixed'; return e.tagName + '.' + String(e.className) + '|' + Math.round(r.left + (fixed ? 0 : scrollX)) + ',' + Math.round(r.top + (fixed ? 0 : scrollY)) + ',' + Math.round(r.width) + ',' + Math.round(r.height); };
   window.__jouriloMenusBefore = Array.from(document.querySelectorAll('[role="menu"]')).filter(visible);
+  window.__jouriloPopupsBefore = Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"], dialog[open]')).filter(visible);
+  window.__jouriloMenuLayers = new Set(Array.from(document.querySelectorAll('body *')).filter((e) => { const p = getComputedStyle(e).position; return (p === 'fixed' || p === 'absolute') && visible(e) && big(e); }).map(sig));
 })()`;
 var MENU_STATE = `(id) => {
-  const visible = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+  ${VISIBLE_FN}
   const b = document.querySelector('[data-jourilo-menu="' + id + '"]');
   if (!b) return null;
   const controls = (b.getAttribute('aria-controls') || '').split(/\\s+/).map((i) => document.getElementById(i)).filter(Boolean);
@@ -43551,26 +43564,37 @@ var MENU_STATE = `(id) => {
   return { open: true, items: items.length, pos: target ? items.findIndex((i) => i === target || i.contains(target)) : -1, onTrigger: ae === b };
 }`;
 async function checkMenus(page, out) {
-  const found = await page.evaluate(MENU_TRIGGERS).catch(() => []);
+  const candidates = await page.evaluate(`(${MENU_TAG})(null)`).catch(() => []);
+  const found = candidates.filter((m) => !(DESTRUCTIVE.test(m.name) || FINANCIAL.test(m.name) || AVOID.test(m.name))).slice(0, 4).map((m, i) => ({ ...m, id: `jourilo-menu-${i}` }));
+  const tag = () => page.evaluate(`(${MENU_TAG})(${JSON.stringify(found.map((m) => ({ id: m.id, key: m.key, nth: m.nth })))})`).catch(() => void 0);
+  await tag();
   const startUrl = page.url();
+  let layerReloads = 0;
   const settle2 = async (id) => {
     let dirty = page.url() !== startUrl;
     if (dirty) await page.goto(startUrl, { waitUntil: "load" }).catch(() => void 0);
     else {
       await page.keyboard.press("Escape").catch(() => void 0);
       await page.waitForTimeout(150);
-      dirty = !!await page.evaluate(
+      const left = await page.evaluate(
         `(() => {
-            const visible = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+            ${VISIBLE_FN}
+            const big = (e) => { const r = e.getBoundingClientRect(); return r.width * r.height >= innerWidth * innerHeight * 0.02; };
+            const sig = (e) => { const r = e.getBoundingClientRect(); const fixed = getComputedStyle(e).position === 'fixed'; return e.tagName + '.' + String(e.className) + '|' + Math.round(r.left + (fixed ? 0 : scrollX)) + ',' + Math.round(r.top + (fixed ? 0 : scrollY)) + ',' + Math.round(r.width) + ',' + Math.round(r.height); };
             const b = document.querySelector('[data-jourilo-menu="${id}"]');
+            const menus = window.__jouriloMenusBefore || [];
+            const popups = window.__jouriloPopupsBefore || [];
+            const layers = window.__jouriloMenuLayers || new Set();
             const open = Array.from(document.querySelectorAll('[role="menu"], [role="dialog"], [role="alertdialog"], dialog[open]'));
-            const before = window.__jouriloMenusBefore || [];
-            return !b || b.getAttribute('aria-expanded') === 'true' || open.some((e) => visible(e) && !before.includes(e));
+            if (!b || b.getAttribute('aria-expanded') === 'true' || open.some((e) => visible(e) && !menus.includes(e) && !popups.includes(e))) return 1;
+            const fresh = Array.from(document.querySelectorAll('body *')).some((e) => { const p = getComputedStyle(e).position; return (p === 'fixed' || p === 'absolute') && visible(e) && big(e) && !layers.has(sig(e)); });
+            return fresh ? 2 : 0;
           })()`
-      ).catch(() => true);
+      ).catch(() => 1);
+      dirty = left === 1 || left === 2 && layerReloads++ < 1;
       if (dirty) await page.reload({ waitUntil: "load" }).catch(() => void 0);
     }
-    if (dirty) await page.evaluate(MENU_TRIGGERS).catch(() => void 0);
+    if (dirty) await tag();
   };
   const checkMenu = async (m) => {
     const trigger = page.locator(`[data-jourilo-menu="${m.id}"]`).first();
@@ -43643,10 +43667,7 @@ async function checkMenus(page, out) {
         [...open, "Press Escape: the menu closes, but focus is not on the menu button."]
       );
   };
-  let tested = 0;
   for (const m of found) {
-    if (DESTRUCTIVE.test(m.name) || FINANCIAL.test(m.name) || AVOID.test(m.name)) continue;
-    if (tested++ >= 4) break;
     try {
       await checkMenu(m);
     } catch {
@@ -43656,6 +43677,16 @@ async function checkMenus(page, out) {
   await page.evaluate(
     `document.querySelectorAll('[data-jourilo-menu]').forEach((e) => e.removeAttribute('data-jourilo-menu'))`
   ).catch(() => void 0);
+}
+async function focusNow(loc) {
+  return loc.evaluate(
+    (el) => {
+      el.focus();
+      return document.activeElement === el;
+    },
+    void 0,
+    { timeout: 1e3 }
+  ).catch(() => false);
 }
 async function checkWidgets(page) {
   const triggers = await page.evaluate(TRIGGERS);
@@ -43675,8 +43706,8 @@ async function checkWidgets(page) {
     await page.evaluate(SNAPSHOT_LAYERS).catch(() => void 0);
     const before = await state(t.controls);
     if (before.dialogOpen) break;
+    if (!await focusNow(loc)) continue;
     try {
-      await loc.focus({ timeout: 3e3 });
       await page.keyboard.press("Enter");
       await page.waitForTimeout(350);
     } catch {
@@ -43735,9 +43766,10 @@ async function checkWidgets(page) {
           detail: `The controlled content is now ${after.controlledVisible ? "shown" : "hidden"} but aria-expanded is "${expandedAfter}".`
         });
       if (after.controlledVisible !== before.controlledVisible) {
-        await loc.focus({ timeout: 2e3 }).catch(() => void 0);
-        await page.keyboard.press("Enter").catch(() => void 0);
-        await page.waitForTimeout(200);
+        if (await focusNow(loc)) {
+          await page.keyboard.press("Enter").catch(() => void 0);
+          await page.waitForTimeout(200);
+        }
       }
     }
   }

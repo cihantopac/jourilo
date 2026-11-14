@@ -127,7 +127,6 @@ there.
 
 Deferred from the 1.4.0 reviews, grouped; each is a small, known gap.
 
-- **Menus:** detect a role-less popup that ignores Escape; do not reload up to four times on a cookie banner.
 - **Discovery and causes:** keep hand-written long-line files out of the regex fallback; Angular `loadComponent` records.
 - **Fixers:** edit an existing `html, body {}` rule; add a rect and screenshot to implicit-submit evidence.
 - **Trends:** LCP and CLS from every capture; say when the page set changed between runs.

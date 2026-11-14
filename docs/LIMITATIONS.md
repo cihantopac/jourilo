@@ -22,10 +22,12 @@ Stated so nobody mistakes silence for a pass.
 - The keyboard walk visits up to 60 stops per page and only on keyboard (non-touch) viewports by default. Dialogs and
   disclosures that declare `aria-haspopup`/`aria-expanded` are operated with Enter/Escape. Composite widgets (tabs,
   radio groups, list boxes, menu bars, trees) are tested for keyboard reachability (do the arrow keys reach the other
-  items?). Menu buttons (`aria-haspopup="menu"` or `true`, at most 4 per page) also get the APG menu-button keys:
-  ArrowDown/ArrowUp, Home/End, Escape and focus return. Items are never activated, so what an item does is not
+  items?). Menu buttons (`aria-haspopup="menu"` or `true`; at most 4 per page, counted after
+  destructive and financial names are skipped) also get the APG menu-button keys: ArrowDown/ArrowUp, Home/End, Escape
+  and focus return. Items are never activated, so what an item does is not
   tested; a menu bar, submenus, typeahead and grids are not tested beyond reachability. A role-less popup without
-  `aria-expanded` that ignores Escape is not detected.
+  `aria-expanded` that is still showing after Escape (a banner the trigger opened) is closed by one reload, never by a
+  click, and is not reported. The focus-return finding cites WCAG 2.4.3 (Focus Order); the other menu findings cite 2.1.1.
 - Focus-visible detection compares the styles of the element and its parent, then the pixels around the element with
   and without focus, so indicators drawn by a sibling are seen; an indicator drawn far away from the element is not.
 - Focus hidden by other content is found when an opaque, hit-testable element covers the focused element at the

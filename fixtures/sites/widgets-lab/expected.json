@@ -44,7 +44,7 @@
     {
       "rule": "jourilo/menu-home-end",
       "path": "/menu-broken",
-      "why": "Home and End do nothing in the File menu (the View menu handles them)"
+      "why": "Home and End do nothing in the File menu; only File fails here, the View menu handles both keys"
     },
     {
       "rule": "jourilo/menu-escape",
@@ -224,10 +224,12 @@
       "/dialog-guards",
       "/dialog-guards-slow",
       "/menu-good",
-      "/menu-nav"
+      "/menu-nav",
+      "/menu-banner",
+      "/menu-cookie"
     ]
   },
   "audit": {
-    "maxPages": 20
+    "maxPages": 24
   }
 }

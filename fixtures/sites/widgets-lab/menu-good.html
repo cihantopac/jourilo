@@ -30,6 +30,7 @@ dialog{border:1px solid #555;padding:16px}</style></head>
     var btn = document.getElementById(btnId), menu = document.getElementById(menuId);
     var items = Array.prototype.slice.call(menu.querySelectorAll('[role="menuitem"]'));
     function open(which) {
+      (window.__menuOpened = window.__menuOpened || []).push(menuId);
       menu.hidden = false; btn.setAttribute('aria-expanded', 'true');
       items[which === 'last' ? items.length - 1 : 0].focus();
     }
@@ -56,7 +57,8 @@ dialog{border:1px solid #555;padding:16px}</style></head>
   document.getElementById('about-item').addEventListener('click', function () {
     actions.menu.hidden = true; actions.btn.setAttribute('aria-expanded', 'false'); dlg.showModal();
   });
-  dlg.addEventListener('close', function () { actions.menu.hidden = false; actions.btn.setAttribute('aria-expanded', 'true'); document.getElementById('about-item').focus(); });
+  // APG: when the dialog closes, focus returns to the menu button; the menu stays closed.
+  dlg.addEventListener('close', function () { actions.btn.focus(); });
   document.getElementById('about-close').addEventListener('click', function () { dlg.close(); });
 </script>
 </body>

@@ -3,7 +3,7 @@
 //  - disclosures/menus: aria-expanded reflects whether the controlled content is shown (WCAG 4.1.2).
 // Only triggers that declare a popup or expanded state are operated (aria-haspopup / aria-expanded), and never one
 // whose name looks destructive or financial. Nothing is submitted.
-import type { Page } from 'playwright-core';
+import type { Locator, Page } from 'playwright-core';
 import type { Rect } from '../core/types.js';
 import { DESTRUCTIVE, FINANCIAL } from '../journeys/safety.js';
 
@@ -36,6 +36,10 @@ export interface WidgetCheck {
   composites: number;
   issues: WidgetIssue[];
 }
+
+// One page-side visibility test shared by every injected script below (interpolated into each script's source).
+const VISIBLE_FN =
+  "const visible = (e) => !!e && e.isConnected && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';";
 
 // Generic triggers are operated too, but never ones that change data or carts.
 const AVOID =
@@ -97,7 +101,7 @@ const SNAPSHOT_LAYERS = `(() => {
 // mode "open": find a dialog that opened (a real one, else a new overlay layer); "same": is the dialog found by the
 // last "open" call still shown? Checking only that element keeps other layers (toasts, launchers) from looking open.
 const STATE = `(controls, mode) => {
-  const visible = (e) => !!e && e.isConnected && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+  ${VISIBLE_FN}
   if (mode === 'same') {
     const d = window.__jouriloDialog;
     const ae = document.activeElement;
@@ -174,7 +178,7 @@ type State = {
 // Tab already reaches every item.
 const COMPOSITES = `(() => {
   const ITEM = { tablist: 'tab', radiogroup: 'radio', listbox: 'option', menubar: 'menuitem, [role="menuitemcheckbox"], [role="menuitemradio"]', tree: 'treeitem' };
-  const visible = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+  ${VISIBLE_FN}
   const tabbable = (e) => e.tabIndex >= 0 && !e.disabled && e.getAttribute('aria-disabled') !== 'true' && visible(e);
   const out = [];
   for (const [role, item] of Object.entries(ITEM)) {
@@ -271,30 +275,43 @@ async function checkComposites(page: Page, out: WidgetCheck): Promise<void> {
 // ArrowDown/ArrowUp, Home/End and Escape are pressed. An item is never activated (no Enter or Space while the menu is
 // open): items are often links that navigate or actions that change data. The page is reloaded if anything changed
 // the URL anyway.
-const MENU_TRIGGERS = `(() => {
-  const visible = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+const MENU_TAG = `(wanted) => {
+  ${VISIBLE_FN}
+  const seen = new Map();
   const out = [];
   for (const b of document.querySelectorAll('[aria-haspopup="menu"], [aria-haspopup="true"]')) {
-    if (out.length >= 12 || !visible(b) || b.disabled || b.getAttribute('aria-disabled') === 'true') continue;
+    if (!visible(b) || b.disabled || b.getAttribute('aria-disabled') === 'true') continue;
     if (b.closest('[role="menu"], [role="menubar"]')) continue;
     const name = (b.getAttribute('aria-label') || b.innerText || b.getAttribute('title') || '').replace(/\\s+/g, ' ').trim().slice(0, 80);
-    const id = 'jourilo-menu-' + out.length;
-    b.setAttribute('data-jourilo-menu', id);
+    // A trigger is identified by element type, popup role and name, plus its position among identical ones, so a
+    // reload that reorders the DOM or adds a banner still finds the same triggers.
+    const key = b.tagName + '|' + b.getAttribute('aria-haspopup') + '|' + name;
+    const nth = seen.get(key) || 0;
+    seen.set(key, nth + 1);
+    const hit = wanted ? wanted.find((w) => w.key === key && w.nth === nth) : null;
+    if (wanted && !hit) continue;
+    if (hit) b.setAttribute('data-jourilo-menu', hit.id);
     const r = b.getBoundingClientRect();
     const href = b.tagName === 'A' ? b.getAttribute('href') || '' : '';
-    out.push({ id, name, link: b.tagName === 'A' && !/^(#.*)?$|^javascript:/i.test(href), rect: { x: Math.round(r.left + scrollX), y: Math.round(r.top + scrollY), width: Math.round(r.width), height: Math.round(r.height) } });
+    out.push({ key, nth, name, link: b.tagName === 'A' && !/^(#.*)?$|^javascript:/i.test(href), rect: { x: Math.round(r.left + scrollX), y: Math.round(r.top + scrollY), width: Math.round(r.width), height: Math.round(r.height) } });
+    if (!wanted && out.length >= 40) break;
   }
   return out;
-})()`;
+}`;
 
-// Visible menus before the trigger is operated: an always-visible role="menu" (a nav list) is not the popup.
+// What is already showing before the trigger is operated: menus (an always-visible role="menu" nav is not the popup),
+// dialogs (a cookie banner present on load is not something the menu opened) and large positioned layers.
 const MENU_SNAPSHOT = `(() => {
-  const visible = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+  ${VISIBLE_FN}
+  const big = (e) => { const r = e.getBoundingClientRect(); return r.width * r.height >= innerWidth * innerHeight * 0.02; };
+  const sig = (e) => { const r = e.getBoundingClientRect(); const fixed = getComputedStyle(e).position === 'fixed'; return e.tagName + '.' + String(e.className) + '|' + Math.round(r.left + (fixed ? 0 : scrollX)) + ',' + Math.round(r.top + (fixed ? 0 : scrollY)) + ',' + Math.round(r.width) + ',' + Math.round(r.height); };
   window.__jouriloMenusBefore = Array.from(document.querySelectorAll('[role="menu"]')).filter(visible);
+  window.__jouriloPopupsBefore = Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"], dialog[open]')).filter(visible);
+  window.__jouriloMenuLayers = new Set(Array.from(document.querySelectorAll('body *')).filter((e) => { const p = getComputedStyle(e).position; return (p === 'fixed' || p === 'absolute') && visible(e) && big(e); }).map(sig));
 })()`;
 
 const MENU_STATE = `(id) => {
-  const visible = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+  ${VISIBLE_FN}
   const b = document.querySelector('[data-jourilo-menu="' + id + '"]');
   if (!b) return null;
   const controls = (b.getAttribute('aria-controls') || '').split(/\\s+/).map((i) => document.getElementById(i)).filter(Boolean);
@@ -310,40 +327,59 @@ const MENU_STATE = `(id) => {
   return { open: true, items: items.length, pos: target ? items.findIndex((i) => i === target || i.contains(target)) : -1, onTrigger: ae === b };
 }`;
 
-async function checkMenus(page: Page, out: WidgetCheck): Promise<void> {
-  const found = (await page.evaluate(MENU_TRIGGERS).catch(() => [])) as {
-    id: string;
-    name: string;
-    link: boolean;
-    rect: Rect;
-  }[];
-  // Candidates are tagged by index (up to 12); at most 4 that pass the name filter are operated.
+export async function checkMenus(page: Page, out: WidgetCheck): Promise<void> {
+  type Cand = { key: string; nth: number; name: string; link: boolean; rect: Rect };
+  type Menu = Cand & { id: string };
+  // Every candidate is listed (up to 40), then the destructive/financial names are dropped and only the first 4 left
+  // are tagged and operated, so unsafe triggers never use up the cap.
+  const candidates = (await page.evaluate(`(${MENU_TAG})(null)`).catch(() => [])) as Cand[];
+  const found: Menu[] = candidates
+    .filter((m) => !(DESTRUCTIVE.test(m.name) || FINANCIAL.test(m.name) || AVOID.test(m.name)))
+    .slice(0, 4)
+    .map((m, i) => ({ ...m, id: `jourilo-menu-${i}` }));
+  const tag = () =>
+    page
+      .evaluate(`(${MENU_TAG})(${JSON.stringify(found.map((m) => ({ id: m.id, key: m.key, nth: m.nth })))})`)
+      .catch(() => undefined);
+  await tag();
   type MenuState = { open: boolean; items: number; pos: number; onTrigger: boolean } | null;
   const startUrl = page.url();
+  let layerReloads = 0;
   // Leave the page as it was found after every attempt: back to the start URL if it navigated, and no popup, dialog or
-  // menu left open (Escape first, a reload if something is still showing). The marks are put back after a reload.
+  // menu left open (Escape first, a reload if something is still showing). A new large layer that is still there after
+  // Escape (a role-less banner or popup) is closed by one reload; nothing is clicked, because it could be consent.
+  // Whatever was showing before the trigger was operated (a cookie banner) never counts, so it causes no reload. The
+  // marks are put back after a reload, matched by name and role.
   const settle = async (id: string): Promise<void> => {
     let dirty = page.url() !== startUrl;
     if (dirty) await page.goto(startUrl, { waitUntil: 'load' }).catch(() => undefined);
     else {
       await page.keyboard.press('Escape').catch(() => undefined);
       await page.waitForTimeout(150);
-      dirty = !!(await page
+      // 0: clean, 1: a menu/dialog/expanded trigger is still open, 2: only a new role-less layer is showing.
+      const left = (await page
         .evaluate(
           `(() => {
-            const visible = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+            ${VISIBLE_FN}
+            const big = (e) => { const r = e.getBoundingClientRect(); return r.width * r.height >= innerWidth * innerHeight * 0.02; };
+            const sig = (e) => { const r = e.getBoundingClientRect(); const fixed = getComputedStyle(e).position === 'fixed'; return e.tagName + '.' + String(e.className) + '|' + Math.round(r.left + (fixed ? 0 : scrollX)) + ',' + Math.round(r.top + (fixed ? 0 : scrollY)) + ',' + Math.round(r.width) + ',' + Math.round(r.height); };
             const b = document.querySelector('[data-jourilo-menu="${id}"]');
+            const menus = window.__jouriloMenusBefore || [];
+            const popups = window.__jouriloPopupsBefore || [];
+            const layers = window.__jouriloMenuLayers || new Set();
             const open = Array.from(document.querySelectorAll('[role="menu"], [role="dialog"], [role="alertdialog"], dialog[open]'));
-            const before = window.__jouriloMenusBefore || [];
-            return !b || b.getAttribute('aria-expanded') === 'true' || open.some((e) => visible(e) && !before.includes(e));
+            if (!b || b.getAttribute('aria-expanded') === 'true' || open.some((e) => visible(e) && !menus.includes(e) && !popups.includes(e))) return 1;
+            const fresh = Array.from(document.querySelectorAll('body *')).some((e) => { const p = getComputedStyle(e).position; return (p === 'fixed' || p === 'absolute') && visible(e) && big(e) && !layers.has(sig(e)); });
+            return fresh ? 2 : 0;
           })()`,
         )
-        .catch(() => true));
+        .catch(() => 1)) as number;
+      dirty = left === 1 || (left === 2 && layerReloads++ < 1);
       if (dirty) await page.reload({ waitUntil: 'load' }).catch(() => undefined);
     }
-    if (dirty) await page.evaluate(MENU_TRIGGERS).catch(() => undefined);
+    if (dirty) await tag();
   };
-  const checkMenu = async (m: { id: string; name: string; link: boolean; rect: Rect }): Promise<void> => {
+  const checkMenu = async (m: Menu): Promise<void> => {
     const trigger = page.locator(`[data-jourilo-menu="${m.id}"]`).first();
     const selector = `[aria-haspopup][data-jourilo-menu="${m.id}"]`;
     const read = () => page.evaluate(`(${MENU_STATE})(${JSON.stringify(m.id)})`) as Promise<MenuState>;
@@ -417,10 +453,7 @@ async function checkMenus(page: Page, out: WidgetCheck): Promise<void> {
         [...open, 'Press Escape: the menu closes, but focus is not on the menu button.'],
       );
   };
-  let tested = 0;
   for (const m of found) {
-    if (DESTRUCTIVE.test(m.name) || FINANCIAL.test(m.name) || AVOID.test(m.name)) continue;
-    if (tested++ >= 4) break;
     try {
       await checkMenu(m);
     } catch {
@@ -433,6 +466,21 @@ async function checkMenus(page: Page, out: WidgetCheck): Promise<void> {
       `document.querySelectorAll('[data-jourilo-menu]').forEach((e) => e.removeAttribute('data-jourilo-menu'))`,
     )
     .catch(() => undefined);
+}
+
+// Focuses the element and says whether it took focus. An element that cannot be focused (disabled, inert, hidden)
+// answers at once instead of waiting out a Playwright timeout.
+async function focusNow(loc: Locator): Promise<boolean> {
+  return loc
+    .evaluate(
+      (el) => {
+        (el as HTMLElement).focus();
+        return document.activeElement === el;
+      },
+      undefined,
+      { timeout: 1000 },
+    )
+    .catch(() => false);
 }
 
 export async function checkWidgets(page: Page): Promise<WidgetCheck> {
@@ -464,8 +512,8 @@ export async function checkWidgets(page: Page): Promise<WidgetCheck> {
     await page.evaluate(SNAPSHOT_LAYERS).catch(() => undefined);
     const before = await state(t.controls);
     if (before.dialogOpen) break; // a dialog is already open; the page is in an unexpected state
+    if (!(await focusNow(loc))) continue;
     try {
-      await loc.focus({ timeout: 3000 });
       await page.keyboard.press('Enter');
       await page.waitForTimeout(350);
     } catch {
@@ -539,9 +587,10 @@ export async function checkWidgets(page: Page): Promise<WidgetCheck> {
       if (after.controlledVisible !== before.controlledVisible) {
         // Focus may have moved into the opened content (a menu item that is a link): press Enter on the trigger,
         // never on whatever has focus.
-        await loc.focus({ timeout: 2000 }).catch(() => undefined);
-        await page.keyboard.press('Enter').catch(() => undefined);
-        await page.waitForTimeout(200);
+        if (await focusNow(loc)) {
+          await page.keyboard.press('Enter').catch(() => undefined);
+          await page.waitForTimeout(200);
+        }
       }
     }
   }
