@@ -10,6 +10,10 @@ export interface AstRoute {
   line: number;
   /** Which router declared it: "React Router", "Router config" (route records) or "TanStack Router". */
   router?: string;
+  /** The named export a lazy route takes from its module (`import('./a').then((m) => m.A)`); absent means default. */
+  exportName?: string;
+  /** Index (in the returned array) of the route this one is nested in, when that one has a path. */
+  parent?: number;
 }
 
 /** Joins a child route path to its parent; a child that starts with "/" is absolute. */
@@ -34,8 +38,19 @@ function prop(obj: ts.ObjectLiteralExpression, name: string): ts.Expression | un
   return undefined;
 }
 
+/** `m => m.Home` on the `.then` of a dynamic import → "Home". */
+function thenExport(importCall: ts.Node): string | undefined {
+  const access = importCall.parent;
+  if (!access || !ts.isPropertyAccessExpression(access) || access.name.text !== 'then') return undefined;
+  const call = access.parent;
+  if (!ts.isCallExpression(call) || call.expression !== access) return undefined;
+  const fn = call.arguments[0];
+  if (!fn || !ts.isArrowFunction(fn) || !ts.isPropertyAccessExpression(fn.body)) return undefined;
+  return fn.body.name.text;
+}
+
 /** `Home`, `<Home />` or `() => import('./Home.vue')` → a component name or module. */
-function componentOf(node: ts.Node | undefined): string | undefined {
+function componentOf(node: ts.Node | undefined, exportOf?: { name?: string }): string | undefined {
   if (!node) return undefined;
   if (ts.isIdentifier(node)) return node.text;
   if (ts.isPropertyAccessExpression(node)) return node.getText();
@@ -47,8 +62,11 @@ function componentOf(node: ts.Node | undefined): string | undefined {
     const stack: ts.Node[] = [node];
     while (stack.length) {
       const n = stack.pop()!;
-      if (ts.isCallExpression(n) && n.expression.kind === ts.SyntaxKind.ImportKeyword)
+      if (ts.isCallExpression(n) && n.expression.kind === ts.SyntaxKind.ImportKeyword) {
+        const named = exportOf ? thenExport(n) : undefined;
+        if (exportOf && named) exportOf.name = named;
         return literal(n.arguments[0]);
+      }
       stack.push(...childrenOf(n).reverse());
     }
     return undefined;
@@ -100,8 +118,23 @@ const tanstackPath = (p: string) => p.replace(/(^|\/)\$([A-Za-z_]\w*)/g, '$1:$2'
 export function astRoutes(file: string, sf: ts.SourceFile): AstRoute[] {
   const routes: AstRoute[] = [];
   const lineOf = (n: ts.Node) => sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1;
-  const push = (path: string, node: ts.Node, router: string, component?: string) =>
-    routes.push({ path, line: lineOf(node), router, ...(component ? { component } : {}) });
+  const push = (
+    path: string,
+    node: ts.Node,
+    router: string,
+    component?: string,
+    extra: { exportName?: string; parent?: number } = {},
+  ) => {
+    routes.push({
+      path,
+      line: lineOf(node),
+      router,
+      ...(component ? { component } : {}),
+      ...(extra.exportName ? { exportName: extra.exportName } : {}),
+      ...(extra.parent !== undefined ? { parent: extra.parent } : {}),
+    });
+    return routes.length - 1;
+  };
   // Route records (`{ path: '/a', children: [...] }`) count in files that look like router configuration, the same
   // rule the regular expressions used; createBrowserRouter([...]) and friends always count.
   const routerFile = isRouterConfigFile(file, sf.text);
@@ -110,14 +143,15 @@ export function astRoutes(file: string, sf: ts.SourceFile): AstRoute[] {
 
   // An explicit stack, not recursion: minified code nests thousands of levels deep (a long comma sequence is one
   // left-nested binary expression), which would overflow the call stack.
-  const stack: { node: ts.Node; prefix: string; inRouter: boolean }[] = [
+  const stack: { node: ts.Node; prefix: string; inRouter: boolean; parent?: number }[] = [
     { node: sf, prefix: '', inRouter: false },
   ];
-  const queue = (nodes: readonly ts.Node[], prefix: string, inRouter: boolean) => {
-    for (let i = nodes.length - 1; i >= 0; i--) stack.push({ node: nodes[i]!, prefix, inRouter });
+  const queue = (nodes: readonly ts.Node[], prefix: string, inRouter: boolean, parent?: number) => {
+    for (let i = nodes.length - 1; i >= 0; i--)
+      stack.push({ node: nodes[i]!, prefix, inRouter, ...(parent !== undefined ? { parent } : {}) });
   };
   while (stack.length) {
-    const { node, prefix, inRouter } = stack.pop()!;
+    const { node, prefix, inRouter, parent } = stack.pop()!;
     // TanStack Router: const postRoute = createRoute({ getParentRoute: () => postsRoute, path: '$postId' })
     if (ts.isCallExpression(node) && calleeName(node) === 'createRoute') {
       const arg = node.arguments[0];
@@ -145,7 +179,7 @@ export function astRoutes(file: string, sf: ts.SourceFile): AstRoute[] {
       ts.isCallExpression(node) &&
       /^create(Browser|Hash|Memory|Static)?Router$|^useRoutes$/.test(calleeName(node) ?? '')
     ) {
-      queue(childrenOf(node), prefix, true);
+      queue(childrenOf(node), prefix, true, parent);
       continue;
     }
     // Route records: { path: 'settings', component: Settings, children: [{ path: 'profile' }] }
@@ -160,13 +194,17 @@ export function astRoutes(file: string, sf: ts.SourceFile): AstRoute[] {
       if (path !== undefined && redirectOnly) continue;
       if (path !== undefined && routeLike) {
         const full = joinPath(prefix, path);
-        push(
-          full,
-          node,
-          'Router config',
-          componentOf(prop(node, 'component') ?? prop(node, 'Component') ?? prop(node, 'element')),
+        // Angular: `loadComponent: () => import('./a').then((m) => m.A)` names the component like `component` does.
+        const lazy: { name?: string } = {};
+        const component = componentOf(
+          prop(node, 'component') ?? prop(node, 'Component') ?? prop(node, 'element'),
         );
-        queue(childrenOf(node), full, inRouter);
+        const loaded = component ?? componentOf(prop(node, 'loadComponent'), lazy);
+        const idx = push(full, node, 'Router config', loaded, {
+          ...(!component && lazy.name ? { exportName: lazy.name } : {}),
+          ...(parent !== undefined ? { parent } : {}),
+        });
+        queue(childrenOf(node), full, inRouter, idx);
         continue;
       }
     }
@@ -177,18 +215,20 @@ export function astRoutes(file: string, sf: ts.SourceFile): AstRoute[] {
       if (tag === 'Route' || tag.endsWith('.Route')) {
         const path = literal(jsxAttr(opening.attributes, 'path'));
         const full = path === undefined ? prefix : joinPath(prefix, path);
+        let idx = parent;
         if (path !== undefined)
-          push(
+          idx = push(
             full,
             node,
             'React Router',
             componentOf(jsxAttr(opening.attributes, 'element') ?? jsxAttr(opening.attributes, 'component')),
+            parent !== undefined ? { parent } : {},
           );
-        if (ts.isJsxElement(node)) queue(node.children, full, inRouter);
+        if (ts.isJsxElement(node)) queue(node.children, full, inRouter, idx);
         continue;
       }
     }
-    queue(childrenOf(node), prefix, inRouter);
+    queue(childrenOf(node), prefix, inRouter, parent);
   }
 
   // TanStack routes join their parent's path (a leading "/" does not make them absolute); the root route

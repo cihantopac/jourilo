@@ -197,4 +197,45 @@ export function SettingsTabs() {
     expect(idx.failed).toEqual(['src/broken.tsx']);
     expect(idx.components.has('src/ok.tsx#Ok')).toBe(true);
   });
+
+  it('reaches a component named only by loadComponent in a file with no router call', () => {
+    const idx = index({
+      'src/app/app.routes.ts': `export const routes: Routes = [
+  { path: 'users', loadComponent: () => import('./users/users.page').then((m) => m.UsersPage) },
+  { path: 'home', loadComponent: () => import('./home.page') },
+];`,
+      'src/app/users/users.page.ts': `export class UsersPage {}\n`,
+      'src/app/home.page.ts': `export default class HomePage {}\n`,
+    });
+    expect(idx.components.get('src/app/users/users.page.ts#UsersPage')?.usedBy).toBe(1);
+    expect(idx.components.get('src/app/home.page.ts#HomePage')?.usedBy).toBe(1);
+  });
+
+  it('a control without any route record leaves the same file out of the graph', () => {
+    const idx = index({
+      'src/app/nav.ts': `export const links = [{ path: 'users', label: 'Users' }];`,
+      'src/app/users/users.page.ts': `export class UsersPage {}\n`,
+    });
+    expect(idx.components.get('src/app/users/users.page.ts#UsersPage')?.usedBy).toBe(0);
+  });
+
+  it('counts nested code routes toward a parent layout component', () => {
+    const idx = index({
+      'src/router.tsx': `import { createBrowserRouter } from 'react-router-dom';
+import { Shell } from './Shell';
+import { Profile } from './Profile';
+import { Billing } from './Billing';
+export const router = createBrowserRouter([
+  { path: '/settings', element: <Shell />, children: [
+    { path: 'profile', element: <Profile /> },
+    { path: 'billing', element: <Billing /> },
+  ] },
+]);`,
+      'src/Shell.tsx': `export const Shell = () => <div><Outlet /></div>;\n`,
+      'src/Profile.tsx': `export const Profile = () => <p />;\n`,
+      'src/Billing.tsx': `export const Billing = () => <p />;\n`,
+    });
+    expect(idx.components.get('src/Shell.tsx#Shell')?.usedBy).toBe(3);
+    expect(idx.components.get('src/Profile.tsx#Profile')?.usedBy).toBe(1);
+  });
 });

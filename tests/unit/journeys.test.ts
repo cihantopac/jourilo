@@ -742,4 +742,21 @@ describe('journey suggestions: disclosures and toggles', () => {
       ),
     ).toBe(false);
   });
+
+  it('a short or verb-led switch is a UI switch; a longer button that mentions a switch word is not', () => {
+    const cta = (text: string) => ({
+      text,
+      selector: '#go',
+      href: null,
+      rect,
+      aboveFold: true,
+      emphasis: 'primary' as const,
+    });
+    const landing = (text: string) =>
+      suggestJourneys(runWith({ ctas: [cta(text)] })).some((x) => x.id === 'landing-primary-cta');
+    for (const text of ['Taal', 'Licht', 'Modo oscuro', 'Switch to dark mode', 'Schakel taal om'])
+      expect(landing(text)).toBe(false);
+    for (const text of ['Start your language course today', 'Leer een nieuwe taal vandaag'])
+      expect(landing(text)).toBe(true);
+  });
 });

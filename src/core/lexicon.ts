@@ -14,6 +14,7 @@ export type Concept =
   | 'search'
   | 'newsletter'
   | 'checkout'
+  | 'payment'
   | 'formError'
   | 'trustTestimonials'
   | 'trustGuarantee'
@@ -23,6 +24,39 @@ export type Concept =
   | 'freeTrial'
   | 'toggle-ui'
   | 'submit';
+
+/** What an Italian "Ordina per ..." list control sorts by. */
+const SORT_KEYS =
+  'prezzo|nome|data|rilevanza|popolarità|valutazione|novità|categoria|marca|recenti|più recenti|punteggio';
+
+/** Payment words that identify a payment form by themselves (a "card" or "map" word does not). */
+const PAYMENT_WORDS = [
+  'checkout',
+  'payment',
+  'billing',
+  'ödeme',
+  'fatura',
+  'kasse',
+  'zahlung',
+  'rechnung',
+  'pago',
+  'facturación',
+  'paiement',
+  'facturation',
+  // it
+  'cassa',
+  'pagamento',
+  'fatturazione',
+  // pt
+  'faturação',
+  'faturamento',
+  // nl
+  'afrekenen',
+  'betaling',
+  'facturatie',
+];
+/** Words for a payment card; also ordinary nouns elsewhere (Dutch "kaart" is a map or a menu, Italian "carta" paper). */
+const CARD_WORDS = ['card', 'kart', 'karte', 'tarjeta', 'carte', 'carta', 'cartão', 'kaart'];
 
 const LEX: Record<Concept, string[]> = {
   destructive: [
@@ -141,8 +175,10 @@ const LEX: Record<Concept, string[]> = {
     // it
     'paga( ora)?',
     'acquista(re)?( ora)?',
-    'ordina(re)?( ora)?',
-    'compra(re)?( ora)?',
+    // "Ordina per prezzo" sorts a list; "Comprare casa" and "Compra de ingressos" browse a section. A real order or
+    // buy control ("Ordina", "Compra ora", "Compra il biglietto") still matches.
+    `ordina(re)?( ora)?(?!\\s+per\\s+(?:${SORT_KEYS})(?![\\p{L}\\p{N}]))`,
+    `compra(re)?( ora)?(?!\\s+(?:de|di|del|della|dei|delle|(?:una\\s+|la\\s+)?casa)(?![\\p{L}\\p{N}]))`,
     'completa (l.ordine|l.acquisto|il pagamento)',
     'conferma (l.ordine|il pagamento|l.acquisto)',
     'procedi al pagamento',
@@ -416,40 +452,8 @@ const LEX: Record<Concept, string[]> = {
     'nieuwsbrief',
     'abonneren',
   ],
-  checkout: [
-    'checkout',
-    'payment',
-    'billing',
-    'card',
-    'ödeme',
-    'fatura',
-    'kart',
-    'kasse',
-    'zahlung',
-    'rechnung',
-    'karte',
-    'pago',
-    'facturación',
-    'tarjeta',
-    'paiement',
-    'facturation',
-    'carte',
-    // it
-    'cassa',
-    'pagamento',
-    'fatturazione',
-    'carta',
-    // pt
-    'pagamento',
-    'faturação',
-    'faturamento',
-    'cartão',
-    // nl
-    'afrekenen',
-    'betaling',
-    'facturatie',
-    'kaart',
-  ],
+  checkout: [...PAYMENT_WORDS, ...CARD_WORDS],
+  payment: PAYMENT_WORDS,
   formError: [
     'error',
     'required',

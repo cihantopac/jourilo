@@ -52,7 +52,7 @@ export const RULES: RuleInfo[] = [
     'usability',
     'defect',
     'moderate',
-    'A button with no type submits its form although its name is not a submit word',
+    'A button with no type submits its form although its name is not a submit word (a name that contains a submit word anywhere counts as one, so the rule can miss a button but never flags a submit button)',
     ['Nielsen usability heuristic #5'],
   ),
   rule(

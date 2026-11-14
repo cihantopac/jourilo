@@ -120,8 +120,11 @@ Stated so nobody mistakes silence for a pass.
 - Conversion rules are text/structure heuristics. Vocabulary (calls to action, trust and pricing signals, form
   purposes, error messages, field names, and the safety policy's destructive/financial actions) covers English,
   Turkish, German, Spanish, French, Italian, Portuguese and Dutch; other languages fall back to structure-only signals.
-  A few short words can match a control that is not the target (for example `licht` or `modo` as a theme toggle, or
-  Italian `Ordina per prezzo` refused as an order button); the safety policy errs toward refusing.
+  A few short words can still match a control that is not the target; the safety policy errs toward refusing.
+  Italian `Ordina per prezzo` (sort) and `Comprare casa` / `Compra de ingressos` (browse) are no longer refused, but
+  other sorting or browsing labels that start with an order or buy word are. The submit vocabulary is matched anywhere
+  in a button's name, so a button whose name merely contains a submit word is treated as a submit button: that can
+  only miss a `button-implicit-submit` finding, never raise a false one.
 - Experiment statistics: conversion (two-proportion) metrics only, with a fixed-horizon z-test or a sequential mSPRT
   (always-valid p-value and confidence sequence, normal approximation); no continuous metrics, no CUPED. The CLI keeps
   no history between `analyze` runs, so each run is one look, and an arm with almost no visitors can give a far too
@@ -135,7 +138,8 @@ Stated so nobody mistakes silence for a pass.
 
 - Repository discovery reads TS, TSX, JS, Vue and Svelte routes from the syntax tree (a bundled TypeScript 6.0.3
   parser, loaded only when needed) and the rest from file patterns and regexes. A file the parser cannot read, or
-  minified code, falls back to the regex with a limitation. Laravel route files, groups and Filament panels are
+  minified code (a `.min.js` file, or one where most lines are 2000 characters or longer), falls back to the regex
+  with a limitation; one long line in a hand-written file does not. Laravel route files, groups and Filament panels are
   followed; router configs built dynamically at runtime are missed, and a configurable route
   prefix is shown with its local default. Website discovery crawls up to 30 pages, same origin only; on a local
   target, a sitemap that lists production URLs is mapped onto the local server, otherwise sitemaps on other origins
@@ -248,8 +252,8 @@ Stated so nobody mistakes silence for a pass.
   crop shows the same place, not necessarily the same element. Baseline images load from the sibling run folder, so
   moving a run folder elsewhere breaks them (the report still renders).
 - Root-cause grouping is lexical (rule + source line or selector), not a semantic judgment. Component-level causes
-  follow imports, barrels and the usual aliases (`@/`, `~/`, `#/`, `$lib/`) in TS, TSX, Vue and Svelte; a record that
-  only has `loadComponent` in a file with no router call is not in the graph, and that finding groups per line.
+  follow imports, barrels and the usual aliases (`@/`, `~/`, `#/`, `$lib/`) in TS, TSX, Vue and Svelte. A route that
+  is nested in a pathless route (a layout route with no `path`) does not count toward that layout's `usedBy`.
 - History in the report lists earlier runs of the same target with defect counts; that list does not normalize for
   different page sets or viewports. The trend table (and `runs trend`) does, per page and viewport and per capture,
   and leaves out partial and no-page-loaded runs. A finding with no viewport counts at every viewport of its page, LCP

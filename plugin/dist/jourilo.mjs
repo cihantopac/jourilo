@@ -39687,6 +39687,33 @@ function slug(text, max = 48) {
 }
 
 // src/core/lexicon.ts
+var SORT_KEYS = "prezzo|nome|data|rilevanza|popolarit\xE0|valutazione|novit\xE0|categoria|marca|recenti|pi\xF9 recenti|punteggio";
+var PAYMENT_WORDS = [
+  "checkout",
+  "payment",
+  "billing",
+  "\xF6deme",
+  "fatura",
+  "kasse",
+  "zahlung",
+  "rechnung",
+  "pago",
+  "facturaci\xF3n",
+  "paiement",
+  "facturation",
+  // it
+  "cassa",
+  "pagamento",
+  "fatturazione",
+  // pt
+  "fatura\xE7\xE3o",
+  "faturamento",
+  // nl
+  "afrekenen",
+  "betaling",
+  "facturatie"
+];
+var CARD_WORDS = ["card", "kart", "karte", "tarjeta", "carte", "carta", "cart\xE3o", "kaart"];
 var LEX = {
   destructive: [
     // en
@@ -39804,8 +39831,10 @@ var LEX = {
     // it
     "paga( ora)?",
     "acquista(re)?( ora)?",
-    "ordina(re)?( ora)?",
-    "compra(re)?( ora)?",
+    // "Ordina per prezzo" sorts a list; "Comprare casa" and "Compra de ingressos" browse a section. A real order or
+    // buy control ("Ordina", "Compra ora", "Compra il biglietto") still matches.
+    `ordina(re)?( ora)?(?!\\s+per\\s+(?:${SORT_KEYS})(?![\\p{L}\\p{N}]))`,
+    `compra(re)?( ora)?(?!\\s+(?:de|di|del|della|dei|delle|(?:una\\s+|la\\s+)?casa)(?![\\p{L}\\p{N}]))`,
     "completa (l.ordine|l.acquisto|il pagamento)",
     "conferma (l.ordine|il pagamento|l.acquisto)",
     "procedi al pagamento",
@@ -40079,40 +40108,8 @@ var LEX = {
     "nieuwsbrief",
     "abonneren"
   ],
-  checkout: [
-    "checkout",
-    "payment",
-    "billing",
-    "card",
-    "\xF6deme",
-    "fatura",
-    "kart",
-    "kasse",
-    "zahlung",
-    "rechnung",
-    "karte",
-    "pago",
-    "facturaci\xF3n",
-    "tarjeta",
-    "paiement",
-    "facturation",
-    "carte",
-    // it
-    "cassa",
-    "pagamento",
-    "fatturazione",
-    "carta",
-    // pt
-    "pagamento",
-    "fatura\xE7\xE3o",
-    "faturamento",
-    "cart\xE3o",
-    // nl
-    "afrekenen",
-    "betaling",
-    "facturatie",
-    "kaart"
-  ],
+  checkout: [...PAYMENT_WORDS, ...CARD_WORDS],
+  payment: PAYMENT_WORDS,
   formError: [
     "error",
     "required",
@@ -42429,7 +42426,7 @@ var probe_default = `// Runs inside the audited page. Plain JavaScript (no impor
       return 'signup';
     if (pw === 1) return 'login';
     if (lex('newsletter', 'subscribe|newsletter').test(blob) && fields.length <= 2) return 'newsletter';
-    if (lex('checkout', 'checkout|payment|billing').test(blob) && fields.length >= 3) return 'checkout';
+    if (lex('payment', 'checkout|payment|billing').test(blob) && fields.length >= 3) return 'checkout';
     if (fields.some((f) => f.type === 'textarea') && /email/i.test(types)) return 'contact';
     return 'other';
   };
@@ -48411,6 +48408,17 @@ function isRouterConfigFile(file2, text) {
     text.slice(0, 2e3)
   );
 }
+function isMinified(file2, lines) {
+  if (/\.min\.[cm]?js$/.test(file2)) return true;
+  let long = 0;
+  let total = 0;
+  for (const l of lines) {
+    if (!l.trim()) continue;
+    total++;
+    if (l.length >= 2e3) long++;
+  }
+  return long > 0 && long * 2 >= total;
+}
 
 // src/repair/locate.ts
 var SOURCE_EXT = /* @__PURE__ */ new Set([
@@ -48853,7 +48861,6 @@ function locate(f, files, max = 3) {
 }
 var GRAPH_FAILED = "The component graph could not be built, so findings in shared components are grouped per source line instead of per component.";
 var COMPONENT_FILE = /\.(tsx?|jsx?|mjs|vue|svelte)$/;
-var isMinified = (rel, lines) => /\.min\.[cm]?js$/.test(rel) || lines.some((l) => l.length >= 2e3);
 function componentAt(byFile, file2, line) {
   let best;
   for (const c of byFile.get(file2) ?? [])
@@ -51891,7 +51898,12 @@ function formJourney(page, form) {
   };
 }
 var TOGGLE_UI = lexicon("toggle-ui");
-var isUiSwitch = (c) => !c.href && TOGGLE_UI.test(c.text);
+var SWITCH_VERB = /^(switch|toggle|change|set|use|select|choose|schakel|wissel|wechsel|cambiar?|changer|passer|mude|alterar)\b/i;
+var isUiSwitch = (c) => {
+  if (c.href || !TOGGLE_UI.test(c.text)) return false;
+  const words = c.text.trim().split(/\s+/).length;
+  return words <= 2 || words <= 6 && SWITCH_VERB.test(c.text.trim());
+};
 var DESTRUCTIVE2 = lexicon("destructive");
 function toggleJourney(page, toggle) {
   if (DESTRUCTIVE2.test(toggle.name)) return null;
@@ -53637,9 +53649,16 @@ function roleOf(path2) {
 }
 var AST_FILE = /\.(tsx?|jsx?|mjs|vue|svelte)$/;
 var MAY_DECLARE_ROUTES = /<Route\b|\bpath\s*:/;
-var isMinified2 = (file2, text) => /\.min\.[cm]?js$/.test(file2) || /^.{2000}/m.test(text);
+function codeText(ast, abs) {
+  let text = ast.texts.get(abs);
+  if (text === void 0) {
+    text = read2(abs);
+    if (MAY_DECLARE_ROUTES.test(text)) ast.texts.set(abs, text);
+  }
+  return text;
+}
 function astFileRoutes(ast, file2, text) {
-  if (!ast.parser || isMinified2(file2, text)) return null;
+  if (!ast.parser || isMinified(file2, text.split("\n"))) return null;
   try {
     const sf = ast.parser.parseSource(file2, text);
     return sf ? ast.parser.astRoutes(file2, sf) : null;
@@ -53721,7 +53740,7 @@ function fileRoutes(appRoot, files, frameworks, ast) {
   ];
   for (const f of files) {
     if (AST_FILE.test(f)) {
-      const text = read2(join21(appRoot, f));
+      const text = codeText(ast, join21(appRoot, f));
       if (!MAY_DECLARE_ROUTES.test(text)) continue;
       const astRoutes = astFileRoutes(ast, f, text);
       if (astRoutes) {
@@ -53735,7 +53754,7 @@ function fileRoutes(appRoot, files, frameworks, ast) {
     }
     for (const [fileRe, re, label] of codeRoute) {
       if (!fileRe.test(f)) continue;
-      const text = read2(join21(appRoot, f));
+      const text = AST_FILE.test(f) ? codeText(ast, join21(appRoot, f)) : read2(join21(appRoot, f));
       if (!text) continue;
       for (const m of text.matchAll(re)) {
         const raw = m[1].trim();
@@ -53840,8 +53859,8 @@ async function discoverRepository(root) {
   const files = walk(root);
   const gaps = [];
   const limitations = [];
-  const ast = { root, parser: null, fallback: /* @__PURE__ */ new Set() };
-  if (files.some((f) => AST_FILE.test(f) && MAY_DECLARE_ROUTES.test(read2(join21(root, f))))) {
+  const ast = { root, parser: null, fallback: /* @__PURE__ */ new Set(), texts: /* @__PURE__ */ new Map() };
+  if (files.some((f) => AST_FILE.test(f) && MAY_DECLARE_ROUTES.test(codeText(ast, join21(root, f))))) {
     const loaded = await loadTsParser();
     if ("parser" in loaded) ast.parser = loaded.parser;
     else
@@ -56176,7 +56195,7 @@ var RULES2 = [
     "usability",
     "defect",
     "moderate",
-    "A button with no type submits its form although its name is not a submit word",
+    "A button with no type submits its form although its name is not a submit word (a name that contains a submit word anywhere counts as one, so the rule can miss a button but never flags a submit button)",
     ["Nielsen usability heuristic #5"]
   ),
   rule(

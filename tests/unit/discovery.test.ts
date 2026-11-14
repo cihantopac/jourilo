@@ -236,6 +236,27 @@ export const router = createBrowserRouter([
     ]);
   });
 
+  it('keeps AST routes for a hand-written file with one long line, and for .svelte', async () => {
+    // One 3,000-character line (an inline data URI) among normal lines: not minified, so no regex fallback.
+    const longLine = `const icon = '${'x'.repeat(3000)}';`;
+    const root = reactApp({
+      'src/router.ts': `${longLine}\nexport const routes = [\n  // { path: '/commented-out', component: Old },\n  { path: '/real', component: Real },\n];\n`,
+      'src/Nav.svelte': `<script lang="ts">\n  ${longLine}\n  const router = createRouter({ routes: [{ path: '/inbox', component: Inbox }] });\n</script>\n<main />\n`,
+    });
+    const p = await discoverRepository(root);
+    expect(pagePaths(p)).toEqual(['/inbox', '/real']);
+    expect(p.limitations).toEqual([]);
+  });
+
+  it('still skips a file in which most lines are long', async () => {
+    const long = (n: number) => `{ path: '/p${n}', component: C${n} }, ${'y'.repeat(2100)}`;
+    const root = reactApp({
+      'src/router.ts': `export const routes = [\n${[1, 2, 3].map((n) => `  ${long(n)}`).join('\n')}\n];\n`,
+    });
+    const p = await discoverRepository(root);
+    expect(p.limitations?.[0]).toMatch(/read with the regex fallback.*src\/router\.ts\.$/);
+  });
+
   it('falls back to the regexes when the AST walk throws', async () => {
     const real = await import('../../src/discovery/ast/parser.js');
     vi.mocked(loadTsParser).mockResolvedValueOnce({

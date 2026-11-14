@@ -6,7 +6,7 @@ import { toPosix } from '../core/fs-safety.js';
 import type { Confidence, Finding, Run, SourceLocation } from '../core/types.js';
 import type { ComponentDef } from '../discovery/ast/components.js';
 import { loadTsParser } from '../discovery/ast/load.js';
-import { isStructuralFile } from '../discovery/ast/route-files.js';
+import { isMinified, isStructuralFile } from '../discovery/ast/route-files.js';
 
 const SOURCE_EXT = new Set([
   '.html',
@@ -539,8 +539,6 @@ const GRAPH_FAILED =
 
 /** Files the component graph reads (the parser's languages). */
 const COMPONENT_FILE = /\.(tsx?|jsx?|mjs|vue|svelte)$/;
-const isMinified = (rel: string, lines: string[]) =>
-  /\.min\.[cm]?js$/.test(rel) || lines.some((l) => l.length >= 2000);
 
 /** The innermost component whose declaration spans `line` of `file`. */
 function componentAt(

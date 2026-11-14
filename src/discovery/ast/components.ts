@@ -326,19 +326,40 @@ export function componentIndex(
     const routerCall = ROUTER_CALL.test(sf.text);
     if (routerCall || declared.some((r) => r.router !== 'Router config')) codeRouter = true;
     const ids: string[] = [];
-    for (const r of declared) {
+    // Route id per declared route (undefined when it was skipped), to hand a nested route to its parents.
+    const idOf: (string | undefined)[] = [];
+    const keyOf: (string | undefined)[] = [];
+    for (const [i, r] of declared.entries()) {
       if (r.router === 'Router config' && !routerCall && !r.component) continue;
       const id = `${file}:${r.path}`;
       ids.push(id);
+      idOf[i] = id;
       allRoutes.add(id);
       if (!r.component) continue;
       const key = /^[./@~#$]/.test(r.component)
         ? (() => {
             const target = resolveModule(file, r.component);
-            return target ? exportedComponent(target, 'default') : undefined;
+            return target
+              ? (exportedComponent(target, r.exportName ?? 'default') ??
+                  (r.exportName ? exportedComponent(target, 'default') : undefined))
+              : undefined;
           })()
         : resolveName(file, r.component.split('.')[0]!);
-      if (key) addEntry(key, id);
+      if (key) {
+        addEntry(key, id);
+        keyOf[i] = key;
+      }
+    }
+    // A route's component also renders every route nested in it (its <Outlet />, or Angular's router-outlet).
+    for (const [i, r] of declared.entries()) {
+      const id = idOf[i];
+      if (!id) continue;
+      let p = r.parent;
+      for (let guard = 0; p !== undefined && guard < 50; guard++) {
+        const parentKey = keyOf[p];
+        if (parentKey) addEntry(parentKey, id);
+        p = declared[p]?.parent;
+      }
     }
     // The components of a file that declares routes wrap them (an App with a header around its <Routes>).
     if (ids.length)
