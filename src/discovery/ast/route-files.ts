@@ -46,3 +46,20 @@ export function isRouterConfigFile(file: string, text: string): boolean {
     )
   );
 }
+
+/**
+ * Minified or generated code, which is not parsed (a bundle is slow to parse and deep to walk): a `.min.js` file, or a
+ * file in which most lines are 2000 characters or longer. One long line in a hand-written file (an inline SVG, a
+ * data URI) does not make it minified, so its routes are still read from the syntax tree.
+ */
+export function isMinified(file: string, lines: readonly string[]): boolean {
+  if (/\.min\.[cm]?js$/.test(file)) return true;
+  let long = 0;
+  let total = 0;
+  for (const l of lines) {
+    if (!l.trim()) continue;
+    total++;
+    if (l.length >= 2000) long++;
+  }
+  return long > 0 && long * 2 >= total;
+}

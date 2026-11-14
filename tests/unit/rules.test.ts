@@ -469,6 +469,19 @@ describe('experience rules', () => {
         ),
       ).toBe(false);
   });
+  it('says "at least N" only when capture hit its 10-hop cap', () => {
+    const hops = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        status: 302,
+        from: `https://example.test/${i}`,
+        to: `https://example.test/${i + 1}`,
+      }));
+    const title = (n: number) =>
+      performanceFindings(obs({ redirects: hops(n) })).find((f) => f.ruleId === 'jourilo/redirect-chain')!
+        .title;
+    expect(title(9)).toBe('Page is reached through 9 redirects');
+    expect(title(10)).toBe('Page is reached through at least 10 redirects');
+  });
   it('does not report a redirect chain on top of a redirect loop', () => {
     const loop = [0, 1, 2, 3].map((i) => ({
       status: 302,
@@ -549,6 +562,19 @@ describe('performance evidence for snapshot consumers', () => {
     expect(a.fingerprint).toBe(b.fingerprint);
     const cls = performanceFindings(obs({ vitals: vit(100, 0.31449) })).find((x) => x.ruleId === 'perf/cls')!;
     expect(cls.evidence[0]!.data?.value).toBe(0.314);
+  });
+  it('layout-shift times are rounded to 10 ms and shift values to 3 decimals', () => {
+    const shifts = [
+      { value: 0.12345, t: 1234, sources: ['img'] },
+      { value: 0.05, t: 1235, sources: ['img'] },
+      { value: 0.04, t: 1244, sources: ['img'] },
+    ];
+    const cls = performanceFindings(obs({ vitals: { ...vit(100, 0.3), clsEntries: shifts } })).find(
+      (x) => x.ruleId === 'perf/cls',
+    )!;
+    const items = cls.evidence.filter((e) => e.data && 'shift' in e.data).map((e) => e.data);
+    expect(items.map((d) => d?.at)).toEqual([1230, 1240, 1240]);
+    expect(items[0]?.shift).toBe(0.123);
   });
   it('three viewports keep every metric and CLS shift item, each with its viewport', () => {
     // A real run.json: five CLS entries per capture (the cap), so three viewports hold 18 items.

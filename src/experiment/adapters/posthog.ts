@@ -46,7 +46,7 @@ export function posthogAdapter(deps: AdapterDeps): AnalyticsAdapter {
     'POSTHOG_API_KEY',
     'a PostHog personal API key with experiment:read and query:read',
   );
-  const host = hostFrom(deps.env, 'POSTHOG_HOST', 'https://us.posthog.com');
+  const host = hostFrom(deps.env, 'POSTHOG_HOST', 'https://us.posthog.com', deps.allowPrivate === true);
   const project = deps.env.POSTHOG_PROJECT_ID?.trim() || '@current';
   if (!/^(@current|\d+)$/.test(project))
     throw new JouriloError(

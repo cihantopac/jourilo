@@ -274,6 +274,31 @@ describe('report interface', () => {
     expect(renderHtml(head, compareRuns(evil, head))).not.toMatch(/src="\.\.\/\.\./);
   });
 
+  it('the visual pair falls back to the first-screen shot when a page has no full-page screenshot', () => {
+    const page = (fold?: string, shot?: string) => ({
+      url: 'https://example.test/',
+      finalUrl: '',
+      status: 200,
+      title: '',
+      viewport: 'desktop',
+      loadMs: 0,
+      metrics: [],
+      consoleErrors: 0,
+      failedRequests: 0,
+      ...(shot ? { screenshot: shot } : {}),
+      ...(fold ? { foldScreenshot: fold } : {}),
+      inventory: {} as never,
+    });
+    const base = run([], { id: '20261101-120000-aaaaaa', pages: [page('screenshots/p-fold.jpg')] });
+    const head = run([], { id: '20261101-130000-bbbbbb', pages: [page('screenshots/q-fold.jpg')] });
+    const html = renderHtml(head, compareRuns(base, head));
+    expect(html).toContain('src="../20261101-120000-aaaaaa/screenshots/p-fold.jpg"');
+    expect(html).toContain('src="screenshots/q-fold.jpg"');
+    // Control: a page with neither shot has no pair.
+    const none = run([], { id: '20261101-130000-cccccc', pages: [page()] });
+    expect(renderHtml(none, compareRuns(base, none))).not.toContain('class="pair"');
+  });
+
   it('the report shows a trend table with an accessible text alternative', () => {
     const cap = (lcp: number) => ({
       url: 'https://example.test/',

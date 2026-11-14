@@ -260,3 +260,48 @@ describe('Italian, Portuguese and Dutch safety policy', () => {
     ).toBe(true);
   });
 });
+
+describe('financial vocabulary: sorting and browsing controls', () => {
+  const act = (name: string) =>
+    checkAction({ action: 'click', name, submitsForm: false, paymentForm: false }, publicHost).allowed;
+  it.each([
+    'Ordina per prezzo',
+    'Ordinare per nome',
+    'Ordina per rilevanza',
+    'Comprare casa',
+    'Comprare una casa',
+    'Compra de ingressos',
+    'Compra di biglietti',
+  ])('lets "%s" through (sorting or browsing)', (name) => {
+    expect(act(name)).toBe(true);
+  });
+  it.each([
+    'Ordina',
+    'Ordina ora',
+    'Compra ora',
+    'Compra il biglietto',
+    'Comprare',
+    'Paga ora',
+    'Pague agora',
+    'Comprar agora',
+    'Betaal nu',
+    'Koop nu',
+    'Bestel nu',
+  ])('still refuses the real buy or pay control "%s"', (name) => {
+    expect(act(name)).toBe(false);
+  });
+});
+
+describe('payment words versus card nouns', () => {
+  it('a form that only mentions a "kaart" (map) or "carta" (paper) is not a payment page', () => {
+    for (const t of ['Zoek op de kaart', 'Carta da regalo', 'Kaartje', 'Carte du restaurant'])
+      expect(lexicon('payment').test(t)).toBe(false);
+    for (const t of ['Afrekenen', 'Billing address', 'Pagamento', 'Zahlung'])
+      expect(lexicon('payment').test(t)).toBe(true);
+  });
+  it('the checkout concept still knows the card words', () => {
+    for (const t of ['Kaartnummer kaart', 'Carta di credito', 'Credit card']) {
+      expect(lexicon('checkout').test(t)).toBe(true);
+    }
+  });
+});

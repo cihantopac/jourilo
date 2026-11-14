@@ -5,7 +5,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { toPosix } from '../core/fs-safety.js';
 import { loadTsParser, type TsParser } from './ast/load.js';
-import { isRouterConfigFile } from './ast/route-files.js';
+import { isMinified, isRouterConfigFile } from './ast/route-files.js';
 import { laravelProfile } from './laravel.js';
 
 export interface Fact {
@@ -225,20 +225,30 @@ const AST_FILE = /\.(tsx?|jsx?|mjs|vue|svelte)$/;
 /** A code file that may declare routes: the parser is only loaded (and run) for these. */
 const MAY_DECLARE_ROUTES = /<Route\b|\bpath\s*:/;
 
-/** Minified or generated code: not parsed (a single huge line is slow to parse and deep to walk). */
-const isMinified = (file: string, text: string) => /\.min\.[cm]?js$/.test(file) || /^.{2000}/m.test(text);
-
 /** The bundled parser for this discovery (null when it could not be loaded) and the files read without it. */
 interface AstContext {
   root: string;
   parser: TsParser | null;
   /** Repository-relative files whose routes were read with the regex fallback. */
   fallback: Set<string>;
+  /** Code files that may declare routes, by absolute path: each is read from disk once for the whole discovery. */
+  texts: Map<string, string>;
+}
+
+/** The text of a code file, read once per discovery (the decision to load the parser and the route scan share it). */
+function codeText(ast: AstContext, abs: string): string {
+  let text = ast.texts.get(abs);
+  if (text === undefined) {
+    text = read(abs);
+    // Only files that can declare routes are worth keeping; the rest are read once and dropped.
+    if (MAY_DECLARE_ROUTES.test(text)) ast.texts.set(abs, text);
+  }
+  return text;
 }
 
 /** Routes from the syntax tree, or null when the file must use the regex fallback. Never throws. */
 function astFileRoutes(ast: AstContext, file: string, text: string) {
-  if (!ast.parser || isMinified(file, text)) return null;
+  if (!ast.parser || isMinified(file, text.split('\n'))) return null;
   try {
     const sf = ast.parser.parseSource(file, text);
     return sf ? ast.parser.astRoutes(file, sf) : null;
@@ -341,7 +351,7 @@ function fileRoutes(appRoot: string, files: string[], frameworks: string[], ast:
   ];
   for (const f of files) {
     if (AST_FILE.test(f)) {
-      const text = read(join(appRoot, f));
+      const text = codeText(ast, join(appRoot, f));
       if (!MAY_DECLARE_ROUTES.test(text)) continue;
       const astRoutes = astFileRoutes(ast, f, text);
       if (astRoutes) {
@@ -356,7 +366,7 @@ function fileRoutes(appRoot: string, files: string[], frameworks: string[], ast:
     }
     for (const [fileRe, re, label] of codeRoute) {
       if (!fileRe.test(f)) continue;
-      const text = read(join(appRoot, f));
+      const text = AST_FILE.test(f) ? codeText(ast, join(appRoot, f)) : read(join(appRoot, f));
       if (!text) continue;
       for (const m of text.matchAll(re)) {
         const raw = m[1]!.trim();
@@ -481,8 +491,8 @@ export async function discoverRepository(root: string): Promise<ProductProfile> 
   const gaps: string[] = [];
   const limitations: string[] = [];
   // The parser chunk is loaded only when a code file may declare routes.
-  const ast: AstContext = { root, parser: null, fallback: new Set() };
-  if (files.some((f) => AST_FILE.test(f) && MAY_DECLARE_ROUTES.test(read(join(root, f))))) {
+  const ast: AstContext = { root, parser: null, fallback: new Set(), texts: new Map() };
+  if (files.some((f) => AST_FILE.test(f) && MAY_DECLARE_ROUTES.test(codeText(ast, join(root, f))))) {
     const loaded = await loadTsParser();
     if ('parser' in loaded) ast.parser = loaded.parser;
     else

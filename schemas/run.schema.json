@@ -351,7 +351,12 @@
         "reproduction": { "type": "array", "items": { "type": "string" } },
         "sources": { "type": "array", "items": { "$ref": "#/$defs/sourceLocation" } },
         "occurrences": { "type": "integer" },
-        "pages": { "type": "array", "items": { "type": "string" } }
+        "pages": { "type": "array", "items": { "type": "string" } },
+        "pageOccurrences": {
+          "description": "Occurrences on each page of `pages`, by URL.",
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        }
       }
     },
     "dismissal": {
@@ -361,6 +366,7 @@
         "fingerprint": { "type": "string" },
         "ruleId": { "type": "string" },
         "url": { "type": "string" },
+        "pages": { "type": "array", "items": { "type": "string" } },
         "reason": { "type": "string" },
         "by": { "enum": ["user", "agent"] },
         "at": { "type": "string" }

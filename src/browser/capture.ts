@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import axe from 'axe-core';
 import type { Browser, BrowserContext, Page } from 'playwright-core';
 import { EVIDENCE_QUALITY, type EvidenceMode, FULL_PAGE_MAX_HEIGHT } from '../audit/evidence.js';
+import { AXE_TAGS } from '../audit/standards.js';
 import { toPosix } from '../core/fs-safety.js';
 import { shortHash, slug } from '../core/hash.js';
 import { lexiconSources } from '../core/lexicon.js';
@@ -11,12 +12,7 @@ import { GUARD_UPSTREAM_ERROR_HEADER } from '../core/net-guard.js';
 import { excerpt, redactText, redactUrl, redactUrlsIn } from '../core/redact.js';
 import type { PageInventory, Rect, Viewport } from '../core/types.js';
 import { type BlockedRequest, installRequestGuard } from '../journeys/request-guard.js';
-import {
-  CONTRAST_SAMPLE_CAP,
-  type ContrastSample,
-  SAMPLED_REASONS,
-  sampleContrast,
-} from './contrast-sample.js';
+import { CONTRAST_BUDGET_MS, type ContrastSample, sampleNodes } from './contrast-sample.js';
 import PROBE_SOURCE from './inpage/probe.js?raw';
 import { type KeyboardWalk, keyboardWalk } from './keyboard.js';
 import { asJourilo, inpageSource, isOwnConsoleMessage, isOwnException } from './own-activity.js';
@@ -300,6 +296,20 @@ async function settle(page: Page, timeoutMs: number): Promise<boolean> {
   return networkIdle;
 }
 
+/**
+ * Settles the page once after load. With `--wait-for` the element is waited for first, so late content and its late
+ * layout share the one settle that the page is then audited in (no second settle when it is found).
+ */
+async function settleAfterLoad(
+  page: Page,
+  timeoutMs: number,
+  waitFor?: string,
+): Promise<{ networkIdle: boolean; found?: boolean }> {
+  const found = waitFor ? await waitForElement(page, waitFor, timeoutMs) : undefined;
+  const networkIdle = await settle(page, timeoutMs);
+  return found === undefined ? { networkIdle } : { networkIdle, found };
+}
+
 /** `--wait-for`: true when the selector's first match became visible within `timeoutMs`. */
 export async function waitForElement(page: Page, selector: string, timeoutMs: number): Promise<boolean> {
   try {
@@ -309,8 +319,6 @@ export async function waitForElement(page: Page, selector: string, timeoutMs: nu
     return false;
   }
 }
-
-export const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
 
 const HIDDEN_SKIP_RULES = new Set(['color-contrast', 'color-contrast-enhanced']);
 
@@ -396,19 +404,6 @@ async function runAxe(page: Page): Promise<PageObservation['axe']> {
     incomplete: raw.incomplete.map(map),
     version: raw.testEngine.version,
   };
-  // Contrast axe could not decide because of a background image, gradient or overlapping element: measure it from
-  // the rendered pixels (F8). A node that cannot be measured stays a manual-review item.
-  let sampled = 0;
-  for (const issue of result.incomplete) {
-    if (issue.id !== 'color-contrast') continue;
-    for (const n of issue.nodes) {
-      if (sampled >= CONTRAST_SAMPLE_CAP) break;
-      if (!SAMPLED_REASONS.has(String(n.data?.messageKey))) continue;
-      sampled++;
-      const s = await sampleContrast(page, n.target);
-      if (s) n.contrast = s;
-    }
-  }
   // Element boxes so the report can draw each node on the screenshot.
   const targets = [...result.violations, ...result.incomplete].flatMap((i) => i.nodes.map((n) => n.target));
   const rects = (await page.evaluate(
@@ -484,7 +479,9 @@ async function applyThrottle(page: Page): Promise<boolean> {
 export function originFreeName(url: string, primaryOrigin?: string): string {
   const u = new URL(url);
   const tag = primaryOrigin && u.origin !== primaryOrigin ? `\u0000${u.origin}` : '';
-  return shortHash(`${u.pathname}${u.search}${tag}`);
+  // The fragment is part of the name: `/#/pricing` and `/#/docs` are different pages of a hash-routed app, and
+  // `/a?x=1` and `/a?x=1#frag` must not write one file.
+  return shortHash(`${u.pathname}${u.search}${u.hash ? `#${u.hash.slice(1)}` : ''}${tag}`);
 }
 
 /** The screenshots a capture of `url` in `vp` writes, relative to the run directory. */
@@ -563,15 +560,10 @@ export async function capturePage(
     obs.loadMs = Date.now() - t0;
     obs.status = response?.status() ?? null;
     obs.finalUrl = redactUrl(page.url());
-    let networkIdle = await settle(page, timeoutMs);
-    obs.load = { networkIdle };
-    if (opts.waitFor) {
-      const found = await waitForElement(page, opts.waitFor, timeoutMs);
-      // Late content may bring late layout: let it settle the same way before anything is measured. The page is
-      // audited in the state of this last settle, so that is the one recorded.
-      if (found) networkIdle = await settle(page, timeoutMs);
-      obs.load = { networkIdle, waitedFor: opts.waitFor, found };
-    }
+    const settled = await settleAfterLoad(page, timeoutMs, opts.waitFor);
+    obs.load = opts.waitFor
+      ? { networkIdle: settled.networkIdle, waitedFor: opts.waitFor, found: settled.found === true }
+      : { networkIdle: settled.networkIdle };
     obs.title = excerpt(await page.title(), 160);
 
     obs.vitals = (await page.evaluate(READ_VITALS_SCRIPT).catch((e: Error) => {
@@ -650,6 +642,17 @@ export async function capturePage(
       }
     }
 
+    // Sampling scrolls to nodes, which can start lazy loading, so it runs after the screenshots, which show the page
+    // as it was captured, and before the keyboard and widget checks.
+    if (obs.axe) {
+      const nodes = obs.axe.incomplete.filter((i) => i.id === 'color-contrast').flatMap((i) => i.nodes);
+      const { overBudget } = await sampleNodes(page, nodes).catch(() => ({ overBudget: 0 }));
+      if (overBudget)
+        obs.errors.push(
+          `contrast sampling stopped at its ${CONTRAST_BUDGET_MS / 1000} s budget: ${overBudget} node(s) stay manual-review items`,
+        );
+    }
+
     if (opts.keyboard !== false) {
       // Keys and widget operation must not change data or leave the site: from here on the page is read-only.
       const guard = await installRequestGuard(page, {
@@ -692,8 +695,7 @@ export async function measureVitals(
   try {
     if (opts.throttle) await applyThrottle(page);
     await page.goto(url, { waitUntil: 'load', timeout: opts.timeoutMs ?? 30_000 });
-    await settle(page, opts.timeoutMs ?? 30_000);
-    if (opts.waitFor) await waitForElement(page, opts.waitFor, opts.timeoutMs ?? 30_000);
+    await settleAfterLoad(page, opts.timeoutMs ?? 30_000, opts.waitFor);
     return (await page.evaluate(READ_VITALS_SCRIPT)) as RawVitals;
   } catch {
     return null;

@@ -82,7 +82,17 @@ function formJourney(page: PageCapture, form: FormInfo): JourneySpec | null {
 
 const TOGGLE_UI = lexicon('toggle-ui');
 /** A button without a destination that is named like a theme or language switch is not a call to action. */
-const isUiSwitch = (c: { text: string; href: string | null }) => !c.href && TOGGLE_UI.test(c.text);
+const SWITCH_VERB =
+  /^(switch|toggle|change|set|use|select|choose|schakel|wissel|wechsel|cambiar?|changer|passer|mude|alterar)\b/i;
+/**
+ * Only a short name counts ("Dark mode", "Language"), or one that starts with a switching verb ("Switch to dark
+ * mode"): "Start a language course" or "Taal leren" is a call to action that merely contains a switch word.
+ */
+const isUiSwitch = (c: { text: string; href: string | null }) => {
+  if (c.href || !TOGGLE_UI.test(c.text)) return false;
+  const words = c.text.trim().split(/\s+/).length;
+  return words <= 2 || (words <= 6 && SWITCH_VERB.test(c.text.trim()));
+};
 const DESTRUCTIVE = lexicon('destructive');
 
 /** Opens a collapsed disclosure or presses a toggle and checks the visible result; null when nothing can be checked. */

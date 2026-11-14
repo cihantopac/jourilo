@@ -48,7 +48,7 @@ export async function sendTargetHeaders(
   const names = new Set(Object.keys(scope.headers).map((n) => n.toLowerCase()));
   await ctx.route('**/*', async (route: Route) => {
     const req = route.request();
-    if (safeUrl(req.url())?.origin !== scope.origin) return route.fallback();
+    if (safeUrl(req.url())?.origin !== scope.origin) return await route.fallback().catch(() => undefined);
     const headers: Record<string, string> = {};
     for (const [k, v] of Object.entries(req.headers())) if (!names.has(k.toLowerCase())) headers[k] = v;
     Object.assign(headers, scope.headers);

@@ -40,6 +40,7 @@ import {
   refuseDenyLocalWebkit,
   requirePositional,
   str,
+  warnWorkspaceInRepo,
 } from '../framework.js';
 import { loadJourneys } from './journeys.js';
 
@@ -167,6 +168,7 @@ export async function auditCommand(
     const isDir = isDirectoryTarget(targetArg);
     server = isDir ? await serveStatic(resolve(targetArg)) : undefined;
     const repo = str(ctx, 'repo') ?? (isDir ? resolve(targetArg) : undefined);
+    warnWorkspaceInRepo(ctx, repo);
     const auditTarget = server ? server.url : targetArg;
     const opts: AuditOptions = {
       target: auditTarget,

@@ -22,10 +22,12 @@ Stated so nobody mistakes silence for a pass.
 - The keyboard walk visits up to 60 stops per page and only on keyboard (non-touch) viewports by default. Dialogs and
   disclosures that declare `aria-haspopup`/`aria-expanded` are operated with Enter/Escape. Composite widgets (tabs,
   radio groups, list boxes, menu bars, trees) are tested for keyboard reachability (do the arrow keys reach the other
-  items?). Menu buttons (`aria-haspopup="menu"` or `true`, at most 4 per page) also get the APG menu-button keys:
-  ArrowDown/ArrowUp, Home/End, Escape and focus return. Items are never activated, so what an item does is not
+  items?). Menu buttons (`aria-haspopup="menu"` or `true`; at most 4 per page, counted after
+  destructive and financial names are skipped) also get the APG menu-button keys: ArrowDown/ArrowUp, Home/End, Escape
+  and focus return. Items are never activated, so what an item does is not
   tested; a menu bar, submenus, typeahead and grids are not tested beyond reachability. A role-less popup without
-  `aria-expanded` that ignores Escape is not detected.
+  `aria-expanded` that is still showing after Escape (a banner the trigger opened) is closed by one reload, never by a
+  click, and is not reported. The focus-return finding cites WCAG 2.4.3 (Focus Order); the other menu findings cite 2.1.1.
 - Focus-visible detection compares the styles of the element and its parent, then the pixels around the element with
   and without focus, so indicators drawn by a sibling are seen; an indicator drawn far away from the element is not.
 - Focus hidden by other content is found when an opaque, hit-testable element covers the focused element at the
@@ -51,11 +53,13 @@ Stated so nobody mistakes silence for a pass.
   the rendered pixels: the text's line boxes are cut into tiles of about one font size, and in each tile that holds
   the text color the 20 % of pixels farthest from it count as its background. The worst tile decides, so text over a
   busy photo that fails somewhere is not passed. At most 30 such nodes are sampled per capture; the rest stay
-  manual-review items. A decided pass removes the review item. A light and dark pattern finer than one tile can be
-  averaged into a pass, and text not rendered in its computed color (under a tint) stays for review. Pieces of a
-  line box narrower than 16 px are not sampled. Sampling scrolls to each node, which can start lazy loading or
-  scroll-triggered animations before the later checks of that capture, and on a page with many such nodes it adds
-  noticeable time to the capture.
+  manual-review items. A decided pass removes the review item. A light and dark pattern finer than one tile (about
+  one font size) can be averaged into a pass, because within a tile the 20 % of pixels farthest from the text color
+  count as background and the rest are not judged one by one. Text not rendered in its computed color (under a tint) or
+  covered by another element stays for review. Each line box is cut into its own tiles, so a narrow piece is sampled
+  too. Sampling shares a 15 s time budget per capture; nodes left when it runs out stay manual-review items and the
+  run records how many. It runs after the screenshots and scrolls only to nodes outside the viewport, which can still
+  start lazy loading or scroll-triggered animations before the keyboard and widget checks of that capture.
 
 ## Performance
 
@@ -67,9 +71,9 @@ Stated so nobody mistakes silence for a pass.
   unchanged), so TTFB under `--throttle` is not meaningful for local targets.
 - INP is approximated from scripted journey interactions; it is not field INP.
 - A redirect chain is counted from the HTTP redirects (3xx) of the navigation to the page, at most 10 of them. A
-  redirect made by a script or a `<meta http-equiv="refresh">` is not counted. With `--extra-header`, redirects
-  from the target's origin are handed to the browser by Jourilo and may not be counted, so `jourilo/redirect-chain`
-  can be missed (never reported wrongly).
+  redirect made by a script or a `<meta http-equiv="refresh">` is not counted. With `--extra-header`, the first
+  redirect from the target's origin is answered by Jourilo and handed to the browser; it is counted like the others
+  (the browser's `response` event fires for it).
 - `--wait-for SELECTOR` costs time: a capture whose element never appears waits up to `--timeout` before it is
   audited as it is, and the extra lab visits of `--runs N` wait for the element only where the capture found it.
 - With `--throttle` and `--extra-header`, the target-origin responses Jourilo fetches itself and hands to the browser
@@ -102,9 +106,8 @@ Stated so nobody mistakes silence for a pass.
   include the hop, `goto` reports 200 for the final page of a redirect, and a 307 or 308 redirect that resends a form
   is followed only for URL-encoded bodies. Cookies follow SameSite and RFC 6265 matching where the browser's own
   decision can be reproduced, and are withheld where it cannot, so a journey can fail where a browser would succeed.
-  In Chromium, a navigation that another window or frame started without a Referer is judged by the tab's own page,
-  which can count it as same-site where the browser would not. A domain cookie on a host with a trailing dot is
-  withheld.
+  A navigation with neither Referer nor Sec-Fetch-Site counts as cross-site. In a redirect chain the final page's
+  `document.referrer` shows Jourilo's hand-over URL (the Referer header the site receives is the chain's original).
 - Without `--allow-submit`, journeys on non-local hosts cannot send first-party POST requests (including some
   telemetry); the journey result lists what was stopped.
 
@@ -120,13 +123,16 @@ Stated so nobody mistakes silence for a pass.
 - Conversion rules are text/structure heuristics. Vocabulary (calls to action, trust and pricing signals, form
   purposes, error messages, field names, and the safety policy's destructive/financial actions) covers English,
   Turkish, German, Spanish, French, Italian, Portuguese and Dutch; other languages fall back to structure-only signals.
-  A few short words can match a control that is not the target (for example `licht` or `modo` as a theme toggle, or
-  Italian `Ordina per prezzo` refused as an order button); the safety policy errs toward refusing.
+  A few short words can still match a control that is not the target; the safety policy errs toward refusing.
+  Italian `Ordina per prezzo` (sort) and `Comprare casa` / `Compra de ingressos` (browse) are no longer refused, but
+  other sorting or browsing labels that start with an order or buy word are. The submit vocabulary is matched anywhere
+  in a button's name, so a button whose name merely contains a submit word is treated as a submit button: that can
+  only miss a `button-implicit-submit` finding, never raise a false one.
 - Experiment statistics: conversion (two-proportion) metrics only, with a fixed-horizon z-test or a sequential mSPRT
   (always-valid p-value and confidence sequence, normal approximation); no continuous metrics, no CUPED. The CLI keeps
-  no history between `analyze` runs, so each run is one look, and an arm with almost no visitors can give a far too
-  small p-value (the decision stays correct). `--from` reads results read-only from PostHog,
-  GrowthBook and Amplitude; Jourilo does not create or change experiments or flags, and plans list the detected
+  no history between `analyze` runs, so each run is one look. A sequential stop needs at least 100 visitors and 5
+  conversions in each arm (below that the result says "Not enough data"); the fixed-horizon test has no such floor. `--from` reads results read-only from PostHog,
+  GrowthBook and Amplitude (a self-hosted instance on a LAN address needs `--allow-private`); Jourilo does not create or change experiments or flags, and plans list the detected
   tools only. Amplitude's funnel API does not list a flag's variants, so a missing third arm of a multi-arm
   experiment cannot be detected (a missing control or a single arm is). The adapters were tested on responses
   synthesized from vendor documentation, not on live accounts.
@@ -135,7 +141,8 @@ Stated so nobody mistakes silence for a pass.
 
 - Repository discovery reads TS, TSX, JS, Vue and Svelte routes from the syntax tree (a bundled TypeScript 6.0.3
   parser, loaded only when needed) and the rest from file patterns and regexes. A file the parser cannot read, or
-  minified code, falls back to the regex with a limitation. Laravel route files, groups and Filament panels are
+  minified code (a `.min.js` file, or one where most lines are 2000 characters or longer), falls back to the regex
+  with a limitation; one long line in a hand-written file does not. Laravel route files, groups and Filament panels are
   followed; router configs built dynamically at runtime are missed, and a configurable route
   prefix is shown with its local default. Website discovery crawls up to 30 pages, same origin only; on a local
   target, a sitemap that lists production URLs is mapped onto the local server, otherwise sitemaps on other origins
@@ -157,8 +164,6 @@ Stated so nobody mistakes silence for a pass.
 - Jourilo does not start the server it audits. When at least two pages were captured and every own-origin script
   request of every page failed (5xx or no answer), the run adds one limitation saying this looks like a stale or
   different server on the port; the failures are still reported as findings.
-- With `--proxy`, the tunnel is opened to the first allowed address of a name only; a name with several addresses
-  does not fall back to the others through the proxy (loopback is reached directly and does fall back).
 - `--proxy` (or `HTTPS_PROXY` / `HTTP_PROXY`) chains to an upstream HTTP proxy behind the guard. The guard still
   resolves and checks every destination, then asks the proxy for a tunnel to the checked address, never to the name:
   `CONNECT 93.184.216.34:443` for HTTPS and WebSockets, and `CONNECT 93.184.216.34:80` for plain HTTP, whose request
@@ -170,7 +175,8 @@ Stated so nobody mistakes silence for a pass.
   reported as a failed request, never as a page. Only `http://` proxies are supported; loopback addresses are reached
   directly. `NO_PROXY` is decided per destination host, as curl and browsers do (`NO_PROXY=*` means no proxy; CIDR
   ranges are not supported). The run records the proxy as `http://host:port` without its credentials. A tunnel
-  is accepted only when the proxy answers `200`. Jourilo reads `HTTPS_PROXY` / `HTTP_PROXY` from the environment: a
+  is accepted when the proxy answers `2xx`; a name with several allowed addresses is tried address by address through
+  the proxy, moving on only after a 5xx answer or no answer in time (a refusal or a `407` is final). Jourilo reads `HTTPS_PROXY` / `HTTP_PROXY` from the environment: a
   value that is not a usable `http://` proxy (for example `socks5://…`) fails every browsing command with exit 2;
   set `NO_PROXY=*` or unset the variable to go direct.
 - Because the guard resolves every name itself (so that it can check the address), a network where only the proxy can
@@ -187,8 +193,8 @@ Stated so nobody mistakes silence for a pass.
 - Lab timings include one local proxy hop per connection.
 - Layout shift (CLS) includes shifts caused by font swaps, so it varies with font caching and font loading. That is
   real layout shift for a visitor, so it stays in the metric. Performance evidence in findings has one item per metric
-  and viewport, with milliseconds rounded to the nearest 10 and CLS to 3 decimals, so snapshots change less often (a
-  value close to a rounding boundary can still flip between runs), and up to five layout-shift items per viewport; the raw values are in `run.pages[].metrics`, which `--budget` reads.
+  and viewport, with milliseconds rounded to the nearest 10 and CLS to 3 decimals, so snapshots change less often, not never (a
+  value close to a rounding boundary can still flip between runs, and a changed bucket changes the evidence), and up to five layout-shift items per viewport; the raw values are in `run.pages[].metrics`, which `--budget` reads.
 - `--extra-header "Name: value"` is sent only with requests to the target's origin (scheme, host and port), never to
   another origin. Playwright would carry an overridden header along every hop of a redirect chain, so Jourilo makes
   each request to the target's origin itself (through the guard) without following redirects and hands the response
@@ -220,8 +226,8 @@ Stated so nobody mistakes silence for a pass.
   Jourilo's own test for the flag skips itself on such a kernel and on Windows, where it cannot inspect the process
   command line.
 - While a Chromium run is going, its directory holds `browser.pids`: a snapshot, taken when the browser launched, of
-  the process ids of the browser, GPU and network service processes, one per line (renderers and utility processes
-  started later are not listed). The file is removed when the browser closes and on Jourilo's own exit, including
+  the process ids of the browser, GPU and network service processes, one per line. The list is a launch snapshot:
+  renderers and utility processes started later, and a GPU or network process that Chromium restarts, are not listed. The file is removed when the browser closes and on Jourilo's own exit, including
   after Ctrl-C, SIGTERM, a second signal (exit 130) and `--max-duration`, and is not listed in `manifest.json`. A
   `SIGKILL` of Jourilo (or a crashed machine) leaves the file and may leave the browser running: an integrator can
   clean up with `kill $(cat <run dir>/browser.pids)` (on Windows, `taskkill /F /PID` for each id). Check first that
@@ -238,7 +244,8 @@ Stated so nobody mistakes silence for a pass.
   both languages and switches in the page, so the Turkish text is checked by tests for presence and parity, not for
   wording; the wording of the first Turkish rule texts is for a fluent reader to review.
 - Jourilo's own activity in the page (the injected axe-core, its probes, screenshot masks) is marked and not reported
-  as a site error in Chromium and Firefox. WebKit drops the marker: there, Jourilo's own style refusal during a
+  as a site error in Chromium and Firefox. WebKit drops the marker (its console messages and exceptions carry no
+  source URL, checked again in 1.5.0): there, Jourilo's own style refusal during a
   screenshot is dropped only by time window (a site's own style refusal in those few milliseconds would be dropped
   too), and an exception thrown by Jourilo's own code cannot be told from the site's. A site's script refusals are
   never dropped.
@@ -248,28 +255,30 @@ Stated so nobody mistakes silence for a pass.
   crop shows the same place, not necessarily the same element. Baseline images load from the sibling run folder, so
   moving a run folder elsewhere breaks them (the report still renders).
 - Root-cause grouping is lexical (rule + source line or selector), not a semantic judgment. Component-level causes
-  follow imports, barrels and the usual aliases (`@/`, `~/`, `#/`, `$lib/`) in TS, TSX, Vue and Svelte; a record that
-  only has `loadComponent` in a file with no router call is not in the graph, and that finding groups per line.
+  follow imports, barrels and the usual aliases (`@/`, `~/`, `#/`, `$lib/`) in TS, TSX, Vue and Svelte. A route that
+  is nested in a pathless route (a layout route with no `path`) does not count toward that layout's `usedBy`.
 - History in the report lists earlier runs of the same target with defect counts; that list does not normalize for
   different page sets or viewports. The trend table (and `runs trend`) does, per page and viewport and per capture,
   and leaves out partial and no-page-loaded runs. A finding with no viewport counts at every viewport of its page, LCP
-  and CLS come from the first capture, and a changed page set between runs is not flagged. Use `verify` for
-  like-for-like comparisons.
+  and CLS are the median over the captures of that page in a run, and a note says when the pages audited differ
+  between the runs (a row only follows the runs that captured it). Use `verify` for like-for-like comparisons.
 - Screenshots are capped at 12 000 px height.
-- Screenshot names come from the page's path and query, so `--url /a?x=1` and `--url /a?x=1#top` write the same file.
-  A form-probe screenshot is named from the page's final URL, so a start URL that redirects to another host gets a
-  name with an origin tag.
-- Before/after pairs in `compare` and `verify` reports need the full-page screenshot; a page kept only as a first
-  screen (`--evidence minimal`) has no pair image.
+- Screenshot names come from the page's path, query and fragment. A form-probe screenshot is named from the address
+  that was requested, like the capture, so a start URL that redirects to another host gets no origin tag.
+- Before/after pairs in `compare` and `verify` reports use the full-page screenshot, or the first screen when that is
+  all a page kept (`--evidence minimal`); a page with neither has no pair image.
 - `jourilo/console-errors` and `jourilo/failed-requests` findings that differ only in volatile tokens are collapsed
   into one finding with `pages` (F44 in [FIELD-FEEDBACK.md](FIELD-FEEDBACK.md)). Volatile tokens are CSP nonces and
   hashes, UUIDs, long hex and base64-like runs, chunk hashes in file names, cache-busting query values (`v`, `t`, `_`, `ts`, `cb`,
   `ver` and `nonce` with a number, version, hash or random-looking value, so `?v=2026.11.14` counts; and any query
   value of 8 or more digits, such as a date `?d=20261114`), runs of 10 or more digits, and the page's own URL. Readable
   identifiers (`Icon24ArrowLeftBold`) are kept. The rule errs toward not collapsing: evidence cut at 400 characters can
-  keep two findings apart, and a page that was redirected is not normalized. A value that is a real identifier but
-  looks volatile (a 10-digit order number, an 8-digit date) does collapse. A dismissal made before the collapse does not carry over,
-  because the fingerprint changes.
+  keep two findings apart; a page that was redirected reads `{page}` for both the address requested and the one it
+  ended on. A value that is a real identifier but
+  looks volatile (a 10-digit order number, an 8-digit date) does collapse. A dismissal made before the collapse carries
+  over when every page of the collapsed finding was dismissed for the same rule; with only some of them dismissed, the
+  collapsed finding is reported again. Comparing runs weighs a collapse page by page (`pageOccurrences`), so a cause
+  that is collapsed in only one of the two runs is not a change by itself.
 - On a partial run (stopped early, exit 6), `sample.audited` and the manifest's `scope.urls` count the pages that
   were planned, not only those that finished; `pages` lists what finished.
 - `jourilo verify` does not apply the baseline's `--budget`; it compares metrics with their ranges. Give `--budget`

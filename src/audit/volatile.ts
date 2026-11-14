@@ -72,14 +72,20 @@ const RULES: [RegExp, string | ((...m: string[]) => string)][] = [
   [/(?<![\w.])\d{10,}(?![\w])/g, MARK],
 ];
 
-/** Replaces volatile tokens with `*`, and the page's own URL or path (when given) with `{page}`. */
-export function normalizeVolatile(text: string, pageUrl?: string): string {
+/**
+ * Replaces volatile tokens with `*`, and the page's own URL or path (when given) with `{page}`. A page that
+ * redirects is known by two addresses, the one requested and the one it ended on: pass both and either is `{page}`.
+ */
+export function normalizeVolatile(text: string, pageUrl?: string | (string | undefined)[]): string {
   let out = text;
-  if (pageUrl) {
-    const { urls, path } = pageForms(pageUrl);
-    for (const u of urls) out = out.replace(new RegExp(`${escapeRe(u)}${END}`, 'g'), '{page}');
-    if (path) out = out.replace(new RegExp(`(^|[\\s"'(=])${escapeRe(path)}${END}`, 'g'), '$1{page}');
-  }
+  const forms = (Array.isArray(pageUrl) ? pageUrl : [pageUrl]).filter((u): u is string => !!u).map(pageForms);
+  const urls = forms.flatMap((f) => f.urls).sort((a, b) => b.length - a.length);
+  const paths = [...new Set(forms.flatMap((f) => (f.path ? [f.path] : [])))].sort(
+    (a, b) => b.length - a.length,
+  );
+  for (const u of urls) out = out.replace(new RegExp(`${escapeRe(u)}${END}`, 'g'), '{page}');
+  for (const path of paths)
+    out = out.replace(new RegExp(`(^|[\\s"'(=])${escapeRe(path)}${END}`, 'g'), '$1{page}');
   for (const [re, to] of RULES) out = typeof to === 'string' ? out.replace(re, to) : out.replace(re, to);
   return out;
 }

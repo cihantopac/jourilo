@@ -201,7 +201,8 @@ export const verify: Command = {
   --deny-local           Refuse a local target (localhost, 127.0.0.1, [::1], *.localhost, *.test) with exit 3; a redirect to one is blocked by the network guard and listed in the limitations;
                          JOURILO_DENY_LOCAL=1 does the same. Not available with --browser webkit (exit 3)
 ${networkOptionsHelp(25)}
-                         Without --allow-hosts / --block-hosts, the baseline run's lists are used again; so are its
+                         Without --allow-hosts / --block-hosts, the baseline run's lists are used again (give an empty
+                         value, --allow-hosts "", to drop one); so are its
                          --user-agent and --ignore-https-errors. Header values are never stored: a baseline that sent
                          --extra-header needs the headers again (exit 2 without them)
   --fail-on-regression   Exit 1 when new serious or critical defects appear`,
@@ -242,8 +243,10 @@ ${networkOptionsHelp(25)}
       const network = networkFrom(ctx, origin);
       const recorded = (key: string) =>
         Array.isArray(base.settings[key]) ? (base.settings[key] as string[]) : undefined;
-      const allowHosts = network.allowHosts ?? recorded('allowHosts');
-      const blockHosts = network.blockHosts ?? recorded('blockHosts');
+      // An empty value (`--allow-hosts ""`) drops the baseline's list instead of replaying it.
+      const dropped = (key: string) => ctx.values[key] !== undefined;
+      const allowHosts = network.allowHosts ?? (dropped('allow-hosts') ? undefined : recorded('allowHosts'));
+      const blockHosts = network.blockHosts ?? (dropped('block-hosts') ? undefined : recorded('blockHosts'));
       // The baseline's user agent and certificate setting are replayed; header values were never stored, so headers
       // the baseline sent must be given again, or the pages compared would not be the same (e.g. a gated staging site).
       const userAgent =

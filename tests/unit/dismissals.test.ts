@@ -69,6 +69,54 @@ describe('dismissals', () => {
     expect(cmp.dismissed.map((x) => x.fingerprint)).toEqual([a.fingerprint]);
   });
 
+  describe('across a collapse (F44)', () => {
+    const collapsedOver = (paths: string[]) => {
+      const first = f('jourilo/console-errors', paths[0]!);
+      return {
+        ...first,
+        fingerprint: 'collapsed00000000',
+        url: `https://example.test${paths[0]}`,
+        pages: paths.map((p) => `https://example.test${p}`),
+      } as Finding;
+    };
+    const paths = ['/', '/pricing', '/about'];
+    const perPage = paths.map((p) => f('jourilo/console-errors', p));
+
+    it('old per-page dismissals dismiss the collapsed finding when every one of its pages was dismissed', () => {
+      const c = collapsedOver(paths);
+      const { kept, dismissed } = applyDismissals([c], perPage.map(dismissal));
+      expect(kept).toEqual([]);
+      expect(dismissed[0]!.fingerprint).toBe(c.fingerprint);
+    });
+    it('control: a page that was never dismissed keeps the collapsed finding, and another rule is unaffected', () => {
+      const c = collapsedOver(paths);
+      expect(applyDismissals([c], perPage.slice(0, 2).map(dismissal)).kept).toEqual([c]);
+      const other = perPage.map((p) => ({ ...dismissal(p), ruleId: 'axe/other' }));
+      expect(applyDismissals([c], other).kept).toEqual([c]);
+    });
+    it('a dismissal of a collapsed finding does not reach a single page', () => {
+      const c = collapsedOver(paths);
+      const d = { ...dismissal(c), pages: c.pages };
+      const single = f('jourilo/console-errors', '/');
+      expect(applyDismissals([single], [d]).kept).toEqual([single]);
+    });
+    it('compare: a base page finding now covered by a dismissed collapse is dismissed, not fixed', () => {
+      const base = run(perPage, {
+        pages: paths.map(
+          (p) =>
+            ({ url: `https://example.test${p}`, viewport: 'desktop', status: 200, metrics: [] }) as never,
+        ),
+      });
+      const head = run([], {
+        pages: base.pages,
+        dismissed: applyDismissals([collapsedOver(paths)], perPage.map(dismissal)).dismissed,
+      });
+      const cmp = compareRuns(base, head);
+      expect(cmp.fixed).toEqual([]);
+      expect(cmp.dismissed).toHaveLength(3);
+    });
+  });
+
   it('a finding with the same rule at a new URL is kept and comes back as new', () => {
     const old = f('axe/a', '/');
     const moved = f('axe/a', '/new-page');

@@ -20,6 +20,9 @@ export const SAMPLED_REASONS = new Set(['bgImage', 'bgGradient', 'bgOverlap']);
 /** At most this many nodes are sampled per capture. */
 export const CONTRAST_SAMPLE_CAP = 30;
 
+/** Total time one capture may spend sampling contrast; nodes left over stay manual-review items. */
+export const CONTRAST_BUDGET_MS = 15_000;
+
 /** Larger screenshots (device pixels) are not sampled: too slow to move into the page and decode. */
 const MAX_DEVICE_PIXELS = 4_000_000;
 
@@ -53,53 +56,63 @@ export function judgeContrast(
   const near = 48 * 48;
   const size = Math.max(4, Math.round(tile));
   // Only pixels inside the text's line boxes are behind the text: padding and the empty width beside centred text
-  // are not, even when the image there is as light as the text.
-  let mask: Uint8Array | null = null;
-  if (lines) {
-    mask = new Uint8Array(width * height);
-    for (const l of lines) {
+  // are not, even when the image there is as light as the text. Each line box is cut into its own tiles, so a line
+  // box never leaves a thin piece of a shared grid that is too small to judge; the remainder joins the last tile.
+  const regions = (lines ?? [{ x: 0, y: 0, w: width, h: height }])
+    .map((l) => {
       const xa = Math.max(0, Math.floor(l.x));
       const ya = Math.max(0, Math.floor(l.y));
-      const xb = Math.min(width, Math.ceil(l.x + l.w));
-      const yb = Math.min(height, Math.ceil(l.y + l.h));
-      for (let y = ya; y < yb; y++) mask.fill(1, y * width + xa, y * width + Math.max(xa, xb));
-    }
-  }
+      return {
+        xa,
+        ya,
+        xb: Math.min(width, Math.ceil(l.x + l.w)),
+        yb: Math.min(height, Math.ceil(l.y + l.h)),
+      };
+    })
+    .filter((r) => r.xb > r.xa && r.yb > r.ya);
+  const edges = (from: number, to: number) => {
+    const n = Math.max(1, Math.floor((to - from) / size));
+    return Array.from({ length: n + 1 }, (_, i) => from + Math.round(((to - from) * i) / n));
+  };
   let textPixels = 0;
   let worst = Number.POSITIVE_INFINITY;
   let best = 0;
-  for (let y0 = 0; y0 < height; y0 += size) {
-    for (let x0 = 0; x0 < width; x0 += size) {
-      const x1 = Math.min(width, x0 + size);
-      const y1 = Math.min(height, y0 + size);
-      const at = new Int32Array((x1 - x0) * (y1 - y0));
-      const dist = new Float64Array(at.length);
-      let count = 0;
-      let nearHere = 0;
-      for (let y = y0; y < y1; y++) {
-        for (let x = x0; x < x1; x++) {
-          const p = y * width + x;
-          if (mask && !mask[p]) continue;
-          const i = p * 4;
-          const dr = (px[i] as number) - tr;
-          const dg = (px[i + 1] as number) - tg;
-          const db = (px[i + 2] as number) - tb;
-          const d = dr * dr + dg * dg + db * db;
-          if (d <= near) nearHere++;
-          at[count] = i;
-          dist[count++] = d;
+  for (const r of regions) {
+    const xs = edges(r.xa, r.xb);
+    const ys = edges(r.ya, r.yb);
+    for (let ty = 0; ty < ys.length - 1; ty++) {
+      for (let tx = 0; tx < xs.length - 1; tx++) {
+        const x0 = xs[tx] as number;
+        const x1 = xs[tx + 1] as number;
+        const y0 = ys[ty] as number;
+        const y1 = ys[ty + 1] as number;
+        const at = new Int32Array((x1 - x0) * (y1 - y0));
+        const dist = new Float64Array(at.length);
+        let count = 0;
+        let nearHere = 0;
+        for (let y = y0; y < y1; y++) {
+          for (let x = x0; x < x1; x++) {
+            const i = (y * width + x) * 4;
+            const dr = (px[i] as number) - tr;
+            const dg = (px[i + 1] as number) - tg;
+            const db = (px[i + 2] as number) - tb;
+            const d = dr * dr + dg * dg + db * db;
+            if (d <= near) nearHere++;
+            at[count] = i;
+            dist[count++] = d;
+          }
         }
-      }
-      if (count < 16 || !nearHere) continue;
-      textPixels += nearHere;
-      const cut = dist.slice(0, count).sort()[Math.floor(count * 0.8)] as number;
-      for (let k = 0; k < count; k++) {
-        if ((dist[k] as number) < cut) continue;
-        const i = at[k] as number;
-        const lb = lum(px[i] as number, px[i + 1] as number, px[i + 2] as number);
-        const ratio = (Math.max(lt, lb) + 0.05) / (Math.min(lt, lb) + 0.05);
-        if (ratio < worst) worst = ratio;
-        if (ratio > best) best = ratio;
+        if (count < 16 || !nearHere) continue;
+        textPixels += nearHere;
+        const cut = dist.slice(0, count).sort()[Math.floor(count * 0.8)] as number;
+        for (let k = 0; k < count; k++) {
+          if ((dist[k] as number) < cut) continue;
+          const i = at[k] as number;
+          const lb = lum(px[i] as number, px[i + 1] as number, px[i + 2] as number);
+          const ratio = (Math.max(lt, lb) + 0.05) / (Math.min(lt, lb) + 0.05);
+          if (ratio < worst) worst = ratio;
+          if (ratio > best) best = ratio;
+        }
       }
     }
   }
@@ -198,7 +211,14 @@ export async function sampleContrast(page: Page, target: string): Promise<Contra
   const scroll = (await page.evaluate('[scrollX, scrollY]').catch(() => null)) as [number, number] | null;
   try {
     const locator = page.locator(`css=${target}`).first();
-    await locator.scrollIntoViewIfNeeded({ timeout: 2000 });
+    // Scrolling can start lazy loading, so an element that is already inside the viewport is not scrolled to.
+    const inView = await locator
+      .evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth;
+      })
+      .catch(() => false);
+    if (!inView) await locator.scrollIntoViewIfNeeded({ timeout: 2000 });
     const style = (await page.evaluate(
       `(${String(readNodeStyle)})(${JSON.stringify(target)})`,
     )) as NodeStyle | null;
@@ -233,4 +253,47 @@ export async function sampleContrast(page: Page, target: string): Promise<Contra
         .evaluate(`scrollTo({ left: ${scroll[0]}, top: ${scroll[1]}, behavior: "instant" })`)
         .catch(() => undefined);
   }
+}
+
+interface SampledNode {
+  target: string;
+  data?: Record<string, unknown>;
+  contrast?: ContrastSample;
+}
+
+/**
+ * Samples the nodes axe left for review because of their background, in order, until the cap or the time budget is
+ * reached. Returns how many nodes were sampled and how many were left because the budget ran out.
+ */
+export async function sampleNodes(
+  page: Page,
+  nodes: SampledNode[],
+  opts: {
+    budgetMs?: number;
+    cap?: number;
+    sample?: (page: Page, target: string) => Promise<ContrastSample | null>;
+    now?: () => number;
+  } = {},
+): Promise<{ sampled: number; overBudget: number }> {
+  const {
+    budgetMs = CONTRAST_BUDGET_MS,
+    cap = CONTRAST_SAMPLE_CAP,
+    sample = sampleContrast,
+    now = Date.now,
+  } = opts;
+  const start = now();
+  let sampled = 0;
+  let overBudget = 0;
+  for (const n of nodes) {
+    if (!SAMPLED_REASONS.has(String(n.data?.messageKey))) continue;
+    if (sampled >= cap) break;
+    if (now() - start >= budgetMs) {
+      overBudget++;
+      continue;
+    }
+    sampled++;
+    const s = await sample(page, n.target);
+    if (s) n.contrast = s;
+  }
+  return { sampled, overBudget };
 }

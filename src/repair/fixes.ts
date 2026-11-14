@@ -397,7 +397,10 @@ const GLOBAL_CSS = [
 // CSS modules are excluded: a bare `html` selector is not pure and Next.js rejects it.
 const isCss = (file: string) => /\.(css|scss|less)$/.test(file) && !/\.module\.(css|scss|less)$/.test(file);
 
-/** The body span of the first top-level rule whose selector is exactly `html` (not `.dark html`, not inside @media). */
+/**
+ * The body span of the first top-level rule whose selector is `html`, alone or in a list such as `html, body` (not
+ * `.dark html`, not inside @media).
+ */
 function topLevelHtmlRule(css: string): { open: number; close: number } | null {
   let depth = 0;
   let boundary = 0;
@@ -415,7 +418,7 @@ function topLevelHtmlRule(css: string): { open: number; close: number } | null {
           .slice(boundary, i)
           .replace(/\/\*[\s\S]*?\*\//g, '')
           .trim();
-        if (sel === 'html') {
+        if (sel.split(',').some((part) => part.trim() === 'html')) {
           let d = 1;
           let j = i + 1;
           for (; j < css.length && d > 0; j++) {

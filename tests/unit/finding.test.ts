@@ -199,6 +199,37 @@ const capture = (path: string, viewport = 'desktop', status: number | null = 200
     inventory: run([]).pages[0]?.inventory as never,
   }) as PageCapture;
 
+describe('redirected pages in a collapse', () => {
+  // Two pages whose message names the address they ended on after a redirect (/old -> /en/old), not the one requested.
+  const redirected = (path: string, finalPath: string) =>
+    obs({
+      url: `${SITE}${path}`,
+      finalUrl: `${SITE}${finalPath}`,
+      viewport: VIEWPORTS.desktop!,
+      console: [
+        { type: 'error', text: `Failed to load ${SITE}${finalPath}`, location: `${SITE}${finalPath}:3` },
+      ],
+    });
+  const found = () =>
+    mergeFindings([
+      ...reliabilityFindings(redirected('/old', '/en/old')),
+      ...reliabilityFindings(redirected('/older', '/en/older')),
+    ]);
+  const order2 = [`${SITE}/old`, `${SITE}/older`];
+
+  it('collapses when the final address is known, so each message reads {page}', () => {
+    const out = collapseVolatileFindings(found(), order2, {
+      [`${SITE}/old`]: `${SITE}/en/old`,
+      [`${SITE}/older`]: `${SITE}/en/older`,
+    });
+    expect(byRule(out, 'jourilo/console-errors')).toHaveLength(1);
+    expect(byRule(out, 'jourilo/console-errors')[0]!.pages).toEqual(order2);
+  });
+  it('control: without the final addresses the two messages differ and stay apart', () => {
+    expect(byRule(collapseVolatileFindings(found(), order2), 'jourilo/console-errors')).toHaveLength(2);
+  });
+});
+
 describe('collapsed findings in compare, trends, bench and reports', () => {
   const collapsed = (paths: string[]) => collapseVolatileFindings(auditFindings(paths), order(paths));
   const ce = (fs: Finding[]) => byRule(fs, 'jourilo/console-errors')[0]!;
@@ -272,6 +303,30 @@ describe('collapsed findings in compare, trends, bench and reports', () => {
       (x) => x.after.url === `${SITE}/about` && x.after.ruleId === 'jourilo/console-errors',
     );
     expect(about?.after.severity).toBe('serious');
+  });
+
+  it('compares a collapse page by page: a collapse in only one run is not a change by itself', () => {
+    const base = run(collapsed(['/pricing']), { id: 'b1', pages: [capture('/pricing')] });
+    const head = run(collapsed(PATHS), { id: 'h1', pages: PATHS.map((p) => capture(p)) });
+    expect(head.findings.every((f) => f.pageOccurrences)).toBe(true);
+    const cmp = compareRuns(base, head);
+    expect(cmp.introduced).toEqual([]);
+    expect(cmp.changed).toEqual([]);
+    // And the other way round: the collapse in the baseline, one page left in the head run.
+    const back = compareRuns(
+      head,
+      run(collapsed(['/pricing']), { id: 'h2', pages: PATHS.map((p) => capture(p)) }),
+    );
+    expect(back.changed).toEqual([]);
+  });
+  it('control: more occurrences on a shared page are a change, whatever the collapse', () => {
+    const base = run(collapsed(['/pricing']), { id: 'b2', pages: [capture('/pricing')] });
+    const more = collapsed(PATHS).map((f) => ({
+      ...f,
+      pageOccurrences: { ...f.pageOccurrences, [`${SITE}/pricing`]: 9 },
+    }));
+    const cmp = compareRuns(base, run(more, { id: 'h3', pages: PATHS.map((p) => capture(p)) }));
+    expect(cmp.changed.length).toBeGreaterThan(0);
   });
 
   it('counts a collapsed finding on every one of its pages in trends', () => {

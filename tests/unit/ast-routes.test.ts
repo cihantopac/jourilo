@@ -116,6 +116,20 @@ const router = createRouter({ history: createWebHistory(), routes });
     expect(paths('src/Router.svelte', src)).toEqual(['/inbox']);
   });
 
+  it('reads Angular loadComponent with a named export, and records the parent route', () => {
+    const r = routes(
+      'src/app/app.routes.ts',
+      `export const routes: Routes = [
+  { path: 'admin', component: AdminShell, children: [
+    { path: 'users', loadComponent: () => import('./users').then((m) => m.UsersPage) },
+  ] },
+];`,
+    );
+    expect(r.map((x) => x.path)).toEqual(['/admin', '/admin/users']);
+    expect(r[1]).toMatchObject({ component: './users', exportName: 'UsersPage', parent: 0 });
+    expect(r[0]!.parent).toBeUndefined();
+  });
+
   it('reads relative Angular-style records, but not other objects with a relative path', () => {
     const src = `export const routes: Routes = [
   { path: 'heroes', component: HeroesComponent },

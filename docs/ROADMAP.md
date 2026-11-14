@@ -123,17 +123,29 @@ All five (the `verify --target` typo error, setup-state removal when the guard f
 shipped in 1.2.1, together with F24-F40 (see Done in 1.2.1). The four review follow-ups carried to 1.3.0 shipped
 there.
 
-## Next
+## Done in 1.5.0
 
-Deferred from the 1.4.0 reviews, grouped; each is a small, known gap.
+The deferred minors of 1.3.0 and 1.4.0 and F43 ([RELEASE-1.5.md](RELEASE-1.5.md)):
 
-- **Menus:** detect a role-less popup that ignores Escape; do not reload up to four times on a cookie banner.
-- **Discovery and causes:** keep hand-written long-line files out of the regex fallback; Angular `loadComponent` records.
-- **Fixers:** edit an existing `html, body {}` rule; add a rect and screenshot to implicit-submit evidence.
-- **Trends:** LCP and CLS from every capture; say when the page set changed between runs.
-- **Experiments:** a minimum-sample floor for the sequential p-value; variants of an Amplitude flag; self-hosted LAN hosts.
-- **Journeys:** domain cookies on a trailing-dot host; fail a half-finished redirect chain sooner than the step timeout.
-- **Vocabulary:** stop the financial list refusing Italian "Ordina per" (sort) and similar.
-- **Network:** close a half-open upstream socket sooner; try several addresses through `--proxy`.
-- **WebKit:** tell Jourilo's own style refusal and exceptions from the site's without a time window.
-- **Findings:** carry a dismissal across a collapse; collapse a cause seen on one page of one run and many in another.
+- **Menus:** banner-shaped popups closed in `settle()`, menu cap after the name filter, stable trigger tagging.
+- **Discovery and causes:** hand-written long-line files keep their AST routes; Angular `loadComponent` records.
+- **Fixers and trends:** `html, body {}` edit, implicit-submit evidence, median LCP and CLS, a note on a changed page set.
+- **Experiments:** a minimum-sample floor for sequential stops, `--allow-private` for self-hosted LAN hosts.
+- **Journeys:** trailing-dot domain cookies, prompt hop aborts, Referer fixes.
+- **Vocabulary:** Italian "Ordina per" and similar no longer refused.
+- **Network:** `--proxy` tries several addresses, half-open sockets close sooner.
+- **Findings:** dismissals carry across a collapse; per-page compare of collapsed findings.
+- **Capture:** contrast sampling time budget.
+- **F43:** warning when the workspace is inside `--repo`.
+
+## Next (after 1.5.0)
+
+Not done in 1.5.0, each with its reason in [RELEASE-1.5.md](RELEASE-1.5.md).
+
+- **Discovery:** count children of a pathless layout route toward `usedBy` (route-model change).
+- **Experiments:** variants of an Amplitude flag (needs the Experiment management API or a `--variants` option).
+- **Network:** pool plain-HTTP keep-alive connections again in the direct case (custom `http.Agent` with checked connect).
+- **WebKit:** tell Jourilo's own style refusal and exceptions from the site's without a time window (needs a marker in
+  every evaluated source).
+- **Fixers:** a realistic sticky-header page for the obscured-focus fixer-lab case.
+- **Journeys:** `document.referrer` on the final page of a redirect chain.

@@ -96,8 +96,8 @@ early** by SIGINT, SIGTERM or `--max-duration` (a partial run is written; the pa
 `--json`, progress is one JSON object per stderr line, with `phase`, `done` and `total` on the audit's own lines.
 `done` counts the steps finished before the line's step started, so the last line of a phase has `done` = `total` − 1:
 a phase is over when the next phase's first line arrives, or when the run ends (see
-[RUN-FORMAT.md](RUN-FORMAT.md#progress-lines)). Every run also has `manifest.json` (sha256 per artifact, the Jourilo, browser and axe-core versions, and the scope) and
-follows [`schemas/run.schema.json`](../schemas/run.schema.json) ([RUN-FORMAT.md](RUN-FORMAT.md)).
+[RUN-FORMAT.md](RUN-FORMAT.md#progress-lines)). Every run also has `manifest.json` (sha256 per artifact, the Jourilo,
+browser and axe-core versions, and the scope) and follows [`schemas/run.schema.json`](../schemas/run.schema.json) ([RUN-FORMAT.md](RUN-FORMAT.md)).
 
 Two gates for CI: `--fail-on SEVERITY` (exit 1 on a defect at or above it) and `--budget LCP=2000,CLS=0.05,TBT=300`
 (exit 1 when the worst capture exceeds a lab-metric limit; a metric no capture measured, such as INP, is reported as

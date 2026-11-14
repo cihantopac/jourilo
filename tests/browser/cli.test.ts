@@ -196,6 +196,31 @@ describe('cli', () => {
     const runs = JSON.parse(jourilo('runs', '--json').stdout);
     expect(runs.length).toBeGreaterThan(0);
   });
+  it('records run.sample and its limitation when discovery found more pages than --pages', () => {
+    const r = jourilo(
+      'audit',
+      'fixtures/sites/acme-saas',
+      '--pages',
+      '2',
+      '--viewports',
+      'mobile',
+      '--no-forms',
+      '--no-keyboard',
+      '--json',
+      '-q',
+    );
+    expect(r.status, r.stderr).toBe(0);
+    const run = JSON.parse(readFileSync(join(JSON.parse(r.stdout).runDir, 'run.json'), 'utf8')) as {
+      sample?: { discovered: number; audited: number; leftOut: string[] };
+      limitations: string[];
+    };
+    expect(run.sample?.audited).toBe(2);
+    expect(run.sample!.discovered).toBeGreaterThan(2);
+    expect(run.sample!.leftOut.length).toBeGreaterThan(0);
+    expect(run.limitations.some((l) => l.startsWith(`2 of ${run.sample!.discovered} discovered pages`))).toBe(
+      true,
+    );
+  }, 180_000);
 });
 
 describe('cli --budget', () => {
@@ -263,11 +288,16 @@ describe('cli --budget', () => {
     const failed = jourilo(...clean, '--budget', 'LCP=1', '--fail-on', 'minor', '--json');
     expect(failed.status).toBe(1);
     expect(JSON.parse(failed.stdout).gateFailed).toBe(true);
+    // The control site has no defects at all, minor ones included: otherwise --fail-on minor would fail by itself.
+    expect(
+      (JSON.parse(failed.stdout).findings as { kind: string }[]).filter((f) => f.kind === 'defect'),
+    ).toEqual([]);
     const met = jourilo(...clean, '--budget', 'LCP=600000', '--fail-on', 'minor', '--json');
     expect(met.status).toBe(0);
     expect(JSON.parse(met.stdout).gateFailed).toBe(false);
     // The other way: a met budget does not hide a --fail-on failure.
     expect(jourilo(...site, '--budget', 'LCP=600000', '--fail-on', 'serious').status).toBe(1);
+    // Three audits of one page each; macOS CI runners are the slowest, so keep the headroom.
   }, 360_000);
 });
 
@@ -327,6 +357,22 @@ describe('cli no page loaded', () => {
 });
 
 describe('cli unresolvable local name', () => {
+  it('a budget does not change exit 5 when no page loaded', () => {
+    const r = jourilo(
+      'audit',
+      'http://does-not-exist.invalid/',
+      '--pages',
+      '1',
+      '--viewports',
+      'desktop',
+      '--budget',
+      'LCP=1',
+      '--json',
+      '-q',
+    );
+    expect(r.status).toBe(5);
+    expect(r.stdout).toContain('"outcome":"no-page-loaded"');
+  }, 120_000);
   it('an unresolvable .test name exits 5 quickly', () => {
     const t0 = Date.now();
     const r = jourilo(
@@ -886,6 +932,17 @@ describe('cli --chromium-sandbox and browser.pids (F21)', () => {
     }
   };
 
+  /** The browser's processes are listed once it has launched, but may need a moment to be signalable: poll up to 2 s. */
+  async function expectAlive(pids: number[]) {
+    const deadline = Date.now() + 2000;
+    let dead = pids.filter((pid) => !alive(pid));
+    while (dead.length && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 100));
+      dead = pids.filter((pid) => !alive(pid));
+    }
+    expect(dead, 'pids not alive').toEqual([]);
+  }
+
   /** Child processes can outlive close() by a moment on a slow runner: poll for up to 2 s. */
   async function expectDead(pids: number[]) {
     const deadline = Date.now() + 2000;
@@ -990,7 +1047,7 @@ describe('cli --chromium-sandbox and browser.pids (F21)', () => {
   it('browser.pids lists live browser processes during the run and is gone after it', async () => {
     const live = await holdAudit([]);
     expect(live.pids.length).toBeGreaterThan(0);
-    if (posix) for (const pid of live.pids) expect(alive(pid), `pid ${pid}`).toBe(true);
+    if (posix) await expectAlive(live.pids);
     release();
     expect(await live.closed, live.result().stderr).toBe(0);
     const out = JSON.parse(live.result().stdout);
@@ -1005,12 +1062,31 @@ describe('cli --chromium-sandbox and browser.pids (F21)', () => {
   it.skipIf(!posix)(
     'a second signal (exit 130) leaves no browser.pids behind',
     async () => {
-      const held2 = await holdAudit([]);
+      // Without -q, so that the first signal's own "Stopping" line says it has been handled.
+      const held2 = await holdAudit(
+        [],
+        [
+          'audit',
+          url,
+          '--pages',
+          '1',
+          '--viewports',
+          'desktop',
+          '--no-keyboard',
+          '--no-forms',
+          '--json',
+          '--workspace',
+          sandboxWs,
+        ],
+      );
       // browser.pids appears at launch, before the capture: signal only once the page request is held, so the
       // first SIGTERM cannot finish the run cleanly (exit 6) before the second one arrives.
       await held2.requested;
       held2.child.kill('SIGTERM');
-      await new Promise((r) => setTimeout(r, 1500));
+      const deadline = Date.now() + 30_000;
+      while (!held2.result().stderr.includes('Stopping:') && Date.now() < deadline)
+        await new Promise((r) => setTimeout(r, 50));
+      expect(held2.result().stderr, 'first signal was not acknowledged').toContain('Stopping:');
       held2.child.kill('SIGTERM');
       const code = await held2.closed;
       release();
@@ -1236,6 +1312,12 @@ describe('cli stop early', () => {
     },
     120_000,
   );
+
+  it('a budget never turns a stopped run into exit 1: partial stays 6', async () => {
+    const r = await auditUntil([...site, '--max-duration', '1', '--budget', 'LCP=1'], null);
+    expect(r.code).toBe(6);
+    expect(r.run.outcome).toBe('partial');
+  }, 120_000);
 
   it('--max-duration stops the run', async () => {
     const r = await auditUntil([...site, '--max-duration', '1'], null);
@@ -1650,9 +1732,11 @@ describe('cli structured progress (F35)', () => {
       for (const l of lines) expect(phases, l.message).toContain(l.phase);
       expect(lines[0]).toMatchObject({ phase: 'launch', message: 'Starting chromium …' });
 
-      // The plan line, then one line per capture: done counts the captures finished before it.
+      // The plan line (total only, so it and the first capture line are not both `done: 0`), then one line per
+      // capture: done counts the captures finished before it.
       const plan = lines.find((l) => l.message.startsWith('Auditing '));
-      expect(plan).toMatchObject({ phase: 'capture', done: 0, total: 4 });
+      expect(plan).toMatchObject({ phase: 'capture', total: 4 });
+      expect(plan?.done).toBeUndefined();
       const captures = lines.filter((l) => l.phase === 'capture' && l.url);
       const b = `${origin}/b?token=[redacted]`;
       expect(captures.map((l) => [l.done, l.total, l.viewport, l.url])).toEqual([

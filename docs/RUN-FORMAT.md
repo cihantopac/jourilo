@@ -22,8 +22,10 @@ manifest is described there as `#/$defs/manifest`. The TypeScript source of trut
   3 URLs in 2 viewports has `urls` 3, `captures` 6 and `pages` 6.
 - `sample` is present when discovery found more pages than were audited: `{ discovered, audited, leftOut }`, where
   `leftOut` lists at most 20 of the discovered URLs that were not audited (redacted like other URLs). The same fact is
-  stated in `limitations`. It is absent for `--url` lists, with `--pages 1` (no discovery runs), and when every
-  discovered page was audited.
+  stated in `limitations`. `audited` is the number of pages planned from discovery: after a stop (`stoppedBy`,
+  Ctrl-C, `--max-duration`) fewer captures may exist than `audited` says (compare `summary.urls`). It is absent for
+  `--url` lists, with `--pages 1` (no discovery runs, so no sample is recorded), and when every discovered page was
+  audited.
 - `pages[].load` records how a capture was taken: `networkIdle` (the network went idle within the settle window) and,
   with `--wait-for <selector>`, `waitedFor` and `found`. `found: false` means the element was not visible within
   `--timeout`; the page was still audited in the state it was in, and `limitations` says so. `settings.waitFor` holds
@@ -37,6 +39,8 @@ manifest is described there as `#/$defs/manifest`. The TypeScript source of trut
   capture order; `url` is the first of them. Only `jourilo/console-errors` and `jourilo/failed-requests` collapse this
   way, within one journey (or none).
 - Such a finding is counted once in `summary`; `occurrences` is the sum over its pages and `severity` the highest.
+  `pageOccurrences` (optional, since 1.5.0) gives the occurrences on each page by URL; run comparison uses it to
+  compare a collapse with another run page by page, so a collapse that exists in only one run is not a change.
 - Its `fingerprint` depends on the rule, the normalized evidence and the journey, not on the pages, so it stays stable
   whichever pages a run sampled. A finding seen on one page has no `pages` and keeps the per-page fingerprint of
   earlier releases.
@@ -45,12 +49,14 @@ manifest is described there as `#/$defs/manifest`. The TypeScript source of trut
 - Run comparison (`jourilo verify`, `compare`, `optimize`) keeps the identity these two rules had before: rule, journey
   and page. A finding matches a finding of the same rule and journey that shares at least one page, whatever the
   evidence, so a collapse in either run, or a page that now logs fewer or more errors, is persisting (and changed),
-  never fixed plus new. A finding is fixed only when no finding of its rule and journey shows on any of its pages and
+  never fixed plus new (it is "changed" only when severity or the occurrences on a shared page differ). A finding is fixed only when no finding of its rule and journey shows on any of its pages and
   every one of them was checked again. Trends count it on each of its pages. The field is absent in runs made before
   1.4.0.
-- Dismissals are keyed by fingerprint. A dismissal of a per-page finding does not hide the collapsed one, and the
-  collapsed fingerprint changes when the set of evidence changes (for example one more error on every page), or turns
-  back into the per-page fingerprint when a run samples only one affected page.
+- Dismissals are keyed by fingerprint. Per-page dismissals made before the finding collapsed keep the collapsed
+  finding dismissed when every one of its pages was dismissed for the same rule (a dismissal of a collapsed finding
+  records its `pages` and never reaches a single page). The collapsed fingerprint changes when the set of evidence
+  changes (for example one more error on every page), or turns back into the per-page fingerprint when a run samples
+  only one affected page; those are different findings and come back.
 
 ## Budgets
 
@@ -67,10 +73,11 @@ and `limitations` says so. A failed budget exits 1, like `--fail-on`; exit 5 and
 
 - `tool`: `{ name: "jourilo", version }`, the release that made the run.
 - `browser`: `{ name, version }`, as in `run.json`.
-- `axe`: `{ version }`, the axe-core version the pages were checked with (`settings.axe`), or the bundled axe-core when
-  no page was checked (for example `discover`).
+- `axe`: `{ version, bundled? }`, the axe-core version the pages were checked with (`settings.axe`), or the bundled
+  axe-core with `bundled: true` when no page was checked (for example `discover`).
 - `scope`: `{ target, urls, viewports }`: the redacted target, the audited URLs (`settings.scope.urls`, or the captured
-  pages for journey runs), redacted like other URLs, and the viewport names.
+  pages for journey runs), redacted like other URLs, and the viewport names. On a partial run (stopped early) the URLs
+  are the **planned** list, not only the pages that were captured.
 
 The manifest is rewritten whenever the reports are (`report`, `compare`, `finding`), and these fields are taken from
 the run.
@@ -81,7 +88,8 @@ No secret (proxy credentials, `--extra-header` values) is ever written to it.
 With `--json`, every progress line on stderr is one JSON object:
 `{"type":"progress","phase":…,"message":…,"done"?,"total"?,"url"?,"viewport"?,"at":"<ISO time>"}`. `message` is the
 text of the plain line (trimmed). Lines from the audit pipeline carry `phase`; other lines (stop notices, warnings,
-`journeys run` steps) may carry only `message`.
+`journeys run` steps) may carry only `message`. A stop line can also carry a `phase` (the phase that was running when
+the stop arrived), so do not use the presence of `phase` to tell audit steps from notices.
 
 - `phase` is one of `launch`, `discover`, `setup`, `capture`, `metrics`, `forms` or `report`. `rules` is reserved:
   no line uses it yet.

@@ -104,3 +104,18 @@ describe('normalizeVolatile', () => {
     expect(normalizeVolatile('/img/k3Jd9sLq0ZpX2mWv8nRt.jpg')).toBe('/img/*.jpg');
   });
 });
+
+describe('normalizeVolatile with a redirected page', () => {
+  const msg = 'Failed to load https://example.test/en/old';
+  it('reads both the requested and the final address as {page}', () => {
+    expect(normalizeVolatile(msg, ['https://example.test/old', 'https://example.test/en/old'])).toBe(
+      'Failed to load {page}',
+    );
+    expect(normalizeVolatile('See https://example.test/old', ['https://example.test/old', undefined])).toBe(
+      'See {page}',
+    );
+  });
+  it('control: the final address alone is not the page when it is not given', () => {
+    expect(normalizeVolatile(msg, 'https://example.test/old')).toBe(msg);
+  });
+});

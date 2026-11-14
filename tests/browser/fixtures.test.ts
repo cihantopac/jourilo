@@ -92,7 +92,7 @@ describe('fixture benchmark', () => {
     expect(consoleTexts.some((t) => /inline script/i.test(t))).toBe(true);
     expect(consoleTexts.filter((t) => t.includes(axeHash))).toEqual([]);
   });
-  it('reports no moderate-or-worse defects on the clean control site', async () => {
+  it('reports no defects at all (minor included) on the clean control site', async () => {
     const r = await benchFixture(join(import.meta.dirname, '../../fixtures/sites/clean-shop'), ws);
     expect(r.excessDefects).toEqual([]);
   });

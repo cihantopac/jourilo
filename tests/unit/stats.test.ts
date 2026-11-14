@@ -93,33 +93,82 @@ describe('sequential testing (mSPRT)', () => {
     }
   });
 
-  it('the p-value never increases as data accumulates', () => {
+  it('chained looks equal the running minimum and intersection of independent single looks', () => {
+    // The reference is computed here from memoryless calls (no `previous`), not by the code under test's own chain.
     const rand = mulberry32(42);
     const a = { n: 0, x: 0 };
     const b = { n: 0, x: 0 };
-    let previous: SequentialResult | undefined;
-    let memorylessRose = false;
-    let lastMemoryless = 1;
+    let chained: SequentialResult | undefined;
+    let minP = 1;
+    let lo = -1;
+    let hi = 1;
+    let rose = false;
+    let lastSingle = 1;
     for (let look = 0; look < 400; look++) {
       a.n += 25;
       a.x += conversions(rand, 25, 0.1);
       b.n += 25;
       b.x += conversions(rand, 25, 0.12);
-      const memoryless = sequentialTest(a, b, { alpha: 0.05 });
-      if (memoryless.pValue > lastMemoryless) memorylessRose = true;
-      lastMemoryless = memoryless.pValue;
-      const r = sequentialTest(a, b, { alpha: 0.05, ...(previous ? { previous } : {}) });
-      if (previous) {
-        expect(r.pValue).toBeLessThanOrEqual(previous.pValue);
-        // The confidence sequence only narrows.
-        expect(r.confidenceInterval[0]).toBeGreaterThanOrEqual(previous.confidenceInterval[0]);
-        expect(r.confidenceInterval[1]).toBeLessThanOrEqual(previous.confidenceInterval[1]);
-      }
-      expect(r.pValue).toBeLessThanOrEqual(memoryless.pValue);
-      previous = r;
+      const single = sequentialTest(a, b, { alpha: 0.05 });
+      if (single.pValue > lastSingle) rose = true;
+      lastSingle = single.pValue;
+      minP = Math.min(minP, single.pValue);
+      const nlo = Math.max(lo, single.confidenceInterval[0]);
+      const nhi = Math.min(hi, single.confidenceInterval[1]);
+      if (nlo <= nhi) [lo, hi] = [nlo, nhi];
+      chained = sequentialTest(a, b, { alpha: 0.05, ...(chained ? { previous: chained } : {}) });
+      expect(chained.pValue).toBe(minP);
+      expect(chained.confidenceInterval).toEqual([lo, hi]);
     }
-    // The running minimum matters: one look on its own (1/Λ) does go up and down.
-    expect(memorylessRose).toBe(true);
+    // One look on its own does go up and down, so the chain is doing real work.
+    expect(rose).toBe(true);
+    // A previous result that is worse than this look changes nothing; a better one is kept.
+    const here = sequentialTest(a, b, { alpha: 0.05 });
+    expect(
+      sequentialTest(a, b, { alpha: 0.05, previous: { pValue: 1, confidenceInterval: [-1, 1] } }),
+    ).toEqual(here);
+    expect(
+      sequentialTest(a, b, { alpha: 0.05, previous: { pValue: 1e-9, confidenceInterval: [0.01, 0.02] } })
+        .pValue,
+    ).toBe(1e-9);
+  });
+
+  it('needs a minimum sample in each arm before any stop', () => {
+    // 0/1 vs 1000/1000: one arm has a single visitor. The p-value is tiny, but there is not enough data to stop.
+    const tiny = sequentialTest({ n: 1, x: 0 }, { n: 1000, x: 1000 }, { alpha: 0.05 });
+    expect(tiny.enoughData).toBe(false);
+    expect(tiny.decision).toBe('continue');
+    expect(tiny.pValue).toBeLessThan(0.05);
+    // No conversions in one arm, or 99 visitors, also fall short; the floor is 100 visitors and 5 conversions.
+    for (const [a, b] of [
+      [
+        { n: 1000, x: 0 },
+        { n: 1000, x: 1000 },
+      ],
+      [
+        { n: 1000, x: 4 },
+        { n: 1000, x: 1000 },
+      ],
+      [
+        { n: 99, x: 5 },
+        { n: 1000, x: 1000 },
+      ],
+      [
+        { n: 1000, x: 5 },
+        { n: 99, x: 99 },
+      ],
+    ] as const) {
+      const r = sequentialTest(a, b, { alpha: 0.05 });
+      expect(r.enoughData).toBe(false);
+      expect(r.decision).toBe('continue');
+    }
+    // Control: exactly at the floor, the same strong evidence does stop.
+    const floor = sequentialTest({ n: 100, x: 5 }, { n: 100, x: 100 }, { alpha: 0.05 });
+    expect(floor.enoughData).toBe(true);
+    expect(floor.decision).toBe('stop-b-better');
+    expect(sequentialTest({ n: 1000, x: 5 }, { n: 1000, x: 1000 }, { alpha: 0.05 }).decision).toBe(
+      'stop-b-better',
+    );
   });
 
   it('stops exactly when the confidence sequence excludes zero', () => {
@@ -129,13 +178,15 @@ describe('sequential testing (mSPRT)', () => {
       [10000, 500, 10000, 650],
       [10000, 650, 10000, 500],
       [2400, 120, 2380, 150],
-      [1000, 0, 1000, 1000],
+      [1000, 5, 1000, 1000],
       [4, 1, 4, 4],
+      [30, 0, 30, 30],
     ];
     for (const [na, xa, nb, xb] of cases) {
       const r = sequentialTest({ n: na, x: xa }, { n: nb, x: xb }, { alpha: 0.05 });
       const excludesZero = r.confidenceInterval[0] > 0 || r.confidenceInterval[1] < 0;
-      expect(r.decision !== 'continue').toBe(excludesZero);
+      // Below the minimum sample the interval may exclude zero, but the decision still says continue.
+      expect(r.decision !== 'continue').toBe(excludesZero && r.enoughData);
       expect(r.pValue <= 0.05).toBe(excludesZero);
     }
   });
@@ -155,12 +206,12 @@ describe('sequential testing (mSPRT)', () => {
 
   it('gives no evidence only when every visitor did the same thing, and rejects impossible input', () => {
     const r = sequentialTest({ n: 100, x: 0 }, { n: 100, x: 0 }, { alpha: 0.05 });
-    expect(r).toEqual({ pValue: 1, decision: 'continue', confidenceInterval: [-1, 1] });
+    expect(r).toEqual({ pValue: 1, decision: 'continue', confidenceInterval: [-1, 1], enoughData: false });
     // Opposite extremes are the strongest evidence there is, not "no evidence".
     for (const [a, b, decision] of [
-      [{ n: 1000, x: 0 }, { n: 1000, x: 1000 }, 'stop-b-better'],
-      [{ n: 1000, x: 1000 }, { n: 1000, x: 0 }, 'stop-a-better'],
-      [{ n: 30, x: 0 }, { n: 30, x: 30 }, 'stop-b-better'],
+      [{ n: 1000, x: 5 }, { n: 1000, x: 1000 }, 'stop-b-better'],
+      [{ n: 1000, x: 1000 }, { n: 1000, x: 5 }, 'stop-a-better'],
+      [{ n: 120, x: 5 }, { n: 120, x: 120 }, 'stop-b-better'],
     ] as const) {
       const s = sequentialTest(a, b, { alpha: 0.05 });
       expect(s.decision).toBe(decision);

@@ -507,7 +507,6 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       progress({
         phase: 'capture',
         message: `Auditing ${urls.length} page(s) × ${opts.viewports.length} viewport(s) in ${opts.browser} ${browserVersion}`,
-        done: 0,
         total: captures,
       });
 
@@ -648,12 +647,14 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
                 ...(opts.waitFor && o.load?.found !== false ? { waitFor: opts.waitFor } : {}),
                 timeoutMs: opts.timeoutMs,
                 primaryOrigin,
+                // Named from the requested address, like the capture, so a redirect to another host does not tag it.
+                nameUrl: o.url,
               },
             );
             const r = await withinGrace(probe, signal, async () => {
               await ctx.close();
               await settled(probe, 1000);
-              rmSync(join(runDir, formScreenshotFile(o.finalUrl, form.selector, vp, primaryOrigin)), {
+              rmSync(join(runDir, formScreenshotFile(o.url, form.selector, vp, primaryOrigin)), {
                 force: true,
               });
             });
@@ -722,6 +723,7 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
     findings = collapseVolatileFindings(
       mergeFindings(findings),
       observations.map((o) => o.url),
+      Object.fromEntries(observations.filter((o) => o.finalUrl !== o.url).map((o) => [o.url, o.finalUrl])),
     );
     respectLockedBrand(findings, opts.context?.brand ?? null);
     if (opts.categories?.length) findings = findings.filter((f) => opts.categories!.includes(f.category));

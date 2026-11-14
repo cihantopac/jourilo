@@ -395,7 +395,7 @@ Subcommands:
   analyze  --control 120/2400 --variant 150/2380 [--alpha 0.05] [--expected-share 0.5] [--planned N]
            [--sequential [--tau 0.1]]
   analyze  --from <adapter>:<id> [--metric M] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--control-key K]
-           [--alpha …] [--expected-share …] [--tau 0.1 | --fixed [--planned N]]
+           [--alpha …] [--expected-share …] [--tau 0.1 | --fixed [--planned N]] [--allow-private]
 
 analyze modes:
   fixed        one look at a planned sample: two-proportion z-test, p-value and CI. Default for --control/--variant.
@@ -420,6 +420,8 @@ analyze modes:
                              (default control). Amplitude's funnel API does not list the flag's variants, so a
                              missing third arm of a multi-arm experiment cannot be detected
 --start, --end and --control-key apply only to amplitude; PostHog and GrowthBook use the experiment's own window.
+--allow-private  lets a self-hosted PostHog or GrowthBook on a private network address (10.x, 192.168.x, ...) be
+                 reached; without it the guard refuses LAN hosts. Plain http is then accepted for a private IP literal.
 Requests go through Jourilo's network guard and HTTPS_PROXY / NO_PROXY. A rate limit (429), a failed page or a
 missing variant makes the data incomplete: analyze then refuses and says why, instead of computing on partial numbers.
 
@@ -485,7 +487,8 @@ Options:
                          Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1
                          does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch
                          where the system denies the sandbox (containers, some Linux CI kernels)
-                         Without --allow-hosts / --block-hosts, the baseline run's lists are used again; so are its
+                         Without --allow-hosts / --block-hosts, the baseline run's lists are used again (give an empty
+                         value, --allow-hosts "", to drop one); so are its
                          --user-agent and --ignore-https-errors. Header values are never stored: a baseline that sent
                          --extra-header needs the headers again (exit 2 without them)
   --fail-on-regression   Exit 1 when new serious or critical defects appear
@@ -553,7 +556,7 @@ jourilo runs [trend [--target URL]]
 Subcommands:
   trend            Defects per capture, critical and serious defects, LCP and CLS for every page and viewport across the
                    runs of one target, oldest first. Partial and no-page-loaded runs are left out and counted. A finding with no
-                   viewport is counted at every viewport of its page.
+                   viewport is counted at every viewport of its page. LCP and CLS are the median over a page's captures in a run.
 
 Options:
   --target URL     With trend, the target to follow (default: the target of the latest run)

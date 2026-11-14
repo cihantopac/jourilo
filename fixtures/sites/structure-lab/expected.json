@@ -117,6 +117,11 @@
         "#ctl-sign-in"
       ],
       "why": "a typeless Sign in button is the form's submit button by name"
+    },
+    {
+      "rule": "jourilo/contrast-over-image",
+      "path": "/glyphs",
+      "why": "aria-hidden decorative glyphs are not text; sampling must not decide them (F25)"
     }
   ],
   "maxDefects": {

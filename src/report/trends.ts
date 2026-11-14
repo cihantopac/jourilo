@@ -29,10 +29,20 @@ export interface TrendReport {
   used: number;
   /** Partial and no-page-loaded runs of the target left out: their numbers are not comparable. */
   skipped: number;
+  /** True when the pages (URL x viewport) captured differ between the runs that fed the rows. */
+  pageSetChanged: boolean;
 }
 
 const metric = (p: TrendRun['pages'][number], name: string): number | null =>
   p.metrics.find((m) => m.name === name)?.value ?? null;
+
+/** Median of the values that exist; null when none does. */
+function median(values: (number | null)[]): number | null {
+  const v = values.filter((x): x is number => x !== null).sort((a, b) => a - b);
+  if (!v.length) return null;
+  const m = v.length >> 1;
+  return v.length % 2 ? v[m]! : (v[m - 1]! + v[m]!) / 2;
+}
 
 /** Runs older than `outcome` are judged the way a new run is. */
 function usable(run: TrendRun): boolean {
@@ -45,6 +55,7 @@ export function trendReport(runs: TrendRun[], key: { target: string }): TrendRep
     .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
   const good = same.filter(usable);
   const rows = new Map<string, TrendRow>();
+  const pageSets = new Set<string>();
   for (const run of good) {
     const captures = new Map<string, TrendRun['pages']>();
     for (const p of run.pages) {
@@ -52,6 +63,7 @@ export function trendReport(runs: TrendRun[], key: { target: string }): TrendRep
       const k = `${p.url}\n${p.viewport}`;
       captures.set(k, [...(captures.get(k) ?? []), p]);
     }
+    pageSets.add([...captures.keys()].sort().join('\n\n'));
     for (const [k, caps] of captures) {
       const first = caps[0]!;
       // A finding without a viewport (a page-level result) is counted at every viewport of its page: once per row.
@@ -71,8 +83,9 @@ export function trendReport(runs: TrendRun[], key: { target: string }): TrendRep
         defectsPerCapture: mine.length / caps.length,
         serious:
           mine.filter((f) => f.severity === 'critical' || f.severity === 'serious').length / caps.length,
-        lcp: metric(first, 'LCP'),
-        cls: metric(first, 'CLS'),
+        // The median over the captures of this page, not the first one: a single visit can be an outlier.
+        lcp: median(caps.map((c) => metric(c, 'LCP'))),
+        cls: median(caps.map((c) => metric(c, 'CLS'))),
       });
       rows.set(k, row);
     }
@@ -83,6 +96,7 @@ export function trendReport(runs: TrendRun[], key: { target: string }): TrendRep
     ),
     used: good.length,
     skipped: same.length - good.length,
+    pageSetChanged: pageSets.size > 1,
   };
 }
 

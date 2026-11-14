@@ -3,7 +3,7 @@
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { launchBrowser } from '../../src/browser/runtime.js';
-import { checkWidgets } from '../../src/browser/widgets.js';
+import { checkMenus, checkWidgets } from '../../src/browser/widgets.js';
 import { serveStatic } from '../../src/core/static-server.js';
 
 const lab = join(import.meta.dirname, '../../fixtures/sites/widgets-lab');
@@ -34,6 +34,9 @@ describe('menu keyboard check', () => {
     const w = await checkWidgets(page);
     // The link menu ("Go to") was operated: it is the one whose items point at other pages.
     expect(w.issues.filter((i) => i.kind.startsWith('menu-'))).toEqual([]);
+    const opened = (await page.evaluate('window.__menuOpened')) as string[];
+    expect(opened).toContain('nav-menu');
+    expect(opened).toContain('actions-menu');
     expect(new URL(page.url()).pathname).toBe('/menu-good');
     for (const target of ['/accessible', '/anchors', '/launcher']) expect(requests).not.toContain(target);
     expect(navigations.length).toBe(loaded);
@@ -46,5 +49,35 @@ describe('menu keyboard check', () => {
     const w = await checkWidgets(page);
     // (The pre-existing dialog loop may follow the link trigger itself; only the menu check must not break it.)
     expect(w.issues.map((i) => i.kind)).toContain('dialog-escape');
+  });
+
+  it('closes a role-less popup that ignores Escape with one reload and never clicks it', async (ctx) => {
+    if (!browser) return ctx.skip();
+    const page = await (await browser.newContext()).newPage();
+    let loads = 0;
+    page.on('request', (r) => {
+      if (r.isNavigationRequest() && new URL(r.url()).pathname === '/menu-banner') loads++;
+    });
+    await page.goto(`${server.url}/menu-banner`, { waitUntil: 'load' });
+    // checkMenus alone: the later disclosure loop would operate the Options button again.
+    const w = { triggers: 0, dialogs: 0, disclosures: 0, composites: 0, issues: [] };
+    await checkMenus(page, w);
+    expect(w.issues).toEqual([]);
+    expect(await page.locator('#banner').isHidden()).toBe(true);
+    expect(loads).toBe(2);
+  });
+
+  it('does not reload for a cookie banner that was already showing', async (ctx) => {
+    if (!browser) return ctx.skip();
+    const page = await (await browser.newContext()).newPage();
+    let loads = 0;
+    page.on('request', (r) => {
+      if (r.isNavigationRequest() && new URL(r.url()).pathname === '/menu-cookie') loads++;
+    });
+    await page.goto(`${server.url}/menu-cookie`, { waitUntil: 'load' });
+    const w = await checkWidgets(page);
+    expect(w.issues.filter((i) => i.kind.startsWith('menu-'))).toEqual([]);
+    expect(await page.locator('#banner').isVisible()).toBe(true);
+    expect(loads).toBe(1);
   });
 });

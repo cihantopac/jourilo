@@ -437,7 +437,7 @@ function contextHtml(run: Run): string {
 function historyHtml(run: Run, history: RunListing[]): string {
   const same = history.filter((h) => h.target === run.target && h.id !== run.id && h.pages > 0).slice(-9);
   if (!same.length) return '';
-  const trend = trendHtml(
+  const trendBlock = trendHtml(
     trendReport(
       [...history.filter((h) => h.id !== run.id).flatMap((h) => (h.trend ? [h.trend] : [])), trendSlice(run)],
       run,
@@ -462,7 +462,7 @@ function historyHtml(run: Run, history: RunListing[]): string {
       const trend = t < prev ? 'good' : t > prev ? 'poor' : '';
       return `<tr${'current' in r ? ' class="current"' : ''}><td><code>${esc(r.id)}</code>${'current' in r ? ` ${T('history.this')}` : ''}</td><td>${esc(new Date(r.startedAt).toISOString().slice(0, 16).replace('T', ' '))}</td><td>${r.defects.critical}</td><td>${r.defects.serious}</td><td>${r.defects.moderate}</td><td>${r.defects.minor}</td><td class="${trend}"><span class="bar" style="width:${Math.round((t / max) * 120)}px"></span> ${t}</td></tr>`;
     })
-    .join('')}</tbody></table></div><p class="muted">${T('history.hint')}</p>${trend}</details>`;
+    .join('')}</tbody></table></div><p class="muted">${T('history.hint')}</p>${trendBlock}</details>`;
 }
 
 const numText = (n: number | null, digits = 0): string => (n === null ? '–' : String(+n.toFixed(digits)));
@@ -514,7 +514,7 @@ function trendHtml(t: TrendReport): string {
         )}</tr>`,
     )
     .join('');
-  return `<h4>${T('trend.title')}</h4><div class="tablewrap" tabindex="0" role="region"${attrs({ 'aria-label': 'trend.title' })}><table class="history trend"><thead><tr><th>${T('th.page')}</th><th>${T('th.viewport')}</th><th>${T('th.trendDefects')}</th><th>${T('th.trendSerious')}</th><th>LCP</th><th>CLS</th></tr></thead><tbody>${body}</tbody></table></div><p class="muted">${T('trend.hint')}${t.skipped ? ` ${T('trend.skipped', { n: t.skipped })}` : ''}</p>`;
+  return `<h4>${T('trend.title')}</h4><div class="tablewrap" tabindex="0" role="region"${attrs({ 'aria-label': 'trend.title' })}><table class="history trend"><thead><tr><th>${T('th.page')}</th><th>${T('th.viewport')}</th><th>${T('th.trendDefects')}</th><th>${T('th.trendSerious')}</th><th>LCP</th><th>CLS</th></tr></thead><tbody>${body}</tbody></table></div><p class="muted">${T('trend.hint')}${t.skipped ? ` ${T('trend.skipped', { n: t.skipped })}` : ''}${t.pageSetChanged ? ` ${T('trend.pagesChanged')}` : ''}</p>`;
 }
 
 function journeysHtml(run: Run): string {
@@ -592,7 +592,7 @@ function compareHtml(cmp: RunComparison): string {
       hp,
       bp: cmp.base.pages.find((p) => pathname(p.url) === pathname(hp.url) && p.viewport === hp.viewport),
     }))
-    .filter((x) => x.bp?.screenshot && x.hp.screenshot)
+    .filter((x) => x.bp && shotOf(x.bp) && shotOf(x.hp))
     .sort((a, b) => Number(fixedPaths.has(pathname(b.hp.url))) - Number(fixedPaths.has(pathname(a.hp.url))))
     .slice(0, 6);
   // One card per fixed root cause: the element's region in the baseline next to the same region now.
@@ -636,7 +636,7 @@ ${
     ? `<section class="block"><div class="block-h"><h2>${T('cmp.visual')}</h2></div><div class="pairs">${pairs
         .map(
           ({ hp, bp }) =>
-            `<div class="pair"><h3>${esc(pathname(hp.url))} · ${esc(hp.viewport)}</h3><div class="two"><figure><figcaption>${T('cmp.before')}</figcaption><a href="${runFile(bp!.screenshot, base)}" target="_blank" rel="noopener"${attrs({ 'aria-label': 'shot.open' })}><img loading="lazy" alt="" src="${runFile(bp!.screenshot, base)}"></a></figure><figure class="after"><figcaption>${T('cmp.after')}</figcaption><a href="${runFile(hp.screenshot)}" target="_blank" rel="noopener"${attrs({ 'aria-label': 'shot.open' })}><img loading="lazy" alt="" src="${runFile(hp.screenshot)}"></a></figure></div></div>`,
+            `<div class="pair"><h3>${esc(pathname(hp.url))} · ${esc(hp.viewport)}</h3><div class="two"><figure><figcaption>${T('cmp.before')}</figcaption><a href="${runFile(shotOf(bp!), base)}" target="_blank" rel="noopener"${attrs({ 'aria-label': 'shot.open' })}><img loading="lazy" alt="" src="${runFile(shotOf(bp!), base)}"></a></figure><figure class="after"><figcaption>${T('cmp.after')}</figcaption><a href="${runFile(shotOf(hp))}" target="_blank" rel="noopener"${attrs({ 'aria-label': 'shot.open' })}><img loading="lazy" alt="" src="${runFile(shotOf(hp))}"></a></figure></div></div>`,
         )
         .join('')}</div></section>`
     : ''

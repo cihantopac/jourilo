@@ -361,7 +361,7 @@
       return 'signup';
     if (pw === 1) return 'login';
     if (lex('newsletter', 'subscribe|newsletter').test(blob) && fields.length <= 2) return 'newsletter';
-    if (lex('checkout', 'checkout|payment|billing').test(blob) && fields.length >= 3) return 'checkout';
+    if (lex('payment', 'checkout|payment|billing').test(blob) && fields.length >= 3) return 'checkout';
     if (fields.some((f) => f.type === 'textarea') && /email/i.test(types)) return 'contact';
     return 'other';
   };

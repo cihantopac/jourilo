@@ -405,6 +405,8 @@ describe('journeys across tabs and popups', () => {
   const requests: string[] = [];
   /** The Cookie header each /oauth/echo request carried, by its `via` parameter. */
   const echoed = new Map<string, string>();
+  /** The Referer header /oauth/ref-end received. */
+  const refererSeen: (string | undefined)[] = [];
   const servers: Server[] = [];
   let app = '';
   let idp = '';
@@ -415,6 +417,22 @@ describe('journeys across tabs and popups', () => {
       const url = new URL(req.url ?? '/', 'http://x');
       if (url.pathname === '/oauth/hop') {
         res.writeHead(302, { location: '/oauth/help.html' }).end();
+        return;
+      }
+      if (url.pathname === '/oauth/ref-start') {
+        res
+          .writeHead(200, { 'content-type': 'text/html' })
+          .end('<h1>Start</h1><a href="/oauth/ref-hop1">Go on</a>');
+        return;
+      }
+      if (url.pathname === '/oauth/ref-hop1' || url.pathname === '/oauth/ref-hop2') {
+        const to = url.pathname.endsWith('1') ? '/oauth/ref-hop2' : '/oauth/ref-end';
+        res.writeHead(302, { location: to }).end();
+        return;
+      }
+      if (url.pathname === '/oauth/ref-end') {
+        refererSeen.push(req.headers.referer);
+        res.writeHead(200, { 'content-type': 'text/html' }).end('<h1>Referred</h1>');
         return;
       }
       if (url.pathname === '/oauth/loop') {
@@ -628,6 +646,24 @@ describe('journeys across tabs and popups', () => {
     expect(j.steps[0]!.error).toMatch(/redirects more than 20 times.*ERR_TOO_MANY_REDIRECTS/);
     // The first request and 20 redirects, as a browser does; no retry of the loop.
     expect(requests.filter((r) => r.endsWith(' /oauth/loop'))).toHaveLength(21);
+  }, 120_000);
+
+  it('a redirect chain keeps the Referer of the page the user left, not the hand-over page', async () => {
+    refererSeen.length = 0;
+    const out = await runTabs('redirect-referer', '/oauth/ref-start', [
+      { action: 'click', target: { role: 'link', name: 'Go on' } },
+      { action: 'expect', visible: { role: 'heading', name: 'Referred' } },
+    ]);
+    const j = out.journeys[0]!;
+    expect(j.status, JSON.stringify(j.steps)).toBe('passed');
+    expect(refererSeen).toEqual([`${app}/oauth/ref-start`]);
+    // Control: a typed address has no referrer, and the chain does not invent one.
+    refererSeen.length = 0;
+    const typed = await runTabs('redirect-no-referer', '/oauth/ref-hop1', [
+      { action: 'expect', visible: { role: 'heading', name: 'Referred' } },
+    ]);
+    expect(typed.journeys[0]!.status).toBe('passed');
+    expect(refererSeen).toEqual([undefined]);
   }, 120_000);
 
   it('sends cookies on proxied navigations by the SameSite rules', async () => {

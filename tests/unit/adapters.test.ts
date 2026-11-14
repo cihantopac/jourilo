@@ -569,7 +569,9 @@ describe('experiment analyze --from', () => {
     serve(route);
     const r = await run('--from', from, ...args, '--json');
     expect(r.text).toMatch(head);
-    const all = JSON.stringify(r) + printed;
+    // Keys appear in the Authorization header only: not in any URL, request body, result or printed text.
+    const sent = guarded.calls.map((c) => c.url).join('\n');
+    const all = JSON.stringify(r) + printed + sent;
     for (const k of ALL_KEYS) expect(all).not.toContain(k);
   });
   it('Amplitude with only the control arm is refused as incomplete data, not with a manual-numbers hint', async () => {
@@ -642,14 +644,45 @@ describe('experiment analyze --from', () => {
     expect(await usage(...manual, '--sequential', '--planned', '5000')).toMatch(/--planned applies only/);
     for (const tau of ['0', '1.5', '1e200'])
       expect(await usage(...manual, '--sequential', '--tau', tau)).toMatch(/--tau must be greater than 0/);
-    const extreme = await run('--control', '0/1000', '--variant', '1000/1000', '--sequential');
-    expect(extreme.data).toMatchObject({ decision: 'stop-b-better' });
+    const extreme = await run('--control', '5/1000', '--variant', '1000/1000', '--sequential');
+    expect(extreme.data).toMatchObject({ decision: 'stop-b-better', enoughData: true });
     expect(extreme.text).toMatch(/always-valid p < 1e-6 ≤ 0\.05/);
+    // Control: the same extreme on one visitor in the control arm is "not enough data", never a stop.
+    const thin = await run('--control', '0/1', '--variant', '1000/1000', '--sequential');
+    expect(thin.data).toMatchObject({ decision: 'continue', enoughData: false });
+    expect(thin.text).toMatch(/Not enough data.*at least 100 visitors and 5 conversions in each arm/);
+    expect(thin.text).not.toMatch(/^Stop|Continue:/m);
     process.env.POSTHOG_API_KEY = PH_KEY;
     serve(posthogRoutes());
     const e = await failure(run('--from', 'posthog:42', '--planned', '5000'));
     expect([e.code, e.hint]).toEqual(['USAGE', expect.stringMatching(/--fixed/)]);
     expect(guarded.calls).toEqual([]);
+  });
+  it('a self-hosted LAN host needs --allow-private, and then goes through the guard with the LAN allowed', async () => {
+    process.env.POSTHOG_API_KEY = PH_KEY;
+    process.env.POSTHOG_HOST = 'https://192.168.1.20';
+    serve(posthogRoutes());
+    await run('--from', 'posthog:42', '--allow-private');
+    expect(guarded.calls[0]!.url).toMatch(/^https:\/\/192\.168\.1\.20\//);
+    expect(guarded.calls.every((c) => c.policy.allowPrivate === true)).toBe(true);
+    // Control: without the flag the policy stays closed (the real guard then refuses the LAN address).
+    guarded.calls.length = 0;
+    await run('--from', 'posthog:42');
+    expect(guarded.calls.every((c) => c.policy.allowPrivate === false)).toBe(true);
+    // Plain http reaches only a private IP literal, and only with the flag; a public host stays https only.
+    process.env.POSTHOG_HOST = 'http://192.168.1.20:8000';
+    guarded.calls.length = 0;
+    await run('--from', 'posthog:42', '--allow-private');
+    expect(guarded.calls[0]!.url).toMatch(/^http:\/\/192\.168\.1\.20:8000\//);
+    expect((await failure(run('--from', 'posthog:42'))).message).toMatch(/must be an https/);
+    process.env.POSTHOG_HOST = 'http://example.org';
+    expect((await failure(run('--from', 'posthog:42', '--allow-private'))).message).toMatch(
+      /must be an https/,
+    );
+    expect(
+      (await failure(run('--metric', 'x', '--control', '1/10', '--variant', '2/10', '--allow-private')))
+        .message,
+    ).toMatch(/--metric applies only with --from|--allow-private applies only with --from/);
   });
   it('a refused key names the variable, not the value', async () => {
     process.env.POSTHOG_API_KEY = PH_KEY;

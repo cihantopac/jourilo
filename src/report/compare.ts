@@ -49,13 +49,37 @@ export interface RunComparison {
 
 const pathKey = fingerprintPath;
 
+/**
+ * Whether the occurrences differ. A finding collapsed over several pages is compared page by page, on the pages both
+ * runs have it on: a collapse that exists in only one run (the same defect on one page is "1" there and "3" summed
+ * over three pages) is not a change by itself. Runs from before `pageOccurrences` existed fall back to the totals
+ * only when both findings cover the same number of pages.
+ */
+function occurrencesDiffer(before: Finding, after: Finding): boolean {
+  if (!before.pages && !after.pages) return before.occurrences !== after.occurrences;
+  const on = (f: Finding, key: string): number | undefined => {
+    for (const p of pagesOf(f))
+      if (pathKey(p) === key) return f.pageOccurrences?.[p] ?? (f.pages ? undefined : f.occurrences);
+    return undefined;
+  };
+  const shared = pagesOf(before)
+    .map(pathKey)
+    .filter((k) => pagesOf(after).some((p) => pathKey(p) === k));
+  const known = shared.flatMap((k) => {
+    const a = on(before, k);
+    const b = on(after, k);
+    return a === undefined || b === undefined ? [] : [[a, b] as const];
+  });
+  if (known.length) return known.some(([a, b]) => a !== b);
+  return pagesOf(before).length === pagesOf(after).length && before.occurrences !== after.occurrences;
+}
+
 export function compareRuns(base: Run, head: Run): RunComparison {
   const before = new Map(base.findings.map((f) => [f.fingerprint, f]));
   const after = new Map(head.findings.map((f) => [f.fingerprint, f]));
   // Findings on pages the head run did not visit, or that did not load, are not "fixed": they were not checked.
   const headPages = new Set(head.pages.filter((p) => p.status !== null).map((p) => pathKey(p.url)));
   const dismissedFps = new Set((head.dismissed ?? []).map((f) => f.fingerprint));
-  const dismissed = base.findings.filter((f) => dismissedFps.has(f.fingerprint));
   // Console errors and failed requests keep their 1.3.0 identity, rule + journey + page, extended to page sets: a
   // finding collapsed over several pages (F44) matches a finding of the same rule and journey on any shared page,
   // whatever its evidence. So a collapse in either run, or a change in which errors a page logs, is "persisting"
@@ -80,20 +104,22 @@ export function compareRuns(base: Run, head: Run): RunComparison {
   };
   const inBase = byPage(base.findings);
   const inHead = byPage(head.findings);
+  // A dismissal carries across a collapse: a base finding is dismissed when the head run dismissed itself or the
+  // collapsed finding that now covers its page.
+  const inDismissed = byPage(head.dismissed ?? []);
+  const isDismissed = (f: Finding) => dismissedFps.has(f.fingerprint) || inDismissed(f) !== undefined;
+  const dismissed = base.findings.filter(isDismissed);
   const counterpart = (f: Finding) => before.get(f.fingerprint) ?? inBase(f);
   const stillThere = (f: Finding) => after.has(f.fingerprint) || inHead(f) !== undefined;
   // Fixed only when none of its pages shows it, and every one of them was checked again.
   const fixed = base.findings.filter(
-    (f) =>
-      !stillThere(f) &&
-      !dismissedFps.has(f.fingerprint) &&
-      pagesOf(f).every((p) => headPages.has(pathKey(p))),
+    (f) => !stillThere(f) && !isDismissed(f) && pagesOf(f).every((p) => headPages.has(pathKey(p))),
   );
   const introduced = head.findings.filter((f) => !counterpart(f));
   const persisting = head.findings.filter((f) => counterpart(f));
   const changed = persisting
     .map((f) => ({ before: counterpart(f)!, after: f }))
-    .filter((c) => c.before.severity !== c.after.severity || c.before.occurrences !== c.after.occurrences);
+    .filter((c) => c.before.severity !== c.after.severity || occurrencesDiffer(c.before, c.after));
 
   const metrics: MetricDelta[] = [];
   for (const hp of head.pages) {

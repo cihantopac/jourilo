@@ -86,8 +86,13 @@ export async function openGuardedBrowser(
     close: async () => {
       await browser.close().catch(() => undefined);
       if (pidsFile) {
-        rmSync(pidsFile, { force: true });
-        process.off('exit', unlinkOnExit);
+        // A file that cannot be removed now must not stop the guard from closing: the exit hook stays and tries again.
+        try {
+          rmSync(pidsFile, { force: true });
+          process.off('exit', unlinkOnExit);
+        } catch {
+          // Left for the exit hook.
+        }
       }
       await guard.close();
     },
