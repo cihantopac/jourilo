@@ -2,7 +2,7 @@ import { type ParseArgsConfig, parseArgs } from 'node:util';
 import { JouriloError } from '../core/errors.js';
 import type { ProgressEvent } from '../core/progress.js';
 import { redactUrl } from '../core/redact.js';
-import type { AddressPolicy, Upstream } from '../core/url-safety.js';
+import { type AddressPolicy, parseTargetUrl, type Upstream } from '../core/url-safety.js';
 import { Workspace } from '../core/workspace.js';
 
 export type OptionSpec = NonNullable<ParseArgsConfig['options']>;
@@ -477,9 +477,9 @@ export function networkFrom(
   const { allowHosts, blockHosts } = hostListsFrom(ctx);
   let url: URL | undefined;
   try {
-    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(target) ? target : `https://${target}`);
+    url = parseTargetUrl(target);
   } catch {
-    url = undefined; // the audit itself reports an invalid target
+    url = undefined; // the audit itself reports an invalid or unsupported target
   }
   const upstream = url ? proxyFrom(ctx, url) : undefined;
   return {

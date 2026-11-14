@@ -165,8 +165,6 @@ Stated so nobody mistakes silence for a pass.
 - Jourilo does not start the server it audits. When at least two pages were captured and every own-origin script
   request of every page failed (5xx or no answer), the run adds one limitation saying this looks like a stale or
   different server on the port; the failures are still reported as findings.
-- With `--proxy`, the tunnel is opened to the first allowed address of a name only; a name with several addresses
-  does not fall back to the others through the proxy (loopback is reached directly and does fall back).
 - `--proxy` (or `HTTPS_PROXY` / `HTTP_PROXY`) chains to an upstream HTTP proxy behind the guard. The guard still
   resolves and checks every destination, then asks the proxy for a tunnel to the checked address, never to the name:
   `CONNECT 93.184.216.34:443` for HTTPS and WebSockets, and `CONNECT 93.184.216.34:80` for plain HTTP, whose request
@@ -178,7 +176,8 @@ Stated so nobody mistakes silence for a pass.
   reported as a failed request, never as a page. Only `http://` proxies are supported; loopback addresses are reached
   directly. `NO_PROXY` is decided per destination host, as curl and browsers do (`NO_PROXY=*` means no proxy; CIDR
   ranges are not supported). The run records the proxy as `http://host:port` without its credentials. A tunnel
-  is accepted only when the proxy answers `200`. Jourilo reads `HTTPS_PROXY` / `HTTP_PROXY` from the environment: a
+  is accepted when the proxy answers `2xx`; a name with several allowed addresses is tried address by address through
+  the proxy, moving on only after a 5xx answer or no answer in time (a refusal or a `407` is final). Jourilo reads `HTTPS_PROXY` / `HTTP_PROXY` from the environment: a
   value that is not a usable `http://` proxy (for example `socks5://…`) fails every browsing command with exit 2;
   set `NO_PROXY=*` or unset the variable to go direct.
 - Because the guard resolves every name itself (so that it can check the address), a network where only the proxy can

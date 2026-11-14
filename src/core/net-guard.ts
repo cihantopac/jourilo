@@ -12,13 +12,14 @@
 // (`CONNECT 93.184.216.34:80`), and the original request, Host header included, is sent inside it: an absolute-URI
 // request would make the proxy rebuild Host from the address (RFC 9112 3.2.2), so a name-based site would answer as
 // its default host. A proxy that refuses tunnels to port 80 (a 4xx other than 407) fails the request with the guard's
-// own 502, never its page; a 5xx means the proxy could not reach the site. Loopback addresses a local target may reach, and hosts NO_PROXY matches, connect directly (the proxy's
-// loopback is another machine).
+// own 502, never its page; a 5xx means the proxy could not reach the site. Loopback addresses a local target may
+// reach, and hosts NO_PROXY matches, connect directly (the proxy's loopback is another machine).
 //
 // A name can resolve to several allowed addresses (`localhost` to ::1 and 127.0.0.1). Every address is checked first;
-// a direct connection then tries the allowed ones in resolver order and moves to the next only when the connection
-// itself fails (refused, unreachable, or no answer within the attempt time), within one time budget for the request.
-// An error after the connection is made (TLS, HTTP, a reset) is final.
+// a connection, direct or a tunnel through the upstream proxy, then tries the allowed ones in resolver order and moves
+// to the next only when the connection itself fails (refused, unreachable, a proxy answering 5xx, or no answer within
+// the attempt time), within one time budget for the request. An error after the connection is made (TLS, HTTP, a
+// reset) is final.
 import { randomBytes } from 'node:crypto';
 import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
@@ -175,53 +176,51 @@ function connectAddress(
   });
 }
 
-/**
- * Connects to the first of the checked addresses that accepts, in order. Only a failure of the connection itself moves
- * on to the next address; any other error, or the end of the time budget, is final. The last error is reported.
- */
-async function connectFirst(
-  addresses: string[],
-  port: number,
-  opts: { attemptTimeoutMs: number; timeoutMs: number; onSocket?: (s: Socket) => void },
-): Promise<Socket> {
-  const deadline = Date.now() + opts.timeoutMs;
-  let last: NodeJS.ErrnoException | undefined;
-  for (const [i, address] of addresses.entries()) {
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) break;
-    const limit = i === addresses.length - 1 ? remaining : Math.min(opts.attemptTimeoutMs, remaining);
-    try {
-      return await connectAddress(address, port, limit, opts.onSocket);
-    } catch (err) {
-      last = err as NodeJS.ErrnoException;
-      if (!CONNECT_FALLBACK_CODES.has(last.code ?? '')) throw last;
-    }
-  }
-  throw last ?? errorWithCode(`connect ETIMEDOUT ${port}`, 'ETIMEDOUT');
-}
+/** Whether a failed attempt leaves the next allowed address worth trying. */
+const canTryNext = (err: NodeJS.ErrnoException & { retryable?: boolean }) =>
+  err.retryable === true || CONNECT_FALLBACK_CODES.has(err.code ?? '');
 
 /**
- * Opens a connection to a destination `resolveAllowedAll` checked: a TCP connection to the first allowed address that
- * accepts, or a CONNECT tunnel through the upstream proxy. Through the proxy, the tunnel goes to the first allowed
- * address only: the proxy, not this machine, makes the connection, so its failures are not connection failures here.
- * When the first address goes through the proxy, a later one never connects directly.
+ * Opens a connection to a destination `resolveAllowedAll` checked: for each allowed address in resolver order, a TCP
+ * connection, or a CONNECT tunnel through the upstream proxy when that address goes through it (viaUpstream). Only a
+ * failure of the connection itself (or a proxy that could not reach the address) moves on to the next address; any
+ * other error is final. The budget ending between attempts is a timeout, not the previous attempt's error. The last
+ * error is reported when every address failed.
  */
 async function connectChecked(
   host: string,
   port: number,
   addresses: { address: string }[],
   policy: AddressPolicy,
-  opts: { deps?: GuardDeps; timeoutMs: number; tunnelTimeoutMs: number; onSocket?: (s: Socket) => void },
+  opts: {
+    deps?: GuardDeps;
+    timeoutMs: number;
+    tunnelTimeoutMs: number;
+    onSocket?: (s: Socket) => void;
+    /** True once the request that wanted the connection is gone: no further attempt is made. */
+    cancelled?: () => boolean;
+  },
 ): Promise<Socket> {
-  const first = addresses[0]!.address;
-  const proxy = viaUpstream(policy, host, first, port);
-  if (proxy) return openTunnel(proxy, first, port, opts.tunnelTimeoutMs, opts.onSocket);
-  const direct = addresses.map((a) => a.address).filter((a) => !viaUpstream(policy, host, a, port));
-  return connectFirst(direct, port, {
-    attemptTimeoutMs: opts.deps?.connectAttemptTimeoutMs ?? CONNECT_ATTEMPT_TIMEOUT_MS,
-    timeoutMs: Math.min(opts.timeoutMs, opts.deps?.connectTimeoutMs ?? CONNECT_TIMEOUT_MS),
-    ...(opts.onSocket ? { onSocket: opts.onSocket } : {}),
-  });
+  const attemptMs = opts.deps?.connectAttemptTimeoutMs ?? CONNECT_ATTEMPT_TIMEOUT_MS;
+  const deadline = Date.now() + Math.min(opts.timeoutMs, opts.deps?.connectTimeoutMs ?? CONNECT_TIMEOUT_MS);
+  let last: NodeJS.ErrnoException | undefined;
+  for (const [i, { address }] of addresses.entries()) {
+    if (opts.cancelled?.())
+      throw errorWithCode(`connect cancelled ${authorityOf(address, port)}`, 'ECONNABORTED');
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw errorWithCode(`connect ETIMEDOUT ${port}`, 'ETIMEDOUT');
+    const limit = i === addresses.length - 1 ? remaining : Math.min(attemptMs, remaining);
+    const proxy = viaUpstream(policy, host, address, port);
+    try {
+      return proxy
+        ? await openTunnel(proxy, address, port, Math.min(limit, opts.tunnelTimeoutMs), opts.onSocket)
+        : await connectAddress(address, port, limit, opts.onSocket);
+    } catch (err) {
+      last = err as NodeJS.ErrnoException;
+      if (!canTryNext(last)) throw last;
+    }
+  }
+  throw last ?? errorWithCode(`connect ETIMEDOUT ${port}`, 'ETIMEDOUT');
 }
 
 /** How long the upstream proxy may take to open a tunnel. */
@@ -267,13 +266,15 @@ export function openTunnel(
     const authority = authorityOf(address, port);
     const sock = net.connect({ host: upstream.host, port: upstream.port });
     let settled = false;
-    const fail = (message: string) => {
+    // `retryable`: the proxy could not reach this address (a 5xx, or no answer in time), so another address of the
+    // name may still work. The proxy itself being down, or refusing (4xx), is the same for every address.
+    const fail = (message: string, retryable = false) => {
       if (settled) return;
       settled = true;
       sock.destroy();
-      reject(new Error(`upstream proxy: ${message}`));
+      reject(Object.assign(new Error(`upstream proxy: ${message}`), { retryable }));
     };
-    sock.setTimeout(timeoutMs, () => fail('timed out'));
+    sock.setTimeout(timeoutMs, () => fail('timed out', true));
     sock.once('error', (err: NodeJS.ErrnoException) => fail(err.code ?? 'connection failed'));
     sock.once('close', () => fail('closed the connection'));
     sock.once('connect', () => {
@@ -291,7 +292,8 @@ export function openTunnel(
       }
       sock.off('data', onData);
       const status = Number(/^HTTP\/1\.[01] (\d{3})/.exec(buf.subarray(0, end).toString('latin1'))?.[1] ?? 0);
-      if (status !== 200) return fail(`answered ${status || 'without a status'}`);
+      if (status < 200 || status >= 300)
+        return fail(`answered ${status || 'without a status'}`, status >= 500 && status <= 599);
       settled = true;
       sock.setTimeout(0);
       sock.removeAllListeners('close');
@@ -434,32 +436,54 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
 
   /**
    * Resolves under the policy, then opens a TCP connection to the first checked address that accepts it, or a CONNECT
-   * tunnel to the checked address through the upstream proxy (connectChecked).
+   * tunnel to the checked address through the upstream proxy (connectChecked). Returns a cancel function for when the
+   * client gives up first: a connection still being made (a half-open socket) is closed at once instead of lingering
+   * until its time runs out, and neither callback runs.
    */
   const connectUpstream = (
     host: string,
     port: number,
     onReady: (s: Socket) => void,
     onFail: (status: number, reason: string) => void,
-  ) => {
+  ): (() => void) => {
+    let cancelled = false;
+    const pending = new Set<Socket>();
+    const fail = (status: number, reason: string) => {
+      if (!cancelled) onFail(status, reason);
+    };
     resolveAllowedAll(host, port, policy, deps).then(
       (r) => {
+        if (cancelled) return;
         if ('blocked' in r) {
           record(host, port, r.blocked);
-          return onFail(403, r.blocked);
+          return fail(403, r.blocked);
         }
         connectChecked(host, port, r.addresses, policy, {
           deps,
           timeoutMs: CONNECT_TIMEOUT_MS,
           tunnelTimeoutMs: TUNNEL_TIMEOUT_MS,
-          onSocket: track,
+          cancelled: () => cancelled,
+          onSocket: (s) => {
+            track(s);
+            pending.add(s);
+          },
         }).then(
-          (socket) => onReady(track(socket)),
-          (err: Error) => onFail(502, err.message),
+          (socket) => {
+            pending.clear();
+            if (cancelled) return void socket.destroy();
+            onReady(track(socket));
+          },
+          (err: Error) => fail(502, err.message),
         );
       },
-      (err: Error) => onFail(502, err.message),
+      (err: Error) => fail(502, err.message),
     );
+    return () => {
+      if (cancelled) return;
+      cancelled = true;
+      for (const s of pending) s.destroy();
+      pending.clear();
+    };
   };
 
   const pipeBoth = (client: Duplex, upstream: Socket, head: Buffer) => {
@@ -502,9 +526,13 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
     // A chunked body on a method Node does not chunk by default (GET, HEAD, DELETE, OPTIONS) keeps its framing.
     if (req.headers['transfer-encoding'] && req.headers['content-length'] === undefined)
       headers['transfer-encoding'] = 'chunked';
+    // A request the browser gave up on (its page closed, an abandoned page) ends upstream too, whether the connection is
+    // still being made or already carries it: a server that never answers would otherwise keep the connection, and so
+    // Jourilo's process, alive after the audit.
+    let upstreamRequest: http.ClientRequest | undefined;
     // One path for direct connections and the upstream proxy's tunnel (CONNECT to the checked address): the socket
     // comes from connectUpstream, and the request inside it keeps its own Host header.
-    connectUpstream(
+    const cancel = connectUpstream(
       host,
       port,
       (socket) => {
@@ -515,6 +543,7 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
           setHost: false,
           createConnection: () => socket,
         });
+        upstreamRequest = upstream;
         socket.resume();
         upstream.on('response', (up) => {
           // WebKit follows redirects to loopback hosts outside the proxy, so a forbidden redirect target is
@@ -538,11 +567,6 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
           res.writeHead(up.statusCode ?? 502, up.statusMessage, out);
           up.pipe(res);
         });
-        // A request the browser gave up on (its page closed, an abandoned page) ends upstream too: a server that never
-        // answers would otherwise keep the connection, and so Jourilo's process, alive after the audit.
-        res.on('close', () => {
-          if (!res.writableFinished) upstream.destroy();
-        });
         upstream.on('error', (err) => {
           if (!res.destroyed) fail(502, err.message);
         });
@@ -558,6 +582,11 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
         fail(status, refusesPort ? `upstream proxy: refuses tunnels to port ${port}` : reason);
       },
     );
+    res.on('close', () => {
+      if (res.writableFinished) return;
+      cancel();
+      upstreamRequest?.destroy();
+    });
   });
 
   // HTTPS and WebSockets (ws:// and wss://) are tunnelled.
@@ -569,7 +598,7 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
       client.end('HTTP/1.1 400 Bad Request\r\n\r\n');
       return;
     }
-    connectUpstream(
+    const cancel = connectUpstream(
       hp.host,
       hp.port,
       (upstream) => {
@@ -580,9 +609,10 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
       // --extra-header) read the reply as the response, so it carries the token signal too, in fixed wording.
       (status, reason) =>
         client.end(
-          `HTTP/1.1 ${status} ${status === 403 ? 'Forbidden' : 'Bad Gateway'}\r\ncontent-type: text/plain\r\n${GUARD_UPSTREAM_ERROR_HEADER}: ${token} ${status === 403 ? GUARD_REFUSED_WORDING : upstreamFailureWording(reason)}\r\n\r\n${status === 403 ? `Blocked by Jourilo network guard: ${reason}` : ''}`,
+          `HTTP/1.1 ${status} ${status === 403 ? 'Forbidden' : 'Bad Gateway'}\r\ncontent-type: text/plain\r\n${GUARD_UPSTREAM_ERROR_HEADER}: ${token} ${status === 403 ? GUARD_REFUSED_WORDING : upstreamFailureWording(reason)}\r\n\r\n${status === 403 ? 'Blocked by Jourilo network guard.' : ''}`,
         ),
     );
+    client.once('close', cancel);
   });
 
   // Plain ws:// sent as an Upgrade request with an absolute URI (some engines do this instead of CONNECT).
@@ -596,7 +626,7 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
       client.end('HTTP/1.1 400 Bad Request\r\n\r\n');
       return;
     }
-    connectUpstream(
+    const cancel = connectUpstream(
       target.hostname,
       Number(target.port || 80),
       (upstream) => {
@@ -611,6 +641,7 @@ export async function startNetGuard(policy: AddressPolicy, deps: GuardDeps = {})
       },
       (status) => client.end(`HTTP/1.1 ${status} ${status === 403 ? 'Forbidden' : 'Bad Gateway'}\r\n\r\n`),
     );
+    client.once('close', cancel);
   });
   server.on('connection', (s) => track(s));
   server.on('clientError', (_err, socket) => socket.destroy());
@@ -742,6 +773,10 @@ export async function guardedFetchText(
   return null;
 }
 
+/** Node's TLS error codes for a certificate that cannot be trusted or does not match the name. */
+const CERTIFICATE_ERROR =
+  /CERT|SELF_SIGNED|UNABLE_TO_(?:GET|VERIFY)|ERR_TLS_CERT_ALTNAME_INVALID|HOSTNAME_MISMATCH|SSL_PROTOCOL_ERROR/;
+
 /**
  * A `fetch` for Jourilo's own API calls (the read-only analytics adapters) under the same address policy and upstream
  * proxy as every other outbound request. GET follows at most five redirects, only on the same origin, so headers such
@@ -777,7 +812,13 @@ export async function guardedFetch(
       ...(opts.deps ? { deps: opts.deps } : {}),
     });
     if ('blocked' in res) throw new GuardBlockedError(res.blocked);
-    if ('failed' in res) throw new Error(`${current.host}: ${res.failed}`);
+    if ('failed' in res) {
+      if (CERTIFICATE_ERROR.test(res.failed))
+        throw new Error(
+          `${current.host}: the TLS certificate was rejected (${res.failed}); the site's certificate is invalid, expired, self-signed or issued for another name.`,
+        );
+      throw new Error(`${current.host}: ${res.failed}`);
+    }
     if (method === 'GET' && res.status >= 300 && res.status < 400 && res.headers.location) {
       current = new URL(res.headers.location, current);
       continue;

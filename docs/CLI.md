@@ -485,7 +485,8 @@ Options:
                          Keep Chromium's own process sandbox (Playwright disables it by default); JOURILO_CHROMIUM_SANDBOX=1
                          does the same. Chromium, Chrome and Edge only (a usage error with Firefox or WebKit). Fails to launch
                          where the system denies the sandbox (containers, some Linux CI kernels)
-                         Without --allow-hosts / --block-hosts, the baseline run's lists are used again; so are its
+                         Without --allow-hosts / --block-hosts, the baseline run's lists are used again (give an empty
+                         value, --allow-hosts "", to drop one); so are its
                          --user-agent and --ignore-https-errors. Header values are never stored: a baseline that sent
                          --extra-header needs the headers again (exit 2 without them)
   --fail-on-regression   Exit 1 when new serious or critical defects appear
