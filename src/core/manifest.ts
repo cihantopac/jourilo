@@ -13,7 +13,10 @@ export interface Manifest {
   tool: { name: 'jourilo'; version: string };
   browser: { name: string; version: string };
   /** The axe-core version the run's pages were checked with, or the bundled one when no page was checked. */
-  axe: { version: string };
+  axe: {
+    version: string /** True when no page was checked, so `version` is the bundled one. */;
+    bundled?: true;
+  };
   /** The redacted target, the audited URLs and the viewports. */
   scope: { target: string; urls: string[]; viewports: string[] };
   files: { path: string; bytes: number; sha256: string }[];
@@ -63,7 +66,7 @@ export function writeManifest(runDir: string, run: ManifestRun): Manifest {
     runId: run.id,
     tool: { name: 'jourilo', version: run.tool.version },
     browser: { name: run.browser.name, version: run.browser.version },
-    axe: { version: typeof axeVersion === 'string' ? axeVersion : axe.version },
+    axe: typeof axeVersion === 'string' ? { version: axeVersion } : { version: axe.version, bundled: true },
     scope: scopeOf(run),
     files,
   };

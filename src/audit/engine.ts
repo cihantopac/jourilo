@@ -507,7 +507,6 @@ export async function runAudit(ws: Workspace, opts: AuditOptions): Promise<Audit
       progress({
         phase: 'capture',
         message: `Auditing ${urls.length} page(s) × ${opts.viewports.length} viewport(s) in ${opts.browser} ${browserVersion}`,
-        done: 0,
         total: captures,
       });
 

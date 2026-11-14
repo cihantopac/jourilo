@@ -53,11 +53,13 @@ Stated so nobody mistakes silence for a pass.
   the rendered pixels: the text's line boxes are cut into tiles of about one font size, and in each tile that holds
   the text color the 20 % of pixels farthest from it count as its background. The worst tile decides, so text over a
   busy photo that fails somewhere is not passed. At most 30 such nodes are sampled per capture; the rest stay
-  manual-review items. A decided pass removes the review item. A light and dark pattern finer than one tile can be
-  averaged into a pass, and text not rendered in its computed color (under a tint) stays for review. Pieces of a
-  line box narrower than 16 px are not sampled. Sampling scrolls to each node, which can start lazy loading or
-  scroll-triggered animations before the later checks of that capture, and on a page with many such nodes it adds
-  noticeable time to the capture.
+  manual-review items. A decided pass removes the review item. A light and dark pattern finer than one tile (about
+  one font size) can be averaged into a pass, because within a tile the 20 % of pixels farthest from the text color
+  count as background and the rest are not judged one by one. Text not rendered in its computed color (under a tint) or
+  covered by another element stays for review. Each line box is cut into its own tiles, so a narrow piece is sampled
+  too. Sampling shares a 15 s time budget per capture; nodes left when it runs out stay manual-review items and the
+  run records how many. It runs after the screenshots and scrolls only to nodes outside the viewport, which can still
+  start lazy loading or scroll-triggered animations before the keyboard and widget checks of that capture.
 
 ## Performance
 
@@ -244,7 +246,8 @@ Stated so nobody mistakes silence for a pass.
   both languages and switches in the page, so the Turkish text is checked by tests for presence and parity, not for
   wording; the wording of the first Turkish rule texts is for a fluent reader to review.
 - Jourilo's own activity in the page (the injected axe-core, its probes, screenshot masks) is marked and not reported
-  as a site error in Chromium and Firefox. WebKit drops the marker: there, Jourilo's own style refusal during a
+  as a site error in Chromium and Firefox. WebKit drops the marker (its console messages and exceptions carry no
+  source URL, checked again in 1.5.0): there, Jourilo's own style refusal during a
   screenshot is dropped only by time window (a site's own style refusal in those few milliseconds would be dropped
   too), and an exception thrown by Jourilo's own code cannot be told from the site's. A site's script refusals are
   never dropped.

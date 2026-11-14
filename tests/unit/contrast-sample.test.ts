@@ -1,5 +1,6 @@
+import type { Page } from 'playwright-core';
 import { describe, expect, it } from 'vitest';
-import { judgeContrast } from '../../src/browser/contrast-sample.js';
+import { judgeContrast, sampleNodes } from '../../src/browser/contrast-sample.js';
 
 type RGB = [number, number, number];
 const WHITE: RGB = [255, 255, 255];
@@ -69,5 +70,53 @@ describe('judgeContrast', () => {
   it('returns null when no pixel is near the computed text color (text under a tint)', () => {
     const px = render(120, 40, () => [15, 23, 42], [120, 120, 120]);
     expect(judgeContrast(px, 120, 40, WHITE, 20)).toBeNull();
+  });
+});
+
+describe('judgeContrast on thin line pieces', () => {
+  it('samples a line box narrower than 16 px and a one-pixel row instead of skipping them', () => {
+    const px = render(120, 40, () => [226, 232, 240]);
+    // A 10 px wide line box (under 16 px) and, separately, a 20 x 1 row: both are judged, and both fail.
+    const narrow = judgeContrast(px, 120, 40, WHITE, 20, [{ x: 0, y: 0, w: 10, h: 20 }]);
+    expect(narrow).not.toBeNull();
+    expect(narrow!.worst).toBeLessThan(1.5);
+    const row = judgeContrast(px, 120, 40, WHITE, 20, [{ x: 0, y: 8, w: 20, h: 1 }]);
+    expect(row).not.toBeNull();
+    // Cut into pieces by a line box that straddles a tile of a shared grid: the thin remainder joins its neighbour.
+    const cut = judgeContrast(px, 120, 40, WHITE, 20, [{ x: 0, y: 0, w: 61, h: 20 }]);
+    expect(cut!.worst).toBeLessThan(1.5);
+  });
+
+  it('does not fail a dark photo through a thin piece of a line box', () => {
+    const px = render(120, 40, () => [15, 23, 42]);
+    const r = judgeContrast(px, 120, 40, WHITE, 20, [{ x: 0, y: 0, w: 61, h: 20 }]);
+    expect(r!.worst).toBeGreaterThanOrEqual(7);
+  });
+});
+
+describe('sampleNodes', () => {
+  const node = (target: string, messageKey = 'bgImage') => ({ target, data: { messageKey } });
+  const ok = { worst: 8, best: 9, large: false };
+
+  it('stops at the time budget and counts the nodes it left', async () => {
+    let t = 0;
+    const nodes = [node('#a'), node('#b'), node('#c'), node('#d')];
+    const r = await sampleNodes({} as Page, nodes, {
+      budgetMs: 15_000,
+      now: () => t,
+      sample: async () => {
+        t += 6000;
+        return ok;
+      },
+    });
+    expect(r).toEqual({ sampled: 3, overBudget: 1 });
+    expect(nodes.map((n) => 'contrast' in n)).toEqual([true, true, true, false]);
+  });
+
+  it('control: within budget every decidable node is sampled; other reasons are not', async () => {
+    const nodes = [node('#a'), node('#b', 'fgOnBgFailure'), node('#c', 'bgGradient')];
+    const r = await sampleNodes({} as Page, nodes, { sample: async () => ok });
+    expect(r).toEqual({ sampled: 2, overBudget: 0 });
+    expect('contrast' in nodes[1]!).toBe(false);
   });
 });

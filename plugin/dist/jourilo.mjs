@@ -23750,12 +23750,12 @@ var require_axe = __commonJS({
           if (!win.navigator || _typeof(win.navigator) !== "object") {
             return {};
           }
-          var navigator = win.navigator, innerHeight = win.innerHeight, innerWidth = win.innerWidth;
+          var navigator = win.navigator, innerHeight2 = win.innerHeight, innerWidth2 = win.innerWidth;
           var _ref90 = getOrientation(win) || {}, angle = _ref90.angle, type2 = _ref90.type;
           return {
             userAgent: navigator.userAgent,
-            windowWidth: innerWidth,
-            windowHeight: innerHeight,
+            windowWidth: innerWidth2,
+            windowHeight: innerHeight2,
             orientationAngle: angle,
             orientationType: type2
           };
@@ -41905,6 +41905,7 @@ function isOwnException(err) {
 // src/browser/contrast-sample.ts
 var SAMPLED_REASONS = /* @__PURE__ */ new Set(["bgImage", "bgGradient", "bgOverlap"]);
 var CONTRAST_SAMPLE_CAP = 30;
+var CONTRAST_BUDGET_MS = 15e3;
 var MAX_DEVICE_PIXELS = 4e6;
 function judgeContrast(px, width, height, text, tile, lines) {
   const lin = (v) => {
@@ -41916,52 +41917,59 @@ function judgeContrast(px, width, height, text, tile, lines) {
   const lt = lum(tr, tg, tb);
   const near = 48 * 48;
   const size = Math.max(4, Math.round(tile));
-  let mask = null;
-  if (lines) {
-    mask = new Uint8Array(width * height);
-    for (const l of lines) {
-      const xa = Math.max(0, Math.floor(l.x));
-      const ya = Math.max(0, Math.floor(l.y));
-      const xb = Math.min(width, Math.ceil(l.x + l.w));
-      const yb = Math.min(height, Math.ceil(l.y + l.h));
-      for (let y = ya; y < yb; y++) mask.fill(1, y * width + xa, y * width + Math.max(xa, xb));
-    }
-  }
+  const regions = (lines ?? [{ x: 0, y: 0, w: width, h: height }]).map((l) => {
+    const xa = Math.max(0, Math.floor(l.x));
+    const ya = Math.max(0, Math.floor(l.y));
+    return {
+      xa,
+      ya,
+      xb: Math.min(width, Math.ceil(l.x + l.w)),
+      yb: Math.min(height, Math.ceil(l.y + l.h))
+    };
+  }).filter((r) => r.xb > r.xa && r.yb > r.ya);
+  const edges = (from, to) => {
+    const n = Math.max(1, Math.floor((to - from) / size));
+    return Array.from({ length: n + 1 }, (_, i) => from + Math.round((to - from) * i / n));
+  };
   let textPixels = 0;
   let worst = Number.POSITIVE_INFINITY;
   let best = 0;
-  for (let y0 = 0; y0 < height; y0 += size) {
-    for (let x0 = 0; x0 < width; x0 += size) {
-      const x1 = Math.min(width, x0 + size);
-      const y1 = Math.min(height, y0 + size);
-      const at = new Int32Array((x1 - x0) * (y1 - y0));
-      const dist = new Float64Array(at.length);
-      let count = 0;
-      let nearHere = 0;
-      for (let y = y0; y < y1; y++) {
-        for (let x = x0; x < x1; x++) {
-          const p = y * width + x;
-          if (mask && !mask[p]) continue;
-          const i = p * 4;
-          const dr = px[i] - tr;
-          const dg = px[i + 1] - tg;
-          const db = px[i + 2] - tb;
-          const d = dr * dr + dg * dg + db * db;
-          if (d <= near) nearHere++;
-          at[count] = i;
-          dist[count++] = d;
+  for (const r of regions) {
+    const xs = edges(r.xa, r.xb);
+    const ys = edges(r.ya, r.yb);
+    for (let ty = 0; ty < ys.length - 1; ty++) {
+      for (let tx = 0; tx < xs.length - 1; tx++) {
+        const x0 = xs[tx];
+        const x1 = xs[tx + 1];
+        const y0 = ys[ty];
+        const y1 = ys[ty + 1];
+        const at = new Int32Array((x1 - x0) * (y1 - y0));
+        const dist = new Float64Array(at.length);
+        let count = 0;
+        let nearHere = 0;
+        for (let y = y0; y < y1; y++) {
+          for (let x = x0; x < x1; x++) {
+            const i = (y * width + x) * 4;
+            const dr = px[i] - tr;
+            const dg = px[i + 1] - tg;
+            const db = px[i + 2] - tb;
+            const d = dr * dr + dg * dg + db * db;
+            if (d <= near) nearHere++;
+            at[count] = i;
+            dist[count++] = d;
+          }
         }
-      }
-      if (count < 16 || !nearHere) continue;
-      textPixels += nearHere;
-      const cut = dist.slice(0, count).sort()[Math.floor(count * 0.8)];
-      for (let k = 0; k < count; k++) {
-        if (dist[k] < cut) continue;
-        const i = at[k];
-        const lb = lum(px[i], px[i + 1], px[i + 2]);
-        const ratio = (Math.max(lt, lb) + 0.05) / (Math.min(lt, lb) + 0.05);
-        if (ratio < worst) worst = ratio;
-        if (ratio > best) best = ratio;
+        if (count < 16 || !nearHere) continue;
+        textPixels += nearHere;
+        const cut = dist.slice(0, count).sort()[Math.floor(count * 0.8)];
+        for (let k = 0; k < count; k++) {
+          if (dist[k] < cut) continue;
+          const i = at[k];
+          const lb = lum(px[i], px[i + 1], px[i + 2]);
+          const ratio = (Math.max(lt, lb) + 0.05) / (Math.min(lt, lb) + 0.05);
+          if (ratio < worst) worst = ratio;
+          if (ratio > best) best = ratio;
+        }
       }
     }
   }
@@ -42026,7 +42034,11 @@ async function sampleContrast(page, target) {
   const scroll = await page.evaluate("[scrollX, scrollY]").catch(() => null);
   try {
     const locator = page.locator(`css=${target}`).first();
-    await locator.scrollIntoViewIfNeeded({ timeout: 2e3 });
+    const inView = await locator.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth;
+    }).catch(() => false);
+    if (!inView) await locator.scrollIntoViewIfNeeded({ timeout: 2e3 });
     const style = await page.evaluate(
       `(${String(readNodeStyle)})(${JSON.stringify(target)})`
     );
@@ -42060,6 +42072,29 @@ async function sampleContrast(page, target) {
     if (scroll)
       await page.evaluate(`scrollTo({ left: ${scroll[0]}, top: ${scroll[1]}, behavior: "instant" })`).catch(() => void 0);
   }
+}
+async function sampleNodes(page, nodes, opts = {}) {
+  const {
+    budgetMs = CONTRAST_BUDGET_MS,
+    cap = CONTRAST_SAMPLE_CAP,
+    sample = sampleContrast,
+    now = Date.now
+  } = opts;
+  const start = now();
+  let sampled = 0;
+  let overBudget = 0;
+  for (const n of nodes) {
+    if (!SAMPLED_REASONS.has(String(n.data?.messageKey))) continue;
+    if (sampled >= cap) break;
+    if (now() - start >= budgetMs) {
+      overBudget++;
+      continue;
+    }
+    sampled++;
+    const s = await sample(page, n.target);
+    if (s) n.contrast = s;
+  }
+  return { sampled, overBudget };
 }
 
 // raw:src/browser/inpage/probe.js
@@ -43958,17 +43993,6 @@ async function runAxe(page) {
     incomplete: raw.incomplete.map(map),
     version: raw.testEngine.version
   };
-  let sampled = 0;
-  for (const issue of result.incomplete) {
-    if (issue.id !== "color-contrast") continue;
-    for (const n of issue.nodes) {
-      if (sampled >= CONTRAST_SAMPLE_CAP) break;
-      if (!SAMPLED_REASONS.has(String(n.data?.messageKey))) continue;
-      sampled++;
-      const s = await sampleContrast(page, n.target);
-      if (s) n.contrast = s;
-    }
-  }
   const targets = [...result.violations, ...result.incomplete].flatMap((i) => i.nodes.map((n) => n.target));
   const rects = await page.evaluate(
     `(${String(
@@ -44157,6 +44181,14 @@ async function capturePage(ctx, url, vp, opts) {
       } catch (e) {
         obs.errors.push(`screenshot: ${e.message.split("\n")[0]}`);
       }
+    }
+    if (obs.axe) {
+      const nodes = obs.axe.incomplete.filter((i) => i.id === "color-contrast").flatMap((i) => i.nodes);
+      const { overBudget } = await sampleNodes(page, nodes).catch(() => ({ overBudget: 0 }));
+      if (overBudget)
+        obs.errors.push(
+          `contrast sampling stopped at its ${CONTRAST_BUDGET_MS / 1e3} s budget: ${overBudget} node(s) stay manual-review items`
+        );
     }
     if (opts.keyboard !== false) {
       const guard = await installRequestGuard(page, {
@@ -47901,7 +47933,6 @@ async function runAudit(ws, opts) {
       progress({
         phase: "capture",
         message: `Auditing ${urls.length} page(s) \xD7 ${opts.viewports.length} viewport(s) in ${opts.browser} ${browserVersion}`,
-        done: 0,
         total: captures
       });
       const primaryOrigin = new URL(urls?.[0]?.url ?? target).origin;
@@ -49003,7 +49034,7 @@ function writeManifest(runDir, run) {
     runId: run.id,
     tool: { name: "jourilo", version: run.tool.version },
     browser: { name: run.browser.name, version: run.browser.version },
-    axe: { version: typeof axeVersion === "string" ? axeVersion : import_axe_core2.default.version },
+    axe: typeof axeVersion === "string" ? { version: axeVersion } : { version: import_axe_core2.default.version, bundled: true },
     scope: scopeOf(run),
     files
   };

@@ -84,7 +84,7 @@ describe('manifest', () => {
     });
     const m = writeManifest(dir, journeyRun);
     // No page was checked by axe: the version is the bundled axe-core's.
-    expect(m.axe).toEqual({ version: (axe as unknown as { version: string }).version });
+    expect(m.axe).toEqual({ version: (axe as unknown as { version: string }).version, bundled: true });
     expect(m.scope).toEqual({
       target: 'https://[redacted:email]/?session=redacted',
       urls: ['https://staging.example.test/'],

@@ -67,8 +67,8 @@ and `limitations` says so. A failed budget exits 1, like `--fail-on`; exit 5 and
 
 - `tool`: `{ name: "jourilo", version }`, the release that made the run.
 - `browser`: `{ name, version }`, as in `run.json`.
-- `axe`: `{ version }`, the axe-core version the pages were checked with (`settings.axe`), or the bundled axe-core when
-  no page was checked (for example `discover`).
+- `axe`: `{ version, bundled? }`, the axe-core version the pages were checked with (`settings.axe`), or the bundled
+  axe-core with `bundled: true` when no page was checked (for example `discover`).
 - `scope`: `{ target, urls, viewports }`: the redacted target, the audited URLs (`settings.scope.urls`, or the captured
   pages for journey runs), redacted like other URLs, and the viewport names.
 

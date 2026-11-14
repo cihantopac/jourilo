@@ -18,6 +18,12 @@
         "bad-mixed"
       ],
       "why": "white text over a half-light, half-dark photo: the worst case decides, not the best (Review Focus 1)"
+    },
+    {
+      "rule": "axe-review/color-contrast",
+      "path": "/covered",
+      "kind": "needs-review",
+      "why": "text under a sibling overlay cannot be sampled, so it stays a manual-review item (fallback)"
     }
   ],
   "mustNotFind": [
@@ -40,6 +46,11 @@
       "rule": "axe-review/color-contrast",
       "path": "/sun",
       "why": "sampling decides the text over the dark photo as passing"
+    },
+    {
+      "rule": "jourilo/contrast-over-image",
+      "path": "/covered",
+      "why": "an unsampled node is never decided as a defect"
     }
   ],
   "maxDefects": {
@@ -48,7 +59,8 @@
     "paths": [
       "/",
       "/dark",
-      "/sun"
+      "/sun",
+      "/covered"
     ]
   }
 }

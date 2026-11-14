@@ -11,12 +11,7 @@ import { GUARD_UPSTREAM_ERROR_HEADER } from '../core/net-guard.js';
 import { excerpt, redactText, redactUrl, redactUrlsIn } from '../core/redact.js';
 import type { PageInventory, Rect, Viewport } from '../core/types.js';
 import { type BlockedRequest, installRequestGuard } from '../journeys/request-guard.js';
-import {
-  CONTRAST_SAMPLE_CAP,
-  type ContrastSample,
-  SAMPLED_REASONS,
-  sampleContrast,
-} from './contrast-sample.js';
+import { CONTRAST_BUDGET_MS, type ContrastSample, sampleNodes } from './contrast-sample.js';
 import PROBE_SOURCE from './inpage/probe.js?raw';
 import { type KeyboardWalk, keyboardWalk } from './keyboard.js';
 import { asJourilo, inpageSource, isOwnConsoleMessage, isOwnException } from './own-activity.js';
@@ -396,19 +391,6 @@ async function runAxe(page: Page): Promise<PageObservation['axe']> {
     incomplete: raw.incomplete.map(map),
     version: raw.testEngine.version,
   };
-  // Contrast axe could not decide because of a background image, gradient or overlapping element: measure it from
-  // the rendered pixels (F8). A node that cannot be measured stays a manual-review item.
-  let sampled = 0;
-  for (const issue of result.incomplete) {
-    if (issue.id !== 'color-contrast') continue;
-    for (const n of issue.nodes) {
-      if (sampled >= CONTRAST_SAMPLE_CAP) break;
-      if (!SAMPLED_REASONS.has(String(n.data?.messageKey))) continue;
-      sampled++;
-      const s = await sampleContrast(page, n.target);
-      if (s) n.contrast = s;
-    }
-  }
   // Element boxes so the report can draw each node on the screenshot.
   const targets = [...result.violations, ...result.incomplete].flatMap((i) => i.nodes.map((n) => n.target));
   const rects = (await page.evaluate(
@@ -648,6 +630,17 @@ export async function capturePage(
       } catch (e) {
         obs.errors.push(`screenshot: ${(e as Error).message.split('\n')[0]}`);
       }
+    }
+
+    // Sampling scrolls to nodes, which can start lazy loading, so it runs after the screenshots, which show the page
+    // as it was captured, and before the keyboard and widget checks.
+    if (obs.axe) {
+      const nodes = obs.axe.incomplete.filter((i) => i.id === 'color-contrast').flatMap((i) => i.nodes);
+      const { overBudget } = await sampleNodes(page, nodes).catch(() => ({ overBudget: 0 }));
+      if (overBudget)
+        obs.errors.push(
+          `contrast sampling stopped at its ${CONTRAST_BUDGET_MS / 1000} s budget: ${overBudget} node(s) stay manual-review items`,
+        );
     }
 
     if (opts.keyboard !== false) {
