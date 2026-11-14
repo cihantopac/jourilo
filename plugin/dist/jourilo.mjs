@@ -41464,7 +41464,7 @@ function cookieMatchesUrl(c, url, now = Date.now()) {
   } catch {
     return false;
   }
-  const host = u.hostname.toLowerCase();
+  const host = u.hostname.toLowerCase().replace(/\.$/, "");
   const hostOnly = !c.domain.startsWith(".");
   const domain = c.domain.replace(/^\./, "").toLowerCase();
   const domainOk = hostOnly ? host === domain : host === domain || host.endsWith(`.${domain}`) && !isIpLiteral(host);
@@ -41725,6 +41725,7 @@ function frameUrl(req) {
 }
 async function installRequestGuard(target, policy, options = {}) {
   const blocked = [];
+  let chargeable = 0;
   const urls = /* @__PURE__ */ new Set();
   const redirectLoops = [];
   const context = "context" in target ? target.context() : target;
@@ -41741,11 +41742,12 @@ async function installRequestGuard(target, policy, options = {}) {
         return { kind: "browser" };
       }
     }
-    const origin = originOf(req.headers().referer) ?? originOf(pageOf(req) ? frameUrl(req) : void 0);
+    const origin = originOf(req.headers().referer);
     return origin ? { kind: "site", origin } : { kind: "opaque" };
   };
   const block = async (route, url, method, navigation, verdict) => {
     if (verdict.allowed) return;
+    if (navigation || (verdict.kind ?? "submit") !== "submit") chargeable++;
     if (blocked.length < 200)
       blocked.push({
         url: redactUrl(url),
@@ -41757,13 +41759,20 @@ async function installRequestGuard(target, policy, options = {}) {
       });
     urls.add(url);
     urls.add(route.request().url());
+    endChain(route.request());
     await route.abort("blockedbyclient").catch(() => void 0);
+  };
+  const endChain = (req) => {
+    const key = withoutHash(req.url());
+    const prior = chains.get(key);
+    chains.delete(key);
+    handOvers.delete(key);
+    if (prior) handOvers.delete(withoutHash(prior.from));
   };
   const navigate = async (route, req) => {
     const scope = options.targetHeaders;
     const key = withoutHash(req.url());
     const prior = chains.get(key);
-    chains.delete(key);
     const continued = prior && Date.now() - prior.at < 6e4 && (!req.headers().referer || originOf(req.headers().referer) === originOf(prior.from)) ? prior : void 0;
     const hops = continued?.hops ?? 0;
     const initiator = continued?.initiator ?? initiatorOf(req);
@@ -41774,6 +41783,10 @@ async function installRequestGuard(target, policy, options = {}) {
       const headers = {};
       for (const [k, v] of Object.entries(req.headers()))
         if (k.toLowerCase() !== "cookie" && !(own && names.has(k.toLowerCase()))) headers[k] = v;
+      if (continued) {
+        for (const k of Object.keys(headers)) if (k.toLowerCase() === "referer") delete headers[k];
+        if (continued.referer) headers.referer = continued.referer;
+      }
       const sameSite = isSameSiteNavigation(
         initiator,
         req.url(),
@@ -41787,19 +41800,21 @@ async function installRequestGuard(target, policy, options = {}) {
         ...options.timeoutMs ? { timeout: options.timeoutMs } : {}
       });
     } catch {
+      endChain(req);
       await route.abort("failed").catch(() => void 0);
       return;
     }
     if (response.headers()[GUARD_UPSTREAM_ERROR_HEADER] !== void 0 && req.url().startsWith("https:")) {
       const status = response.status();
       await response.dispose().catch(() => void 0);
+      endChain(req);
       await route.abort(status === 403 ? "blockedbyclient" : "connectionfailed").catch(() => void 0);
       return;
     }
     const location = response.headers().location;
     const handOver = () => route.fulfill({ response }).catch(() => route.abort("failed").catch(() => void 0));
     if (!REDIRECT.has(response.status()) || !location) {
-      handOvers.delete(key);
+      endChain(req);
       await handOver();
       return;
     }
@@ -41807,6 +41822,7 @@ async function installRequestGuard(target, policy, options = {}) {
     try {
       next = new URL(location, req.url());
     } catch {
+      endChain(req);
       await handOver();
       return;
     }
@@ -41853,12 +41869,20 @@ async function installRequestGuard(target, policy, options = {}) {
     }
     if (hops >= MAX_REDIRECTS) {
       redirectLoops.push({ url: redactUrl(req.url()), at: Date.now() });
-      handOvers.delete(key);
+      endChain(req);
       urls.add(req.url());
       await route.abort("failed").catch(() => void 0);
       return;
     }
-    chains.set(withoutHash(next.toString()), { hops: hops + 1, initiator, from: req.url(), at: Date.now() });
+    chains.delete(key);
+    chains.set(withoutHash(next.toString()), {
+      hops: hops + 1,
+      initiator,
+      from: req.url(),
+      at: Date.now(),
+      // What the chain's first request sent: the hand-over page's own URL is not a page the user saw.
+      referer: continued ? continued.referer : req.headers().referer
+    });
     handOvers.add(key);
     await route.fulfill({
       status: 200,
@@ -41894,6 +41918,7 @@ async function installRequestGuard(target, policy, options = {}) {
   await target.route("**/*", handler);
   return {
     blocked,
+    chargeableStops: () => chargeable,
     isBlocked: (u) => urls.has(u) || urls.has(u.split("#")[0]),
     since: (t) => blocked.filter((b) => b.at >= t),
     redirectLoops,
@@ -46181,15 +46206,36 @@ async function act(tabs, step, opts, guard) {
       return;
   }
 }
-function stopLedger(blocked) {
+function stopLedger(blocked, chargeableTotal) {
   let seen = 0;
+  let seenChargeable = 0;
   return {
     take() {
       const fresh = blocked.slice(seen).filter((b) => b.navigation || b.kind !== "submit");
       seen = blocked.length;
+      seenChargeable += fresh.length;
+      const unlisted = chargeableTotal ? chargeableTotal() - seenChargeable : 0;
+      if (unlisted > 0) {
+        seenChargeable += unlisted;
+        const last = fresh[fresh.length - 1] ?? blocked[blocked.length - 1];
+        for (let i = 0; i < unlisted; i++)
+          fresh.push(
+            last ?? {
+              url: "",
+              method: "GET",
+              reason: "The safety policy stopped a request.",
+              kind: "off-origin",
+              navigation: true,
+              at: Date.now()
+            }
+          );
+      }
       return fresh;
     }
   };
+}
+function chargeLastStep(steps, stopped) {
+  return steps.length > 0 && chargeStops(steps[steps.length - 1], stopped);
 }
 function chargeStops(step, stopped) {
   if (!stopped.length) return false;
@@ -46309,7 +46355,7 @@ async function runJourney(browser, spec, opts) {
     }
     return void 0;
   };
-  const stops = stopLedger(guard.blocked);
+  const stops = stopLedger(guard.blocked, guard.chargeableStops);
   try {
     for (let i = 0; i < allSteps.length; i++) {
       const step = allSteps[i];
@@ -46367,8 +46413,7 @@ async function runJourney(browser, spec, opts) {
         break;
       }
     }
-    if (status === "passed" && steps.length && chargeStops(steps[steps.length - 1], stops.take()))
-      status = "blocked";
+    if (status === "passed" && chargeLastStep(steps, stops.take())) status = "blocked";
     const page = tabs.current();
     const finalUrl = page?.url() ?? "";
     const pageErrors = observers.flatMap((o) => o.console).filter((c) => c.type === "pageerror");

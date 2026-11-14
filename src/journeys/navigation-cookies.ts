@@ -3,9 +3,8 @@
 // Strict cookies from a navigation a cross-site page started, and Lax cookies from a cross-site POST. Sending them
 // would let a cross-site sign-in flow pass where real users fail, so the guard builds the Cookie header itself.
 //
-// Where the browser's decision cannot be reproduced exactly, the cookie is withheld (fail closed), with one known
-// exception: in Chromium, a navigation another window or frame started without a Referer is judged by the frame's
-// document, which may count it as same-site where the browser would not.
+// Where the browser's decision cannot be reproduced exactly, the cookie is withheld (fail closed): a navigation that
+// carries no Referer and no Sec-Fetch-Site (another window or frame started it) counts as cross-site.
 //
 // Which cookies match a URL follows RFC 6265 (`cookieMatchesUrl`), not Playwright's `context.cookies(url)` filter,
 // which is looser: it sends a host-only cookie to subdomains and a `Path=/app` cookie to `/application`.
@@ -76,7 +75,8 @@ export function cookieMatchesUrl(c: JarCookie, url: string, now = Date.now()): b
   } catch {
     return false;
   }
-  const host = u.hostname.toLowerCase();
+  // A trailing dot (an absolute host name) names the same host: `example.com.` matches a cookie for `example.com`.
+  const host = u.hostname.toLowerCase().replace(/\.$/, '');
   const hostOnly = !c.domain.startsWith('.');
   const domain = c.domain.replace(/^\./, '').toLowerCase();
   const domainOk = hostOnly

@@ -106,9 +106,8 @@ Stated so nobody mistakes silence for a pass.
   include the hop, `goto` reports 200 for the final page of a redirect, and a 307 or 308 redirect that resends a form
   is followed only for URL-encoded bodies. Cookies follow SameSite and RFC 6265 matching where the browser's own
   decision can be reproduced, and are withheld where it cannot, so a journey can fail where a browser would succeed.
-  In Chromium, a navigation that another window or frame started without a Referer is judged by the tab's own page,
-  which can count it as same-site where the browser would not. A domain cookie on a host with a trailing dot is
-  withheld.
+  A navigation with neither Referer nor Sec-Fetch-Site counts as cross-site. In a redirect chain the final page's
+  `document.referrer` shows Jourilo's hand-over URL (the Referer header the site receives is the chain's original).
 - Without `--allow-submit`, journeys on non-local hosts cannot send first-party POST requests (including some
   telemetry); the journey result lists what was stopped.
 

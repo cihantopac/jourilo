@@ -131,7 +131,6 @@ Deferred from the 1.4.0 reviews, grouped; each is a small, known gap.
 - **Fixers:** edit an existing `html, body {}` rule; add a rect and screenshot to implicit-submit evidence.
 - **Trends:** LCP and CLS from every capture; say when the page set changed between runs.
 - **Experiments:** a minimum-sample floor for the sequential p-value; variants of an Amplitude flag; self-hosted LAN hosts.
-- **Journeys:** domain cookies on a trailing-dot host; fail a half-finished redirect chain sooner than the step timeout.
 - **Vocabulary:** stop the financial list refusing Italian "Ordina per" (sort) and similar.
 - **Network:** pool plain-HTTP keep-alive connections again in the direct case.
 - **WebKit:** tell Jourilo's own style refusal and exceptions from the site's without a time window.

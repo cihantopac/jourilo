@@ -9,7 +9,14 @@ import {
   navigationCookies,
 } from '../../src/journeys/navigation-cookies.js';
 import type { BlockedRequest } from '../../src/journeys/request-guard.js';
-import { chargeStops, keyEffect, matchesUrl, stopLedger, tabPolicy } from '../../src/journeys/runner.js';
+import {
+  chargeLastStep,
+  chargeStops,
+  keyEffect,
+  matchesUrl,
+  stopLedger,
+  tabPolicy,
+} from '../../src/journeys/runner.js';
 import {
   checkAction,
   checkRequest,
@@ -360,6 +367,20 @@ describe('cookies on navigations the guard makes itself', () => {
     expect(cookieMatchesUrl(c('localhost', '/', { secure: true }), 'http://localhost/')).toBe(true);
     expect(cookieMatchesUrl(c('localhost', '/', { expires: 1 }), 'http://localhost/')).toBe(false);
   });
+  it('matches a Domain cookie on a trailing-dot host (RFC 6265), and still not a sibling host', () => {
+    const c = (domain: string): JarCookie => ({
+      name: 'a',
+      value: '1',
+      domain,
+      path: '/',
+      expires: -1,
+      secure: false,
+      sameSite: 'Lax',
+    });
+    expect(cookieMatchesUrl(c('.example.test'), 'https://app.example.test./x')).toBe(true);
+    expect(cookieMatchesUrl(c('app.example.test'), 'https://app.example.test./x')).toBe(true);
+    expect(cookieMatchesUrl(c('.example.test'), 'https://evilexample.test./x')).toBe(false);
+  });
 });
 
 describe('stopped requests per step', () => {
@@ -399,6 +420,64 @@ describe('stopped requests per step', () => {
     expect(chargeStops(last, stops.take())).toBe(true);
     expect(last.status).toBe('blocked');
     expect(last.error).toMatch(/\(\+1 more\)$/);
+  });
+});
+
+describe('stops past the stored cap', () => {
+  const stop = (url: string): BlockedRequest => ({
+    url,
+    method: 'GET',
+    reason: `Navigation to ${url} leaves the target origin`,
+    kind: 'off-origin',
+    navigation: true,
+    at: 0,
+  });
+  it('keeps counting chargeable stops after the stored list is full', () => {
+    const blocked: BlockedRequest[] = [];
+    let total = 0;
+    const stops = stopLedger(blocked, () => total);
+    for (let i = 0; i < 200; i++) blocked.push(stop(`http://a.example/${i}`));
+    total = 200;
+    expect(stops.take()).toHaveLength(200);
+    // The list stopped growing, the count did not.
+    total = 203;
+    const step: { status: 'passed' | 'blocked' | 'failed'; error?: string } = { status: 'passed' };
+    expect(chargeStops(step, stops.take())).toBe(true);
+    expect(step.status).toBe('blocked');
+    expect(step.error).toMatch(/\(\+2 more\)$/);
+    expect(stops.take()).toEqual([]);
+  });
+  it('control: without extra stops nothing is added', () => {
+    const blocked: BlockedRequest[] = [stop('http://a.example/')];
+    const stops = stopLedger(blocked, () => 1);
+    expect(stops.take()).toHaveLength(1);
+    expect(stops.take()).toEqual([]);
+  });
+});
+
+describe('stop after the last step', () => {
+  const late: BlockedRequest = {
+    url: 'http://idp.example/',
+    method: 'GET',
+    reason: 'Navigation to http://idp.example/ leaves the target origin',
+    kind: 'off-origin',
+    navigation: true,
+    at: 0,
+  };
+  it('blocks the last step only', () => {
+    const steps: { status: 'passed' | 'blocked' | 'failed'; error?: string }[] = [
+      { status: 'passed' },
+      { status: 'passed' },
+    ];
+    expect(chargeLastStep(steps, [late])).toBe(true);
+    expect(steps.map((x) => x.status)).toEqual(['passed', 'blocked']);
+    expect(steps[1]!.error).toBe(late.reason);
+  });
+  it('control: no stops, or no steps, change nothing', () => {
+    const steps: { status: 'passed' | 'blocked' | 'failed'; error?: string }[] = [{ status: 'passed' }];
+    expect(chargeLastStep(steps, [])).toBe(false);
+    expect(chargeLastStep([], [late])).toBe(false);
+    expect(steps[0]!.status).toBe('passed');
   });
 });
 

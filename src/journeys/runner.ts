@@ -366,15 +366,46 @@ async function act(
  * next step, and one after the last step's check to the last step, instead of going unreported. Only navigations and
  * destructive or financial requests count: a stopped background form post is reported with the journey, not a step.
  */
-export function stopLedger(blocked: readonly BlockedRequest[]): { take(): BlockedRequest[] } {
+export function stopLedger(
+  blocked: readonly BlockedRequest[],
+  /** The number of stops that belong to a step, when `blocked` is capped and may have stopped growing. */
+  chargeableTotal?: () => number,
+): { take(): BlockedRequest[] } {
   let seen = 0;
+  let seenChargeable = 0;
   return {
     take() {
       const fresh = blocked.slice(seen).filter((b) => b.navigation || b.kind !== 'submit');
       seen = blocked.length;
+      seenChargeable += fresh.length;
+      // Stops past the cap of the stored list are still counted, so the step is blocked and says how many more.
+      const unlisted = chargeableTotal ? chargeableTotal() - seenChargeable : 0;
+      if (unlisted > 0) {
+        seenChargeable += unlisted;
+        const last = fresh[fresh.length - 1] ?? blocked[blocked.length - 1];
+        for (let i = 0; i < unlisted; i++)
+          fresh.push(
+            last ?? {
+              url: '',
+              method: 'GET',
+              reason: 'The safety policy stopped a request.',
+              kind: 'off-origin',
+              navigation: true,
+              at: Date.now(),
+            },
+          );
+      }
       return fresh;
     },
   };
+}
+
+/** A stop after the last step's check blocks that step and the journey; true when it did. */
+export function chargeLastStep(
+  steps: Pick<JourneyStepResult, 'status' | 'error'>[],
+  stopped: BlockedRequest[],
+): boolean {
+  return steps.length > 0 && chargeStops(steps[steps.length - 1]!, stopped);
 }
 
 /** Marks a step blocked by the stops charged to it (a step already blocked keeps its own reason). */
@@ -516,7 +547,7 @@ export async function runJourney(
     return undefined;
   };
 
-  const stops = stopLedger(guard.blocked);
+  const stops = stopLedger(guard.blocked, guard.chargeableStops);
 
   try {
     for (let i = 0; i < allSteps.length; i++) {
@@ -585,8 +616,7 @@ export async function runJourney(
       }
     }
     // A navigation stopped after the last step's check (a popup that opened late) still stops the journey.
-    if (status === 'passed' && steps.length && chargeStops(steps[steps.length - 1]!, stops.take()))
-      status = 'blocked';
+    if (status === 'passed' && chargeLastStep(steps, stops.take())) status = 'blocked';
 
     // Success criteria are evaluated even after a failure so the report shows which goals were missed.
     const page = tabs.current();
