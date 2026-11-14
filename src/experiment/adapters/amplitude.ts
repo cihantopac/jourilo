@@ -33,7 +33,7 @@ function day(value: string | undefined, flag: string): string {
 export function amplitudeAdapter(deps: AdapterDeps): AnalyticsAdapter {
   const apiKey = requireEnv(deps.env, 'AMPLITUDE_API_KEY', "the Amplitude project's API key");
   const secret = requireEnv(deps.env, 'AMPLITUDE_SECRET_KEY', "the Amplitude project's secret key");
-  const host = hostFrom(deps.env, 'AMPLITUDE_HOST', 'https://amplitude.com');
+  const host = hostFrom(deps.env, 'AMPLITUDE_HOST', 'https://amplitude.com', deps.allowPrivate === true);
   if (!deps.metric)
     throw new JouriloError(
       'USAGE',

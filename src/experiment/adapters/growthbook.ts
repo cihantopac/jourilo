@@ -39,7 +39,7 @@ interface GbSlice {
 
 export function growthbookAdapter(deps: AdapterDeps): AnalyticsAdapter {
   const key = requireEnv(deps.env, 'GROWTHBOOK_API_KEY', 'a GrowthBook secret API key with read access');
-  const host = hostFrom(deps.env, 'GROWTHBOOK_HOST', 'https://api.growthbook.io');
+  const host = hostFrom(deps.env, 'GROWTHBOOK_HOST', 'https://api.growthbook.io', deps.allowPrivate === true);
   const base = `${host.href.replace(/\/$/, '')}/api/v1`;
   const http = client('GrowthBook', deps, {
     header: `Bearer ${key}`,

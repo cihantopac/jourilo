@@ -63,7 +63,7 @@ is checked repeatedly, so the always-valid mSPRT p-value and confidence sequence
 fixed-horizon test instead. The adapters only read: GET requests, plus
 PostHog's documented read-only query endpoint (`POST /api/projects/:project/query/`, which uses POST to carry the query).
 Every request goes through Jourilo's guarded fetch (`guardedFetch` in `src/core/net-guard.ts`): the host is resolved and
-checked like every other outbound request (no LAN or metadata addresses; loopback only for a local self-hosted
+checked like every other outbound request (no LAN or metadata addresses, unless `--allow-private` names a self-hosted instance on a private address; loopback only for a local self-hosted
 instance), HTTPS_PROXY / NO_PROXY apply, GET redirects stay on the same origin, and plain `http://` is refused except to
 a local host. No SDK and no new dependency is used.
 

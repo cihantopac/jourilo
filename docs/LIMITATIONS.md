@@ -130,9 +130,9 @@ Stated so nobody mistakes silence for a pass.
   only miss a `button-implicit-submit` finding, never raise a false one.
 - Experiment statistics: conversion (two-proportion) metrics only, with a fixed-horizon z-test or a sequential mSPRT
   (always-valid p-value and confidence sequence, normal approximation); no continuous metrics, no CUPED. The CLI keeps
-  no history between `analyze` runs, so each run is one look, and an arm with almost no visitors can give a far too
-  small p-value (the decision stays correct). `--from` reads results read-only from PostHog,
-  GrowthBook and Amplitude; Jourilo does not create or change experiments or flags, and plans list the detected
+  no history between `analyze` runs, so each run is one look. A sequential stop needs at least 100 visitors and 5
+  conversions in each arm (below that the result says "Not enough data"); the fixed-horizon test has no such floor. `--from` reads results read-only from PostHog,
+  GrowthBook and Amplitude (a self-hosted instance on a LAN address needs `--allow-private`); Jourilo does not create or change experiments or flags, and plans list the detected
   tools only. Amplitude's funnel API does not list a flag's variants, so a missing third arm of a multi-arm
   experiment cannot be detected (a missing control or a single arm is). The adapters were tested on responses
   synthesized from vendor documentation, not on live accounts.

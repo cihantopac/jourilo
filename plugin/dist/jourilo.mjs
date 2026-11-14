@@ -54427,7 +54427,7 @@ function requireEnv(env, name, what) {
     );
   return v;
 }
-function hostFrom(env, name, fallback) {
+function hostFrom(env, name, fallback, allowPrivate = false) {
   const raw = env[name]?.trim() || fallback;
   let url;
   try {
@@ -54440,8 +54440,12 @@ function hostFrom(env, name, fallback) {
       "USAGE",
       `${name} must not contain credentials; keys are read from their own variables.`
     );
-  if (url.protocol !== "https:" && !(url.protocol === "http:" && isLocalHostname(url.hostname)))
-    throw new JouriloError("USAGE", `${name} must be an https:// URL (plain http only for a local host).`);
+  const lanLiteral = allowPrivate && classifyIp(url.hostname) === "private";
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && (isLocalHostname(url.hostname) || lanLiteral)))
+    throw new JouriloError(
+      "USAGE",
+      `${name} must be an https:// URL (plain http only for a local host${allowPrivate ? " or a private IP address" : ""}).`
+    );
   url.pathname = url.pathname.replace(/\/+$/, "");
   url.search = "";
   url.hash = "";
@@ -54452,20 +54456,20 @@ function scrub(text, secrets) {
   for (const s of secrets) if (s) out = out.split(s).join("[redacted]");
   return out;
 }
-function defaultFetch(proxy) {
+function defaultFetch(proxy, allowPrivate = false) {
   return (url, init) => {
     const u = new URL(url);
     const upstream = proxy?.(u);
     const policy = {
       target: isLocalHostname(u.hostname) ? "local" : "public",
-      allowPrivate: false,
+      allowPrivate,
       ...upstream ? { upstream } : {}
     };
     return guardedFetch(url, policy, { ...init, timeoutMs: TIMEOUT_MS, maxBytes: MAX_BYTES });
   };
 }
 function client(vendor, deps, auth) {
-  const fetch = deps.fetch ?? defaultFetch(deps.proxy);
+  const fetch = deps.fetch ?? defaultFetch(deps.proxy, deps.allowPrivate === true);
   const clean = (t) => scrub(t, auth.secrets);
   const send = async (method, url, body) => {
     const path2 = new URL(url).pathname;
@@ -54596,7 +54600,7 @@ function day(value, flag2) {
 function amplitudeAdapter(deps) {
   const apiKey = requireEnv(deps.env, "AMPLITUDE_API_KEY", "the Amplitude project's API key");
   const secret = requireEnv(deps.env, "AMPLITUDE_SECRET_KEY", "the Amplitude project's secret key");
-  const host = hostFrom(deps.env, "AMPLITUDE_HOST", "https://amplitude.com");
+  const host = hostFrom(deps.env, "AMPLITUDE_HOST", "https://amplitude.com", deps.allowPrivate === true);
   if (!deps.metric)
     throw new JouriloError(
       "USAGE",
@@ -54679,7 +54683,7 @@ init_errors();
 var MAX_PAGES = 50;
 function growthbookAdapter(deps) {
   const key = requireEnv(deps.env, "GROWTHBOOK_API_KEY", "a GrowthBook secret API key with read access");
-  const host = hostFrom(deps.env, "GROWTHBOOK_HOST", "https://api.growthbook.io");
+  const host = hostFrom(deps.env, "GROWTHBOOK_HOST", "https://api.growthbook.io", deps.allowPrivate === true);
   const base2 = `${host.href.replace(/\/$/, "")}/api/v1`;
   const http2 = client("GrowthBook", deps, {
     header: `Bearer ${key}`,
@@ -54782,7 +54786,7 @@ function posthogAdapter(deps) {
     "POSTHOG_API_KEY",
     "a PostHog personal API key with experiment:read and query:read"
   );
-  const host = hostFrom(deps.env, "POSTHOG_HOST", "https://us.posthog.com");
+  const host = hostFrom(deps.env, "POSTHOG_HOST", "https://us.posthog.com", deps.allowPrivate === true);
   const project = deps.env.POSTHOG_PROJECT_ID?.trim() || "@current";
   if (!/^(@current|\d+)$/.test(project))
     throw new JouriloError(
@@ -55063,6 +55067,8 @@ function analyze(control, variant, opts = {}) {
     interpretation
   };
 }
+var SEQUENTIAL_MIN_VISITORS = 100;
+var SEQUENTIAL_MIN_CONVERSIONS = 5;
 function sequentialTest(a, b, opts) {
   for (const [name, arm2] of [
     ["a", a],
@@ -55097,12 +55103,15 @@ function sequentialTest(a, b, opts) {
     const hi = Math.min(interval[1], previous.confidenceInterval[1]);
     interval = lo <= hi ? [lo, hi] : [...previous.confidenceInterval];
   }
+  const enoughData = [a, b].every(
+    (arm2) => arm2.n >= SEQUENTIAL_MIN_VISITORS && arm2.x >= SEQUENTIAL_MIN_CONVERSIONS
+  );
   let decision = "continue";
-  if (pValue <= alpha) {
+  if (enoughData && pValue <= alpha) {
     const bBetter = interval[0] > 0 || interval[1] >= 0 && diff > 0;
     decision = bBetter ? "stop-b-better" : "stop-a-better";
   }
-  return { pValue, decision, confidenceInterval: interval };
+  return { pValue, decision, confidenceInterval: interval, enoughData };
 }
 
 // src/experiment/plan.ts
@@ -55287,7 +55296,7 @@ var VENDOR = {
 };
 async function armsFrom(ctx) {
   const from = str(ctx, "from");
-  const fromOnly = ["metric", "start", "end", "control-key"].filter((k) => str(ctx, k) !== void 0);
+  const fromOnly = ["metric", "start", "end", "control-key"].filter((k) => str(ctx, k) !== void 0).concat(flag(ctx, "allow-private") ? ["allow-private"] : []);
   if (from === void 0) {
     if (fromOnly.length)
       throw new JouriloError("USAGE", `--${fromOnly[0]} applies only with --from <adapter>:<id>.`);
@@ -55313,6 +55322,7 @@ async function armsFrom(ctx) {
   const adapter = adapterFor(name, {
     env: process.env,
     proxy: (url) => proxyFrom(ctx, url),
+    allowPrivate: flag(ctx, "allow-private"),
     ...opt("metric") !== void 0 ? { metric: opt("metric") } : {},
     ...opt("start") !== void 0 ? { start: opt("start") } : {},
     ...opt("end") !== void 0 ? { end: opt("end") } : {},
@@ -55373,7 +55383,7 @@ function sequentialAnalysis(c, v, fixed, tau) {
   const interpretation = [];
   if (fixed.srm.mismatch) interpretation.push(srmNote(fixed.srm));
   interpretation.push(
-    s.decision === "continue" ? `Continue: ${rates}, always-valid ${p} > ${alpha}; the ${level} confidence sequence for the difference (${ci}) still includes zero. Check again as data arrives; every look is allowed.` : `Stop: ${s.decision === "stop-b-better" ? v.name : c.name} is better (${rates}, always-valid ${p} \u2264 ${alpha}; ${level} confidence sequence for the difference ${ci}). This holds however often the experiment was checked.`,
+    !s.enoughData ? `Not enough data: ${rates}. A sequential stop needs at least ${SEQUENTIAL_MIN_VISITORS} visitors and ${SEQUENTIAL_MIN_CONVERSIONS} conversions in each arm; keep collecting. (The always-valid ${p} and the ${level} confidence sequence ${ci} are shown for reference only.)` : s.decision === "continue" ? `Continue: ${rates}, always-valid ${p} > ${alpha}; the ${level} confidence sequence for the difference (${ci}) still includes zero. Check again as data arrives; every look is allowed.` : `Stop: ${s.decision === "stop-b-better" ? v.name : c.name} is better (${rates}, always-valid ${p} \u2264 ${alpha}; ${level} confidence sequence for the difference ${ci}). This holds however often the experiment was checked.`,
     `Sequential test (mSPRT, mixing \u03C4 = ${tau}): valid at every look, so peeking is safe, at the cost of a wider interval than a fixed-horizon test at its planned sample. Each run is one look with no memory: once a look says stop, act on it rather than waiting for a later look to agree.`,
     GUARDRAIL_NOTE
   );
@@ -55385,6 +55395,7 @@ function sequentialAnalysis(c, v, fixed, tau) {
     relativeLift: fixed.relativeLift,
     pValue: s.pValue,
     decision: s.decision,
+    enoughData: s.enoughData,
     confidenceInterval: s.confidenceInterval,
     alpha,
     tau,
@@ -55439,6 +55450,7 @@ var experiment = {
     start: { type: "string" },
     end: { type: "string" },
     "control-key": { type: "string" },
+    "allow-private": { type: "boolean" },
     sequential: { type: "boolean" },
     fixed: { type: "boolean" },
     tau: { type: "string" }
@@ -55449,7 +55461,7 @@ var experiment = {
   analyze  --control 120/2400 --variant 150/2380 [--alpha 0.05] [--expected-share 0.5] [--planned N]
            [--sequential [--tau 0.1]]
   analyze  --from <adapter>:<id> [--metric M] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--control-key K]
-           [--alpha \u2026] [--expected-share \u2026] [--tau 0.1 | --fixed [--planned N]]
+           [--alpha \u2026] [--expected-share \u2026] [--tau 0.1 | --fixed [--planned N]] [--allow-private]
 
 analyze modes:
   fixed        one look at a planned sample: two-proportion z-test, p-value and CI. Default for --control/--variant.
@@ -55474,6 +55486,8 @@ analyze modes:
                              (default control). Amplitude's funnel API does not list the flag's variants, so a
                              missing third arm of a multi-arm experiment cannot be detected
 --start, --end and --control-key apply only to amplitude; PostHog and GrowthBook use the experiment's own window.
+--allow-private  lets a self-hosted PostHog or GrowthBook on a private network address (10.x, 192.168.x, ...) be
+                 reached; without it the guard refuses LAN hosts. Plain http is then accepted for a private IP literal.
 Requests go through Jourilo's network guard and HTTPS_PROXY / NO_PROXY. A rate limit (429), a failed page or a
 missing variant makes the data incomplete: analyze then refuses and says why, instead of computing on partial numbers.
 

@@ -3,7 +3,7 @@
 // note instead of numbers. Keys travel only in request headers and are scrubbed from every message as a last resort.
 import { JouriloError } from '../../core/errors.js';
 import { GuardBlockedError, guardedFetch } from '../../core/net-guard.js';
-import { type AddressPolicy, isLocalHostname, type Upstream } from '../../core/url-safety.js';
+import { type AddressPolicy, classifyIp, isLocalHostname, type Upstream } from '../../core/url-safety.js';
 import { VERSION } from '../../core/version.js';
 import type { ExperimentData } from './types.js';
 
@@ -26,6 +26,11 @@ export interface AdapterDeps {
   end?: string;
   /** `--control-key`: the control variant's key, Amplitude only (default `control`). */
   controlKey?: string;
+  /**
+   * `--allow-private`: the user vouches for a self-hosted vendor on a private network (LAN) address. Without it the
+   * guard refuses every LAN host. Metadata and reserved addresses stay refused.
+   */
+  allowPrivate?: boolean;
 }
 
 /** Raised while reading: the data is partial. The adapter returns what it has with `complete: false`. */
@@ -47,9 +52,10 @@ export function requireEnv(env: AdapterDeps['env'], name: string, what: string):
 
 /**
  * The vendor host from `name`, else `fallback`. Only http(s) without credentials; plain http only for a local host,
- * so a key never crosses the network unencrypted. The value is not repeated in errors.
+ * so a key never crosses the network unencrypted; with `allowPrivate` also for a private IP literal (a self-hosted
+ * instance on the LAN, where a certificate is rare). The value is not repeated in errors.
  */
-export function hostFrom(env: AdapterDeps['env'], name: string, fallback: string): URL {
+export function hostFrom(env: AdapterDeps['env'], name: string, fallback: string, allowPrivate = false): URL {
   const raw = env[name]?.trim() || fallback;
   let url: URL;
   try {
@@ -62,8 +68,15 @@ export function hostFrom(env: AdapterDeps['env'], name: string, fallback: string
       'USAGE',
       `${name} must not contain credentials; keys are read from their own variables.`,
     );
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLocalHostname(url.hostname)))
-    throw new JouriloError('USAGE', `${name} must be an https:// URL (plain http only for a local host).`);
+  const lanLiteral = allowPrivate && classifyIp(url.hostname) === 'private';
+  if (
+    url.protocol !== 'https:' &&
+    !(url.protocol === 'http:' && (isLocalHostname(url.hostname) || lanLiteral))
+  )
+    throw new JouriloError(
+      'USAGE',
+      `${name} must be an https:// URL (plain http only for a local host${allowPrivate ? ' or a private IP address' : ''}).`,
+    );
   url.pathname = url.pathname.replace(/\/+$/, '');
   url.search = '';
   url.hash = '';
@@ -76,14 +89,16 @@ export function scrub(text: string, secrets: string[]): string {
   return out;
 }
 
-/** The guarded fetch with a per-host policy: a local vendor host may use loopback, nothing may use the LAN. */
-export function defaultFetch(proxy?: AdapterDeps['proxy']): AdapterFetch {
+/**
+ * The guarded fetch with a per-host policy: a local vendor host may use loopback; the LAN only with `allowPrivate`.
+ */
+export function defaultFetch(proxy?: AdapterDeps['proxy'], allowPrivate = false): AdapterFetch {
   return (url, init) => {
     const u = new URL(url);
     const upstream = proxy?.(u);
     const policy: AddressPolicy = {
       target: isLocalHostname(u.hostname) ? 'local' : 'public',
-      allowPrivate: false,
+      allowPrivate,
       ...(upstream ? { upstream } : {}),
     };
     return guardedFetch(url, policy, { ...init, timeoutMs: TIMEOUT_MS, maxBytes: MAX_BYTES });
@@ -105,7 +120,7 @@ export function client(
   deps: AdapterDeps,
   auth: { header: string; keyVars: string; secrets: string[] },
 ): Client {
-  const fetch = deps.fetch ?? defaultFetch(deps.proxy);
+  const fetch = deps.fetch ?? defaultFetch(deps.proxy, deps.allowPrivate === true);
   const clean = (t: string) => scrub(t, auth.secrets);
   const send = async (method: 'GET' | 'POST', url: string, body?: unknown): Promise<unknown> => {
     const path = new URL(url).pathname;

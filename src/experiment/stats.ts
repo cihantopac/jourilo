@@ -250,10 +250,21 @@ export function analyze(
   };
 }
 
+/** Fewest visitors each arm needs before a sequential stop is possible. */
+export const SEQUENTIAL_MIN_VISITORS = 100;
+/** Fewest conversions each arm needs before a sequential stop is possible. */
+export const SEQUENTIAL_MIN_CONVERSIONS = 5;
+
 export interface SequentialResult {
   /** Always-valid p-value for "no difference" (running minimum of 1/Λ over the looks this call knows about). */
   pValue: number;
   decision: 'continue' | 'stop-b-better' | 'stop-a-better';
+  /**
+   * False while an arm has fewer than SEQUENTIAL_MIN_VISITORS visitors or SEQUENTIAL_MIN_CONVERSIONS conversions:
+   * the decision is then `continue` whatever the p-value says, because the normal approximation cannot be trusted
+   * on so little data.
+   */
+  enoughData: boolean;
   /** Always-valid (1 − alpha) confidence sequence for rate(b) − rate(a), as an interval at this look. */
   confidenceInterval: [number, number];
 }
@@ -276,6 +287,10 @@ export interface SequentialResult {
  * and can rise between looks. Pass the previous look's result as `previous` to get the running minimum (p never
  * increases) and the running intersection of the intervals (the interval never widens). If the intersection is empty
  * (the normal approximation drifted), the previous interval is kept.
+ *
+ * A stop also needs a minimum sample: each arm at least SEQUENTIAL_MIN_VISITORS visitors and
+ * SEQUENTIAL_MIN_CONVERSIONS conversions. Below it the decision is `continue` and `enoughData` is false; the
+ * p-value and interval are still reported.
  */
 export function sequentialTest(
   a: { n: number; x: number },
@@ -324,10 +339,13 @@ export function sequentialTest(
     const hi = Math.min(interval[1], previous.confidenceInterval[1]);
     interval = lo <= hi ? [lo, hi] : [...previous.confidenceInterval];
   }
+  const enoughData = [a, b].every(
+    (arm) => arm.n >= SEQUENTIAL_MIN_VISITORS && arm.x >= SEQUENTIAL_MIN_CONVERSIONS,
+  );
   let decision: SequentialResult['decision'] = 'continue';
-  if (pValue <= alpha) {
+  if (enoughData && pValue <= alpha) {
     const bBetter = interval[0] > 0 || (interval[1] >= 0 && diff > 0);
     decision = bBetter ? 'stop-b-better' : 'stop-a-better';
   }
-  return { pValue, decision, confidenceInterval: interval };
+  return { pValue, decision, confidenceInterval: interval, enoughData };
 }

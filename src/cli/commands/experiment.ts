@@ -5,7 +5,15 @@ import type { ProductProfile } from '../../discovery/repo.js';
 import { ADAPTERS, adapterFor } from '../../experiment/adapters/index.js';
 import type { AnalyticsAdapter, ExperimentData } from '../../experiment/adapters/types.js';
 import { planExperiment, planMarkdown } from '../../experiment/plan.js';
-import { analyze, GUARDRAIL_NOTE, sampleSize, sequentialTest, srmNote } from '../../experiment/stats.js';
+import {
+  analyze,
+  GUARDRAIL_NOTE,
+  SEQUENTIAL_MIN_CONVERSIONS,
+  SEQUENTIAL_MIN_VISITORS,
+  sampleSize,
+  sequentialTest,
+  srmNote,
+} from '../../experiment/stats.js';
 import { type Command, type CommandResult, type Context, flag, proxyFrom, str } from '../framework.js';
 
 function numOpt(ctx: Context, key: string): number | undefined {
@@ -55,7 +63,9 @@ const VENDOR: Record<AnalyticsAdapter['name'], string> = {
  */
 export async function armsFrom(ctx: Context): Promise<{ control: Arm; variant: Arm; source?: Source }> {
   const from = str(ctx, 'from');
-  const fromOnly = ['metric', 'start', 'end', 'control-key'].filter((k) => str(ctx, k) !== undefined);
+  const fromOnly = ['metric', 'start', 'end', 'control-key']
+    .filter((k) => str(ctx, k) !== undefined)
+    .concat(flag(ctx, 'allow-private') ? ['allow-private'] : []);
   if (from === undefined) {
     if (fromOnly.length)
       throw new JouriloError('USAGE', `--${fromOnly[0]} applies only with --from <adapter>:<id>.`);
@@ -82,6 +92,7 @@ export async function armsFrom(ctx: Context): Promise<{ control: Arm; variant: A
   const adapter = adapterFor(name, {
     env: process.env,
     proxy: (url) => proxyFrom(ctx, url),
+    allowPrivate: flag(ctx, 'allow-private'),
     ...(opt('metric') !== undefined ? { metric: opt('metric')! } : {}),
     ...(opt('start') !== undefined ? { start: opt('start')! } : {}),
     ...(opt('end') !== undefined ? { end: opt('end')! } : {}),
@@ -151,9 +162,11 @@ function sequentialAnalysis(c: Arm, v: Arm, fixed: ReturnType<typeof analyze>, t
   // The SRM warning still applies; the planned-sample (peeking) warning does not, since every look is valid.
   if (fixed.srm.mismatch) interpretation.push(srmNote(fixed.srm));
   interpretation.push(
-    s.decision === 'continue'
-      ? `Continue: ${rates}, always-valid ${p} > ${alpha}; the ${level} confidence sequence for the difference (${ci}) still includes zero. Check again as data arrives; every look is allowed.`
-      : `Stop: ${s.decision === 'stop-b-better' ? v.name : c.name} is better (${rates}, always-valid ${p} ≤ ${alpha}; ${level} confidence sequence for the difference ${ci}). This holds however often the experiment was checked.`,
+    !s.enoughData
+      ? `Not enough data: ${rates}. A sequential stop needs at least ${SEQUENTIAL_MIN_VISITORS} visitors and ${SEQUENTIAL_MIN_CONVERSIONS} conversions in each arm; keep collecting. (The always-valid ${p} and the ${level} confidence sequence ${ci} are shown for reference only.)`
+      : s.decision === 'continue'
+        ? `Continue: ${rates}, always-valid ${p} > ${alpha}; the ${level} confidence sequence for the difference (${ci}) still includes zero. Check again as data arrives; every look is allowed.`
+        : `Stop: ${s.decision === 'stop-b-better' ? v.name : c.name} is better (${rates}, always-valid ${p} ≤ ${alpha}; ${level} confidence sequence for the difference ${ci}). This holds however often the experiment was checked.`,
     `Sequential test (mSPRT, mixing τ = ${tau}): valid at every look, so peeking is safe, at the cost of a wider interval than a fixed-horizon test at its planned sample. Each run is one look with no memory: once a look says stop, act on it rather than waiting for a later look to agree.`,
     GUARDRAIL_NOTE,
   );
@@ -165,6 +178,7 @@ function sequentialAnalysis(c: Arm, v: Arm, fixed: ReturnType<typeof analyze>, t
     relativeLift: fixed.relativeLift,
     pValue: s.pValue,
     decision: s.decision,
+    enoughData: s.enoughData,
     confidenceInterval: s.confidenceInterval,
     alpha,
     tau,
@@ -226,6 +240,7 @@ export const experiment: Command = {
     start: { type: 'string' },
     end: { type: 'string' },
     'control-key': { type: 'string' },
+    'allow-private': { type: 'boolean' },
     sequential: { type: 'boolean' },
     fixed: { type: 'boolean' },
     tau: { type: 'string' },
@@ -236,7 +251,7 @@ export const experiment: Command = {
   analyze  --control 120/2400 --variant 150/2380 [--alpha 0.05] [--expected-share 0.5] [--planned N]
            [--sequential [--tau 0.1]]
   analyze  --from <adapter>:<id> [--metric M] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--control-key K]
-           [--alpha …] [--expected-share …] [--tau 0.1 | --fixed [--planned N]]
+           [--alpha …] [--expected-share …] [--tau 0.1 | --fixed [--planned N]] [--allow-private]
 
 analyze modes:
   fixed        one look at a planned sample: two-proportion z-test, p-value and CI. Default for --control/--variant.
@@ -261,6 +276,8 @@ analyze modes:
                              (default control). Amplitude's funnel API does not list the flag's variants, so a
                              missing third arm of a multi-arm experiment cannot be detected
 --start, --end and --control-key apply only to amplitude; PostHog and GrowthBook use the experiment's own window.
+--allow-private  lets a self-hosted PostHog or GrowthBook on a private network address (10.x, 192.168.x, ...) be
+                 reached; without it the guard refuses LAN hosts. Plain http is then accepted for a private IP literal.
 Requests go through Jourilo's network guard and HTTPS_PROXY / NO_PROXY. A rate limit (429), a failed page or a
 missing variant makes the data incomplete: analyze then refuses and says why, instead of computing on partial numbers.
 
