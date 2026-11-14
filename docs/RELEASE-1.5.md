@@ -27,13 +27,13 @@ task, no new dependency.
 
 Measured once on the release branch (macOS, Node 22).
 
-| Check                                                                           | Result               |
-| ------------------------------------------------------------------------------- | -------------------- |
-| `npm run ci` (lint, typecheck, build, unit and browser tests, dist check)       | TBD                  |
-| Fixture benchmark (`npm run bench`)                                             | TBD                  |
-| Independent W3C ACT benchmark                                                   | not re-run for 1.5.0 |
-| `scripts/smoke-pack.mjs` (clean install from the packed tarball, every command) | TBD                  |
-| `claude plugin validate` (marketplace and plugin, strict)                       | TBD                  |
+| Check                                                                           | Result                                                                                                |
+| ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `npm run ci` (lint, typecheck, build, unit and browser tests, dist check)       | 53 files, 842 tests green (1.4.0: 51 files, 761 tests); one stale progress assertion fixed and re-run |
+| Fixture benchmark (`npm run bench`)                                             | 91/91 found, 0 false positives, source location 10/10 (1.4.0: 90/90)                                  |
+| Independent W3C ACT benchmark                                                   | not re-run for 1.5.0                                                                                  |
+| `scripts/smoke-pack.mjs` (clean install from the packed tarball, every command) | passed, 31 files, 1580 kB                                                                             |
+| `claude plugin validate` (marketplace and plugin, strict)                       | passed                                                                                                |
 
 No real-project audit was repeated for 1.5.0. No automated run shows WCAG conformance.
 
