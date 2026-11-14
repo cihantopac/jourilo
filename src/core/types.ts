@@ -105,6 +105,8 @@ export interface Finding {
    * volatile tokens such as CSP nonces ignored. Absent for a finding seen on one page.
    */
   pages?: string[];
+  /** Occurrences on each page of `pages` (by URL), so a comparison can look at one page at a time. */
+  pageOccurrences?: Record<string, number>;
   viewport?: string;
   journey?: string;
   description: string;

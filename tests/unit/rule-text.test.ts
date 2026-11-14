@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { RULES } from '../../src/audit/rules/registry.js';
 import { RULE_TEXT_TR } from '../../src/report/rule-text-tr.js';
@@ -32,6 +34,23 @@ const ASCII_SUBSTITUTES: RegExp[] = [
 
 function asciiSubstitutes(text: string): string[] {
   return ASCII_SUBSTITUTES.filter((re) => re.test(text)).map((re) => re.source);
+}
+
+const SOURCE = ['src/audit/rules', 'src/journeys', 'src/audit']
+  .flatMap((dir) => readdirSync(dir).map((f) => join(dir, f)))
+  .filter((f) => f.endsWith('.ts'))
+  .map((f) => readFileSync(f, 'utf8'))
+  .join('\n');
+
+/** Whether the rule's English `field` interpolates a value (`${...}`) in the source that builds the finding. */
+function interpolates(rule: string, field: string): boolean {
+  // The field's expression, from `field:` to the next property of the same object at the same indent.
+  const re = new RegExp(
+    `ruleId: '${rule.replace(/[/]/g, '\\/')}',[\\s\\S]*?\\n(\\s+)${field}:\\s*((?:[^\\n]*\\n)+?)(?=\\1[A-Za-z]+:|\\1\\}\\)|\\1\\},?\\n)`,
+    'g',
+  );
+  for (const m of SOURCE.matchAll(re)) if (m[2]!.includes('${')) return true;
+  return false;
 }
 
 describe('Turkish rule texts', () => {
@@ -75,5 +94,20 @@ describe('Turkish rule texts', () => {
       })
       .map(([id]) => id);
     expect(hits).toEqual([]);
+  });
+
+  // A rule whose English title, impact or recommendation interpolates a value of the finding must list that field in
+  // `dynamic`; otherwise the Turkish report would replace the English text and drop the value (F-dynamic).
+  it('every field built from finding values is listed in `dynamic`', () => {
+    const missing: string[] = [];
+    for (const [id, t] of Object.entries(RULE_TEXT_TR))
+      for (const field of ['title', 'impact', 'recommendation'] as const)
+        if (interpolates(id, field) && !t.dynamic?.includes(field)) missing.push(`${id}.${field}`);
+    expect(missing).toEqual([]);
+  });
+
+  it('the dynamic scan sees an interpolated field and ignores a literal one (control)', () => {
+    expect(interpolates('jourilo/button-implicit-submit', 'title')).toBe(true);
+    expect(interpolates('jourilo/focus-visible', 'title')).toBe(false);
   });
 });

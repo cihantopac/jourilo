@@ -37,6 +37,8 @@ manifest is described there as `#/$defs/manifest`. The TypeScript source of trut
   capture order; `url` is the first of them. Only `jourilo/console-errors` and `jourilo/failed-requests` collapse this
   way, within one journey (or none).
 - Such a finding is counted once in `summary`; `occurrences` is the sum over its pages and `severity` the highest.
+  `pageOccurrences` (optional, since 1.5.0) gives the occurrences on each page by URL; run comparison uses it to
+  compare a collapse with another run page by page, so a collapse that exists in only one run is not a change.
 - Its `fingerprint` depends on the rule, the normalized evidence and the journey, not on the pages, so it stays stable
   whichever pages a run sampled. A finding seen on one page has no `pages` and keeps the per-page fingerprint of
   earlier releases.
@@ -45,12 +47,14 @@ manifest is described there as `#/$defs/manifest`. The TypeScript source of trut
 - Run comparison (`jourilo verify`, `compare`, `optimize`) keeps the identity these two rules had before: rule, journey
   and page. A finding matches a finding of the same rule and journey that shares at least one page, whatever the
   evidence, so a collapse in either run, or a page that now logs fewer or more errors, is persisting (and changed),
-  never fixed plus new. A finding is fixed only when no finding of its rule and journey shows on any of its pages and
+  never fixed plus new (it is "changed" only when severity or the occurrences on a shared page differ). A finding is fixed only when no finding of its rule and journey shows on any of its pages and
   every one of them was checked again. Trends count it on each of its pages. The field is absent in runs made before
   1.4.0.
-- Dismissals are keyed by fingerprint. A dismissal of a per-page finding does not hide the collapsed one, and the
-  collapsed fingerprint changes when the set of evidence changes (for example one more error on every page), or turns
-  back into the per-page fingerprint when a run samples only one affected page.
+- Dismissals are keyed by fingerprint. Per-page dismissals made before the finding collapsed keep the collapsed
+  finding dismissed when every one of its pages was dismissed for the same rule (a dismissal of a collapsed finding
+  records its `pages` and never reaches a single page). The collapsed fingerprint changes when the set of evidence
+  changes (for example one more error on every page), or turns back into the per-page fingerprint when a run samples
+  only one affected page; those are different findings and come back.
 
 ## Budgets
 

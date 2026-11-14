@@ -466,7 +466,9 @@ async function applyThrottle(page: Page): Promise<boolean> {
 export function originFreeName(url: string, primaryOrigin?: string): string {
   const u = new URL(url);
   const tag = primaryOrigin && u.origin !== primaryOrigin ? `\u0000${u.origin}` : '';
-  return shortHash(`${u.pathname}${u.search}${tag}`);
+  // The fragment is part of the name: `/#/pricing` and `/#/docs` are different pages of a hash-routed app, and
+  // `/a?x=1` and `/a?x=1#frag` must not write one file.
+  return shortHash(`${u.pathname}${u.search}${u.hash ? `#${u.hash.slice(1)}` : ''}${tag}`);
 }
 
 /** The screenshots a capture of `url` in `vp` writes, relative to the run directory. */

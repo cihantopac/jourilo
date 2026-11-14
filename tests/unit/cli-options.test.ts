@@ -256,6 +256,10 @@ describe('progress lines', () => {
 describe('--budget', () => {
   it('parses known metrics and rejects unknown names or non-numbers with USAGE', () => {
     expect(parseBudgets(undefined)).toEqual([]);
+    expect(parseBudgets('CLS=.1,LCP=0')).toEqual([
+      { metric: 'CLS', limit: 0.1 },
+      { metric: 'LCP', limit: 0 },
+    ]);
     expect(parseBudgets('LCP=2000,CLS=0.05, tbt=300')).toEqual([
       { metric: 'LCP', limit: 2000 },
       { metric: 'CLS', limit: 0.05 },
@@ -268,6 +272,11 @@ describe('--budget', () => {
       'LCP=fast',
       'LCP=-1',
       'LCP=Infinity',
+      'LCP=0x10',
+      'LCP=1e3',
+      'LCP=+5',
+      'LCP=1_000',
+      'LCP=.',
       'FOO=1',
       'LCP=1,LCP=2',
       'LCP=1,',

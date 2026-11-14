@@ -194,6 +194,7 @@ function dismiss(ctx: Context) {
     fingerprint: fp,
     ruleId: f.ruleId,
     url: f.url,
+    ...(f.pages?.length ? { pages: f.pages } : {}),
     reason: excerpt(reason, 400),
     by,
     at: new Date().toISOString(),

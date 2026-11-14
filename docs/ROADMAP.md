@@ -128,10 +128,8 @@ there.
 Deferred from the 1.4.0 reviews, grouped; each is a small, known gap.
 
 - **Discovery and causes:** keep hand-written long-line files out of the regex fallback; Angular `loadComponent` records.
-- **Fixers:** edit an existing `html, body {}` rule; add a rect and screenshot to implicit-submit evidence.
-- **Trends:** LCP and CLS from every capture; say when the page set changed between runs.
 - **Experiments:** variants of an Amplitude flag (needs the Experiment management API and a second key).
 - **Vocabulary:** stop the financial list refusing Italian "Ordina per" (sort) and similar.
 - **Network:** pool plain-HTTP keep-alive connections again in the direct case.
 - **WebKit:** tell Jourilo's own style refusal and exceptions from the site's without a time window.
-- **Findings:** carry a dismissal across a collapse; collapse a cause seen on one page of one run and many in another.
+- **Findings:** collapse a cause seen on one page of one run and many in another.

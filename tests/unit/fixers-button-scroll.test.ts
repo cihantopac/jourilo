@@ -94,6 +94,20 @@ describe('scroll-padding fixer', () => {
     );
   });
 
+  it('edits an existing `html, body` rule instead of appending a new html rule', () => {
+    const css = 'html, body {\n  margin: 0;\n}\n';
+    const root = repo({ 'a.css': css });
+    const [plan] = planFixes([barFinding('a.css', sticky)], root);
+    expect(plan!.edits[0]!.after).toBe('html, body {\n  margin: 0;\n  scroll-padding-top: 56px;\n}\n');
+  });
+
+  it('does not take `body` or `.html` alone for the html rule (control)', () => {
+    const css = 'body, .html-x {\n  margin: 0;\n}\n';
+    const root = repo({ 'a.css': css });
+    const [plan] = planFixes([barFinding('a.css', sticky)], root);
+    expect(plan!.edits[0]!.after).toBe(`${css}\nhtml {\n  scroll-padding-top: 56px;\n}\n`);
+  });
+
   it('is idempotent once the value is there', () => {
     const root = repo({ 'a.css': 'html { scroll-padding-top: 56px; }\n' });
     expect(planFixes([barFinding('a.css', sticky)], root)).toEqual([]);

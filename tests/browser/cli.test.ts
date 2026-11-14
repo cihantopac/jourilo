@@ -327,6 +327,22 @@ describe('cli no page loaded', () => {
 });
 
 describe('cli unresolvable local name', () => {
+  it('a budget does not change exit 5 when no page loaded', () => {
+    const r = jourilo(
+      'audit',
+      'http://does-not-exist.invalid/',
+      '--pages',
+      '1',
+      '--viewports',
+      'desktop',
+      '--budget',
+      'LCP=1',
+      '--json',
+      '-q',
+    );
+    expect(r.status).toBe(5);
+    expect(r.stdout).toContain('"outcome":"no-page-loaded"');
+  }, 120_000);
   it('an unresolvable .test name exits 5 quickly', () => {
     const t0 = Date.now();
     const r = jourilo(
@@ -1236,6 +1252,12 @@ describe('cli stop early', () => {
     },
     120_000,
   );
+
+  it('a budget never turns a stopped run into exit 1: partial stays 6', async () => {
+    const r = await auditUntil([...site, '--max-duration', '1', '--budget', 'LCP=1'], null);
+    expect(r.code).toBe(6);
+    expect(r.run.outcome).toBe('partial');
+  }, 120_000);
 
   it('--max-duration stops the run', async () => {
     const r = await auditUntil([...site, '--max-duration', '1'], null);

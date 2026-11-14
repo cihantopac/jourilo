@@ -15,7 +15,7 @@ export const runs: Command = {
   details: `Subcommands:
   trend            Defects per capture, critical and serious defects, LCP and CLS for every page and viewport across the
                    runs of one target, oldest first. Partial and no-page-loaded runs are left out and counted. A finding with no
-                   viewport is counted at every viewport of its page.
+                   viewport is counted at every viewport of its page. LCP and CLS are the median over a page's captures in a run.
 
 Options:
   --target URL     With trend, the target to follow (default: the target of the latest run)`,
@@ -39,13 +39,19 @@ async function runsTrend(ctx: Context) {
   const list = ctx.ws.listRuns({ trend: true });
   const target = str(ctx, 'target') ?? list[list.length - 1]?.target;
   if (!target)
-    return { data: { target: null, rows: [], used: 0, skipped: 0 }, text: `No runs in ${ctx.ws.runsDir}.` };
+    return {
+      data: { target: null, rows: [], used: 0, skipped: 0, pageSetChanged: false },
+      text: `No runs in ${ctx.ws.runsDir}.`,
+    };
   const t = trendReport(
     list.flatMap((r) => (r.trend ? [r.trend] : [])),
     { target },
   );
   const lines = [
     `Trend for ${target}: ${t.used} run(s)${t.skipped ? `, ${t.skipped} partial or empty run(s) left out` : ''}.`,
+    ...(t.pageSetChanged
+      ? ['The pages audited changed between these runs; a row only follows the runs that captured it.']
+      : []),
     ...t.rows.map((r) => {
       const v = (pick: (p: (typeof r.points)[number]) => number | null) =>
         r.points.map((p) => pick(p) ?? '–').join(' → ');

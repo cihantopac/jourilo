@@ -9,6 +9,8 @@ export interface BudgetSpec {
 
 type BudgetResult = NonNullable<Run['budgets']>[number];
 
+const DECIMAL = /^(?:\d+(?:\.\d+)?|\.\d+)$/;
+
 /** `--budget LCP=2000,CLS=0.05`: metric names follow THRESHOLDS; values are in the metric's own unit. */
 export function parseBudgets(value: string | undefined): BudgetSpec[] {
   if (value === undefined) return [];
@@ -20,7 +22,8 @@ export function parseBudgets(value: string | undefined): BudgetSpec[] {
     const [name = '', raw, ...rest] = part.split('=').map((s) => s.trim());
     const metric = name.toUpperCase();
     if (!(metric in THRESHOLDS)) throw usage(`has an unknown metric "${name}" (known: ${known}).`);
-    const limit = Number(raw);
+    // Plain decimal only: Number() would also take "0x10", "1e3", "+5" and " 7 " as numbers.
+    const limit = raw !== undefined && DECIMAL.test(raw) ? Number(raw) : Number.NaN;
     if (raw === undefined || rest.length || raw === '' || !Number.isFinite(limit) || limit < 0)
       throw usage(`needs a number of 0 or more for ${metric} (got "${raw ?? ''}").`);
     if (specs.some((s) => s.metric === metric)) throw usage(`names ${metric} twice.`);

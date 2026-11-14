@@ -71,9 +71,9 @@ Stated so nobody mistakes silence for a pass.
   unchanged), so TTFB under `--throttle` is not meaningful for local targets.
 - INP is approximated from scripted journey interactions; it is not field INP.
 - A redirect chain is counted from the HTTP redirects (3xx) of the navigation to the page, at most 10 of them. A
-  redirect made by a script or a `<meta http-equiv="refresh">` is not counted. With `--extra-header`, redirects
-  from the target's origin are handed to the browser by Jourilo and may not be counted, so `jourilo/redirect-chain`
-  can be missed (never reported wrongly).
+  redirect made by a script or a `<meta http-equiv="refresh">` is not counted. With `--extra-header`, the first
+  redirect from the target's origin is answered by Jourilo and handed to the browser; it is counted like the others
+  (the browser's `response` event fires for it).
 - `--wait-for SELECTOR` costs time: a capture whose element never appears waits up to `--timeout` before it is
   audited as it is, and the extra lab visits of `--runs N` wait for the element only where the capture found it.
 - With `--throttle` and `--extra-header`, the target-origin responses Jourilo fetches itself and hands to the browser
@@ -260,23 +260,25 @@ Stated so nobody mistakes silence for a pass.
 - History in the report lists earlier runs of the same target with defect counts; that list does not normalize for
   different page sets or viewports. The trend table (and `runs trend`) does, per page and viewport and per capture,
   and leaves out partial and no-page-loaded runs. A finding with no viewport counts at every viewport of its page, LCP
-  and CLS come from the first capture, and a changed page set between runs is not flagged. Use `verify` for
-  like-for-like comparisons.
+  and CLS are the median over the captures of that page in a run, and a note says when the pages audited differ
+  between the runs (a row only follows the runs that captured it). Use `verify` for like-for-like comparisons.
 - Screenshots are capped at 12 000 px height.
-- Screenshot names come from the page's path and query, so `--url /a?x=1` and `--url /a?x=1#top` write the same file.
-  A form-probe screenshot is named from the page's final URL, so a start URL that redirects to another host gets a
-  name with an origin tag.
-- Before/after pairs in `compare` and `verify` reports need the full-page screenshot; a page kept only as a first
-  screen (`--evidence minimal`) has no pair image.
+- Screenshot names come from the page's path, query and fragment. A form-probe screenshot is named from the address
+  that was requested, like the capture, so a start URL that redirects to another host gets no origin tag.
+- Before/after pairs in `compare` and `verify` reports use the full-page screenshot, or the first screen when that is
+  all a page kept (`--evidence minimal`); a page with neither has no pair image.
 - `jourilo/console-errors` and `jourilo/failed-requests` findings that differ only in volatile tokens are collapsed
   into one finding with `pages` (F44 in [FIELD-FEEDBACK.md](FIELD-FEEDBACK.md)). Volatile tokens are CSP nonces and
   hashes, UUIDs, long hex and base64-like runs, chunk hashes in file names, cache-busting query values (`v`, `t`, `_`, `ts`, `cb`,
   `ver` and `nonce` with a number, version, hash or random-looking value, so `?v=2026.11.14` counts; and any query
   value of 8 or more digits, such as a date `?d=20261114`), runs of 10 or more digits, and the page's own URL. Readable
   identifiers (`Icon24ArrowLeftBold`) are kept. The rule errs toward not collapsing: evidence cut at 400 characters can
-  keep two findings apart, and a page that was redirected is not normalized. A value that is a real identifier but
-  looks volatile (a 10-digit order number, an 8-digit date) does collapse. A dismissal made before the collapse does not carry over,
-  because the fingerprint changes.
+  keep two findings apart; a page that was redirected reads `{page}` for both the address requested and the one it
+  ended on. A value that is a real identifier but
+  looks volatile (a 10-digit order number, an 8-digit date) does collapse. A dismissal made before the collapse carries
+  over when every page of the collapsed finding was dismissed for the same rule; with only some of them dismissed, the
+  collapsed finding is reported again. Comparing runs weighs a collapse page by page (`pageOccurrences`), so a cause
+  that is collapsed in only one of the two runs is not a change by itself.
 - On a partial run (stopped early, exit 6), `sample.audited` and the manifest's `scope.urls` count the pages that
   were planned, not only those that finished; `pages` lists what finished.
 - `jourilo verify` does not apply the baseline's `--budget`; it compares metrics with their ranges. Give `--budget`

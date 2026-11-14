@@ -91,8 +91,35 @@ describe('trends', () => {
     expect(home.points.map((p) => p.runId)).toEqual(['r1', 'r2']);
     expect(home.points.map((p) => p.defectsPerCapture)).toEqual([2, 1]);
     expect(home.points.map((p) => p.serious)).toEqual([1, 0.5]);
-    expect(home.points.map((p) => p.lcp)).toEqual([2000, 1800]);
+    expect(home.points.map((p) => p.lcp)).toEqual([2000, 1850]);
     expect(home.points[0]!.cls).toBeNull();
+  });
+
+  it('uses the median LCP and CLS over the captures of a page, and flags a changed page set', () => {
+    const cls = (v: number) => ({ name: 'CLS', value: v, unit: '', source: 'lab' }) as never;
+    const withCls = (p: PageCapture, v: number): PageCapture => ({ ...p, metrics: [...p.metrics, cls(v)] });
+    const a = mk('m1', '2026-11-01T10:00:00Z', [page('/', 'desktop', 1000)], []);
+    const b = mk(
+      'm2',
+      '2026-11-02T10:00:00Z',
+      [
+        withCls(page('/', 'desktop', 1000), 0.3),
+        withCls(page('/', 'desktop', 9000), 0.1),
+        withCls(page('/', 'desktop', 1200), 0.1),
+      ],
+      [],
+    );
+    const same = trendReport([a, b].map(trendSlice), { target: TARGET });
+    const p = same.rows[0]!.points[1]!;
+    expect(p.lcp).toBe(1200); // not the first capture (1000), not the mean
+    expect(p.cls).toBe(0.1);
+    expect(same.pageSetChanged).toBe(false);
+    // Even number of captures: the mean of the two middle values.
+    const c = mk('m3', '2026-11-03T10:00:00Z', [page('/', 'desktop', 1000), page('/', 'desktop', 2000)], []);
+    expect(trendReport([trendSlice(c)], { target: TARGET }).rows[0]!.points[0]!.lcp).toBe(1500);
+    // A page that appears in a later run changes the page set.
+    const d = mk('m4', '2026-11-04T10:00:00Z', [page('/', 'desktop', 1000), page('/about', 'desktop')], []);
+    expect(trendReport([a, d].map(trendSlice), { target: TARGET }).pageSetChanged).toBe(true);
   });
 
   it('runs trend --json lists one row per page and viewport', async () => {
@@ -153,7 +180,13 @@ describe('trends', () => {
     expect(ws.listRuns({ trend: true })[0]!.trend?.id).toBe('20261101-100000-aaaaaa');
     // --target picks another target; one with no runs is empty, and skips nothing.
     const none = (await exec(['trend', '--target', 'https://nothing.test/', '--json'])).data;
-    expect(none).toEqual({ target: 'https://nothing.test/', rows: [], used: 0, skipped: 0 });
+    expect(none).toEqual({
+      target: 'https://nothing.test/',
+      rows: [],
+      used: 0,
+      skipped: 0,
+      pageSetChanged: false,
+    });
     await expect(exec(['bogus'])).rejects.toMatchObject({ code: 'USAGE' });
   });
 
@@ -189,6 +222,6 @@ describe('trends', () => {
     const ctx = parse(runsCommand, ['trend', '--json', '--workspace', ws.root]);
     ctx.log = () => undefined;
     const res = await runsCommand.run(ctx);
-    expect(res.data).toEqual({ target: null, rows: [], used: 0, skipped: 0 });
+    expect(res.data).toEqual({ target: null, rows: [], used: 0, skipped: 0, pageSetChanged: false });
   });
 });

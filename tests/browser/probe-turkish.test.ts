@@ -12,10 +12,10 @@ afterAll(async () => {
   await browser?.close();
 });
 
-async function inventoryOf(html: string) {
+async function inventoryOf(html: string, lang = 'tr') {
   const page = await browser.newPage();
   try {
-    await page.setContent(`<!doctype html><html lang="tr"><body>${html}</body></html>`);
+    await page.setContent(`<!doctype html><html lang="${lang}"><body>${html}</body></html>`);
     const opts = { maxItems: 40, viewportWidth: 1280, viewportHeight: 800, lex: lexiconSources() };
     const probe = await page.evaluate(`(${PROBE_SOURCE.trim().replace(/;$/, '')})(${JSON.stringify(opts)})`);
     return (
@@ -34,6 +34,12 @@ const page = (upper: boolean) => {
     <form action="/sifre"><input type="email" name="e" aria-label="E-posta"><button>${t('şifre sıfırla')}</button></form>`;
 };
 
+const english = (upper: boolean) => {
+  const t = (s: string) => (upper ? s.toUpperCase() : s);
+  return `<p>${t('secure payment')}</p><p>${t('free trial')}</p>
+    <form action="/reset"><input type="email" name="e" aria-label="Email"><button>${t('reset password')}</button></form>`;
+};
+
 describe('in-page probe lexicon and Turkish capitals', () => {
   it('recognises the lower-case Turkish page (control)', async () => {
     const inv = await inventoryOf(page(false));
@@ -46,5 +52,13 @@ describe('in-page probe lexicon and Turkish capitals', () => {
     expect(inv.trustSignals).toContain('security');
     expect(inv.pricingSignals).toContain('free trial');
     expect(inv.forms[0]?.purpose).toBe('recovery');
+  }, 60_000);
+  it('recognises the English page in lower case and capitals (control: English "I" is untouched)', async () => {
+    for (const upper of [false, true]) {
+      const inv = await inventoryOf(english(upper), 'en');
+      expect(inv.trustSignals).toContain('security');
+      expect(inv.pricingSignals).toContain('free trial');
+      expect(inv.forms[0]?.purpose).toBe('recovery');
+    }
   }, 60_000);
 });

@@ -3,6 +3,7 @@
 // changes (another page or target) is a different finding and comes back.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fingerprintPath } from '../audit/finding.js';
 import { JouriloError } from './errors.js';
 import type { Finding } from './types.js';
 import type { Workspace } from './workspace.js';
@@ -11,6 +12,8 @@ export interface Dismissal {
   fingerprint: string;
   ruleId: string;
   url: string;
+  /** The pages of a finding collapsed over several pages (F44), when that is what was dismissed. */
+  pages?: string[];
   reason: string;
   by: 'user' | 'agent';
   at: string;
@@ -66,10 +69,21 @@ export function applyDismissals(
   list: Dismissal[],
 ): { kept: Finding[]; dismissed: DismissedFinding[] } {
   const byFp = new Map(list.map((d) => [d.fingerprint, d]));
+  // A dismissal made before the finding collapsed over several pages names one page. The collapsed finding keeps it
+  // dismissed when every one of its pages was dismissed for the same rule; a dismissal of a collapsed finding itself
+  // (it has `pages`) never reaches a single page.
+  const perPage = new Map(
+    list.filter((d) => !d.pages?.length).map((d) => [`${d.ruleId}\n${fingerprintPath(d.url)}`, d]),
+  );
+  const fromPages = (f: Finding): Dismissal | undefined => {
+    if (!f.pages || f.pages.length < 2) return undefined;
+    const hits = f.pages.map((p) => perPage.get(`${f.ruleId}\n${fingerprintPath(p)}`));
+    return hits.every(Boolean) ? hits[0] : undefined;
+  };
   const kept: Finding[] = [];
   const dismissed: DismissedFinding[] = [];
   for (const f of findings) {
-    const dismissal = byFp.get(f.fingerprint);
+    const dismissal = byFp.get(f.fingerprint) ?? fromPages(f);
     if (dismissal) dismissed.push({ ...f, dismissal });
     else kept.push(f);
   }

@@ -39843,6 +39843,7 @@ function toMetrics(v, spread, runs2 = 1) {
 
 // src/audit/budget.ts
 init_errors();
+var DECIMAL = /^(?:\d+(?:\.\d+)?|\.\d+)$/;
 function parseBudgets(value) {
   if (value === void 0) return [];
   const known = Object.keys(THRESHOLDS).join(", ");
@@ -39852,7 +39853,7 @@ function parseBudgets(value) {
     const [name = "", raw, ...rest] = part.split("=").map((s) => s.trim());
     const metric2 = name.toUpperCase();
     if (!(metric2 in THRESHOLDS)) throw usage2(`has an unknown metric "${name}" (known: ${known}).`);
-    const limit = Number(raw);
+    const limit = raw !== void 0 && DECIMAL.test(raw) ? Number(raw) : Number.NaN;
     if (raw === void 0 || rest.length || raw === "" || !Number.isFinite(limit) || limit < 0)
       throw usage2(`needs a number of 0 or more for ${metric2} (got "${raw ?? ""}").`);
     if (specs.some((s) => s.metric === metric2)) throw usage2(`names ${metric2} twice.`);
@@ -43514,8 +43515,9 @@ var STATE = `(controls, mode) => {
 }`;
 var WAIT_FOCUS_STABLE = `new Promise((resolve) => {
   let done = false;
-  const finish = () => { if (!done) { done = true; resolve(true); } };
-  setTimeout(finish, 250);
+  let timer = 0;
+  const finish = () => { if (!done) { done = true; clearTimeout(timer); resolve(true); } };
+  timer = setTimeout(finish, 250);
   const deepActive = () => { let a = document.activeElement; while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement; return a; };
   const start = performance.now();
   let last = deepActive();
@@ -44093,7 +44095,7 @@ async function applyThrottle(page) {
 function originFreeName(url, primaryOrigin) {
   const u = new URL(url);
   const tag = primaryOrigin && u.origin !== primaryOrigin ? `\0${u.origin}` : "";
-  return shortHash(`${u.pathname}${u.search}${tag}`);
+  return shortHash(`${u.pathname}${u.search}${u.hash ? `#${u.hash.slice(1)}` : ""}${tag}`);
 }
 function captureScreenshotFiles(url, vp, primaryOrigin) {
   const base2 = `${slug(new URL(url).pathname.replace(/^\/$/, "home"), 40)}-${originFreeName(url, primaryOrigin).slice(0, 6)}-${vp.name}`;
@@ -44373,11 +44375,14 @@ var RULES = [
 ];
 function normalizeVolatile(text, pageUrl) {
   let out = text;
-  if (pageUrl) {
-    const { urls, path: path2 } = pageForms(pageUrl);
-    for (const u of urls) out = out.replace(new RegExp(`${escapeRe(u)}${END}`, "g"), "{page}");
-    if (path2) out = out.replace(new RegExp(`(^|[\\s"'(=])${escapeRe(path2)}${END}`, "g"), "$1{page}");
-  }
+  const forms = (Array.isArray(pageUrl) ? pageUrl : [pageUrl]).filter((u) => !!u).map(pageForms);
+  const urls = forms.flatMap((f) => f.urls).sort((a, b) => b.length - a.length);
+  const paths = [...new Set(forms.flatMap((f) => f.path ? [f.path] : []))].sort(
+    (a, b) => b.length - a.length
+  );
+  for (const u of urls) out = out.replace(new RegExp(`${escapeRe(u)}${END}`, "g"), "{page}");
+  for (const path2 of paths)
+    out = out.replace(new RegExp(`(^|[\\s"'(=])${escapeRe(path2)}${END}`, "g"), "$1{page}");
   for (const [re, to] of RULES) out = typeof to === "string" ? out.replace(re, to) : out.replace(re, to);
   return out;
 }
@@ -44462,22 +44467,22 @@ var COLLAPSIBLE_RULES = ["jourilo/console-errors", "jourilo/failed-requests"];
 function pagesOf(f) {
   return f.pages?.length ? f.pages : [f.url];
 }
-function collapseKey(f) {
+function collapseKey(f, finalUrl) {
   if (!COLLAPSIBLE_RULES.includes(f.ruleId)) return void 0;
   const items = new Set(
     f.evidence.filter((e) => (e.type === "console" || e.type === "network") && e.snippet).map((e) => {
-      const at = e.type === "console" && e.note ? normalizeVolatile(e.note, f.url).replace(/^\{page\}(:\d+)+$/, "{page}") : "";
-      return `${e.type}:${normalizeVolatile(e.snippet, f.url)}${at ? ` @ ${at}` : ""}`;
+      const at = e.type === "console" && e.note ? normalizeVolatile(e.note, [f.url, finalUrl]).replace(/^\{page\}(:\d+)+$/, "{page}") : "";
+      return `${e.type}:${normalizeVolatile(e.snippet, [f.url, finalUrl])}${at ? ` @ ${at}` : ""}`;
     })
   );
   if (!items.size) return void 0;
   return [f.ruleId, f.journey ?? "", ...[...items].sort()].join("\n");
 }
-function collapseVolatileFindings(findings, pageOrder = []) {
+function collapseVolatileFindings(findings, pageOrder = [], finalUrls = {}) {
   const groups = /* @__PURE__ */ new Map();
   const slots = [];
   for (const f of findings) {
-    const key = collapseKey(f);
+    const key = collapseKey(f, finalUrls[f.url]);
     if (!key) {
       slots.push(f);
       continue;
@@ -44530,7 +44535,11 @@ function collapse(members, key) {
       ...first.reproduction,
       `The same evidence appears on the other ${n - 1} affected page(s).`
     ],
-    occurrences: members.reduce((sum, m) => sum + m.occurrences, 0)
+    occurrences: members.reduce((sum, m) => sum + m.occurrences, 0),
+    // Per page, so a later comparison can weigh a page against the same page in another run (see compareRuns).
+    pageOccurrences: Object.fromEntries(
+      pages.map((p) => [p, members.filter((m) => m.url === p).reduce((sum, m) => sum + m.occurrences, 0)])
+    )
   };
 }
 
@@ -44910,9 +44919,9 @@ function formFriction(obs, form) {
 }
 
 // src/core/dismissals.ts
-init_errors();
 import { existsSync as existsSync4, readFileSync as readFileSync3, writeFileSync as writeFileSync5 } from "node:fs";
 import { join as join8 } from "node:path";
+init_errors();
 var file = (ws) => join8(ws.root, "dismissed.json");
 function loadDismissals(ws) {
   if (!existsSync4(file(ws))) return [];
@@ -44952,10 +44961,20 @@ function removeDismissal(ws, fingerprint) {
 }
 function applyDismissals(findings, list2) {
   const byFp = new Map(list2.map((d) => [d.fingerprint, d]));
+  const perPage = new Map(
+    list2.filter((d) => !d.pages?.length).map((d) => [`${d.ruleId}
+${fingerprintPath(d.url)}`, d])
+  );
+  const fromPages = (f) => {
+    if (!f.pages || f.pages.length < 2) return void 0;
+    const hits = f.pages.map((p) => perPage.get(`${f.ruleId}
+${fingerprintPath(p)}`));
+    return hits.every(Boolean) ? hits[0] : void 0;
+  };
   const kept = [];
   const dismissed = [];
   for (const f of findings) {
-    const dismissal = byFp.get(f.fingerprint);
+    const dismissal = byFp.get(f.fingerprint) ?? fromPages(f);
     if (dismissal) dismissed.push({ ...f, dismissal });
     else kept.push(f);
   }
@@ -45526,7 +45545,7 @@ async function probeEmptySubmission(ctx, url, form, vp, policy, runDir, wait) {
     await page.waitForLoadState("networkidle", { timeout: 3e3 }).catch(() => void 0);
     await page.waitForTimeout(600);
     const intercepted = guard.since(submittedAt);
-    const shotFile = formScreenshotFile(url, form.selector, vp, wait?.primaryOrigin);
+    const shotFile = formScreenshotFile(wait?.nameUrl ?? url, form.selector, vp, wait?.primaryOrigin);
     await page.screenshot({
       path: `${runDir}/${shotFile}`,
       type: "jpeg",
@@ -45668,11 +45687,12 @@ var IMPLICIT_BUTTONS = `(sel) => {
     };
   });
 }`;
+var IMPLICIT_SHOT_MAX_HEIGHT = 12e3;
 var WATCH_SUBMIT = `(() => {
   window.__jouriloSubmits = 0;
   window.addEventListener('submit', (e) => { window.__jouriloSubmits++; e.preventDefault(); }, true);
 })()`;
-async function probeImplicitSubmit(ctx, url, form, vp, policy, wait) {
+async function probeImplicitSubmit(ctx, url, form, vp, policy, runDir, wait) {
   const page = await ctx.newPage();
   const guard = await installRequestGuard(page, {
     ...policy,
@@ -45708,6 +45728,24 @@ async function probeImplicitSubmit(ctx, url, form, vp, policy, wait) {
       await page.waitForTimeout(150);
       const submits = await page.evaluate("window.__jouriloSubmits").catch(() => 0);
       if (!submits) continue;
+      const rect = await page.evaluate(
+        `(() => { const b = document.querySelector(${JSON.stringify(b.selector)}); if (!b) return null; const r = b.getBoundingClientRect(); return r.width && r.height ? { x: Math.round(r.left + scrollX), y: Math.round(r.top + scrollY), width: Math.round(r.width), height: Math.round(r.height) } : null; })()`
+      ).catch(() => null);
+      let shotFile;
+      if (rect && rect.y + rect.height <= IMPLICIT_SHOT_MAX_HEIGHT) {
+        const file2 = toPosix(
+          `screenshots/implicit-submit-${shortHash(originFreeName(wait?.nameUrl ?? url, wait?.primaryOrigin), form.selector, b.selector).slice(0, 8)}-${vp.name}.jpg`
+        );
+        const shot = await page.screenshot({
+          path: `${runDir}/${file2}`,
+          type: "jpeg",
+          quality: 70,
+          fullPage: true,
+          mask: DEFAULT_MASK.map((m) => page.locator(m)),
+          maskColor: "#FF00FF"
+        }).catch(() => void 0);
+        if (shot) shotFile = file2;
+      }
       findings.push(
         makeFinding({
           ruleId: "jourilo/button-implicit-submit",
@@ -45729,6 +45767,7 @@ async function probeImplicitSubmit(ctx, url, form, vp, policy, wait) {
               type: "element",
               selector: b.selector,
               snippet: excerpt(`${b.markup}${b.name}`, 240),
+              ...rect && shotFile ? { file: shotFile, rect } : {},
               data: { buttonName: b.name, form: form.selector }
             }
           ],
@@ -45754,7 +45793,7 @@ async function probeImplicitSubmit(ctx, url, form, vp, policy, wait) {
 async function probeFormValidation(ctx, url, form, vp, policy, runDir, wait) {
   const out = await probeEmptySubmission(ctx, url, form, vp, policy, runDir, wait);
   if (out.result.outcome !== "blocked" && out.result.outcome !== "skipped" && out.result.outcome !== "error") {
-    const implicit = await probeImplicitSubmit(ctx, url, form, vp, policy, wait);
+    const implicit = await probeImplicitSubmit(ctx, url, form, vp, policy, runDir, wait);
     out.findings.push(...implicit.findings);
     if (implicit.limitation) out.limitation = implicit.limitation;
   }
@@ -48126,13 +48165,15 @@ async function runAudit(ws, opts) {
               {
                 ...opts.waitFor && o.load?.found !== false ? { waitFor: opts.waitFor } : {},
                 timeoutMs: opts.timeoutMs,
-                primaryOrigin
+                primaryOrigin,
+                // Named from the requested address, like the capture, so a redirect to another host does not tag it.
+                nameUrl: o.url
               }
             );
             const r = await withinGrace(probe, signal, async () => {
               await ctx.close();
               await settled(probe, 1e3);
-              rmSync3(join11(runDir, formScreenshotFile(o.finalUrl, form.selector, vp, primaryOrigin)), {
+              rmSync3(join11(runDir, formScreenshotFile(o.url, form.selector, vp, primaryOrigin)), {
                 force: true
               });
             });
@@ -48191,7 +48232,8 @@ async function runAudit(ws, opts) {
     }
     findings = collapseVolatileFindings(
       mergeFindings(findings),
-      observations.map((o) => o.url)
+      observations.map((o) => o.url),
+      Object.fromEntries(observations.filter((o) => o.finalUrl !== o.url).map((o) => [o.url, o.finalUrl]))
     );
     respectLockedBrand(findings, opts.context?.brand ?? null);
     if (opts.categories?.length) findings = findings.filter((f) => opts.categories.includes(f.category));
@@ -49529,6 +49571,7 @@ var EN = {
   "trend.title": "Trend per page and viewport",
   "trend.hint": "Defects are counted per capture (one page at one viewport), so runs audited with different --pages stay comparable. A finding with no viewport counts at every viewport of its page, and a finding seen on several pages with the same evidence counts on each of them. Values run from the oldest run to this one.",
   "trend.skipped": "{n} partial or empty run(s) left out: their numbers are not comparable.",
+  "trend.pagesChanged": "The pages audited changed between these runs; a row only follows the runs that captured it.",
   "trend.series": "Oldest to newest: {list}",
   "trend.noData": "no data",
   "th.trendDefects": "Defects per capture",
@@ -49754,6 +49797,7 @@ var TR = {
   "trend.title": "Sayfa ve g\xF6r\xFCn\xFCm alan\u0131 ba\u015F\u0131na e\u011Filim",
   "trend.hint": "Kusurlar yakalama ba\u015F\u0131na (bir sayfa, bir g\xF6r\xFCn\xFCm alan\u0131) say\u0131l\u0131r; bu y\xFCzden farkl\u0131 --pages ile yap\u0131lan \xE7al\u0131\u015Fmalar kar\u015F\u0131la\u015Ft\u0131r\u0131labilir kal\u0131r. G\xF6r\xFCn\xFCm alan\u0131 olmayan bir bulgu, sayfas\u0131n\u0131n her g\xF6r\xFCn\xFCm alan\u0131nda say\u0131l\u0131r; ayn\u0131 kan\u0131tla birden \xE7ok sayfada g\xF6r\xFClen bir bulgu da bu sayfalar\u0131n her birinde say\u0131l\u0131r. De\u011Ferler en eski \xE7al\u0131\u015Fmadan bu \xE7al\u0131\u015Fmaya do\u011Fru gider.",
   "trend.skipped": "{n} yar\u0131m veya bo\u015F \xE7al\u0131\u015Fma d\u0131\u015Far\u0131da b\u0131rak\u0131ld\u0131: say\u0131lar\u0131 kar\u015F\u0131la\u015Ft\u0131r\u0131lamaz.",
+  "trend.pagesChanged": "Denetlenen sayfalar bu \xE7al\u0131\u015Fmalar aras\u0131nda de\u011Fi\u015Fti; bir sat\u0131r yaln\u0131zca o sayfay\u0131 yakalayan \xE7al\u0131\u015Fmalar\u0131 izler.",
   "trend.series": "Eskiden yeniye: {list}",
   "trend.noData": "veri yok",
   "th.trendDefects": "Yakalama ba\u015F\u0131na kusur",
@@ -50622,7 +50666,7 @@ function topLevelHtmlRule(css) {
     } else if (c === "{") {
       if (depth === 0) {
         const sel = css.slice(boundary, i).replace(/\/\*[\s\S]*?\*\//g, "").trim();
-        if (sel === "html") {
+        if (sel.split(",").some((part) => part.trim() === "html")) {
           let d = 1;
           let j = i + 1;
           for (; j < css.length && d > 0; j++) {
@@ -51116,6 +51160,12 @@ var RULE_TEXT_TR = {
 // src/report/trends.ts
 init_trend_run();
 var metric = (p, name) => p.metrics.find((m) => m.name === name)?.value ?? null;
+function median(values) {
+  const v = values.filter((x) => x !== null).sort((a, b) => a - b);
+  if (!v.length) return null;
+  const m = v.length >> 1;
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+}
 function usable(run) {
   return (run.outcome ?? runOutcome(run)) === "complete";
 }
@@ -51123,6 +51173,7 @@ function trendReport(runs2, key) {
   const same = runs2.filter((r) => r.target === key.target).sort((a, b) => a.startedAt.localeCompare(b.startedAt));
   const good = same.filter(usable);
   const rows = /* @__PURE__ */ new Map();
+  const pageSets = /* @__PURE__ */ new Set();
   for (const run of good) {
     const captures = /* @__PURE__ */ new Map();
     for (const p of run.pages) {
@@ -51131,6 +51182,7 @@ function trendReport(runs2, key) {
 ${p.viewport}`;
       captures.set(k, [...captures.get(k) ?? [], p]);
     }
+    pageSets.add([...captures.keys()].sort().join("\n\n"));
     for (const [k, caps] of captures) {
       const first = caps[0];
       const mine = run.findings.filter(
@@ -51143,8 +51195,9 @@ ${p.viewport}`;
         at: run.startedAt,
         defectsPerCapture: mine.length / caps.length,
         serious: mine.filter((f) => f.severity === "critical" || f.severity === "serious").length / caps.length,
-        lcp: metric(first, "LCP"),
-        cls: metric(first, "CLS")
+        // The median over the captures of this page, not the first one: a single visit can be an outlier.
+        lcp: median(caps.map((c) => metric(c, "LCP"))),
+        cls: median(caps.map((c) => metric(c, "CLS")))
       });
       rows.set(k, row);
     }
@@ -51154,7 +51207,8 @@ ${p.viewport}`;
       (a, b) => a.url.localeCompare(b.url) || a.viewport.localeCompare(b.viewport)
     ),
     used: good.length,
-    skipped: same.length - good.length
+    skipped: same.length - good.length,
+    pageSetChanged: pageSets.size > 1
   };
 }
 
@@ -51445,7 +51499,7 @@ function contextHtml(run) {
 function historyHtml(run, history) {
   const same = history.filter((h) => h.target === run.target && h.id !== run.id && h.pages > 0).slice(-9);
   if (!same.length) return "";
-  const trend = trendHtml(
+  const trendBlock = trendHtml(
     trendReport(
       [...history.filter((h) => h.id !== run.id).flatMap((h) => h.trend ? [h.trend] : []), trendSlice(run)],
       run
@@ -51466,9 +51520,9 @@ function historyHtml(run, history) {
   return `<details class="fold"><summary>${T("history.title")}</summary><div class="tablewrap" tabindex="0" role="region"${attrs({ "aria-label": "history.title" })}><table class="history"><thead><tr><th>${T("th.run")}</th><th>${T("th.date")}</th>${SEVS.map((s) => `<th>${T(`sev.${s}`)}</th>`).join("")}<th>${T("th.defects")}</th></tr></thead><tbody>${rows.map((r, i) => {
     const t = total(r.defects);
     const prev = i ? total(rows[i - 1].defects) : t;
-    const trend2 = t < prev ? "good" : t > prev ? "poor" : "";
-    return `<tr${"current" in r ? ' class="current"' : ""}><td><code>${esc(r.id)}</code>${"current" in r ? ` ${T("history.this")}` : ""}</td><td>${esc(new Date(r.startedAt).toISOString().slice(0, 16).replace("T", " "))}</td><td>${r.defects.critical}</td><td>${r.defects.serious}</td><td>${r.defects.moderate}</td><td>${r.defects.minor}</td><td class="${trend2}"><span class="bar" style="width:${Math.round(t / max * 120)}px"></span> ${t}</td></tr>`;
-  }).join("")}</tbody></table></div><p class="muted">${T("history.hint")}</p>${trend}</details>`;
+    const trend = t < prev ? "good" : t > prev ? "poor" : "";
+    return `<tr${"current" in r ? ' class="current"' : ""}><td><code>${esc(r.id)}</code>${"current" in r ? ` ${T("history.this")}` : ""}</td><td>${esc(new Date(r.startedAt).toISOString().slice(0, 16).replace("T", " "))}</td><td>${r.defects.critical}</td><td>${r.defects.serious}</td><td>${r.defects.moderate}</td><td>${r.defects.minor}</td><td class="${trend}"><span class="bar" style="width:${Math.round(t / max * 120)}px"></span> ${t}</td></tr>`;
+  }).join("")}</tbody></table></div><p class="muted">${T("history.hint")}</p>${trendBlock}</details>`;
 }
 var numText = (n, digits = 0) => n === null ? "\u2013" : String(+n.toFixed(digits));
 function sparkline(values) {
@@ -51508,7 +51562,7 @@ function trendHtml(t) {
       3
     )}</tr>`
   ).join("");
-  return `<h4>${T("trend.title")}</h4><div class="tablewrap" tabindex="0" role="region"${attrs({ "aria-label": "trend.title" })}><table class="history trend"><thead><tr><th>${T("th.page")}</th><th>${T("th.viewport")}</th><th>${T("th.trendDefects")}</th><th>${T("th.trendSerious")}</th><th>LCP</th><th>CLS</th></tr></thead><tbody>${body}</tbody></table></div><p class="muted">${T("trend.hint")}${t.skipped ? ` ${T("trend.skipped", { n: t.skipped })}` : ""}</p>`;
+  return `<h4>${T("trend.title")}</h4><div class="tablewrap" tabindex="0" role="region"${attrs({ "aria-label": "trend.title" })}><table class="history trend"><thead><tr><th>${T("th.page")}</th><th>${T("th.viewport")}</th><th>${T("th.trendDefects")}</th><th>${T("th.trendSerious")}</th><th>LCP</th><th>CLS</th></tr></thead><tbody>${body}</tbody></table></div><p class="muted">${T("trend.hint")}${t.skipped ? ` ${T("trend.skipped", { n: t.skipped })}` : ""}${t.pageSetChanged ? ` ${T("trend.pagesChanged")}` : ""}</p>`;
 }
 function journeysHtml(run) {
   if (!run.journeys.length) return `<p class="empty">${T("j.none")}</p>`;
@@ -51554,7 +51608,7 @@ function compareHtml(cmp) {
   const pairs = cmp.head.pages.map((hp) => ({
     hp,
     bp: cmp.base.pages.find((p) => pathname(p.url) === pathname(hp.url) && p.viewport === hp.viewport)
-  })).filter((x) => x.bp?.screenshot && x.hp.screenshot).sort((a, b) => Number(fixedPaths.has(pathname(b.hp.url))) - Number(fixedPaths.has(pathname(a.hp.url)))).slice(0, 6);
+  })).filter((x) => x.bp && shotOf(x.bp) && shotOf(x.hp)).sort((a, b) => Number(fixedPaths.has(pathname(b.hp.url))) - Number(fixedPaths.has(pathname(a.hp.url)))).slice(0, 6);
   const visible = {
     responsive: 0,
     performance: 1,
@@ -51581,7 +51635,7 @@ ${cmp.dismissed.length ? `<p class="muted" style="margin:6px 0">${T("cmp.dismiss
 <p class="${reg ? "poor" : "muted"}" style="margin:6px 0"><strong>${reg ? T("cmp.regressed", { n: reg }) : T("cmp.ok")}</strong> ${T("cmp.baseline", { b: base2, bd: cmp.base.startedAt.slice(0, 16).replace("T", " "), h: cmp.head.id, hd: cmp.head.startedAt.slice(0, 16).replace("T", " ") })}</p>
 ${fixedCards.length ? `<section class="block"><div class="block-h"><h2>${T("cmp.fixed")}</h2></div><div class="cards">${fixedCards.join("")}</div></section>` : ""}
 ${pairs.length ? `<section class="block"><div class="block-h"><h2>${T("cmp.visual")}</h2></div><div class="pairs">${pairs.map(
-    ({ hp, bp }) => `<div class="pair"><h3>${esc(pathname(hp.url))} \xB7 ${esc(hp.viewport)}</h3><div class="two"><figure><figcaption>${T("cmp.before")}</figcaption><a href="${runFile(bp.screenshot, base2)}" target="_blank" rel="noopener"${attrs({ "aria-label": "shot.open" })}><img loading="lazy" alt="" src="${runFile(bp.screenshot, base2)}"></a></figure><figure class="after"><figcaption>${T("cmp.after")}</figcaption><a href="${runFile(hp.screenshot)}" target="_blank" rel="noopener"${attrs({ "aria-label": "shot.open" })}><img loading="lazy" alt="" src="${runFile(hp.screenshot)}"></a></figure></div></div>`
+    ({ hp, bp }) => `<div class="pair"><h3>${esc(pathname(hp.url))} \xB7 ${esc(hp.viewport)}</h3><div class="two"><figure><figcaption>${T("cmp.before")}</figcaption><a href="${runFile(shotOf(bp), base2)}" target="_blank" rel="noopener"${attrs({ "aria-label": "shot.open" })}><img loading="lazy" alt="" src="${runFile(shotOf(bp), base2)}"></a></figure><figure class="after"><figcaption>${T("cmp.after")}</figcaption><a href="${runFile(shotOf(hp))}" target="_blank" rel="noopener"${attrs({ "aria-label": "shot.open" })}><img loading="lazy" alt="" src="${runFile(shotOf(hp))}"></a></figure></div></div>`
   ).join("")}</div></section>` : ""}
 ${cmp.metrics.length ? `<section class="block"><div class="block-h"><h2>${T("cmp.metrics")}</h2></div><div class="tablewrap" tabindex="0" role="region"${attrs({ "aria-label": "cmp.metrics" })}><table><thead><tr><th>${T("th.page")}</th><th>${T("th.viewport")}</th><th>${T("th.metric")}</th><th>${T("th.before")}</th><th>${T("th.after")}</th><th>${T("th.delta")}</th><th>${T("th.verdict")}</th></tr></thead><tbody>${cmp.metrics.map(
     (m) => `<tr><td>${esc(pathname(m.url))}</td><td>${esc(m.viewport)}</td><td>${esc(m.name)}</td><td>${m.before}</td><td>${m.after}</td><td class="${m.verdict === "improved" ? "good" : m.verdict === "regressed" ? "poor" : ""}">${m.delta > 0 ? "+" : ""}${m.delta}</td><td><span class="verdict ${m.verdict}">${T(`v.${m.verdict}`)}</span></td></tr>`
@@ -55722,6 +55776,7 @@ function dismiss(ctx) {
     fingerprint: fp,
     ruleId: f.ruleId,
     url: f.url,
+    ...f.pages?.length ? { pages: f.pages } : {},
     reason: excerpt(reason, 400),
     by,
     at: (/* @__PURE__ */ new Date()).toISOString()
@@ -55847,12 +55902,27 @@ function metricVerdict(name, a, b) {
   return Math.abs(delta) < (RESOLUTION[name] ?? 0) ? "noise" : "unconfirmed";
 }
 var pathKey = fingerprintPath;
+function occurrencesDiffer(before, after) {
+  if (!before.pages && !after.pages) return before.occurrences !== after.occurrences;
+  const on = (f, key) => {
+    for (const p of pagesOf(f))
+      if (pathKey(p) === key) return f.pageOccurrences?.[p] ?? (f.pages ? void 0 : f.occurrences);
+    return void 0;
+  };
+  const shared = pagesOf(before).map(pathKey).filter((k) => pagesOf(after).some((p) => pathKey(p) === k));
+  const known = shared.flatMap((k) => {
+    const a = on(before, k);
+    const b = on(after, k);
+    return a === void 0 || b === void 0 ? [] : [[a, b]];
+  });
+  if (known.length) return known.some(([a, b]) => a !== b);
+  return pagesOf(before).length === pagesOf(after).length && before.occurrences !== after.occurrences;
+}
 function compareRuns(base2, head) {
   const before = new Map(base2.findings.map((f) => [f.fingerprint, f]));
   const after = new Map(head.findings.map((f) => [f.fingerprint, f]));
   const headPages = new Set(head.pages.filter((p) => p.status !== null).map((p) => pathKey(p.url)));
   const dismissedFps = new Set((head.dismissed ?? []).map((f) => f.fingerprint));
-  const dismissed = base2.findings.filter((f) => dismissedFps.has(f.fingerprint));
   const byPage = (findings) => {
     const index = /* @__PURE__ */ new Map();
     for (const f of findings) {
@@ -55877,14 +55947,17 @@ ${pathKey(p)}`)?.[0];
   };
   const inBase = byPage(base2.findings);
   const inHead = byPage(head.findings);
+  const inDismissed = byPage(head.dismissed ?? []);
+  const isDismissed = (f) => dismissedFps.has(f.fingerprint) || inDismissed(f) !== void 0;
+  const dismissed = base2.findings.filter(isDismissed);
   const counterpart = (f) => before.get(f.fingerprint) ?? inBase(f);
   const stillThere = (f) => after.has(f.fingerprint) || inHead(f) !== void 0;
   const fixed = base2.findings.filter(
-    (f) => !stillThere(f) && !dismissedFps.has(f.fingerprint) && pagesOf(f).every((p) => headPages.has(pathKey(p)))
+    (f) => !stillThere(f) && !isDismissed(f) && pagesOf(f).every((p) => headPages.has(pathKey(p)))
   );
   const introduced = head.findings.filter((f) => !counterpart(f));
   const persisting = head.findings.filter((f) => counterpart(f));
-  const changed = persisting.map((f) => ({ before: counterpart(f), after: f })).filter((c) => c.before.severity !== c.after.severity || c.before.occurrences !== c.after.occurrences);
+  const changed = persisting.map((f) => ({ before: counterpart(f), after: f })).filter((c) => c.before.severity !== c.after.severity || occurrencesDiffer(c.before, c.after));
   const metrics = [];
   for (const hp of head.pages) {
     const bp = base2.pages.find((p) => pathKey(p.url) === pathKey(hp.url) && p.viewport === hp.viewport);
@@ -56777,7 +56850,7 @@ var runs = {
   details: `Subcommands:
   trend            Defects per capture, critical and serious defects, LCP and CLS for every page and viewport across the
                    runs of one target, oldest first. Partial and no-page-loaded runs are left out and counted. A finding with no
-                   viewport is counted at every viewport of its page.
+                   viewport is counted at every viewport of its page. LCP and CLS are the median over a page's captures in a run.
 
 Options:
   --target URL     With trend, the target to follow (default: the target of the latest run)`,
@@ -56798,13 +56871,17 @@ async function runsTrend(ctx) {
   const list2 = ctx.ws.listRuns({ trend: true });
   const target = str(ctx, "target") ?? list2[list2.length - 1]?.target;
   if (!target)
-    return { data: { target: null, rows: [], used: 0, skipped: 0 }, text: `No runs in ${ctx.ws.runsDir}.` };
+    return {
+      data: { target: null, rows: [], used: 0, skipped: 0, pageSetChanged: false },
+      text: `No runs in ${ctx.ws.runsDir}.`
+    };
   const t = trendReport(
     list2.flatMap((r) => r.trend ? [r.trend] : []),
     { target }
   );
   const lines = [
     `Trend for ${target}: ${t.used} run(s)${t.skipped ? `, ${t.skipped} partial or empty run(s) left out` : ""}.`,
+    ...t.pageSetChanged ? ["The pages audited changed between these runs; a row only follows the runs that captured it."] : [],
     ...t.rows.map((r) => {
       const v = (pick2) => r.points.map((p) => pick2(p) ?? "\u2013").join(" \u2192 ");
       return `${r.url} [${r.viewport}]

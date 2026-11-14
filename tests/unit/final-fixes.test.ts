@@ -42,6 +42,11 @@ describe('origin-free evidence names', () => {
   it('originFreeName: a page on another origin than the target gets another name', () => {
     expect(originFreeName('https://other.test/pricing', a)).not.toBe(originFreeName(`${a}/pricing`, a));
   });
+  it('originFreeName: a fragment is part of the name, so /a?x=1 and /a?x=1#frag never share a file', () => {
+    expect(originFreeName(`${a}/a?x=1`, a)).not.toBe(originFreeName(`${a}/a?x=1#frag`, a));
+    expect(originFreeName(`${a}/#/pricing`, a)).not.toBe(originFreeName(`${a}/#/docs`, a));
+    expect(originFreeName(`${a}/a?x=1#frag`, a)).toBe(originFreeName(`${a}/a?x=1#frag`, a));
+  });
   it('originFreeName: two queries give different names', () => {
     expect(originFreeName(`${a}/search?q=1`, a)).not.toBe(originFreeName(`${a}/search?q=2`, a));
   });

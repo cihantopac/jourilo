@@ -85,7 +85,7 @@ async function probeEmptySubmission(
   vp: Viewport,
   policy: SafetyPolicy,
   runDir: string,
-  wait?: { waitFor?: string; timeoutMs?: number; primaryOrigin?: string },
+  wait?: { waitFor?: string; timeoutMs?: number; primaryOrigin?: string; nameUrl?: string },
 ): Promise<{ result: FormProbeResult; findings: Finding[] }> {
   const page = await ctx.newPage();
   // Simulated by default (nothing that sends data leaves the browser); a real submission only with --allow-submit,
@@ -158,7 +158,7 @@ async function probeEmptySubmission(
     await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => undefined);
     await page.waitForTimeout(600);
     const intercepted = guard.since(submittedAt);
-    const shotFile = formScreenshotFile(url, form.selector, vp, wait?.primaryOrigin);
+    const shotFile = formScreenshotFile(wait?.nameUrl ?? url, form.selector, vp, wait?.primaryOrigin);
     await page
       .screenshot({
         path: `${runDir}/${shotFile}`,
@@ -330,6 +330,9 @@ const IMPLICIT_BUTTONS = `(sel) => {
   });
 }`;
 
+/** A taller full-page screenshot is not taken for the accidental-submit evidence; the element evidence stays. */
+const IMPLICIT_SHOT_MAX_HEIGHT = 12_000;
+
 // Records the form's submit events and cancels them, so a probe click never navigates; the request guard still
 // stops any request the page's own handlers send.
 const WATCH_SUBMIT = `(() => {
@@ -350,7 +353,8 @@ async function probeImplicitSubmit(
   form: FormInfo,
   vp: Viewport,
   policy: SafetyPolicy,
-  wait?: { waitFor?: string; timeoutMs?: number },
+  runDir: string,
+  wait?: { waitFor?: string; timeoutMs?: number; primaryOrigin?: string; nameUrl?: string },
 ): Promise<{ findings: Finding[]; limitation?: string }> {
   const page = await ctx.newPage();
   const guard = await installRequestGuard(page, {
@@ -397,6 +401,29 @@ async function probeImplicitSubmit(
       await page.waitForTimeout(150);
       const submits = (await page.evaluate('window.__jouriloSubmits').catch(() => 0)) as number;
       if (!submits) continue;
+      // Where the button sits on the full page, and a screenshot to draw it on (the report crops around it).
+      const rect = (await page
+        .evaluate(
+          `(() => { const b = document.querySelector(${JSON.stringify(b.selector)}); if (!b) return null; const r = b.getBoundingClientRect(); return r.width && r.height ? { x: Math.round(r.left + scrollX), y: Math.round(r.top + scrollY), width: Math.round(r.width), height: Math.round(r.height) } : null; })()`,
+        )
+        .catch(() => null)) as { x: number; y: number; width: number; height: number } | null;
+      let shotFile: string | undefined;
+      if (rect && rect.y + rect.height <= IMPLICIT_SHOT_MAX_HEIGHT) {
+        const file = toPosix(
+          `screenshots/implicit-submit-${shortHash(originFreeName(wait?.nameUrl ?? url, wait?.primaryOrigin), form.selector, b.selector).slice(0, 8)}-${vp.name}.jpg`,
+        );
+        const shot = await page
+          .screenshot({
+            path: `${runDir}/${file}`,
+            type: 'jpeg',
+            quality: 70,
+            fullPage: true,
+            mask: DEFAULT_MASK.map((m) => page.locator(m)),
+            maskColor: '#FF00FF',
+          })
+          .catch(() => undefined);
+        if (shot) shotFile = file;
+      }
       findings.push(
         makeFinding({
           ruleId: 'jourilo/button-implicit-submit',
@@ -420,6 +447,7 @@ async function probeImplicitSubmit(
               type: 'element',
               selector: b.selector,
               snippet: excerpt(`${b.markup}${b.name}`, 240),
+              ...(rect && shotFile ? { file: shotFile, rect } : {}),
               data: { buttonName: b.name, form: form.selector },
             },
           ],
@@ -450,7 +478,7 @@ export async function probeFormValidation(
   vp: Viewport,
   policy: SafetyPolicy,
   runDir: string,
-  wait?: { waitFor?: string; timeoutMs?: number; primaryOrigin?: string },
+  wait?: { waitFor?: string; timeoutMs?: number; primaryOrigin?: string; nameUrl?: string },
 ): Promise<{ result: FormProbeResult; findings: Finding[]; limitation?: string }> {
   const out: { result: FormProbeResult; findings: Finding[]; limitation?: string } =
     await probeEmptySubmission(ctx, url, form, vp, policy, runDir, wait);
@@ -460,7 +488,7 @@ export async function probeFormValidation(
     out.result.outcome !== 'skipped' &&
     out.result.outcome !== 'error'
   ) {
-    const implicit = await probeImplicitSubmit(ctx, url, form, vp, policy, wait);
+    const implicit = await probeImplicitSubmit(ctx, url, form, vp, policy, runDir, wait);
     out.findings.push(...implicit.findings);
     if (implicit.limitation) out.limitation = implicit.limitation;
   }

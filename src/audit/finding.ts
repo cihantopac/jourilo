@@ -121,9 +121,11 @@ export function pagesOf(f: Pick<Finding, 'url' | 'pages'>): string[] {
  * A console message's location (`file:line`) is part of it, normalized the same way, so one generic message logged
  * from different files does not collapse. The line of an inline script on the page itself (`{page}:12`) is dropped:
  * it depends on each page's HTML, while the script is the same.
+ * A page that redirected is known by two addresses; a message naming the address it ended on (`finalUrl`) reads
+ * `{page}` as well, so the same cause on a redirected and a direct page still collapses.
  * Undefined for other rules and for findings without such evidence.
  */
-export function collapseKey(f: Finding): string | undefined {
+export function collapseKey(f: Finding, finalUrl?: string): string | undefined {
   if (!COLLAPSIBLE_RULES.includes(f.ruleId)) return undefined;
   const items = new Set(
     f.evidence
@@ -131,9 +133,9 @@ export function collapseKey(f: Finding): string | undefined {
       .map((e) => {
         const at =
           e.type === 'console' && e.note
-            ? normalizeVolatile(e.note, f.url).replace(/^\{page\}(:\d+)+$/, '{page}')
+            ? normalizeVolatile(e.note, [f.url, finalUrl]).replace(/^\{page\}(:\d+)+$/, '{page}')
             : '';
-        return `${e.type}:${normalizeVolatile(e.snippet!, f.url)}${at ? ` @ ${at}` : ''}`;
+        return `${e.type}:${normalizeVolatile(e.snippet!, [f.url, finalUrl])}${at ? ` @ ${at}` : ''}`;
       }),
   );
   if (!items.size) return undefined;
@@ -146,11 +148,16 @@ export function collapseKey(f: Finding): string | undefined {
  * fingerprint depends on the rule, the normalized evidence and the journey only, so it stays stable whichever pages
  * a run sampled. A finding seen on one page is returned unchanged, with its per-page fingerprint.
  */
-export function collapseVolatileFindings(findings: Finding[], pageOrder: string[] = []): Finding[] {
+export function collapseVolatileFindings(
+  findings: Finding[],
+  pageOrder: string[] = [],
+  /** Where a page ended up after redirects, by its requested URL. */
+  finalUrls: Record<string, string> = {},
+): Finding[] {
   const groups = new Map<string, Finding[]>();
   const slots: (Finding | string)[] = [];
   for (const f of findings) {
-    const key = collapseKey(f);
+    const key = collapseKey(f, finalUrls[f.url]);
     if (!key) {
       slots.push(f);
       continue;
@@ -205,5 +212,9 @@ function collapse(members: Finding[], key: string): Finding {
       `The same evidence appears on the other ${n - 1} affected page(s).`,
     ],
     occurrences: members.reduce((sum, m) => sum + m.occurrences, 0),
+    // Per page, so a later comparison can weigh a page against the same page in another run (see compareRuns).
+    pageOccurrences: Object.fromEntries(
+      pages.map((p) => [p, members.filter((m) => m.url === p).reduce((sum, m) => sum + m.occurrences, 0)]),
+    ),
   };
 }

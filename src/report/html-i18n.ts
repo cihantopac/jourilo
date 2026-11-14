@@ -169,6 +169,8 @@ const EN = {
   'trend.hint':
     'Defects are counted per capture (one page at one viewport), so runs audited with different --pages stay comparable. A finding with no viewport counts at every viewport of its page, and a finding seen on several pages with the same evidence counts on each of them. Values run from the oldest run to this one.',
   'trend.skipped': '{n} partial or empty run(s) left out: their numbers are not comparable.',
+  'trend.pagesChanged':
+    'The pages audited changed between these runs; a row only follows the runs that captured it.',
   'trend.series': 'Oldest to newest: {list}',
   'trend.noData': 'no data',
   'th.trendDefects': 'Defects per capture',
@@ -426,6 +428,8 @@ const TR: Record<MsgKey, string> = {
   'trend.hint':
     'Kusurlar yakalama başına (bir sayfa, bir görünüm alanı) sayılır; bu yüzden farklı --pages ile yapılan çalışmalar karşılaştırılabilir kalır. Görünüm alanı olmayan bir bulgu, sayfasının her görünüm alanında sayılır; aynı kanıtla birden çok sayfada görülen bir bulgu da bu sayfaların her birinde sayılır. Değerler en eski çalışmadan bu çalışmaya doğru gider.',
   'trend.skipped': '{n} yarım veya boş çalışma dışarıda bırakıldı: sayıları karşılaştırılamaz.',
+  'trend.pagesChanged':
+    'Denetlenen sayfalar bu çalışmalar arasında değişti; bir satır yalnızca o sayfayı yakalayan çalışmaları izler.',
   'trend.series': 'Eskiden yeniye: {list}',
   'trend.noData': 'veri yok',
   'th.trendDefects': 'Yakalama başına kusur',
