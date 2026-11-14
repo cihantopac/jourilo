@@ -297,8 +297,8 @@ describe('cli --budget', () => {
     expect(JSON.parse(met.stdout).gateFailed).toBe(false);
     // The other way: a met budget does not hide a --fail-on failure.
     expect(jourilo(...site, '--budget', 'LCP=600000', '--fail-on', 'serious').status).toBe(1);
-    // Three audits of one page each, about a minute at worst on a slow runner.
-  }, 240_000);
+    // Three audits of one page each; macOS CI runners are the slowest, so keep the headroom.
+  }, 360_000);
 });
 
 describe('cli no page loaded', () => {

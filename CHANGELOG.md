@@ -4,6 +4,73 @@ All notable changes are documented here. The project follows [Semantic Versionin
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-14
+
+Closes the deferred minors of 1.3.0 and 1.4.0 and field item F43 (see [docs/RELEASE-1.5.md](docs/RELEASE-1.5.md) for what
+stays open). `RUN_SCHEMA_VERSION` stays 1; every new field is optional and old runs still load. No new dependency.
+
+### Upgrade notes
+
+- A sequential `experiment analyze` stops only with at least 100 visitors and 5 conversions in each arm. Below that the
+  result has `enoughData: false` and says "Not enough data"; before, a tiny arm could give a stop. The fixed-horizon
+  test has no floor.
+- Journeys: a navigation with neither a Referer nor Sec-Fetch-Site (started by another window or frame) now counts as
+  cross-site, so a cookie that depended on same-site is withheld.
+- A finding collapsed over pages has the optional `pageOccurrences`, and a dismissal of a collapsed finding records
+  `pages`; per-page dismissals carry over to the collapsed finding when every one of its pages was dismissed.
+- The manifest `axe` entry has `bundled: true` when no page was checked and the version is the bundled one.
+- `verify --allow-hosts ""` and `--block-hosts ""` drop the baseline run's host list instead of reusing it.
+
+### Added
+
+- **`experiment analyze --allow-private`** lets a self-hosted PostHog or GrowthBook on a private network address
+  through the guard; plain http is accepted for a private IP literal only with it.
+- **F43 warning.** When the workspace is inside the `--repo` being audited, Jourilo warns and names `--workspace`.
+- **Sequential minimum sample** (100 visitors, 5 conversions per arm) and the `enoughData` field in the JSON.
+- **Experiment adapters:** the success-path key search of GrowthBook and Amplitude is tested as for PostHog.
+- **Menus:** a role-less banner-shaped popup (a cookie banner) that ignores Escape is closed by one reload in
+  `settle()`, never by a click; the menu cap of 4 is counted after the destructive and financial name filter; triggers
+  are re-tagged after a reload by name and role, not DOM order.
+- **Trends:** LCP and CLS are the median over a page's captures, and a note says when the page set changed between
+  runs.
+- **Run schema:** optional `Finding.pageOccurrences` and optional dismissal `pages`.
+- **Fixer evidence:** `jourilo/button-implicit-submit` findings carry a rect and a screenshot crop.
+
+### Changed
+
+- Contrast sampling shares a 15 s budget per capture, runs after the screenshots and does not scroll to nodes already
+  in view; nodes left over stay manual-review items and the run records how many. Each line box is tiled on its own,
+  so thin pieces are sampled.
+- The first capture progress line no longer repeats `done: 0`.
+- `--proxy` tunnels try every allowed address of a name; any 2xx CONNECT reply is accepted; the 403 body no longer
+  carries the raw reason; a half-open upstream socket is closed sooner; an unusable proxy environment (for example
+  `socks5://`) names `NO_PROXY=*` in its hint; a certificate error has its own hint; a non-Latin-1 header value is a
+  usage error (exit 2).
+- Budget exhaustion between connect attempts reports a timeout, not the previous attempt's code.
+- Journeys: an aborted mid-chain redirect hop fails at once, not after the step timeout; step block attribution keeps
+  counting after 200 requests; no empty `cookie:` header is built when no cookie qualifies (the header sent to the
+  route stays empty on purpose); a domain cookie on a trailing-dot host is matched per RFC 6265; later redirect hops
+  carry the Referer the chain started with.
+- With `--extra-header`, the first 3xx answered by Jourilo is counted by `jourilo/redirect-chain`.
+- Financial vocabulary no longer refuses Italian "Ordina per prezzo" or "Comprare casa" / "Compra de ingressos" when
+  they are sorting or browsing controls; real buy and pay controls in it, pt and nl are still refused.
+- Discovery: a file counts as minified only when most lines are 2000 characters or longer, so hand-written files with
+  one long line keep their AST routes (and `.svelte` routes are no longer lost); code files are read once for routes
+  and the component graph; Angular `loadComponent` records reach the graph and nested code routes count toward
+  `usedBy`.
+- Compare weighs a collapsed finding page by page, so a cause collapsed in only one of two runs is not a change by
+  itself; a redirected page reads `{page}` for both addresses; the pair view falls back to the first-screen shot.
+- The scroll-padding fixer edits an existing `html, body {}` rule instead of appending a new one.
+- Screenshot names include the fragment and follow the requested URL, so `/a?x=1` and `/a?x=1#frag` differ.
+- Budgets reject `0x10`, `1e3` and `+5`.
+- Disclosure checks skip focus on an unfocusable trigger without the 2 s wait; one shared `visible()` helper.
+- Docs: RUN-FORMAT (`sample.audited` after a stop, `--pages 1`, `scope.urls` on partial runs, stop lines with
+  `phase`), LIMITATIONS (pid list is a launch snapshot, snapshot stability wording, contrast tile averaging).
+
+### Fixed
+
+- The compare dialog wait timer is cleared.
+
 ## [1.4.0] - 2026-11-14
 
 The "Next (1.x)" list from the 1.3.0 roadmap, plus two field items (F42 and F44 in
