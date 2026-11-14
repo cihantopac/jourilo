@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import axe from 'axe-core';
 import type { Browser, BrowserContext, Page } from 'playwright-core';
 import { EVIDENCE_QUALITY, type EvidenceMode, FULL_PAGE_MAX_HEIGHT } from '../audit/evidence.js';
+import { AXE_TAGS } from '../audit/standards.js';
 import { toPosix } from '../core/fs-safety.js';
 import { shortHash, slug } from '../core/hash.js';
 import { lexiconSources } from '../core/lexicon.js';
@@ -295,6 +296,20 @@ async function settle(page: Page, timeoutMs: number): Promise<boolean> {
   return networkIdle;
 }
 
+/**
+ * Settles the page once after load. With `--wait-for` the element is waited for first, so late content and its late
+ * layout share the one settle that the page is then audited in (no second settle when it is found).
+ */
+async function settleAfterLoad(
+  page: Page,
+  timeoutMs: number,
+  waitFor?: string,
+): Promise<{ networkIdle: boolean; found?: boolean }> {
+  const found = waitFor ? await waitForElement(page, waitFor, timeoutMs) : undefined;
+  const networkIdle = await settle(page, timeoutMs);
+  return found === undefined ? { networkIdle } : { networkIdle, found };
+}
+
 /** `--wait-for`: true when the selector's first match became visible within `timeoutMs`. */
 export async function waitForElement(page: Page, selector: string, timeoutMs: number): Promise<boolean> {
   try {
@@ -304,8 +319,6 @@ export async function waitForElement(page: Page, selector: string, timeoutMs: nu
     return false;
   }
 }
-
-export const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
 
 const HIDDEN_SKIP_RULES = new Set(['color-contrast', 'color-contrast-enhanced']);
 
@@ -547,15 +560,10 @@ export async function capturePage(
     obs.loadMs = Date.now() - t0;
     obs.status = response?.status() ?? null;
     obs.finalUrl = redactUrl(page.url());
-    let networkIdle = await settle(page, timeoutMs);
-    obs.load = { networkIdle };
-    if (opts.waitFor) {
-      const found = await waitForElement(page, opts.waitFor, timeoutMs);
-      // Late content may bring late layout: let it settle the same way before anything is measured. The page is
-      // audited in the state of this last settle, so that is the one recorded.
-      if (found) networkIdle = await settle(page, timeoutMs);
-      obs.load = { networkIdle, waitedFor: opts.waitFor, found };
-    }
+    const settled = await settleAfterLoad(page, timeoutMs, opts.waitFor);
+    obs.load = opts.waitFor
+      ? { networkIdle: settled.networkIdle, waitedFor: opts.waitFor, found: settled.found === true }
+      : { networkIdle: settled.networkIdle };
     obs.title = excerpt(await page.title(), 160);
 
     obs.vitals = (await page.evaluate(READ_VITALS_SCRIPT).catch((e: Error) => {
@@ -687,8 +695,7 @@ export async function measureVitals(
   try {
     if (opts.throttle) await applyThrottle(page);
     await page.goto(url, { waitUntil: 'load', timeout: opts.timeoutMs ?? 30_000 });
-    await settle(page, opts.timeoutMs ?? 30_000);
-    if (opts.waitFor) await waitForElement(page, opts.waitFor, opts.timeoutMs ?? 30_000);
+    await settleAfterLoad(page, opts.timeoutMs ?? 30_000, opts.waitFor);
     return (await page.evaluate(READ_VITALS_SCRIPT)) as RawVitals;
   } catch {
     return null;

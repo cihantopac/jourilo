@@ -24,6 +24,15 @@ for (const f of [
     ok = false;
   }
 }
+// A license file that the build no longer produces must not stay committed.
+const freshLicenses = new Set(readdirSync(join(tmp, 'licenses')));
+const committedLicenseDir = join(root, 'plugin', 'dist', 'licenses');
+for (const l of existsSync(committedLicenseDir) ? readdirSync(committedLicenseDir) : []) {
+  if (!freshLicenses.has(l)) {
+    console.error(`plugin/dist/licenses/${l} is stale: the build no longer writes it. Delete it and commit.`);
+    ok = false;
+  }
+}
 const md = norm(
   execFileSync(process.execPath, [join(tmp, 'jourilo.mjs'), '__cli-markdown'], { encoding: 'utf8' }),
 );

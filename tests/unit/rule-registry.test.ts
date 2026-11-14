@@ -87,9 +87,20 @@ describe('rule registry', () => {
     });
     expect(byId.get('axe-review/color-contrast')).toMatchObject({ kind: 'needs-review' });
     expect(byId.has('axe/target-size')).toBe(true);
+    const categories = [
+      'accessibility',
+      'usability',
+      'responsive',
+      'performance',
+      'conversion',
+      'reliability',
+      'content',
+      'design-system',
+    ];
+    const severities = ['critical', 'serious', 'moderate', 'minor', 'info', 'varies'];
     for (const r of list) {
-      expect(r.category).toBeTruthy();
-      expect(r.severity).toBeTruthy();
+      expect(categories, `${r.id} category`).toContain(r.category);
+      expect(severities, `${r.id} severity`).toContain(r.severity);
       expect(r.kind).toBeTruthy();
     }
     expect(() => JSON.parse(JSON.stringify(out.data))).not.toThrow();

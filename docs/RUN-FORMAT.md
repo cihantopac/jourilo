@@ -22,8 +22,10 @@ manifest is described there as `#/$defs/manifest`. The TypeScript source of trut
   3 URLs in 2 viewports has `urls` 3, `captures` 6 and `pages` 6.
 - `sample` is present when discovery found more pages than were audited: `{ discovered, audited, leftOut }`, where
   `leftOut` lists at most 20 of the discovered URLs that were not audited (redacted like other URLs). The same fact is
-  stated in `limitations`. It is absent for `--url` lists, with `--pages 1` (no discovery runs), and when every
-  discovered page was audited.
+  stated in `limitations`. `audited` is the number of pages planned from discovery: after a stop (`stoppedBy`,
+  Ctrl-C, `--max-duration`) fewer captures may exist than `audited` says (compare `summary.urls`). It is absent for
+  `--url` lists, with `--pages 1` (no discovery runs, so no sample is recorded), and when every discovered page was
+  audited.
 - `pages[].load` records how a capture was taken: `networkIdle` (the network went idle within the settle window) and,
   with `--wait-for <selector>`, `waitedFor` and `found`. `found: false` means the element was not visible within
   `--timeout`; the page was still audited in the state it was in, and `limitations` says so. `settings.waitFor` holds
@@ -74,7 +76,8 @@ and `limitations` says so. A failed budget exits 1, like `--fail-on`; exit 5 and
 - `axe`: `{ version, bundled? }`, the axe-core version the pages were checked with (`settings.axe`), or the bundled
   axe-core with `bundled: true` when no page was checked (for example `discover`).
 - `scope`: `{ target, urls, viewports }`: the redacted target, the audited URLs (`settings.scope.urls`, or the captured
-  pages for journey runs), redacted like other URLs, and the viewport names.
+  pages for journey runs), redacted like other URLs, and the viewport names. On a partial run (stopped early) the URLs
+  are the **planned** list, not only the pages that were captured.
 
 The manifest is rewritten whenever the reports are (`report`, `compare`, `finding`), and these fields are taken from
 the run.
@@ -85,7 +88,8 @@ No secret (proxy credentials, `--extra-header` values) is ever written to it.
 With `--json`, every progress line on stderr is one JSON object:
 `{"type":"progress","phase":…,"message":…,"done"?,"total"?,"url"?,"viewport"?,"at":"<ISO time>"}`. `message` is the
 text of the plain line (trimmed). Lines from the audit pipeline carry `phase`; other lines (stop notices, warnings,
-`journeys run` steps) may carry only `message`.
+`journeys run` steps) may carry only `message`. A stop line can also carry a `phase` (the phase that was running when
+the stop arrived), so do not use the presence of `phase` to tell audit steps from notices.
 
 - `phase` is one of `launch`, `discover`, `setup`, `capture`, `metrics`, `forms` or `report`. `rules` is reserved:
   no line uses it yet.

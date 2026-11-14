@@ -68,7 +68,7 @@ export function renderMarkdown(run: Run, cmp?: RunComparison, limit = 25): strin
       lines.push(
         `- \`${md(path(p.url))}\` (${p.viewport}): load, network idle (${p.load!.networkIdle ? 'yes' : 'no'})${p.load!.waitedFor ? `, \`${md(p.load!.waitedFor)}\` (${p.load!.found ? 'found' : 'not found'})` : ''}`,
       );
-    lines.push('');
+    lines.push('', 'Captures not listed went network-idle without waiting for any element.', '');
   }
   const sorted = [...run.findings].sort(
     (a, b) => severityRank(a.severity) - severityRank(b.severity) || b.occurrences - a.occurrences,

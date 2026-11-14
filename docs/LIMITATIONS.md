@@ -193,8 +193,8 @@ Stated so nobody mistakes silence for a pass.
 - Lab timings include one local proxy hop per connection.
 - Layout shift (CLS) includes shifts caused by font swaps, so it varies with font caching and font loading. That is
   real layout shift for a visitor, so it stays in the metric. Performance evidence in findings has one item per metric
-  and viewport, with milliseconds rounded to the nearest 10 and CLS to 3 decimals, so snapshots change less often (a
-  value close to a rounding boundary can still flip between runs), and up to five layout-shift items per viewport; the raw values are in `run.pages[].metrics`, which `--budget` reads.
+  and viewport, with milliseconds rounded to the nearest 10 and CLS to 3 decimals, so snapshots change less often, not never (a
+  value close to a rounding boundary can still flip between runs, and a changed bucket changes the evidence), and up to five layout-shift items per viewport; the raw values are in `run.pages[].metrics`, which `--budget` reads.
 - `--extra-header "Name: value"` is sent only with requests to the target's origin (scheme, host and port), never to
   another origin. Playwright would carry an overridden header along every hop of a redirect chain, so Jourilo makes
   each request to the target's origin itself (through the guard) without following redirects and hands the response
@@ -226,8 +226,8 @@ Stated so nobody mistakes silence for a pass.
   Jourilo's own test for the flag skips itself on such a kernel and on Windows, where it cannot inspect the process
   command line.
 - While a Chromium run is going, its directory holds `browser.pids`: a snapshot, taken when the browser launched, of
-  the process ids of the browser, GPU and network service processes, one per line (renderers and utility processes
-  started later are not listed). The file is removed when the browser closes and on Jourilo's own exit, including
+  the process ids of the browser, GPU and network service processes, one per line. The list is a launch snapshot:
+  renderers and utility processes started later, and a GPU or network process that Chromium restarts, are not listed. The file is removed when the browser closes and on Jourilo's own exit, including
   after Ctrl-C, SIGTERM, a second signal (exit 130) and `--max-duration`, and is not listed in `manifest.json`. A
   `SIGKILL` of Jourilo (or a crashed machine) leaves the file and may leave the browser running: an integrator can
   clean up with `kill $(cat <run dir>/browser.pids)` (on Windows, `taskkill /F /PID` for each id). Check first that

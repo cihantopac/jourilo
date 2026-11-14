@@ -2,6 +2,9 @@
 // https://www.w3.org/TR/WCAG22/ (W3C Recommendation, 12 December 2024 edition). See docs/research/standards.md.
 import type { StandardRef } from '../core/types.js';
 
+/** The axe-core tags a run enables (also what `jourilo rules list` describes). */
+export const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
+
 const WCAG22: Record<string, [title: string, level: 'A' | 'AA' | 'AAA', slug: string]> = {
   '1.1.1': ['Non-text Content', 'A', 'non-text-content'],
   '1.2.1': ['Audio-only and Video-only (Prerecorded)', 'A', 'audio-only-and-video-only-prerecorded'],

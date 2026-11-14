@@ -10,6 +10,8 @@ import {
   pagesOption,
   parse,
   parseStateOptions,
+  warnWorkspaceInRepo,
+  workspaceInsideRepo,
 } from '../../src/cli/framework.js';
 import type { JouriloError } from '../../src/core/errors.js';
 
@@ -325,5 +327,27 @@ describe('budgetCoverageLimitations', () => {
   it('is silent when every loaded capture measured it, ignoring captures that never loaded, and for ok: null', () => {
     expect(budgetCoverageLimitations([cap(200, 900), cap(null)], [decided])).toEqual([]);
     expect(budgetCoverageLimitations([cap(200)], [{ ...decided, worst: null, ok: null }])).toEqual([]);
+  });
+});
+
+describe('F43: workspace inside the audited repository', () => {
+  it('detects a workspace that is the repository or lies inside it, not a sibling or a lookalike', () => {
+    expect(workspaceInsideRepo('/work/app/.jourilo', '/work/app')).toBe(true);
+    expect(workspaceInsideRepo('/work/app', '/work/app')).toBe(true);
+    expect(workspaceInsideRepo('/work/app/tmp/runs', '/work/app/')).toBe(true);
+    expect(workspaceInsideRepo('/work/app-runs', '/work/app')).toBe(false);
+    expect(workspaceInsideRepo('/work/.jourilo', '/work/app')).toBe(false);
+    expect(workspaceInsideRepo('/elsewhere/runs', '/work/app')).toBe(false);
+  });
+  it('warns naming --workspace only when the workspace is inside the repository', () => {
+    const lines: string[] = [];
+    const ctx = (root: string) => ({ ws: { root }, log: (m: string) => lines.push(m) }) as unknown as Context;
+    warnWorkspaceInRepo(ctx('/elsewhere/runs'), '/work/app');
+    warnWorkspaceInRepo(ctx('/work/app/.jourilo'), undefined);
+    expect(lines).toEqual([]);
+    warnWorkspaceInRepo(ctx('/work/app/.jourilo'), '/work/app');
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('--workspace');
+    expect(lines[0]).toContain('/work/app/.jourilo');
   });
 });

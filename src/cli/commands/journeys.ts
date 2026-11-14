@@ -40,6 +40,7 @@ import {
   parseStateOptions,
   refuseDenyLocalWebkit,
   str,
+  warnWorkspaceInRepo,
 } from '../framework.js';
 
 export function journeysDir(ws: Workspace): string {
@@ -413,6 +414,7 @@ async function runCmd(ctx: Context) {
       ...(guarded.blocked.length || guarded.escaped.length ? { network: guarded } : {}),
     };
     const repo = str(ctx, 'repo') ?? (isDir ? resolve(baseArg) : undefined);
+    warnWorkspaceInRepo(ctx, repo);
     if (repo) await locateFindings(run, repo);
     ctx.ws.saveRun(run);
     const reports = writeReports(runDir, run, undefined, { history: ctx.ws.listRuns({ trend: true }) });

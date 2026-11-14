@@ -1,3 +1,4 @@
+import { isAbsolute, relative, resolve } from 'node:path';
 import { type ParseArgsConfig, parseArgs } from 'node:util';
 import { JouriloError } from '../core/errors.js';
 import type { ProgressEvent } from '../core/progress.js';
@@ -82,6 +83,20 @@ export function parse(cmd: Command, argv: string[]): Context {
     log: (msg) => write({}, msg),
     progress: (event) => write(event.url ? { ...event, url: redactUrl(event.url) } : event, event.message),
   };
+}
+
+/** True when `workspace` is the audited `repo` itself or lies inside it. */
+export function workspaceInsideRepo(workspace: string, repo: string): boolean {
+  const rel = relative(resolve(repo), resolve(workspace));
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
+/** F43: runs written inside the audited repository can trip the repository's own conformance checks. */
+export function warnWorkspaceInRepo(ctx: Context, repo: string | undefined): void {
+  if (!repo || !workspaceInsideRepo(ctx.ws.root, repo)) return;
+  ctx.log(
+    `Note: the workspace (${ctx.ws.root}) is inside the audited repository (${resolve(repo)}). Runs are kept out of git by .jourilo/.gitignore, but checks that do not use git still see them; pass --workspace DIR (or set JOURILO_WORKSPACE) to write runs elsewhere.`,
+  );
 }
 
 export function str(ctx: Context, key: string): string | undefined {

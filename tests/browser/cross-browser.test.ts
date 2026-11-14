@@ -124,6 +124,46 @@ describe.each(['firefox', 'webkit'])('%s', (browser) => {
     expect(formRules).toEqual(['a11y/errors-not-associated /login', 'ux/no-validation-feedback /signup']);
   });
 
+  it('judges held focus the same way: two fields that keep Tab inside are a trap, a dialog or a lone button is not', (ctx) => {
+    const r = spawnSync(
+      process.execPath,
+      [
+        cli,
+        'audit',
+        'fixtures/sites/overlay-lab',
+        '--url',
+        '/trap-alone',
+        '--url',
+        '/single-button',
+        '--url',
+        '/cookie-wall',
+        '--viewports',
+        'desktop',
+        '--browser',
+        browser,
+        '--no-forms',
+        '--workspace',
+        join(root, 'tests/.tmp', `xb-held-${browser}`),
+        '--json',
+        '-q',
+      ],
+      { encoding: 'utf8', cwd: root },
+    );
+    if (r.status === 4) ctx.skip();
+    expect(r.status, r.stderr).toBe(0);
+    const out = JSON.parse(r.stdout) as {
+      findings: { ruleId: string; url: string; kind: string }[];
+      limitations: string[];
+    };
+    const trapPaths = out.findings
+      .filter((f) => f.ruleId === 'jourilo/keyboard-trap' && f.kind === 'defect')
+      .map((f) => new URL(f.url).pathname.replace(/(.)\/$/, '$1'));
+    // WebKit on Windows has no key that focuses links, so the walk is reported as not run there.
+    const walkSkipped = out.limitations.some((l) => l.includes('does not move keyboard focus to links'));
+    if (!walkSkipped) expect(trapPaths).toEqual(['/trap-alone']);
+    else expect(trapPaths).not.toContain('/cookie-wall');
+  });
+
   it("runs axe on a strict-CSP page and reports none of Jourilo's own injection as the site's error", (ctx) => {
     const r = spawnSync(
       process.execPath,

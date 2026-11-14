@@ -1,7 +1,6 @@
 import axe from 'axe-core';
 import { RULES, type RuleInfo } from '../../audit/rules/registry.js';
-import { wcagFromAxeTags } from '../../audit/standards.js';
-import { AXE_TAGS } from '../../browser/capture.js';
+import { AXE_TAGS, wcagFromAxeTags } from '../../audit/standards.js';
 import { JouriloError } from '../../core/errors.js';
 import { VERSION } from '../../core/version.js';
 import type { Command } from '../framework.js';
