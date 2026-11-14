@@ -18,8 +18,9 @@ export function isLandingPath(url: string): boolean {
 export function isPricingPage(obs: PageObservation): boolean {
   const inv = obs.probe?.inventory;
   return (
-    /pric|plans|subscribe|fiyat|preise|precios|tarifs|abonelik/i.test(pathOf(obs.url)) ||
-    (inv?.pricingSignals.length ?? 0) >= 2
+    /pric|plans|subscribe|fiyat|preise|precios|tarifs|abonelik|prezzi|pre[cç]os|prijzen/i.test(
+      pathOf(obs.url),
+    ) || (inv?.pricingSignals.length ?? 0) >= 2
   );
 }
 

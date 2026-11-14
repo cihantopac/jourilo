@@ -1,6 +1,6 @@
 {
   "name": "jourilo",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "AI-powered product experience & conversion engineering studio: real-browser journeys, UX, accessibility, performance and conversion audits with evidence, root causes and verified fixes.",
   "license": "Apache-2.0",
   "type": "module",
@@ -61,6 +61,7 @@
     "axe-core": "4.14.0",
     "esbuild": "0.28.2",
     "typescript": "7.0.2",
+    "typescript-js": "npm:typescript@6.0.3",
     "vitest": "5.0.5"
   }
 }

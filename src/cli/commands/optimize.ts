@@ -55,7 +55,7 @@ export const optimize: Command = {
   },
   details: `Deterministic fixers (others are reported with source candidates for a person or agent to fix):
   axe/html-has-lang, jourilo/missing-viewport-meta, jourilo/input-purpose, jourilo/focus-visible, jourilo/paste-blocked,
-  jourilo/unsized-images, jourilo/placeholder-label
+  jourilo/unsized-images, jourilo/placeholder-label, jourilo/button-implicit-submit, jourilo/focus-obscured
 Options:
   --repo PATH      Repository to fix (default: the run's repo, else the current directory)
   --rule ID        Only fix findings of this rule (repeatable)
@@ -69,7 +69,7 @@ Afterwards run \`jourilo verify <run>\` to repeat the audit and compare.`,
     const { run, dir } = ctx.ws.loadRun(ctx.positionals[0] ?? 'latest');
     const repo = resolve(str(ctx, 'repo') ?? (run.settings.repo as string | undefined) ?? '.');
     if (!existsSync(repo)) throw new JouriloError('NOT_FOUND', `Repository not found: ${repo}`);
-    if (run.findings.every((f) => !f.sources)) locateFindings(run, repo);
+    if (run.findings.every((f) => !f.sources)) await locateFindings(run, repo);
     const rules = list(ctx, 'rule');
     const only = list(ctx, 'finding');
     const selected = run.findings.filter(
@@ -314,13 +314,13 @@ ${networkOptionsHelp(25)}
       }
       if (repo) {
         run.settings.repo = repo;
-        locateFindings(run, repo);
+        await locateFindings(run, repo);
       }
       run.settings.baseline = base.id;
       run.outcome = runOutcome(run);
       ctx.ws.saveRun(run);
       const cmp = compareRuns(base, run);
-      const reports = writeReports(runDir, run, cmp, { history: ctx.ws.listRuns() });
+      const reports = writeReports(runDir, run, cmp, { history: ctx.ws.listRuns({ trend: true }) });
       const failed = flag(ctx, 'fail-on-regression') && !cmp.regressionFree;
       // Without loaded pages nothing was re-checked; a stopped run re-checked only part of the scope.
       const caveat =

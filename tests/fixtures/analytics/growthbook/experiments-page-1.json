@@ -1,0 +1,17 @@
+{
+  "_synthesized": "Shape of GET /api/v1/experiments?limit&offset (docs.growthbook.io/api, pagination: limit, offset, count, total, hasMore, nextOffset). Not a live recording.",
+  "experiments": [
+    {
+      "id": "exp_example0",
+      "name": "Hero image",
+      "trackingKey": "hero-image",
+      "variations": []
+    }
+  ],
+  "limit": 100,
+  "offset": 0,
+  "count": 1,
+  "total": 2,
+  "hasMore": true,
+  "nextOffset": 100
+}

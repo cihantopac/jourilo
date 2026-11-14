@@ -147,3 +147,45 @@ error with Firefox or WebKit. The network guard, not the sandbox, is what keeps 
 machine and network. For cleanup after a `SIGKILL`, a Chromium run writes the browser's process ids to
 `browser.pids` in its run directory and removes the file on every exit Jourilo itself handles. Jourilo does not move
 the browser into a process group of its own; the pid file is the cleanup path.
+
+## D21 · A bundled TypeScript 6.0.3 parser in a lazy chunk (2026-11-11)
+
+Route and component discovery for TS, TSX, Vue and Svelte needs a real parser, since regexes miss nested route
+records, quoted keys and comments. The parser is the JavaScript compiler of TypeScript 6.0.3, the last release with a
+JS API: TypeScript 7 is the Go port and has no JS API (`createSourceFile` does not exist), so the repository keeps
+`typescript` 7.0.2 for `tsc` and adds `"typescript-js": "npm:typescript@6.0.3"` as an exact devDependency that is
+bundled, not installed. It lives in its own file, `plugin/dist/ts-parser.mjs` (about 3.6 MB minified), which one
+dynamic `import()` in `src/discovery/ast/load.ts` reaches only when a repository has route-like code, so the main
+bundle stays one file and a run without `--repo` never loads it. Vitest resolves the same `import()` to the source.
+`check:dist` and `smoke-pack` cover the chunk and its licenses (`THIRD_PARTY_NOTICES.md`). A file the parser cannot
+read, or a chunk that fails to load, falls back to the old regex with a limitation, so discovery never fails on one
+file. The cost is a larger tarball (the chunk adds about 3.6 MB uncompressed) and a parser that may not read syntax
+newer than 6.0.3; the chunk boundary keeps replacing it local to `src/discovery/ast/`.
+
+## D22 · Analytics adapters are read-only and take keys from the environment (2026-11-11)
+
+`experiment analyze --from posthog|growthbook|amplitude:<id>` reads the numbers of a live experiment so the analysis
+does not depend on typing counts. The adapters only read: GET requests, plus PostHog's documented query endpoint,
+which carries a read query in a POST body. Jourilo never creates or changes experiments, flags or events. Keys come
+from environment variables only (`POSTHOG_API_KEY`, `GROWTHBOOK_API_KEY`, `AMPLITUDE_API_KEY` and
+`AMPLITUDE_SECRET_KEY`), never from flags, files or run output; they are sent in headers and scrubbed from errors and
+progress lines. Every request goes through the guarded fetch of the network guard (checked addresses, proxy
+variables, same-origin redirects, no plain `http://` except to a local host), and no vendor SDK is added. A partial
+answer (rate limit, failed page, missing variant, a count cut off by a page limit) makes the data incomplete and
+`analyze` refuses to compute. Only conversion metrics are read. The test recordings are synthesized from each vendor's
+documented responses because no vendor account or key was available; the first user with a real account may find a
+field mismatch, and the adapters say so in their notes.
+
+## D23 · Sequential testing with an mSPRT and always-valid p-values (2026-11-14)
+
+A live experiment is looked at many times, and a fixed-horizon p-value computed at each look inflates false stops. For
+conversion rates Jourilo offers a mixture sequential probability ratio test (mSPRT, a normal mixture with standard
+deviation `--tau`, default 0.1) that gives an always-valid p-value and a confidence sequence, so the experiment may
+stop at the first look that says stop. The variance of the difference is the larger of the unpooled variance and the
+pooled variance under the null: the plain plug-in variance gave 12 to 13.6 % false stops at a nominal 5 % when `tau`
+was large and counts were small, and the maximum brings an A/A run to 0.2 to 4.4 % over repeated probes while power
+stays intact. The statistic is a normal approximation, which the docs say. The CLI keeps no history between runs, so
+each `analyze` is one look: it reports the p-value and decision for that look, which stays valid, and conservative.
+It is the default with `--from`, because that is where repeated looks happen; `--fixed` gives the fixed-horizon test
+and `--planned N` warns about peeking there. With a near-empty arm the p-value can be far too small although the
+decision is right; a minimum-n floor is a roadmap item.

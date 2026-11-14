@@ -61,7 +61,10 @@
             "wait",
             "back",
             "expect",
-            "screenshot"
+            "screenshot",
+            "waitForPopup",
+            "switchTab",
+            "closeTab"
           ]
         },
         "url": { "type": "string" },
@@ -73,6 +76,16 @@
         "hidden": { "$ref": "#/$defs/target" },
         "title": { "type": "string" },
         "name": { "type": "string" },
+        "urlMatch": {
+          "type": "string",
+          "minLength": 1,
+          "description": "waitForPopup, switchTab: \"/path\", \"re:<regex>\" or a substring of the tab's URL."
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "switchTab (instead of urlMatch): open tabs in the order they were opened; 0 is the journey's first tab."
+        },
         "note": { "type": "string" }
       }
     },

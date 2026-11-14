@@ -1,0 +1,51 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font: 16px/1.5 system-ui, sans-serif;
+  color: #111827;
+  background: #fff;
+}
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 56px;
+  padding: 0 24px;
+  background: #fff;
+  border-bottom: 1px solid #d1d5db;
+}
+.site-header a {
+  color: #1d4ed8;
+}
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+label {
+  display: block;
+  margin-top: 12px;
+}
+input {
+  font: inherit;
+  padding: 6px 8px;
+}
+button {
+  font: inherit;
+  padding: 8px 14px;
+  margin-top: 12px;
+}
+a:focus-visible,
+input:focus-visible,
+button:focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 2px;
+}
+.topic {
+  margin: 0 0 28px;
+}

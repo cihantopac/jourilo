@@ -1,7 +1,10 @@
 import type { Run } from '../core/types.js';
 
 /** How a finished run ended. A stopped run is `partial` even when it loaded nothing: it did not finish. */
-export function runOutcome(run: Pick<Run, 'pages' | 'stoppedBy'>): NonNullable<Run['outcome']> {
+export function runOutcome(run: {
+  pages: { status: number | null }[];
+  stoppedBy?: Run['stoppedBy'];
+}): NonNullable<Run['outcome']> {
   if (run.stoppedBy) return 'partial';
   return run.pages.some((p) => p.status !== null) ? 'complete' : 'no-page-loaded';
 }

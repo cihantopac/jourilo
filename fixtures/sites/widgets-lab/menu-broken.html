@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Menus (broken) – Widgets lab</title><link rel="stylesheet" href="/style.css">
+<style>[role="menu"]{border:1px solid #555;padding:4px;display:inline-block;background:#fff} [role="menu"][hidden]{display:none} [role="menuitem"]{display:block;padding:6px 10px;color:#111;background:none;border:0;font:inherit;text-align:left;width:100%} [role="menuitem"]:focus-visible{outline:3px solid #0645ad}</style></head>
+<body>
+<!-- Menu one: opens, but arrows, Home/End and Escape are not handled (focus stays on the button, the menu stays open).
+     Menu two: closes on Escape, but focus is dropped to the page instead of returning to the button. -->
+<main><h1>Menus</h1><p><a href="/">Back to the lab</a></p>
+<div>
+  <button type="button" id="file-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="file-menu">File</button>
+  <div role="menu" id="file-menu" aria-labelledby="file-btn" hidden>
+    <button type="button" role="menuitem" tabindex="-1">New</button>
+    <button type="button" role="menuitem" tabindex="-1">Open</button>
+    <button type="button" role="menuitem" tabindex="-1">Save</button>
+  </div>
+</div>
+<div>
+  <button type="button" id="view-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="view-menu">View</button>
+  <div role="menu" id="view-menu" aria-labelledby="view-btn" hidden>
+    <button type="button" role="menuitem" tabindex="-1">Zoom in</button>
+    <button type="button" role="menuitem" tabindex="-1">Zoom out</button>
+    <button type="button" role="menuitem" tabindex="-1">Full screen</button>
+  </div>
+</div>
+</main>
+<script>
+  // Mouse-style toggle only.
+  var file = document.getElementById('file-btn'), fileMenu = document.getElementById('file-menu');
+  file.addEventListener('click', function () { fileMenu.hidden = !fileMenu.hidden; file.setAttribute('aria-expanded', String(!fileMenu.hidden)); });
+  // Arrows work and Escape closes, but focus is lost.
+  var view = document.getElementById('view-btn'), viewMenu = document.getElementById('view-menu');
+  var vitems = Array.prototype.slice.call(viewMenu.querySelectorAll('[role="menuitem"]'));
+  view.addEventListener('click', function () { viewMenu.hidden = false; view.setAttribute('aria-expanded', 'true'); vitems[0].focus(); });
+  viewMenu.addEventListener('keydown', function (e) {
+    var i = vitems.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); vitems[(i + 1) % vitems.length].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); vitems[(i - 1 + vitems.length) % vitems.length].focus(); }
+    else if (e.key === 'Home') { e.preventDefault(); vitems[0].focus(); }
+    else if (e.key === 'End') { e.preventDefault(); vitems[vitems.length - 1].focus(); }
+    else if (e.key === 'Escape') { viewMenu.hidden = true; view.setAttribute('aria-expanded', 'false'); document.activeElement.blur(); }
+  });
+</script>
+</body>
+</html>

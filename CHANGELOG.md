@@ -4,6 +4,125 @@ All notable changes are documented here. The project follows [Semantic Versionin
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-14
+
+The "Next (1.x)" list from the 1.3.0 roadmap, plus two field items (F42 and F44 in
+[docs/FIELD-FEEDBACK.md](docs/FIELD-FEEDBACK.md)): keyboard checks for menus, route discovery and root causes read from
+the syntax tree, two more fixers, trends across runs, read-only analytics adapters with sequential testing, multi-tab
+journeys and OAuth popups, Italian, Portuguese and Dutch vocabulary, Turkish rule texts, one finding for one cause seen
+on many pages, and axe-core under a strict Content-Security-Policy. `RUN_SCHEMA_VERSION` stays 1; every new field is
+optional and old runs still load. One new bundled dependency in a lazy chunk (the TypeScript 6.0.3 parser). No run
+shows WCAG conformance.
+
+### Upgrade notes
+
+- Journeys now make every top-level navigation through Node, so each redirect hop can be checked against the allowed
+  origins. Step timings include that proxy hop; `goto` to a URL that redirects reports 200 for the final page, not the
+  3xx; the referrer of the final page is the redirecting URL; and a 307 or 308 redirect that resends a form is
+  followed only for URL-encoded bodies (any other body is blocked and reported). A chain of more than 20 redirects
+  fails the step.
+- A navigation that was stopped between steps (an origin that is not allowed) now blocks the next step instead of
+  letting it run on the wrong page.
+- Cookies on proxied navigations follow SameSite and RFC 6265 domain and path matching. Where the browser's decision
+  cannot be reproduced, the cookie is withheld, so a journey can fail where a browser would succeed.
+- `experiment analyze` with `--metric`, `--start`, `--end` or `--control-key` but without `--from` is now a usage error
+  (exit 2); before, they were ignored. With `--from`, the analysis is sequential by default; `--fixed` opts out.
+- In sequential mode, the JSON of `analyze` (with or without `--from`) has `mode: "sequential"`, `pValue`, `decision`
+  (`continue`, `stop-b-better` or `stop-a-better`), `confidenceInterval` and `tau`, and leaves out the fixed-horizon
+  `z`, `significant`, `ciAbsolute` and `ciRelative`. Code that reads those from `--from` output must pass `--fixed`.
+  Fixed output only gains `mode: "fixed"`.
+- Findings for `jourilo/console-errors` and `jourilo/failed-requests` that differ only in volatile tokens (CSP nonces,
+  hashes, ids, cache-busting values) and appear on two or more pages are now one finding with `pages` listing them.
+  The fingerprint of such a finding differs from 1.3.0, so a dismissal made on 1.3.0 does not carry over to it, and a
+  trend counts the collapsed finding once on each of its pages. `compare` and `verify` match collapsed and single-page
+  findings by rule, journey and shared page, so collapsing between two runs is neither "fixed" nor "new".
+- The limitation text for axe-core changed: axe rule help stays English in Turkish reports because axe-core ships no
+  Turkish locale. The text of Jourilo's own rules is Turkish in a Turkish report.
+- `ProductProfile.limitations` is new and optional; `discover` prints it when it is not empty. `locateFindings` is
+  asynchronous for programmatic callers.
+- `RUN_SCHEMA_VERSION` stays 1. New fields (`Finding.pages`, `ProductProfile.limitations`, the cover position in
+  focus-obscured evidence) are optional, and runs from 1.3.0 still load.
+
+### Added
+
+- **Menu keyboard checks.** For up to 4 menu buttons per page (`aria-haspopup="menu"` or `true`), Jourilo opens the
+  menu with Enter (ArrowDown for a link trigger), presses ArrowDown, ArrowUp, Home, End and Escape, and judges only
+  the menu that opened. Four rules: `jourilo/menu-arrow-keys` (serious), `jourilo/menu-home-end` (minor),
+  `jourilo/menu-escape` and `jourilo/menu-focus-return` (moderate). It never activates an item, and the page is
+  restored after every menu.
+- **Route discovery from the syntax tree.** TS, TSX, Vue and Svelte files are parsed with a bundled TypeScript 6.0.3
+  parser, loaded only when needed from `plugin/dist/ts-parser.mjs` (React Router objects and `<Route>`, TanStack
+  Router, Vue Router, SvelteKit, Angular route records). A file the parser cannot read falls back to the old regex
+  and adds a limitation (one line with a count when several fail); discovery never fails on one file.
+- **Component-level root causes.** A component graph links each page to the components it renders. A cause in a
+  component shared by several pages is reported as one root cause with its `usedBy` pages and the source lines of every
+  member finding.
+- **Two fixers.** `jourilo/button-implicit-submit` finds a typeless `<button>` inside a form that really submits it
+  (a `submit` event fired during a guarded probe) and the fixer adds `type="button"`. `jourilo/focus-obscured` gets a
+  `scroll-padding-top` fixer for a fixed or sticky bar at the top (the tallest measured bar; CSS modules are skipped).
+  Both are idempotent, verified, and reversible.
+- **Trends.** `jourilo runs trend [--target URL] [--json]` shows defects per capture, critical and serious defects,
+  LCP and CLS for every page and viewport across the runs of one target. Partial and no-page-loaded runs are left out
+  and counted. The history section of the report has the same table with a text alternative for each sparkline.
+- **Analytics adapters (read-only).** `jourilo experiment analyze --from posthog:<id>`, `growthbook:<id>` or
+  `amplitude:<flag>` reads exposures and conversions through Jourilo's guarded fetch. Keys come from the environment
+  only and are never printed. Conversion metrics only; an incomplete answer (rate limit, failed page, missing
+  variant) is refused with its reasons. Test recordings are synthesized from each vendor's documented responses
+  (docs/INTEGRATIONS.md).
+- **Sequential testing.** `--sequential` (default with `--from`), `--fixed` and `--tau T` (in (0, 1], default 0.1):
+  an mSPRT with an always-valid p-value and confidence sequence, using the larger of the unpooled and the pooled-null
+  variance. The CLI keeps no history, so each run is one look: act on the first "stop".
+- **Multi-tab journeys and OAuth popups.** `waitForPopup`, `switchTab` and `closeTab` steps; `--allow-origin` applies
+  to popups and new tabs, every redirect hop is checked against it, and a popup on a non-local origin is judged by its
+  own host. Fixture: `fixtures/apps/journey-lab/oauth`.
+- **Italian, Portuguese and Dutch.** The shared vocabulary (calls to action, trust and pricing signals, form errors,
+  the safety policy's destructive and financial actions) covers `it`, `pt` and `nl`, each with a fixture site
+  (`it-negozio`, `pt-loja`, `nl-winkel`) and English look-alike controls.
+- **Turkish rule texts.** In a Turkish report, Jourilo's own rules show a Turkish title, impact and recommendation.
+  Where the English text names a value of the finding (a width, a measured time, suggested autocomplete tokens, the
+  nearest brand colors), the English original follows. axe-core help stays English.
+- **One finding for one cause on many pages (F44).** See the upgrade notes. The HTML and Markdown reports list the
+  affected pages.
+- **A stale server is named (F42).** When at least two pages were captured and every own-origin script request of
+  every page failed (5xx or no answer), the run adds one limitation saying this looks like a stale or different
+  server on the port. Findings are not suppressed. The plugin's audit skill now checks that the port is free before it
+  starts a dev server.
+
+### Changed
+
+- The network guard tries every resolved address of a host in turn before it fails, so `localhost` works whether the
+  server listens on `::1` or `127.0.0.1` (5 seconds per address, 30 seconds in all).
+- The benchmark applies `evidenceExactly` to `mustNotFind` too, and accepts a finding collapsed over pages (`pages`,
+  `pagesExactly`).
+
+### Fixed
+
+- axe-core runs under a strict Content-Security-Policy in all three engines: it is injected by evaluation, which a
+  CSP does not govern, instead of a `<script>` tag. Before, a nonce CSP skipped axe on that page. `bypassCSP` stays
+  off, so a site's real CSP defects remain visible.
+- Jourilo's own injections are not reported as site errors: its console refusals are marked and dropped, and in WebKit
+  its style refusal during a screenshot is dropped by time window.
+- The net guard no longer returns "Bad gateway" for a server that listens only on `127.0.0.1` when `localhost`
+  resolves to `::1` first.
+- A trend counts a finding merged over viewports at each of its viewports (it was counted at none).
+- `runs --json` does not carry the trend slice (it was 1.1 MB on a large workspace); trend data is opt-in.
+- A menu check no longer leaves a popup open or navigates a link trigger away, and an always-visible `role="menu"`
+  navigation is not judged.
+- The route walk is iterative and guarded, so minified code cannot overflow the stack; a route record that is only a
+  redirect is not a page; quoted route keys are read.
+- A shared barrel resolves in one pass, and a parse failure in one file is a limitation, not an error.
+- `ProductProfile` read from an older `product.json` without `limitations` loads.
+
+### Security
+
+- Every redirect hop of a journey navigation is checked against the allowed origins before any request goes to it;
+  in 1.3.0 a server redirect from an allowed origin could reach another origin.
+- A popup on a non-local origin is judged by its own host: submitting there needs `--allow-submit`, and deletions and
+  payments are never sent.
+- Analytics adapters send only GET requests (plus PostHog's documented read-only query endpoint), keep keys in
+  headers only and scrub them from output, follow redirects only within the origin, and refuse plain `http://` except
+  to a local host.
+
 ## [1.3.0] - 2026-11-13
 
 The rest of the field feedback from the portfolio site and the container adapter (F8, F15, F16, F21, F22, F23, F26,

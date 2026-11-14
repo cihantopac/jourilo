@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Test app</title>
+  </head>
+  <body>
+    <main>
+      <h1>Test app</h1>
+      <p id="status">Signed out</p>
+      <button type="button" id="signin">Sign in with Test IdP</button>
+      <button type="button" id="signin-redirect">Sign in through the app</button>
+      <p><a href="help.html" target="_blank">Open help in a new tab</a></p>
+      <p><a id="idp-help" href="help.html" target="_blank">Open the IdP's help in a new tab</a></p>
+    </main>
+    <script>
+      // The test identity provider runs on a second local origin: the same server under the other loopback name
+      // (127.0.0.1 <-> localhost), so it is cross-origin without a second server.
+      const idpHost = location.hostname === 'localhost' ? '127.0.0.1' : 'localhost';
+      const idpOrigin = `${location.protocol}//${idpHost}:${location.port}`;
+      const openIdp = () =>
+        window.open(
+          `${idpOrigin}/oauth/idp.html?return_origin=${encodeURIComponent(location.origin)}`,
+          'test-idp',
+          'popup,width=480,height=600',
+        );
+      document.getElementById('signin').addEventListener('click', openIdp);
+      // /oauth/start is answered by the browser test's server with a 302 to the IdP, like a real "/auth/provider"
+      // route.
+      document
+        .getElementById('signin-redirect')
+        .addEventListener('click', () => window.open('/oauth/start', 'test-idp', 'popup,width=480,height=600'));
+      document.getElementById('idp-help').href = `${idpOrigin}/oauth/help.html`;
+      // ?auto=1: the page opens the IdP popup on its own, without being asked (a journey must not follow it).
+      if (new URLSearchParams(location.search).has('auto')) window.addEventListener('load', openIdp);
+      window.addEventListener('message', (e) => {
+        if (e.origin !== idpOrigin || !e.data || e.data.type !== 'test-idp-signed-in') return;
+        document.getElementById('status').textContent = `Signed in as ${e.data.email}`;
+      });
+    </script>
+  </body>
+</html>

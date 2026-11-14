@@ -76,15 +76,22 @@ Field items F8, F15, F16, F21, F22, F23, F26, F29, F31, F35, F36 and F38
   probe lexicon, a timer fallback for the dialog wait, and the report's fallback to `foldScreenshot`.
 - F43 is documented: put runs outside an audited repository with `--workspace` ([WORKFLOW.md](WORKFLOW.md)).
 
-## Planned for 1.4.0
+## Done in 1.4.0
 
-The [1.4.0 plan](superpowers/plans/2026-11-11-jourilo-1.4.0.md) covers the "Next (1.x)" items below. Open intake,
-not yet decided for 1.4.0:
+The "Next (1.x)" list from 1.3.0 and field items F42 and F44 ([RELEASE-1.4.md](RELEASE-1.4.md)):
 
-- **F42** a stale dev server answering 5xx for every chunk is reported as site defects; proposed: one limitation
-  line that suggests a stale server, and a port check in the plugin before it starts a dev server.
-- **F44** findings whose evidence differs only in a volatile token (a CSP nonce) are reported once per page;
-  proposed: collapse them into one finding with the affected URLs.
+- Full APG menu-button keys (arrows, Home/End, Escape, focus return).
+- AST route discovery for TS, TSX, Vue and Svelte with a bundled TypeScript 6.0.3 parser in a lazy chunk
+  ([DECISIONS.md](DECISIONS.md) D21), and component-level root causes.
+- Two fixers: `type="button"` for typeless buttons that submit, and `scroll-padding` for sticky headers.
+- Normalized trends across runs (`runs trend`, a table in the report).
+- Read-only PostHog, GrowthBook and Amplitude adapters (D22) and sequential testing with an mSPRT (D23).
+- Multi-tab journeys and OAuth popups against test identity providers, with every redirect hop checked.
+- Italian, Portuguese and Dutch vocabulary; Turkish rule texts.
+- **F44** findings that differ only in volatile tokens collapse into one finding with `pages`; axe-core runs under a
+  strict CSP and Jourilo's own injections are not reported as site errors.
+- **F42** a run where every page's own scripts fail adds a stale-server limitation, and the plugin checks the port.
+- The network guard tries every resolved address (`localhost` on `::1` and `127.0.0.1`).
 
 ## Deferred from 1.2.0
 
@@ -116,18 +123,17 @@ All five (the `verify --target` typo error, setup-state removal when the guard f
 shipped in 1.2.1, together with F24-F40 (see Done in 1.2.1). The four review follow-ups carried to 1.3.0 shipped
 there.
 
-## Next (1.x)
+## Next
 
-All eight are planned for [1.4.0](superpowers/plans/2026-11-11-jourilo-1.4.0.md). Decisions (2026-11-11): the
-TypeScript parser is bundled in a lazy chunk, the adapters are PostHog, GrowthBook and Amplitude (read-only), and the
-new languages are Italian, Portuguese and Dutch.
+Deferred from the 1.4.0 reviews, grouped; each is a small, known gap.
 
-1. Full arrow-key patterns for menus and dialogs inside menus (Escape closes, focus returns, Home/End).
-2. AST-based route and component discovery for TS/TSX, Vue SFC and Svelte, and component-level root causes.
-3. More deterministic fixers (`type="button"`, `scroll-padding` for sticky headers), each with a fixture and a
-   verify test.
-4. Normalized trends across runs (per page and viewport) on top of the run history table.
-5. Read-only analytics/flag adapters for experiment plans (PostHog, GrowthBook, Amplitude); sequential testing.
-6. Multi-tab journeys and OAuth popups against test identity providers.
-7. More languages for the shared lexicon (`src/core/lexicon.ts`), each with a fixture site.
-8. Translated rule texts in the report (titles, impact, recommendations) for Turkish.
+- **Menus:** detect a role-less popup that ignores Escape; do not reload up to four times on a cookie banner.
+- **Discovery and causes:** keep hand-written long-line files out of the regex fallback; Angular `loadComponent` records.
+- **Fixers:** edit an existing `html, body {}` rule; add a rect and screenshot to implicit-submit evidence.
+- **Trends:** LCP and CLS from every capture; say when the page set changed between runs.
+- **Experiments:** a minimum-sample floor for the sequential p-value; variants of an Amplitude flag; self-hosted LAN hosts.
+- **Journeys:** domain cookies on a trailing-dot host; fail a half-finished redirect chain sooner than the step timeout.
+- **Vocabulary:** stop the financial list refusing Italian "Ordina per" (sort) and similar.
+- **Network:** close a half-open upstream socket sooner; try several addresses through `--proxy`.
+- **WebKit:** tell Jourilo's own style refusal and exceptions from the site's without a time window.
+- **Findings:** carry a dismissal across a collapse; collapse a cause seen on one page of one run and many in another.

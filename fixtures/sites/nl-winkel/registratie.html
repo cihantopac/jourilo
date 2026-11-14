@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="nl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Registreren – Koffiewinkel</title><link rel="stylesheet" href="/stil.css"></head>
+<body><main>
+  <h1>Maak je account aan</h1>
+  <form id="reg" action="/registratie" method="post" novalidate>
+    <label for="voornaam">Voornaam</label><input id="voornaam" name="voornaam">
+    <label for="achternaam">Achternaam</label><input id="achternaam" name="achternaam">
+    <label for="email">E-mailadres</label><input id="email" name="email" type="email">
+    <label for="mobiel">Mobiel nummer</label><input id="mobiel" name="mobiel" type="tel" required>
+    <label for="wachtwoord">Wachtwoord</label><input id="wachtwoord" name="wachtwoord" type="password">
+    <label for="wachtwoord2">Wachtwoord (herhalen)</label><input id="wachtwoord2" name="wachtwoord2" type="password">
+    <p class="errore" id="reg-errore" hidden></p>
+    <p><button class="btn" type="submit">Verzenden</button></p>
+  </form>
+</main>
+<script>
+  // Seeded: errors shown visually, not tied to the field or announced.
+  document.getElementById('reg').addEventListener('submit', function (e) {
+    if (!document.getElementById('email').value) {
+      e.preventDefault();
+      var h = document.getElementById('reg-errore'); h.textContent = 'E-mailadres is verplicht.'; h.hidden = false;
+    }
+  });
+</script>
+</body>
+</html>

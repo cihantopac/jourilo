@@ -1,5 +1,5 @@
 // Before/after comparison of two runs by finding fingerprint, plus lab metric deltas per page and viewport.
-import { fingerprintPath } from '../audit/finding.js';
+import { COLLAPSIBLE_RULES, fingerprintPath, pagesOf } from '../audit/finding.js';
 import type { Finding, MetricValue, Run } from '../core/types.js';
 
 export interface MetricDelta {
@@ -56,13 +56,43 @@ export function compareRuns(base: Run, head: Run): RunComparison {
   const headPages = new Set(head.pages.filter((p) => p.status !== null).map((p) => pathKey(p.url)));
   const dismissedFps = new Set((head.dismissed ?? []).map((f) => f.fingerprint));
   const dismissed = base.findings.filter((f) => dismissedFps.has(f.fingerprint));
+  // Console errors and failed requests keep their 1.3.0 identity, rule + journey + page, extended to page sets: a
+  // finding collapsed over several pages (F44) matches a finding of the same rule and journey on any shared page,
+  // whatever its evidence. So a collapse in either run, or a change in which errors a page logs, is "persisting"
+  // (and "changed"), never "fixed" plus "new".
+  const byPage = (findings: Finding[]) => {
+    const index = new Map<string, Finding[]>();
+    for (const f of findings) {
+      if (!COLLAPSIBLE_RULES.includes(f.ruleId)) continue;
+      for (const p of pagesOf(f)) {
+        const k = `${f.ruleId}\n${f.journey ?? ''}\n${pathKey(p)}`;
+        index.set(k, [...(index.get(k) ?? []), f]);
+      }
+    }
+    return (f: Finding): Finding | undefined => {
+      if (!COLLAPSIBLE_RULES.includes(f.ruleId)) return undefined;
+      for (const p of pagesOf(f)) {
+        const hit = index.get(`${f.ruleId}\n${f.journey ?? ''}\n${pathKey(p)}`)?.[0];
+        if (hit) return hit;
+      }
+      return undefined;
+    };
+  };
+  const inBase = byPage(base.findings);
+  const inHead = byPage(head.findings);
+  const counterpart = (f: Finding) => before.get(f.fingerprint) ?? inBase(f);
+  const stillThere = (f: Finding) => after.has(f.fingerprint) || inHead(f) !== undefined;
+  // Fixed only when none of its pages shows it, and every one of them was checked again.
   const fixed = base.findings.filter(
-    (f) => !after.has(f.fingerprint) && !dismissedFps.has(f.fingerprint) && headPages.has(pathKey(f.url)),
+    (f) =>
+      !stillThere(f) &&
+      !dismissedFps.has(f.fingerprint) &&
+      pagesOf(f).every((p) => headPages.has(pathKey(p))),
   );
-  const introduced = head.findings.filter((f) => !before.has(f.fingerprint));
-  const persisting = head.findings.filter((f) => before.has(f.fingerprint));
+  const introduced = head.findings.filter((f) => !counterpart(f));
+  const persisting = head.findings.filter((f) => counterpart(f));
   const changed = persisting
-    .map((f) => ({ before: before.get(f.fingerprint)!, after: f }))
+    .map((f) => ({ before: counterpart(f)!, after: f }))
     .filter((c) => c.before.severity !== c.after.severity || c.before.occurrences !== c.after.occurrences);
 
   const metrics: MetricDelta[] = [];

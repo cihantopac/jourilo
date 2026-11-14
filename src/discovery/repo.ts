@@ -4,6 +4,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { toPosix } from '../core/fs-safety.js';
+import { loadTsParser, type TsParser } from './ast/load.js';
+import { isRouterConfigFile } from './ast/route-files.js';
 import { laravelProfile } from './laravel.js';
 
 export interface Fact {
@@ -55,6 +57,8 @@ export interface ProductProfile {
   candidateJourneys: { name: string; routes: string[]; why: string }[];
   integrations: { markilo: string | null; searvex: string | null };
   gaps: string[];
+  /** What discovery could not do as intended, e.g. a file read with the regex fallback instead of the parser. */
+  limitations?: string[];
 }
 
 const SKIP = new Set([
@@ -216,7 +220,35 @@ export function roleOf(path: string): string {
   return 'page';
 }
 
-function fileRoutes(appRoot: string, files: string[], frameworks: string[]): RouteInfo[] {
+/** Code files the bundled parser reads for routes (Vue and Svelte through their script blocks). */
+const AST_FILE = /\.(tsx?|jsx?|mjs|vue|svelte)$/;
+/** A code file that may declare routes: the parser is only loaded (and run) for these. */
+const MAY_DECLARE_ROUTES = /<Route\b|\bpath\s*:/;
+
+/** Minified or generated code: not parsed (a single huge line is slow to parse and deep to walk). */
+const isMinified = (file: string, text: string) => /\.min\.[cm]?js$/.test(file) || /^.{2000}/m.test(text);
+
+/** The bundled parser for this discovery (null when it could not be loaded) and the files read without it. */
+interface AstContext {
+  root: string;
+  parser: TsParser | null;
+  /** Repository-relative files whose routes were read with the regex fallback. */
+  fallback: Set<string>;
+}
+
+/** Routes from the syntax tree, or null when the file must use the regex fallback. Never throws. */
+function astFileRoutes(ast: AstContext, file: string, text: string) {
+  if (!ast.parser || isMinified(file, text)) return null;
+  try {
+    const sf = ast.parser.parseSource(file, text);
+    return sf ? ast.parser.astRoutes(file, sf) : null;
+  } catch {
+    // Review Focus 2: e.g. a RangeError on code nested too deeply. The file falls back; discovery goes on.
+    return null;
+  }
+}
+
+function fileRoutes(appRoot: string, files: string[], frameworks: string[], ast: AstContext): RouteInfo[] {
   const routes: RouteInfo[] = [];
   const add = (path: string, file: string, kind: RouteInfo['kind'], framework: string, dynamic: boolean) => {
     if (routes.some((r) => r.path === path && r.kind === kind && r.framework === framework)) return;
@@ -308,6 +340,20 @@ function fileRoutes(appRoot: string, files: string[], frameworks: string[]): Rou
     [/\.dart$/, /['"](\/[a-z0-9/_-]*)['"]\s*:\s*\(\s*context\s*\)/gi, 'Flutter routes'],
   ];
   for (const f of files) {
+    if (AST_FILE.test(f)) {
+      const text = read(join(appRoot, f));
+      if (!MAY_DECLARE_ROUTES.test(text)) continue;
+      const astRoutes = astFileRoutes(ast, f, text);
+      if (astRoutes) {
+        for (const r of astRoutes) {
+          if (!r.path || r.path.includes('*') || r.path.length > 120) continue;
+          add(r.path, f, 'page', r.router ?? 'Router config', /[:{]/.test(r.path));
+        }
+        continue;
+      }
+      // Review Focus 2: a file the parser cannot handle never fails discovery; the regexes take over.
+      if (ast.parser) ast.fallback.add(toPosix(relative(ast.root, join(appRoot, f))));
+    }
     for (const [fileRe, re, label] of codeRoute) {
       if (!fileRe.test(f)) continue;
       const text = read(join(appRoot, f));
@@ -316,7 +362,7 @@ function fileRoutes(appRoot: string, files: string[], frameworks: string[]): Rou
         const raw = m[1]!.trim();
         if (!raw || raw.includes('*') || raw.length > 120) continue;
         const path = raw.startsWith('/') ? raw : `/${raw}`;
-        if (label === 'Router config' && !/routes|router/i.test(f + text.slice(0, 2000))) continue;
+        if (label === 'Router config' && !isRouterConfigFile(f, text)) continue;
         add(path.replace(/\{(\w+)\??\}/g, ':$1'), f, 'page', label, /[:{]/.test(path));
       }
     }
@@ -378,7 +424,7 @@ function devCommand(
   return null;
 }
 
-function profileApp(repoRoot: string, appRoot: string, files: string[]): AppProfile {
+function profileApp(repoRoot: string, appRoot: string, files: string[], ast: AstContext): AppProfile {
   const rel = toPosix(relative(repoRoot, appRoot));
   const pkgFile = join(appRoot, 'package.json');
   const pkg = existsSync(pkgFile) ? readJson(pkgFile) : null;
@@ -410,7 +456,7 @@ function profileApp(repoRoot: string, appRoot: string, files: string[]): AppProf
   const appFiles = files
     .filter((f) => !rel || f.startsWith(`${rel}/`))
     .map((f) => (rel ? f.slice(rel.length + 1) : f));
-  const routes = fileRoutes(appRoot, appFiles, names).map((r) => ({
+  const routes = fileRoutes(appRoot, appFiles, names, ast).map((r) => ({
     ...r,
     file: rel ? `${rel}/${r.file}` : r.file,
   }));
@@ -430,9 +476,20 @@ function profileApp(repoRoot: string, appRoot: string, files: string[]): AppProf
   };
 }
 
-export function discoverRepository(root: string): ProductProfile {
+export async function discoverRepository(root: string): Promise<ProductProfile> {
   const files = walk(root);
   const gaps: string[] = [];
+  const limitations: string[] = [];
+  // The parser chunk is loaded only when a code file may declare routes.
+  const ast: AstContext = { root, parser: null, fallback: new Set() };
+  if (files.some((f) => AST_FILE.test(f) && MAY_DECLARE_ROUTES.test(read(join(root, f))))) {
+    const loaded = await loadTsParser();
+    if ('parser' in loaded) ast.parser = loaded.parser;
+    else
+      limitations.push(
+        `The bundled TypeScript parser could not be loaded (${loaded.error}); routes in code were read with the regex fallback.`,
+      );
+  }
   const rootPkg = existsSync(join(root, 'package.json')) ? readJson(join(root, 'package.json')) : null;
 
   // Monorepo layout
@@ -461,7 +518,7 @@ export function discoverRepository(root: string): ProductProfile {
     } else if (existsSync(join(root, base, 'package.json'))) appRoots.push(join(root, base));
   }
   const apps = (appRoots.length ? appRoots : [root])
-    .map((r) => profileApp(root, r, files))
+    .map((r) => profileApp(root, r, files, ast))
     // In a monorepo, libraries without routes or a framework are not apps.
     .filter(
       (a, _, all) =>
@@ -469,7 +526,7 @@ export function discoverRepository(root: string): ProductProfile {
         a.routes.length > 0 ||
         a.frameworks.some((f) => !['React', 'Vue', 'Svelte', 'Vite'].includes(f.value)),
     );
-  if (!apps.length) apps.push(profileApp(root, root, files));
+  if (!apps.length) apps.push(profileApp(root, root, files, ast));
 
   const laravelRoles: Fact[] = [];
   // Dependency-based signals across the whole repository.
@@ -638,6 +695,12 @@ export function discoverRepository(root: string): ProductProfile {
       'No analytics library detected: funnel metrics for experiments must be instrumented or supplied.',
     );
 
+  const fallback = [...ast.fallback].sort();
+  if (fallback.length)
+    limitations.push(
+      `${fallback.length} code file(s) were read with the regex fallback instead of the bundled TypeScript parser (broken or newer syntax, minified code, or code it could not walk), so their routes can include ones in comments or strings: ${fallback.slice(0, 3).join(', ')}${fallback.length > 3 ? ` and ${fallback.length - 3} more` : ''}.`,
+    );
+
   const markilo =
     files.find(
       (f) =>
@@ -671,5 +734,6 @@ export function discoverRepository(root: string): ProductProfile {
     candidateJourneys,
     integrations: { markilo, searvex },
     gaps,
+    limitations,
   };
 }

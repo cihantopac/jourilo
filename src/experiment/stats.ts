@@ -148,6 +148,15 @@ export function sampleSize(i: SampleSizeInput): SampleSizeResult {
   };
 }
 
+/** The closing line of every analysis, fixed or sequential. */
+export const GUARDRAIL_NOTE =
+  'Check guardrail metrics (errors, latency, refunds, retention) before shipping; statistical significance is not business significance.';
+
+/** The sample-ratio-mismatch warning, for an SRM check that found a mismatch. */
+export function srmNote(srm: { pValue: number }): string {
+  return `Sample ratio mismatch (χ² p = ${srm.pValue.toExponential(2)} < 0.0005): the traffic split is not what was configured. Do not trust the result until the cause (bucketing, redirects, logging) is found.`;
+}
+
 export interface ArmData {
   name: string;
   visitors: number;
@@ -214,10 +223,7 @@ export function analyze(
 
   const pct = (x: number) => `${(x * 100).toFixed(2)}%`;
   const interpretation: string[] = [];
-  if (srm.mismatch)
-    interpretation.push(
-      `Sample ratio mismatch (χ² p = ${srmP.toExponential(2)} < 0.0005): the traffic split is not what was configured. Do not trust the result until the cause (bucketing, redirects, logging) is found.`,
-    );
+  if (srm.mismatch) interpretation.push(srmNote(srm));
   if (opts.plannedPerVariant && Math.min(control.visitors, variant.visitors) < opts.plannedPerVariant)
     interpretation.push(
       `Only ${Math.min(control.visitors, variant.visitors)} of the planned ${opts.plannedPerVariant} visitors per arm so far: stopping now inflates false positives (peeking). Wait for the planned sample.`,
@@ -227,9 +233,7 @@ export function analyze(
       ? `${variant.name} converted at ${pct(p2)} vs ${pct(p1)} for ${control.name} (difference ${pct(p2 - p1)}, ${(1 - alpha) * 100}% CI ${pct(ciAbsolute[0])} to ${pct(ciAbsolute[1])}); p = ${pValue.toPrecision(3)} < ${alpha}. The difference is statistically significant for this sample.`
       : `No statistically significant difference: ${pct(p2)} vs ${pct(p1)}, p = ${pValue.toPrecision(3)} ≥ ${alpha}. The ${(1 - alpha) * 100}% CI for the difference (${pct(ciAbsolute[0])} to ${pct(ciAbsolute[1])}) includes effects of either sign or zero; "no evidence of a difference" is not evidence of no difference.`,
   );
-  interpretation.push(
-    'Check guardrail metrics (errors, latency, refunds, retention) before shipping; statistical significance is not business significance.',
-  );
+  interpretation.push(GUARDRAIL_NOTE);
   return {
     control: { ...control, rate: p1 },
     variant: { ...variant, rate: p2 },
@@ -244,4 +248,86 @@ export function analyze(
     srm,
     interpretation,
   };
+}
+
+export interface SequentialResult {
+  /** Always-valid p-value for "no difference" (running minimum of 1/Λ over the looks this call knows about). */
+  pValue: number;
+  decision: 'continue' | 'stop-b-better' | 'stop-a-better';
+  /** Always-valid (1 − alpha) confidence sequence for rate(b) − rate(a), as an interval at this look. */
+  confidenceInterval: [number, number];
+}
+
+/**
+ * Mixture sequential probability ratio test (mSPRT) for the difference of two conversion rates, with a normal
+ * mixing distribution N(0, tau²) on the difference (Johari, Koomen, Pekelis & Walsh, "Always Valid Inference",
+ * Operations Research 2022; the method behind Optimizely's Stats Engine). Source: docs/research/standards.md §4.4.
+ *
+ * With θ̂ = x_b/n_b − x_a/n_a and V = max(p_a(1−p_a)/n_a + p_b(1−p_b)/n_b, q(1−q)(1/n_a + 1/n_b)), q the pooled
+ * rate (the normal approximation; the pooled term is the variance under "no difference"), the mixture likelihood
+ * ratio against θ = θ0 is
+ *   Λ(θ0) = sqrt(V / (V + τ²)) · exp( τ² (θ̂ − θ0)² / (2 V (V + τ²)) ),
+ * the always-valid p-value is min over looks of 1/Λ(0), and the confidence sequence is {θ0 : Λ(θ0) < 1/alpha}:
+ *   θ̂ ± sqrt( V (V + τ²) / τ² · (2 ln(1/alpha) + ln((V + τ²) / V)) ).
+ *
+ * "Always valid" means: under no difference, the chance that ANY look ever shows p ≤ alpha is at most alpha, so the
+ * rule "stop at the first look with p ≤ alpha" may be applied after every new batch of data. That already holds for
+ * independent calls on cumulative totals. A single call has no history, though, so its p-value is 1/Λ at this look
+ * and can rise between looks. Pass the previous look's result as `previous` to get the running minimum (p never
+ * increases) and the running intersection of the intervals (the interval never widens). If the intersection is empty
+ * (the normal approximation drifted), the previous interval is kept.
+ */
+export function sequentialTest(
+  a: { n: number; x: number },
+  b: { n: number; x: number },
+  opts: {
+    alpha: number;
+    tau?: number;
+    previous?: Pick<SequentialResult, 'pValue' | 'confidenceInterval'>;
+  },
+): SequentialResult {
+  for (const [name, arm] of [
+    ['a', a],
+    ['b', b],
+  ] as const) {
+    if (!Number.isInteger(arm.n) || !Number.isInteger(arm.x) || arm.n <= 0 || arm.x < 0 || arm.x > arm.n)
+      throw new RangeError(`${name}: n must be a positive integer and 0 ≤ x ≤ n`);
+  }
+  const { alpha, previous } = opts;
+  const tau = opts.tau ?? 0.1;
+  if (!(alpha > 0 && alpha < 1)) throw new RangeError('alpha must be between 0 and 1');
+  if (!(tau > 0 && tau <= 1)) throw new RangeError('tau must be greater than 0 and at most 1');
+  if (previous && !(previous.pValue >= 0 && previous.pValue <= 1))
+    throw new RangeError('previous.pValue must be between 0 and 1');
+
+  const pa = a.x / a.n;
+  const pb = b.x / b.n;
+  const diff = pb - pa;
+  // One variance for the test and the interval: the larger of the unpooled plug-in and the pooled variance under
+  // "no difference". The pooled one keeps small or one-sided samples (0/4 vs 4/4, 0% vs 100%) from looking
+  // near-certain; taking the larger is conservative because, wherever Λ ≥ 1, Λ falls as the variance grows.
+  const q = (a.x + b.x) / (a.n + b.n);
+  const v = Math.max((pa * (1 - pa)) / a.n + (pb * (1 - pb)) / b.n, q * (1 - q) * (1 / a.n + 1 / b.n));
+  const t2 = tau * tau;
+  let pNow = 1;
+  let interval: [number, number] = [-1, 1];
+  // V = 0 only when every visitor in both arms did the same thing: no information about the difference yet.
+  if (v > 0) {
+    const logLambda = 0.5 * Math.log(v / (v + t2)) + (t2 * diff * diff) / (2 * v * (v + t2));
+    pNow = Math.min(1, Math.exp(-logLambda));
+    const half = Math.sqrt(((v * (v + t2)) / t2) * (2 * Math.log(1 / alpha) + Math.log((v + t2) / v)));
+    interval = [Math.max(-1, diff - half), Math.min(1, diff + half)];
+  }
+  const pValue = previous ? Math.min(previous.pValue, pNow) : pNow;
+  if (previous) {
+    const lo = Math.max(interval[0], previous.confidenceInterval[0]);
+    const hi = Math.min(interval[1], previous.confidenceInterval[1]);
+    interval = lo <= hi ? [lo, hi] : [...previous.confidenceInterval];
+  }
+  let decision: SequentialResult['decision'] = 'continue';
+  if (pValue <= alpha) {
+    const bBetter = interval[0] > 0 || (interval[1] >= 0 && diff > 0);
+    decision = bBetter ? 'stop-b-better' : 'stop-a-better';
+  }
+  return { pValue, decision, confidenceInterval: interval };
 }

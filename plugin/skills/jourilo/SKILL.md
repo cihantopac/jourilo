@@ -61,7 +61,9 @@ Tell the user which stage you are in. If they asked for one thing (e.g. "just ac
    what was observed (with file/page) from what you infer. Ask the user only what the data cannot answer (audience,
    most important goal, test accounts).
 2. **Run it** — For a repository, the app must be running: use the discovered dev command (ask before starting
-   it), or a static build directory (`jourilo audit <dir>` serves it on 127.0.0.1).
+   it), or a static build directory (`jourilo audit <dir>` serves it on 127.0.0.1). Check the port is free first
+   (`lsof -i :<port>` on macOS/Linux, `Get-NetTCPConnection -LocalPort <port>` on Windows): a stale server still
+   holding it would be tested instead of yours. If it is taken, ask the user or pick another port.
 3. **Audit** — `jourilo audit <url|dir> --repo <path> --json` (default: 6 pages, desktop + mobile, keyboard walk,
    form validation on local hosts). Add `--viewports desktop,mobile,reflow` for WCAG 1.4.10, `--throttle` for
    mobile performance. Read the summary and the top findings; open screenshots with Read when you need to see them.

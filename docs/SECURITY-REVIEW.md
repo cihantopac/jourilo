@@ -83,7 +83,7 @@ The new network and browser options keep the controls above. Tests are in `unit/
    run detects the escaped request and reports it as a security event, but cannot prevent that first request. Use
    Chromium (the default) or Firefox for sites you do not trust.
 2. **Keyword-based action classification.** Destructive and payment actions are recognized from names, identifiers
-   and URLs in five languages plus HTTP methods. An endpoint named neutrally (`POST /api/x` that deletes data) on a
+   and URLs in eight languages plus HTTP methods. An endpoint named neutrally (`POST /api/x` that deletes data) on a
    local host with a journey that is allowed to submit is not recognized. Use disposable data for journeys that
    submit.
 3. **Background requests on public hosts.** During journeys without `--allow-submit`, first-party POSTs (including

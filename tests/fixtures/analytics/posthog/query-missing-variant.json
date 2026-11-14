@@ -1,0 +1,12 @@
+{
+  "_synthesized": "ExperimentQuery response (see query-funnel.json) where the `test` variant has no row yet. Not a live recording.",
+  "kind": "ExperimentQuery",
+  "baseline": {
+    "key": "control",
+    "number_of_samples": 2400,
+    "sum": 120,
+    "sum_squares": 120,
+    "step_counts": [120]
+  },
+  "variant_results": []
+}

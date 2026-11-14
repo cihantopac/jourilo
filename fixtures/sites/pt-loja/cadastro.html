@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="pt">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Cadastre-se – Loja do Café</title><link rel="stylesheet" href="/stil.css"></head>
+<body><main>
+  <h1>Crie sua conta</h1>
+  <form id="reg" action="/cadastro" method="post" novalidate>
+    <label for="nome">Nome</label><input id="nome" name="nome">
+    <label for="sobrenome">Sobrenome</label><input id="sobrenome" name="sobrenome">
+    <label for="email">Endereço de e-mail</label><input id="email" name="email" type="email">
+    <label for="celular">Celular</label><input id="celular" name="celular" type="tel" required>
+    <label for="senha">Senha</label><input id="senha" name="senha" type="password">
+    <label for="senha2">Senha (repetir)</label><input id="senha2" name="senha2" type="password">
+    <p class="errore" id="reg-errore" hidden></p>
+    <p><button class="btn" type="submit">Enviar</button></p>
+  </form>
+</main>
+<script>
+  // Seeded: errors shown visually, not tied to the field or announced.
+  document.getElementById('reg').addEventListener('submit', function (e) {
+    if (!document.getElementById('email').value) {
+      e.preventDefault();
+      var h = document.getElementById('reg-errore'); h.textContent = 'O campo e-mail é obrigatório.'; h.hidden = false;
+    }
+  });
+</script>
+</body>
+</html>

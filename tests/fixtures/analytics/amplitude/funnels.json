@@ -1,0 +1,41 @@
+{
+  "_synthesized": "Shape of GET /api/2/funnels grouped by a user property (amplitude.com/docs/apis/analytics/dashboard-rest, Funnel analysis response: one element per group with cumulativeRaw). Not a live recording.",
+  "data": [
+    {
+      "groupValue": "control",
+      "meta": {
+        "segmentIndex": 0
+      },
+      "events": ["$exposure", "purchase_completed"],
+      "cumulativeRaw": [2400, 120],
+      "cumulative": [1, 0.05],
+      "stepByStep": [1, 0.05],
+      "medianTransTimes": [0, 60000],
+      "avgTransTimes": [0, 90000]
+    },
+    {
+      "groupValue": "treatment",
+      "meta": {
+        "segmentIndex": 0
+      },
+      "events": ["$exposure", "purchase_completed"],
+      "cumulativeRaw": [2380, 150],
+      "cumulative": [1, 0.063],
+      "stepByStep": [1, 0.063],
+      "medianTransTimes": [0, 60000],
+      "avgTransTimes": [0, 90000]
+    },
+    {
+      "groupValue": "(none)",
+      "meta": {
+        "segmentIndex": 0
+      },
+      "events": ["$exposure", "purchase_completed"],
+      "cumulativeRaw": [12, 0],
+      "cumulative": [1, 0.0],
+      "stepByStep": [1, 0.0],
+      "medianTransTimes": [0, 60000],
+      "avgTransTimes": [0, 90000]
+    }
+  ]
+}

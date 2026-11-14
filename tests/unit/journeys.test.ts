@@ -1,7 +1,15 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { emptyInventory } from '../../src/audit/engine.js';
 import type { PageInventory } from '../../src/core/types.js';
-import { keyEffect, matchesUrl } from '../../src/journeys/runner.js';
+import {
+  cookieMatchesUrl,
+  isSameSiteNavigation,
+  type JarCookie,
+  navigationCookies,
+} from '../../src/journeys/navigation-cookies.js';
+import type { BlockedRequest } from '../../src/journeys/request-guard.js';
+import { chargeStops, keyEffect, matchesUrl, stopLedger, tabPolicy } from '../../src/journeys/runner.js';
 import {
   checkAction,
   checkRequest,
@@ -11,7 +19,7 @@ import {
   signalWords,
   testData,
 } from '../../src/journeys/safety.js';
-import { describeStep, validateJourney } from '../../src/journeys/schema.js';
+import { describeStep, STEP_ACTIONS, validateJourney } from '../../src/journeys/schema.js';
 import { suggestJourneys, valueFor } from '../../src/journeys/suggest.js';
 import { run } from '../helpers.js';
 
@@ -80,6 +88,12 @@ describe('safety policy: signals beyond the visible name', () => {
     ['Löschen', '', '', 'destructive'],
     ['Supprimer le compte', '', '', 'destructive'],
     ['Eliminar', '', '', 'destructive'],
+    ['Elimina', '', '', 'destructive'],
+    ['Excluir', '', '', 'destructive'],
+    ['Verwijderen', '', '', 'destructive'],
+    ['Paga ora', '', '', 'financial'],
+    ['Pagar agora', '', '', 'financial'],
+    ['Betaal nu', '', '', 'financial'],
     ['Ödeme yap', '', '', 'financial'],
     ['Jetzt kaufen', '', '', 'financial'],
     ['Payer', '', '', 'financial'],
@@ -195,6 +209,56 @@ describe('safety policy: requests (network backstop)', () => {
     // Third-party beacons are not the target's data.
     expect(checkRequest(req('POST', 'https://analytics.example/collect'), journey()).allowed).toBe(true);
   });
+  it('judges requests from or to a non-local allowed origin by that host, not the local journey', () => {
+    const p = journey({
+      hostClass: 'local',
+      origin: 'http://127.0.0.1:3000',
+      allowOrigins: ['https://idp.example'],
+      allowDestructive: true,
+    });
+    const inIdp = { frameUrl: 'https://idp.example/login' };
+    // From a popup on the public IdP: no deletion or payment, and no form post without --allow-submit.
+    expect(checkRequest(req('DELETE', 'https://idp.example/api/account', inIdp), p)).toMatchObject({
+      allowed: false,
+      kind: 'destructive',
+    });
+    expect(checkRequest(req('POST', 'https://idp.example/api/payments', inIdp), p).allowed).toBe(false);
+    expect(
+      checkRequest(req('POST', 'https://idp.example/login', { ...inIdp, isNavigation: true }), p).allowed,
+    ).toBe(false);
+    expect(
+      checkRequest(
+        req('POST', 'https://idp.example/login', { ...inIdp, isNavigation: true }),
+        journey({ ...p, allowSubmit: true }),
+      ).allowed,
+    ).toBe(true);
+    // A navigation to it that looks destructive, from the local app.
+    expect(
+      checkRequest(
+        req('GET', 'https://idp.example/account/delete', {
+          isNavigation: true,
+          frameUrl: 'http://127.0.0.1:3000/settings',
+        }),
+        p,
+      ).allowed,
+    ).toBe(false);
+    // The local app's own background call to a payment provider's test mode keeps the local journey's rules.
+    expect(
+      checkRequest(
+        req('POST', 'https://api.payments.example/v1/payment_intents', {
+          frameUrl: 'http://127.0.0.1:3000/checkout',
+        }),
+        p,
+      ).allowed,
+    ).toBe(true);
+    // A popup on a local IdP stays local.
+    expect(
+      checkRequest(
+        req('DELETE', 'http://localhost:3000/api/x', { frameUrl: 'http://localhost:3000/idp' }),
+        journey({ ...p, allowOrigins: ['http://localhost:3000'] }),
+      ).allowed,
+    ).toBe(true);
+  });
   it('read-only mode (audits, form probes) sends nothing that changes data, on any host', () => {
     const ro = journey({ hostClass: 'local', origin: 'http://127.0.0.1:3000', mode: 'read-only' });
     expect(
@@ -218,6 +282,123 @@ describe('safety policy: requests (network backstop)', () => {
         ro,
       ).allowed,
     ).toBe(false);
+  });
+});
+
+describe('cookies on navigations the guard makes itself', () => {
+  const app = { kind: 'site' as const, origin: 'http://127.0.0.1:3000' };
+  it("judges same-site by the initiator, the browser's own Sec-Fetch-Site first", () => {
+    expect(isSameSiteNavigation({ kind: 'browser' }, 'http://localhost:3000/')).toBe(true);
+    expect(isSameSiteNavigation(app, 'http://127.0.0.1:3000/a')).toBe(true);
+    expect(isSameSiteNavigation(app, 'http://localhost:3000/a')).toBe(false);
+    expect(isSameSiteNavigation({ kind: 'opaque' }, 'http://127.0.0.1:3000/a')).toBe(false);
+    expect(isSameSiteNavigation(app, 'https://127.0.0.1:3000/a')).toBe(false);
+    // Fail closed without the public suffix list, unless the browser says otherwise.
+    expect(
+      isSameSiteNavigation({ kind: 'site', origin: 'https://app.example.com' }, 'https://auth.example.com/'),
+    ).toBe(false);
+    expect(
+      isSameSiteNavigation(
+        { kind: 'site', origin: 'https://app.example.com' },
+        'https://auth.example.com/',
+        'same-site',
+      ),
+    ).toBe(true);
+    expect(isSameSiteNavigation(app, 'http://127.0.0.1:3000/a', 'cross-site')).toBe(false);
+    expect(isSameSiteNavigation({ kind: 'opaque' }, 'http://x.test/', 'none')).toBe(true);
+  });
+  it('sends Strict same-site only, Lax also on a cross-site GET, None as each browser stores it', () => {
+    const at = { domain: 'localhost', path: '/', expires: -1 };
+    const jar: JarCookie[] = [
+      { ...at, name: 'strict', value: '1', secure: false, sameSite: 'Strict' },
+      { ...at, name: 'lax', value: '1', secure: false, sameSite: 'Lax' },
+      { ...at, name: 'none', value: '1', secure: false, sameSite: 'None' },
+      { ...at, name: 'noneSecure', value: '1', secure: true, sameSite: 'None' },
+    ];
+    const names = (sameSite: boolean, method: string, browser = 'chromium') =>
+      navigationCookies(jar, 'http://localhost:3000/', sameSite, method, browser).map((c) => c.name);
+    expect(names(true, 'POST')).toEqual(['strict', 'lax', 'noneSecure']);
+    expect(names(false, 'GET')).toEqual(['lax', 'noneSecure']);
+    expect(names(false, 'POST')).toEqual(['noneSecure']);
+    // Firefox and WebKit report a cookie without a SameSite attribute as None, and send it.
+    expect(names(false, 'POST', 'firefox')).toEqual(['none', 'noneSecure']);
+  });
+  it("matches domain and path as RFC 6265 does, not as Playwright's looser URL filter", () => {
+    const c = (domain: string, path = '/', over: Partial<JarCookie> = {}): JarCookie => ({
+      name: 'c',
+      value: '1',
+      domain,
+      path,
+      expires: -1,
+      secure: false,
+      sameSite: 'Lax',
+      ...over,
+    });
+    // The three leaks: a host-only cookie to a subdomain, and a path prefix that is not a path segment.
+    expect(cookieMatchesUrl(c('localhost'), 'http://idp.localhost/')).toBe(false);
+    expect(cookieMatchesUrl(c('app.example.test'), 'https://auth.app.example.test/')).toBe(false);
+    expect(cookieMatchesUrl(c('app.example.test', '/app'), 'https://app.example.test/application')).toBe(
+      false,
+    );
+    // And through navigationCookies, which the guard uses.
+    expect(navigationCookies([c('localhost')], 'http://idp.localhost/', true, 'GET', 'chromium')).toEqual([]);
+    // Positive cases.
+    expect(cookieMatchesUrl(c('localhost'), 'http://localhost:3000/x')).toBe(true);
+    expect(cookieMatchesUrl(c('.example.test'), 'https://auth.app.example.test/')).toBe(true);
+    expect(cookieMatchesUrl(c('.example.test'), 'https://example.test/')).toBe(true);
+    expect(cookieMatchesUrl(c('app.example.test', '/app'), 'https://app.example.test/app/x')).toBe(true);
+    expect(cookieMatchesUrl(c('app.example.test', '/app'), 'https://app.example.test/app')).toBe(true);
+    expect(cookieMatchesUrl(c('app.example.test', '/app/'), 'https://app.example.test/app/x')).toBe(true);
+    // A Domain cookie never matches by suffix on an IP address; Secure needs https (or localhost); expiry counts.
+    expect(cookieMatchesUrl(c('.0.0.1'), 'http://127.0.0.1/')).toBe(false);
+    expect(cookieMatchesUrl(c('app.example.test', '/', { secure: true }), 'http://app.example.test/')).toBe(
+      false,
+    );
+    expect(cookieMatchesUrl(c('app.example.test', '/', { secure: true }), 'https://app.example.test/')).toBe(
+      true,
+    );
+    expect(cookieMatchesUrl(c('localhost', '/', { secure: true }), 'http://localhost/')).toBe(true);
+    expect(cookieMatchesUrl(c('localhost', '/', { expires: 1 }), 'http://localhost/')).toBe(false);
+  });
+});
+
+describe('stopped requests per step', () => {
+  const stop = (url: string, over: Partial<BlockedRequest> = {}): BlockedRequest => ({
+    url,
+    method: 'GET',
+    reason: `Navigation to ${url} leaves the target origin`,
+    kind: 'off-origin',
+    navigation: true,
+    at: 0,
+    ...over,
+  });
+  it('charges a stop between two steps to the next step, once', () => {
+    const blocked: BlockedRequest[] = [];
+    const stops = stopLedger(blocked);
+    const step1 = { status: 'passed' as const, error: undefined as string | undefined };
+    expect(chargeStops(step1, stops.take())).toBe(false);
+    // Stopped after step 1 was checked (during its screenshot): step 1 stays passed, step 2 is blocked.
+    blocked.push(stop('http://idp.example/'));
+    const step2: { status: 'passed' | 'blocked' | 'failed'; error?: string } = { status: 'passed' };
+    expect(chargeStops(step2, stops.take())).toBe(true);
+    expect(step1.status).toBe('passed');
+    expect(step2).toEqual({
+      status: 'blocked',
+      error: 'Navigation to http://idp.example/ leaves the target origin',
+    });
+    // Not charged twice; stopped background form posts are not a step's doing.
+    blocked.push(stop('http://127.0.0.1/api', { kind: 'submit', navigation: false }));
+    expect(stops.take()).toEqual([]);
+  });
+  it('blocks the last step with a stop after its check', () => {
+    const blocked: BlockedRequest[] = [];
+    const stops = stopLedger(blocked);
+    stops.take();
+    blocked.push(stop('http://a.example/'), stop('http://b.example/'));
+    const last: { status: 'passed' | 'blocked' | 'failed'; error?: string } = { status: 'passed' };
+    expect(chargeStops(last, stops.take())).toBe(true);
+    expect(last.status).toBe('blocked');
+    expect(last.error).toMatch(/\(\+1 more\)$/);
   });
 });
 
@@ -258,6 +439,114 @@ describe('journey schema', () => {
     expect(describeStep({ action: 'fill', target: { label: 'Password' }, value: '{{password}}' }, true)).toBe(
       'Type •••••• into field labelled "Password"',
     );
+  });
+
+  const journeyFiles = [
+    'fixtures/apps/journey-lab/dark.json',
+    'fixtures/apps/journey-lab/dark-broken.json',
+    'fixtures/apps/pulse-dashboard/journeys/refresh-report.json',
+    'fixtures/apps/pulse-dashboard/journeys/sign-in.json',
+  ];
+
+  it('old journeys still validate against the schema', () => {
+    const schema = JSON.parse(readFileSync('schemas/journey.schema.json', 'utf8'));
+    const enumActions: string[] = schema.$defs.step.properties.action.enum;
+    // The JSON schema and the validator accept the same actions, and the new ones are only additions.
+    expect([...enumActions].sort()).toEqual([...STEP_ACTIONS].sort());
+    const old = [
+      'goto',
+      'click',
+      'fill',
+      'select',
+      'check',
+      'press',
+      'hover',
+      'wait',
+      'back',
+      'expect',
+      'screenshot',
+    ];
+    for (const a of old) expect(enumActions).toContain(a);
+    for (const f of journeyFiles) {
+      const j = JSON.parse(readFileSync(f, 'utf8'));
+      expect(validateJourney(j, f).id).toBe(j.id);
+      for (const s of j.steps) expect(enumActions).toContain(s.action);
+    }
+    expect(
+      validateJourney({
+        version: 1,
+        id: 'every-old-action',
+        name: 'Every 1.3 action',
+        start: '/',
+        steps: [
+          { action: 'goto', url: '/' },
+          { action: 'click', target: { role: 'link', name: 'Go' } },
+          { action: 'fill', target: { label: 'Email' }, value: '{{email}}' },
+          { action: 'select', target: { label: 'Plan' }, value: 'pro' },
+          { action: 'check', target: { label: 'Terms' } },
+          { action: 'press', key: 'Enter' },
+          { action: 'hover', target: { text: 'Menu' } },
+          { action: 'wait', ms: 100 },
+          { action: 'back' },
+          { action: 'expect', url: '/next', title: 'Next' },
+          { action: 'screenshot', name: 'end' },
+        ],
+        success: [{ description: 'x', url: '/next' }],
+      }).steps,
+    ).toHaveLength(11);
+  });
+
+  it('validates and describes the tab actions', () => {
+    const spec = (steps: unknown[]) => ({
+      version: 1,
+      id: 'tabs',
+      name: 'Tabs',
+      start: '/',
+      steps,
+      success: [{ description: 'x', noPageErrors: true }],
+    });
+    expect(
+      validateJourney(
+        spec([
+          { action: 'waitForPopup' },
+          { action: 'waitForPopup', urlMatch: '/oauth/idp' },
+          { action: 'switchTab', index: 0 },
+          { action: 'switchTab', urlMatch: 're:help' },
+          { action: 'closeTab' },
+        ]),
+      ).steps,
+    ).toHaveLength(5);
+    expect(() => validateJourney(spec([{ action: 'switchTab' }]))).toThrow(/switchTab.*index or urlMatch/);
+    expect(() => validateJourney(spec([{ action: 'switchTab', index: 0, urlMatch: '/help' }]))).toThrow(
+      /not both/,
+    );
+    expect(() => validateJourney(spec([{ action: 'switchTab', index: -1 }]))).toThrow(/index/);
+    expect(() => validateJourney(spec([{ action: 'switchTab', index: 1.5 }]))).toThrow(/index/);
+    expect(() => validateJourney(spec([{ action: 'waitForPopup', urlMatch: 3 }]))).toThrow(/urlMatch/);
+    expect(describeStep({ action: 'waitForPopup' })).toBe('Wait for a popup or new tab');
+    expect(describeStep({ action: 'waitForPopup', urlMatch: '/oauth/idp' })).toBe(
+      'Wait for a popup or new tab at ~ /oauth/idp',
+    );
+    expect(describeStep({ action: 'switchTab', index: 0 })).toBe('Switch to tab 0');
+    expect(describeStep({ action: 'switchTab', urlMatch: '/help' })).toBe('Switch to the tab at ~ /help');
+    expect(describeStep({ action: 'closeTab' })).toBe('Close the current tab');
+  });
+
+  it("judges actions in a tab on another origin by that origin's host", () => {
+    const base = new URL('http://127.0.0.1:4000/');
+    // The journey's own origin and other local hosts keep the journey's policy.
+    expect(tabPolicy('http://127.0.0.1:4000/a', base, local)).toEqual(local);
+    expect(tabPolicy('http://localhost:4000/idp', base, local)).toEqual(local);
+    expect(tabPolicy('about:blank', base, local)).toEqual(local);
+    // A popup on a public test IdP is not a local host: submitting there needs --allow-submit, payments never run.
+    const idp = tabPolicy('https://dev-123.idp.example/login', base, { ...local, allowDestructive: true });
+    expect(idp.hostClass).toBe('public');
+    expect(
+      checkAction({ action: 'click', name: 'Sign in', submitsForm: true, paymentForm: false }, idp).allowed,
+    ).toBe(false);
+    expect(
+      checkAction({ action: 'click', name: 'Pay now', submitsForm: false, paymentForm: false }, idp).allowed,
+    ).toBe(false);
   });
 });
 

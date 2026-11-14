@@ -58,7 +58,7 @@ function evidenceLines(f) {
 
 /**
  * input: { lang, nonce, dir, run: { id, target, mode, startedAt, version, repo }, items: [finding] }
- * finding: { id, title, rule, kind, sev, cat, prov, conf, url, vp, journey, desc, impact, fix, std, repro, src, ev, occ, path, also }
+ * finding: { id, title, rule, kind, sev, cat, prov, conf, url, pages, vp, journey, desc, impact, fix, std, repro, src, ev, occ, path, also }
  */
 function build(input) {
   var run = input.run || {};
@@ -109,7 +109,7 @@ function build(input) {
     L.push('');
     L.push('### ' + idx + '. ' + line(f.title, 160) + ' (id ' + code(f.id, 40) + ')');
     L.push('- ' + line(f.kind, 20) + ' · ' + line(f.sev, 12) + ' · ' + line(f.cat, 20) + ' · ' + line(f.prov, 12) + ', ' + line(f.conf, 8) + ' confidence · rule ' + code(f.rule, 80) + (f.occ > 1 ? ' · ' + f.occ + ' occurrences' : ''));
-    var pages = [code(pathOf(f.url), 300) + (f.vp ? ' (' + line(f.vp, 60) + ')' : '')].concat((f.also || []).slice(0, 8).map(function (a) { return code(pathOf(a.url), 300) + (a.vp ? ' (' + line(a.vp, 60) + ')' : '') + ' id ' + code(a.id, 40); }));
+    var pages = [code(pathOf(f.url), 300) + (f.vp ? ' (' + line(f.vp, 60) + ')' : '')].concat((f.pages || []).slice(1, 9).map(function (p) { return code(pathOf(p), 300); }), (f.pages || []).length > 9 ? ['+' + (f.pages.length - 9) + ' more'] : []).concat((f.also || []).slice(0, 8).map(function (a) { return code(pathOf(a.url), 300) + (a.vp ? ' (' + line(a.vp, 60) + ')' : '') + ' id ' + code(a.id, 40); }));
     L.push('- Pages: ' + pages.join(', ') + (f.journey ? ' · journey ' + code(f.journey, 80) : ''));
     L.push('- Fix path: ' + PATH[f.path]);
     L.push('- Observed: ' + line(f.desc, 500));

@@ -3,7 +3,7 @@
 // The report is complete without JavaScript; the inline client only adds language, theme, filters and the repair
 // prompt, and a strict CSP keeps it offline.
 import { budgetLine } from '../audit/budget.js';
-import { severityRank } from '../audit/finding.js';
+import { pagesOf, severityRank } from '../audit/finding.js';
 import { MANUAL_REVIEW } from '../audit/standards.js';
 import type { Evidence, Finding, FindingKind, JourneyResult, Run, Severity } from '../core/types.js';
 import type { RunListing } from '../core/workspace.js';
@@ -14,6 +14,8 @@ import { fill, I18N, type MsgKey, type Vars } from './html-i18n.js';
 import { PROMPT_JS } from './html-prompt.js';
 import { REPORT_CSS } from './html-style.js';
 import { FIX_PATHS, type FixPath, fixPathOf, rootCauseKey } from './remediation.js';
+import { RULE_TEXT_TR, type RuleTextField } from './rule-text-tr.js';
+import { type TrendReport, trendReport, trendSlice } from './trends.js';
 
 export function esc(s: unknown): string {
   return String(s ?? '')
@@ -52,6 +54,20 @@ function attrs(map: Record<string, MsgKey>, vars?: Vars): string {
   const pairs = Object.entries(map);
   const v = vars ? ` data-i18n-v="${esc(JSON.stringify(vars))}"` : '';
   return `${pairs.map(([a, k]) => ` ${a}="${esc(fill(I18N.en[k], vars))}"`).join('')} data-i18n-attr="${pairs.map(([a, k]) => `${a}=${k}`).join(';')}"${v}`;
+}
+
+/**
+ * A rule's title, impact or recommendation. English is the server text; when the rule has a Turkish text, it sits
+ * next to it, hidden, and the client shows the one that matches the report language (data-rl). Without a Turkish
+ * text only the English one is rendered, so a Turkish report falls back to English with lang="en", never to nothing.
+ * A field whose English names values of the finding (`dynamic`) keeps that English inside the Turkish copy.
+ */
+function ruleText(f: Finding, field: RuleTextField): string {
+  const en = esc(f[field]);
+  const entry = Object.hasOwn(RULE_TEXT_TR, f.ruleId) ? RULE_TEXT_TR[f.ruleId] : undefined;
+  if (!entry?.[field]) return `<span lang="en">${en}</span>`;
+  const keep = entry.dynamic?.includes(field) ? ` <span lang="en">(${en})</span>` : '';
+  return `<span lang="en" data-rl="en">${en}</span><span lang="tr" data-rl="tr" hidden>${esc(entry[field])}${keep}</span>`;
 }
 
 function pathname(u: string): string {
@@ -184,7 +200,7 @@ function groupFindings(findings: Finding[]): Group[] {
         id: `rc-${slug(lead.fingerprint)}`,
         lead,
         members: sorted,
-        pages: [...new Set(sorted.map((m) => m.url))],
+        pages: [...new Set(sorted.flatMap(pagesOf))],
         path: fixPathOf(lead),
       };
     })
@@ -219,7 +235,7 @@ function whereHtml(g: Group): string {
 
 function pick(g: Group, label: MsgKey = 'rc.select', visible = false): string {
   const ids = g.members.map((m) => esc(m.fingerprint)).join(' ');
-  return `<label class="pick"><input type="checkbox" class="sel" data-ids="${ids}"><span class="${visible ? '' : 'sr'}">${T(label)}${visible ? '' : `: ${esc(g.lead.title)}`}</span></label>`;
+  return `<label class="pick"><input type="checkbox" class="sel" data-ids="${ids}"><span class="${visible ? '' : 'sr'}">${T(label)}${visible ? '' : `: <span lang="en">${esc(g.lead.title)}</span>`}</span></label>`;
 }
 
 function groupHtml(run: Run, g: Group, status?: string, base?: string): string {
@@ -232,8 +248,15 @@ function groupHtml(run: Run, g: Group, status?: string, base?: string): string {
     )
     .map((x) => `<li>${x}</li>`)
     .join('');
-  const sources = f.sources?.length
-    ? `<h4>${T('fd.sources')}</h4><ul class="sources">${f.sources
+  // A component root cause merges findings on different lines of one component: every member's best line stays
+  // listed after the lead's candidates, so no offending line disappears from the report.
+  const listed = [...(f.sources ?? [])];
+  for (const m of g.members) {
+    const s = m.sources?.[0];
+    if (s && !listed.some((x) => x.file === s.file && x.line === s.line)) listed.push(s);
+  }
+  const sources = listed.length
+    ? `<h4>${T('fd.sources')}</h4><ul class="sources">${listed
         .map(
           (s) =>
             `<li><code>${esc(s.file)}:${s.line}</code> <span class="chip">${T(`conf.${s.confidence}` as MsgKey)}</span> <span lang="en">${esc(s.reason)}</span>${s.excerpt ? `<pre>${esc(s.excerpt)}</pre>` : ''}</li>`,
@@ -245,8 +268,15 @@ function groupHtml(run: Run, g: Group, status?: string, base?: string): string {
       ? `<h4>${T('fd.instances')}</h4><ul class="instances">${g.members
           .map(
             (m) =>
-              `<li>${base ? '' : `<label class="pick"><input type="checkbox" class="sel" data-ids="${esc(m.fingerprint)}"><span class="sr">${T('rc.selectOne')}: ${esc(m.title)} ${esc(pathname(m.url))}</span></label>`}<code>${esc(pathname(m.url))}</code> <span class="muted">${esc(m.viewport ?? '')}</span> <span class="chip sev sev-${m.severity}">${T(`sev.${m.severity}` as MsgKey)}</span> <span class="muted">${T('fd.id')} <code>${esc(m.fingerprint)}</code></span></li>`,
+              `<li>${base ? '' : `<label class="pick"><input type="checkbox" class="sel" data-ids="${esc(m.fingerprint)}"><span class="sr">${T('rc.selectOne')}: <span lang="en">${esc(m.title)}</span> ${esc(pathname(m.url))}</span></label>`}<code>${esc(pathname(m.url))}</code> <span class="muted">${esc(m.viewport ?? '')}</span> <span class="chip sev sev-${m.severity}">${T(`sev.${m.severity}` as MsgKey)}</span> <span class="muted">${T('fd.id')} <code>${esc(m.fingerprint)}</code></span></li>`,
           )
+          .join('')}</ul>`
+      : '';
+  // A finding collapsed over several pages (F44) lists every page it was seen on.
+  const affected =
+    f.pages && f.pages.length > 1
+      ? `<h4>${T('fd.pages', { n: f.pages.length })}</h4><p class="muted">${T('fd.pagesHint')}</p><ul class="instances">${f.pages
+          .map((p) => `<li><code>${esc(pathname(p))}</code></li>`)
           .join('')}</ul>`
       : '';
   const data = base
@@ -254,14 +284,14 @@ function groupHtml(run: Run, g: Group, status?: string, base?: string): string {
     : ` data-kind="${f.kind}" data-sev="${f.severity}" data-cat="${esc(f.category)}" data-path="${g.path}" data-pages="${esc(g.pages.join(' '))}" data-n="${g.members.length}"`;
   return `<article class="rc sev-${f.severity} k-${f.kind}${status ? ` st-${esc(status)}` : ''}" id="${base ? 'fixed-' : ''}${g.id}"${data}>
 ${base ? '<span></span>' : pick(g)}
-<details><summary>${chipsHtml(g, status)}<span class="t" lang="en">${esc(f.title)}</span><span class="where">${whereHtml(g)}</span></summary>
+<details><summary>${chipsHtml(g, status)}<span class="t">${ruleText(f, 'title')}</span><span class="where">${whereHtml(g)}</span></summary>
 <div class="body">
 <p lang="en">${esc(f.description)}</p>
-<dl class="facts"><dt>${T('fd.why')}</dt><dd lang="en">${esc(f.impact)}</dd><dt>${T('fd.fix')}</dt><dd lang="en">${esc(f.recommendation)}</dd>
+<dl class="facts"><dt>${T('fd.why')}</dt><dd>${ruleText(f, 'impact')}</dd><dt>${T('fd.fix')}</dt><dd>${ruleText(f, 'recommendation')}</dd>
 <dt>${T('fd.basis')}</dt><dd><span class="chip">${T(`prov.${f.provenance}` as MsgKey)}</span> <span class="chip">${T(`conf.${f.confidence}` as MsgKey)}</span> ${T('fd.rule')} <code>${esc(f.ruleId)}</code> · ${T('fd.id')} <code>${esc(f.fingerprint)}</code></dd>
 ${stds ? `<dt>${T('fd.standards')}</dt><dd><ul class="stds">${stds}</ul></dd>` : ''}
 <dt>${T('fd.repro')}</dt><dd><ol lang="en">${f.reproduction.map((r) => `<li>${esc(r)}</li>`).join('')}</ol></dd></dl>
-${sources}${instances}
+${sources}${affected}${instances}
 <h4>${T('fd.evidence')}</h4>${evidenceHtml(run, f, base)}
 </div></details></article>`;
 }
@@ -270,7 +300,7 @@ function cardHtml(run: Run, g: Group): string {
   const f = g.lead;
   const src = f.sources?.[0];
   return `<article class="rc-card sev-${f.severity}"><div class="vis">${visualOf(run, f, { minW: 520, ratio: 0.5 })}</div>
-<div class="in">${chipsHtml(g)}<h3><a href="#${g.id}" lang="en">${esc(f.title)}</a></h3>
+<div class="in">${chipsHtml(g)}<h3><a href="#${g.id}">${ruleText(f, 'title')}</a></h3>
 <div class="where">${whereHtml(g)}</div>
 ${src ? `<div class="src">${T('fd.sources')}: <code>${esc(src.file)}:${src.line}</code></div>` : ''}
 ${pick(g, 'rc.select', true)}</div></article>`;
@@ -333,7 +363,7 @@ ${
         .slice(0, 4)
         .map(
           ({ g, n }) =>
-            `<li><a href="#${g.id}">${esc(g.lead.title)}</a>${n > 1 ? ` <span class="n">×${n}</span>` : ''}</li>`,
+            `<li><a href="#${g.id}">${ruleText(g.lead, 'title')}</a>${n > 1 ? ` <span class="n">×${n}</span>` : ''}</li>`,
         )
         .join('')}</ul>`
     : `<p>${T('sec.empty')}</p>`
@@ -407,6 +437,12 @@ function contextHtml(run: Run): string {
 function historyHtml(run: Run, history: RunListing[]): string {
   const same = history.filter((h) => h.target === run.target && h.id !== run.id && h.pages > 0).slice(-9);
   if (!same.length) return '';
+  const trend = trendHtml(
+    trendReport(
+      [...history.filter((h) => h.id !== run.id).flatMap((h) => (h.trend ? [h.trend] : [])), trendSlice(run)],
+      run,
+    ),
+  );
   const rows = [
     ...same,
     {
@@ -426,7 +462,59 @@ function historyHtml(run: Run, history: RunListing[]): string {
       const trend = t < prev ? 'good' : t > prev ? 'poor' : '';
       return `<tr${'current' in r ? ' class="current"' : ''}><td><code>${esc(r.id)}</code>${'current' in r ? ` ${T('history.this')}` : ''}</td><td>${esc(new Date(r.startedAt).toISOString().slice(0, 16).replace('T', ' '))}</td><td>${r.defects.critical}</td><td>${r.defects.serious}</td><td>${r.defects.moderate}</td><td>${r.defects.minor}</td><td class="${trend}"><span class="bar" style="width:${Math.round((t / max) * 120)}px"></span> ${t}</td></tr>`;
     })
-    .join('')}</tbody></table></div><p class="muted">${T('history.hint')}</p></details>`;
+    .join('')}</tbody></table></div><p class="muted">${T('history.hint')}</p>${trend}</details>`;
+}
+
+const numText = (n: number | null, digits = 0): string => (n === null ? '–' : String(+n.toFixed(digits)));
+
+/** A small line over the series; decorative, because the numbers beside it carry the same information. */
+function sparkline(values: (number | null)[]): string {
+  const pts = values.flatMap((v, i) => (v === null ? [] : [{ i, v }]));
+  if (pts.length < 2) return '';
+  const max = Math.max(...pts.map((p) => p.v));
+  const min = Math.min(...pts.map((p) => p.v));
+  const span = max - min || 1;
+  const w = 84;
+  const h = 22;
+  const x = (i: number) => ((i / Math.max(1, values.length - 1)) * (w - 4) + 2).toFixed(1);
+  const y = (v: number) => (h - 3 - ((v - min) / span) * (h - 6)).toFixed(1);
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true" focusable="false"><polyline fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" points="${pts.map((p) => `${x(p.i)},${y(p.v)}`).join(' ')}"/></svg>`;
+}
+
+/** One cell: the sparkline, the latest value, and the whole series as text for people who cannot see the line. */
+function trendCell(values: (number | null)[], digits: number, unit = ''): string {
+  const last = values[values.length - 1] ?? null;
+  const list = values.map((v) => (v === null ? '–' : `${numText(v, digits)}${unit}`)).join(', ');
+  return `<td>${sparkline(values)} <b>${last === null ? T('trend.noData') : `${numText(last, digits)}${unit}`}</b><span class="sr">. ${T('trend.series', { list })}</span></td>`;
+}
+
+function trendHtml(t: TrendReport): string {
+  const rows = t.rows.filter((r) => r.points.length >= 2);
+  if (!rows.length) return '';
+  const col = (
+    r: TrendReport['rows'][number],
+    pick: (p: TrendReport['rows'][number]['points'][number]) => number | null,
+  ) => r.points.map(pick);
+  const body = rows
+    .map(
+      (r) =>
+        `<tr><td lang="en"><code>${esc(pathname(r.url))}</code></td><td>${esc(r.viewport)}</td>${trendCell(
+          col(r, (p) => p.defectsPerCapture),
+          1,
+        )}${trendCell(
+          col(r, (p) => p.serious),
+          1,
+        )}${trendCell(
+          col(r, (p) => p.lcp),
+          0,
+          ' ms',
+        )}${trendCell(
+          col(r, (p) => p.cls),
+          3,
+        )}</tr>`,
+    )
+    .join('');
+  return `<h4>${T('trend.title')}</h4><div class="tablewrap" tabindex="0" role="region"${attrs({ 'aria-label': 'trend.title' })}><table class="history trend"><thead><tr><th>${T('th.page')}</th><th>${T('th.viewport')}</th><th>${T('th.trendDefects')}</th><th>${T('th.trendSerious')}</th><th>LCP</th><th>CLS</th></tr></thead><tbody>${body}</tbody></table></div><p class="muted">${T('trend.hint')}${t.skipped ? ` ${T('trend.skipped', { n: t.skipped })}` : ''}</p>`;
 }
 
 function journeysHtml(run: Run): string {
@@ -580,6 +668,7 @@ function payload(run: Run): string {
     prov: f.provenance,
     conf: f.confidence,
     url: f.url,
+    ...(f.pages ? { pages: f.pages } : {}),
     vp: f.viewport,
     journey: f.journey,
     desc: f.description,
@@ -645,7 +734,7 @@ export function renderHtml(run: Run, cmp?: RunComparison, history: RunListing[] 
   const autoGroups = defectGroups.filter((g) => g.path === 'auto').length;
   const uniquePages = new Set(run.pages.map((p) => p.url)).size;
   const cats = [...new Set(findings.map((f) => f.category))].sort();
-  const pages = [...new Set(findings.map((f) => f.url))];
+  const pages = [...new Set(findings.flatMap(pagesOf))];
   const top = defectGroups.slice(0, 6);
   const sevTotal = SEVS.reduce((n, k) => n + s.findings[k], 0) || 1;
   const sevColor: Record<string, string> = {

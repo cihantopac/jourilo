@@ -336,7 +336,8 @@ Run options:
   --var key=value        Test data for {{key}} placeholders (also JOURILO_VAR_KEY env vars)
   --allow-submit         Allow form submission on non-local hosts (authorized test environments only)
   --allow-destructive    Allow irreversible/payment actions — local hosts with sandbox data only
-  --allow-origin ORIGIN  Let the page navigate to another origin you are authorized to test (e.g. a test IdP)
+  --allow-origin ORIGIN  Let the page, its popups and new tabs navigate to another origin you are authorized to test
+                         (e.g. a test IdP); any other origin is blocked in every tab
   --trace                Record a Playwright trace per journey (contains typed values; keep private);
                          refused with --extra-header, since a trace records header values
   --auth FILE            Playwright storage state for signed-in journeys
@@ -392,6 +393,35 @@ Subcommands:
   size     --baseline 4% --mde 10% [--absolute] [--alpha 0.05] [--power 0.8] [--variants 2] [--daily-traffic N]
   plan     --finding <fingerprint> [--run latest] [--baseline 4%] [--mde 10%] [--daily-traffic N]
   analyze  --control 120/2400 --variant 150/2380 [--alpha 0.05] [--expected-share 0.5] [--planned N]
+           [--sequential [--tau 0.1]]
+  analyze  --from <adapter>:<id> [--metric M] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--control-key K]
+           [--alpha …] [--expected-share …] [--tau 0.1 | --fixed [--planned N]]
+
+analyze modes:
+  fixed        one look at a planned sample: two-proportion z-test, p-value and CI. Default for --control/--variant.
+  --sequential mSPRT (mixture sequential probability ratio test): an always-valid p-value and confidence sequence,
+               so the experiment may be checked after every batch and stopped at the first look that says stop.
+               Default with --from, since a live experiment is checked repeatedly; --fixed opts out there.
+  --tau T      standard deviation of the normal mixing distribution on the difference in rates, in (0, 1]
+               (default 0.1); sequential only. Each run is one look without history: once a look says stop, act on it.
+  --planned N  fixed only: warns about peeking while fewer than N visitors per arm have arrived.
+
+--from reads the numbers, read-only, from an analytics tool (keys from the environment only, never printed):
+  posthog:<id|flag-key>      POSTHOG_API_KEY (personal key: experiment:read, query:read); POSTHOG_HOST
+                             (default https://us.posthog.com), POSTHOG_PROJECT_ID (default @current).
+                             --metric picks a primary metric by name or uuid (default: the first); funnel
+                             metrics only
+  growthbook:<exp_id|key>    GROWTHBOOK_API_KEY; GROWTHBOOK_HOST (default https://api.growthbook.io).
+                             --metric picks a metric by id or name (default: the first goal); binomial or
+                             proportion metrics only
+  amplitude:<flag-key>       AMPLITUDE_API_KEY and AMPLITUDE_SECRET_KEY; AMPLITUDE_HOST (default
+                             https://amplitude.com). --metric EVENT (the conversion event) and --start are
+                             required; --end defaults to today; --control-key names the control variant
+                             (default control). Amplitude's funnel API does not list the flag's variants, so a
+                             missing third arm of a multi-arm experiment cannot be detected
+--start, --end and --control-key apply only to amplitude; PostHog and GrowthBook use the experiment's own window.
+Requests go through Jourilo's network guard and HTTPS_PROXY / NO_PROXY. A rate limit (429), a failed page or a
+missing variant makes the data incomplete: analyze then refuses and says why, instead of computing on partial numbers.
 
 Jourilo never invents traffic, conversions or effects: every number comes from you or from the formulas.
 ```
@@ -409,7 +439,7 @@ jourilo optimize [run=latest] --repo <path> [--rule id ...] [--apply]
 ```
 Deterministic fixers (others are reported with source candidates for a person or agent to fix):
   axe/html-has-lang, jourilo/missing-viewport-meta, jourilo/input-purpose, jourilo/focus-visible, jourilo/paste-blocked,
-  jourilo/unsized-images, jourilo/placeholder-label
+  jourilo/unsized-images, jourilo/placeholder-label, jourilo/button-implicit-submit, jourilo/focus-obscured
 Options:
   --repo PATH      Repository to fix (default: the run's repo, else the current directory)
   --rule ID        Only fix findings of this rule (repeatable)
@@ -516,7 +546,17 @@ jourilo compare <baseline-run> [head-run=latest] [--fail-on-regression]
 List stored runs in the workspace (.jourilo/runs).
 
 ```
-jourilo runs
+jourilo runs [trend [--target URL]]
+```
+
+```
+Subcommands:
+  trend            Defects per capture, critical and serious defects, LCP and CLS for every page and viewport across the
+                   runs of one target, oldest first. Partial and no-page-loaded runs are left out and counted. A finding with no
+                   viewport is counted at every viewport of its page.
+
+Options:
+  --target URL     With trend, the target to follow (default: the target of the latest run)
 ```
 
 ### `jourilo finding`

@@ -55,7 +55,25 @@
       "rule": "jourilo/redirect-chain",
       "path": "/old",
       "kind": "defect",
-      "why": "/old → /older → /oldest → /new: three redirects before the page (Frameva, field item F23)"
+      "why": "/old \u2192 /older \u2192 /oldest \u2192 /new: three redirects before the page (Frameva, field item F23)"
+    },
+    {
+      "rule": "jourilo/button-implicit-submit",
+      "path": "/implicit-submit",
+      "kind": "defect",
+      "evidenceExactly": [
+        "#show-pw"
+      ],
+      "why": "a Show password button with no type submits the login form; the Sign in button is a submit button by name"
+    },
+    {
+      "rule": "jourilo/button-implicit-submit",
+      "path": "/implicit-submit-plain",
+      "kind": "defect",
+      "evidenceExactly": [
+        "#plain > button:nth-of-type(2)"
+      ],
+      "why": "an id-less typeless button after a typed one: the evidence selector must match that button (nth-of-type counts every button)"
     }
   ],
   "mustNotFind": [
@@ -91,6 +109,14 @@
       "rule": "jourilo/redirect-chain",
       "path": "/moved",
       "why": "a single 301 to the new address is normal"
+    },
+    {
+      "rule": "jourilo/button-implicit-submit",
+      "path": "/implicit-submit",
+      "evidenceExactly": [
+        "#ctl-sign-in"
+      ],
+      "why": "a typeless Sign in button is the form's submit button by name"
     }
   ],
   "maxDefects": {
@@ -102,6 +128,6 @@
     ]
   },
   "audit": {
-    "maxPages": 10
+    "maxPages": 14
   }
 }

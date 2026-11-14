@@ -29,6 +29,29 @@ manifest is described there as `#/$defs/manifest`. The TypeScript source of trut
   `--timeout`; the page was still audited in the state it was in, and `limitations` says so. `settings.waitFor` holds
   the selector, and `jourilo verify` replays it. The field is absent in runs made before 1.3.0.
 
+## Findings seen on several pages
+
+- `findings[].pages` is present when one cause was seen on several pages with the same evidence once volatile tokens
+  (CSP nonces, `sha256-…` hashes, UUIDs, long hex or base64-like runs, cache-busting query values, chunk hashes in file
+  names, numeric timestamps and the page's own URL) are ignored. It lists every affected page, redacted like `url`, in
+  capture order; `url` is the first of them. Only `jourilo/console-errors` and `jourilo/failed-requests` collapse this
+  way, within one journey (or none).
+- Such a finding is counted once in `summary`; `occurrences` is the sum over its pages and `severity` the highest.
+- Its `fingerprint` depends on the rule, the normalized evidence and the journey, not on the pages, so it stays stable
+  whichever pages a run sampled. A finding seen on one page has no `pages` and keeps the per-page fingerprint of
+  earlier releases.
+- A console location (`file:line`) is part of the compared evidence, normalized the same way; for an inline script on
+  the page itself only the page counts, not the line, which depends on each page's HTML.
+- Run comparison (`jourilo verify`, `compare`, `optimize`) keeps the identity these two rules had before: rule, journey
+  and page. A finding matches a finding of the same rule and journey that shares at least one page, whatever the
+  evidence, so a collapse in either run, or a page that now logs fewer or more errors, is persisting (and changed),
+  never fixed plus new. A finding is fixed only when no finding of its rule and journey shows on any of its pages and
+  every one of them was checked again. Trends count it on each of its pages. The field is absent in runs made before
+  1.4.0.
+- Dismissals are keyed by fingerprint. A dismissal of a per-page finding does not hide the collapsed one, and the
+  collapsed fingerprint changes when the set of evidence changes (for example one more error on every page), or turns
+  back into the per-page fingerprint when a run samples only one affected page.
+
 ## Budgets
 
 `--budget LCP=2000,CLS=0.05` records `budgets`: one entry per metric with the `limit`, the `worst` value and the

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Cross-site cookies</title>
+  </head>
+  <body>
+    <main>
+      <h1>Cross-site cookies</h1>
+      <p><a id="link">Visit the IdP</a></p>
+      <form id="post" method="post">
+        <input type="hidden" name="from" value="app" />
+        <button type="submit">Post to the IdP</button>
+      </form>
+    </main>
+    <script>
+      // The IdP is the other loopback name on the same port: a cross-site destination for this page.
+      const idpHost = location.hostname === 'localhost' ? '127.0.0.1' : 'localhost';
+      const idpOrigin = `${location.protocol}//${idpHost}:${location.port}`;
+      document.getElementById('link').href = `${idpOrigin}/oauth/echo?via=link`;
+      document.getElementById('post').action = `${idpOrigin}/oauth/echo?via=post`;
+    </script>
+  </body>
+</html>

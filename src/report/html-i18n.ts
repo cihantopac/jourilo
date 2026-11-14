@@ -1,5 +1,6 @@
 // Interface strings of the HTML report in English and Turkish. The report is rendered in English on the server; the
-// client swaps every element marked with data-i18n to the chosen language. Finding texts, code, selectors, URLs and
+// client swaps every element marked with data-i18n to the chosen language. The titles, impacts and recommendations of
+// Jourilo's own rules have Turkish texts in rule-text-tr.ts; other finding texts, code, selectors, URLs and
 // screenshots come from the engine or the audited page and are never translated.
 //
 // Placeholders: {name} inserts a value; {name:s} adds an English plural "s" unless the value is 1.
@@ -131,6 +132,9 @@ const EN = {
   'fd.sources': 'Likely source',
   'fd.evidence': 'Evidence',
   'fd.instances': 'Same root cause',
+  'fd.pages': 'Affected pages ({n})',
+  'fd.pagesHint':
+    'The same evidence on each page; volatile tokens such as CSP nonces were ignored when comparing.',
   'fd.rule': 'rule',
   'fd.more': '+{n} more in run.json',
   'fd.shot': 'Screenshot evidence',
@@ -161,6 +165,14 @@ const EN = {
   'history.hint':
     'Runs with the same target in this workspace. Different page sets or viewports make counts not directly comparable; use jourilo verify for like-for-like comparisons.',
   'history.this': '(this run)',
+  'trend.title': 'Trend per page and viewport',
+  'trend.hint':
+    'Defects are counted per capture (one page at one viewport), so runs audited with different --pages stay comparable. A finding with no viewport counts at every viewport of its page, and a finding seen on several pages with the same evidence counts on each of them. Values run from the oldest run to this one.',
+  'trend.skipped': '{n} partial or empty run(s) left out: their numbers are not comparable.',
+  'trend.series': 'Oldest to newest: {list}',
+  'trend.noData': 'no data',
+  'th.trendDefects': 'Defects per capture',
+  'th.trendSerious': 'Critical and serious',
   'context.title': 'Context from other tools',
   'context.brand': 'Brand',
   'context.search': 'Search',
@@ -174,7 +186,7 @@ const EN = {
   'f.count': '{g} root cause{g:s} · {n} finding{n:s} shown',
   'f.selectShown': 'Select shown',
   'f.none': 'No findings match these filters.',
-  'f.original': 'Finding texts, code and evidence stay in their original language.',
+  'f.original': 'Descriptions, axe-core texts, code and evidence stay in their original language.',
   'f.fixedTitle': 'Fixed since the baseline',
 
   'j.none': 'No journeys were run. Use jourilo journeys suggest, then jourilo journeys run.',
@@ -377,6 +389,9 @@ const TR: Record<MsgKey, string> = {
   'fd.sources': 'Olası kaynak',
   'fd.evidence': 'Kanıt',
   'fd.instances': 'Aynı kök neden',
+  'fd.pages': 'Etkilenen sayfalar ({n})',
+  'fd.pagesHint':
+    'Her sayfada aynı kanıt; karşılaştırmada CSP nonce değerleri gibi değişken parçalar yok sayıldı.',
   'fd.rule': 'kural',
   'fd.more': 'run.json içinde {n} tane daha',
   'fd.shot': 'Ekran görüntüsü kanıtı',
@@ -407,6 +422,14 @@ const TR: Record<MsgKey, string> = {
   'history.hint':
     'Bu çalışma alanında aynı hedefe ait çalışmalar. Farklı sayfa kümeleri veya görünüm alanları sayıları doğrudan karşılaştırılamaz kılar; birebir karşılaştırma için jourilo verify kullanın.',
   'history.this': '(bu çalışma)',
+  'trend.title': 'Sayfa ve görünüm alanı başına eğilim',
+  'trend.hint':
+    'Kusurlar yakalama başına (bir sayfa, bir görünüm alanı) sayılır; bu yüzden farklı --pages ile yapılan çalışmalar karşılaştırılabilir kalır. Görünüm alanı olmayan bir bulgu, sayfasının her görünüm alanında sayılır; aynı kanıtla birden çok sayfada görülen bir bulgu da bu sayfaların her birinde sayılır. Değerler en eski çalışmadan bu çalışmaya doğru gider.',
+  'trend.skipped': '{n} yarım veya boş çalışma dışarıda bırakıldı: sayıları karşılaştırılamaz.',
+  'trend.series': 'Eskiden yeniye: {list}',
+  'trend.noData': 'veri yok',
+  'th.trendDefects': 'Yakalama başına kusur',
+  'th.trendSerious': 'Kritik ve ciddi',
   'context.title': 'Diğer araçlardan bağlam',
   'context.brand': 'Marka',
   'context.search': 'Arama',
@@ -420,7 +443,7 @@ const TR: Record<MsgKey, string> = {
   'f.count': '{g} kök neden · {n} bulgu gösteriliyor',
   'f.selectShown': 'Gösterilenleri seç',
   'f.none': 'Bu filtrelere uyan bulgu yok.',
-  'f.original': 'Bulgu metinleri, kod ve kanıtlar özgün dillerinde kalır.',
+  'f.original': 'Açıklamalar, axe-core metinleri, kod ve kanıtlar özgün dillerinde kalır.',
   'f.fixedTitle': 'Taban çalışmadan bu yana düzeltilenler',
 
   'j.none': 'Yolculuk çalıştırılmadı. Önce jourilo journeys suggest, sonra jourilo journeys run kullanın.',

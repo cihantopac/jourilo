@@ -20,6 +20,9 @@ Toolchain: `node "${CLAUDE_PLUGIN_ROOT}/dist/jourilo.mjs" <command> … --json` 
    Form submission on non-local hosts needs `--allow-submit` and the user's confirmation that the environment is
    authorized for testing with test accounts. Payments, deletions and cancellations run only on local sandboxes with
    `--allow-destructive` and explicit consent. A blocked step is a result: report it, do not work around it.
+   Popups and new tabs: `waitForPopup`, `switchTab` and `closeTab` steps make another tab current. An OAuth popup
+   may only reach a test identity provider the user names, passed with `--allow-origin`; never a real provider or
+   account.
 4. For failures, open the failing step's screenshot (Read), explain where and why the user gets stuck, and point to
    the likely cause. Signed-in journeys need a Playwright storage-state file from the user (`--auth`).
 5. Answer in the short format of `${CLAUDE_PLUGIN_ROOT}/skills/jourilo/SKILL.md` → Answer format (80–150 words, report path, one next step). Blocked journeys come first, with the step where people get stuck.

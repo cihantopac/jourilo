@@ -52,6 +52,8 @@ step('npm pack', () => {
   ))
     throw new Error(`unexpected file in package: ${bad}`);
   if (!files.includes('plugin/dist/jourilo.mjs')) throw new Error('bundled CLI missing from the package');
+  if (!files.includes('plugin/dist/ts-parser.mjs'))
+    throw new Error('TypeScript parser chunk missing from the package');
   return `${info.filename}, ${files.length} files, ${(info.size / 1024).toFixed(0)} kB`;
 });
 

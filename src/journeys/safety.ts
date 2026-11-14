@@ -11,7 +11,7 @@
 //  2. every request the page then makes is checked (`checkRequest`): form posts, DELETE/PUT/PATCH, requests to
 //     destructive or payment endpoints and navigations away from the target origin are aborted.
 import { lexicon } from '../core/lexicon.js';
-import type { HostClass } from '../core/url-safety.js';
+import { type HostClass, isLocalHostname } from '../core/url-safety.js';
 
 // Multilingual (en, tr, de, es, fr) vocabulary from core/lexicon.ts, matched on Unicode word boundaries.
 export const DESTRUCTIVE = lexicon('destructive');
@@ -191,6 +191,8 @@ export interface RequestFacts {
   mainFrame: boolean;
   /** Request body, if any (to tell GraphQL reads from writes). */
   body?: string | null;
+  /** URL of the document that makes the request (the tab's current page for a navigation), if known. */
+  frameUrl?: string;
 }
 
 export interface RequestPolicy extends SafetyPolicy {
@@ -232,7 +234,22 @@ export function checkRequest(r: RequestFacts, policy: RequestPolicy): SafetyVerd
   if (u.protocol !== 'http:' && u.protocol !== 'https:') return { allowed: true };
   const method = r.method.toUpperCase();
   const firstParty = u.origin === policy.origin;
-  const safeHost = policy.hostClass === 'local';
+  // A request from a page on a non-local origin other than the target (a popup on a public test identity provider),
+  // or a navigation to one, is judged by that host, not by the journey's: a local journey with --allow-destructive
+  // still never sends a deletion or payment there. Background requests of the target's own pages keep the target's
+  // class, so a local app can still use a payment provider's test mode.
+  const elsewhere = (x: URL | undefined) =>
+    !!x &&
+    (x.protocol === 'http:' || x.protocol === 'https:') &&
+    x.origin !== policy.origin &&
+    !isLocalHostname(x.hostname);
+  let frame: URL | undefined;
+  try {
+    frame = r.frameUrl ? new URL(r.frameUrl) : undefined;
+  } catch {
+    frame = undefined;
+  }
+  const safeHost = policy.hostClass === 'local' && !elsewhere(frame) && !(r.isNavigation && elsewhere(u));
   if (r.isNavigation && r.mainFrame && !firstParty && !(policy.allowOrigins ?? []).includes(u.origin))
     return {
       allowed: false,

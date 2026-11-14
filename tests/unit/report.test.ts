@@ -1,10 +1,15 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { emptyInventory, sampleLimitation, summarize } from '../../src/audit/engine.js';
 import { makeFinding } from '../../src/audit/finding.js';
 import type { Finding } from '../../src/core/types.js';
+import { locateFindings } from '../../src/repair/locate.js';
 import { compareRuns } from '../../src/report/compare.js';
 import { esc, renderHtml } from '../../src/report/html.js';
 import { I18N } from '../../src/report/html-i18n.js';
+import { rootCauseKey } from '../../src/report/remediation.js';
 import { renderMarkdown, renderSarif } from '../../src/report/text.js';
 import { run } from '../helpers.js';
 
@@ -341,5 +346,153 @@ describe('pages, captures and samples', () => {
     expect(renderMarkdown(r)).toContain('2 pages, 4 captures');
     expect(renderHtml(r)).toContain('4 captures');
     expect(I18N.tr['scope.captures']).toBeDefined();
+  });
+});
+
+describe('component-level root causes', () => {
+  // A Next.js app router project as found in the field: a shared header whose links render through NavLink, and a
+  // pricing table only the pricing page uses.
+  const repo = () => {
+    const root = mkdtempSync(join(tmpdir(), 'jourilo-components-'));
+    const put = (file: string, text: string) => {
+      mkdirSync(join(root, file, '..'), { recursive: true });
+      writeFileSync(join(root, file), text);
+    };
+    put(
+      'src/components/Header.tsx',
+      `import Link from 'next/link';
+import { NavLink } from './NavLink';
+
+export function Header() {
+  return (
+    <header className="border-b">
+      <Link href="/" className="font-semibold">Acme</Link>
+      <nav>
+        <NavLink href="/pricing">Pricing</NavLink>
+        <NavLink href="/about">About us</NavLink>
+      </nav>
+    </header>
+  );
+}
+`,
+    );
+    put(
+      'src/components/NavLink.tsx',
+      `export const NavLink = ({ href, children }: { href: string; children: React.ReactNode }) => (
+  <a href={href} className="text-gray-400 hover:text-gray-900">{children}</a>
+);
+`,
+    );
+    put(
+      'src/app/page.tsx',
+      `import { Header } from '@/components/Header';
+export default function Home() {
+  return (<><Header /><main>Home</main></>);
+}
+`,
+    );
+    put(
+      'src/app/pricing/page.tsx',
+      `import { Header } from '@/components/Header';
+function PricingTable() {
+  return (
+    <table className="pricing-table">
+      <tbody><tr><td className="text-gray-400">Billed yearly</td></tr></tbody>
+    </table>
+  );
+}
+export default function Pricing() {
+  return (<><Header /><PricingTable /></>);
+}
+`,
+    );
+    put(
+      'src/app/about/page.tsx',
+      `import { Header } from '@/components/Header';
+export default function About() {
+  return (<><Header /><main>About</main></>);
+}
+`,
+    );
+    return root;
+  };
+  // axe color-contrast evidence as it is recorded: the rendered <a>, its selector and the measured colors.
+  const contrast = (path: string, href: string, text: string) =>
+    f('axe/color-contrast', path, {
+      evidence: [
+        {
+          type: 'element',
+          selector: `header > nav > a[href="${href}"]`,
+          snippet: `<a href="${href}" class="text-gray-400 hover:text-gray-900">${text}</a>`,
+          data: { fgColor: '#9ca3af', bgColor: '#ffffff', contrastRatio: 2.54 },
+        },
+      ],
+    });
+
+  it('findings on three pages located in Header.tsx form one root cause naming the component', async () => {
+    const findings = [
+      contrast('/', '/pricing', 'Pricing'),
+      contrast('/pricing', '/pricing', 'Pricing'),
+      contrast('/about', '/about', 'About us'),
+    ];
+    const r = run(findings);
+    await locateFindings(r, repo());
+    for (const x of findings) {
+      expect(x.sources?.[0]?.file).toBe('src/components/Header.tsx');
+      expect(x.sources?.[0]?.component).toEqual({
+        name: 'Header',
+        file: 'src/components/Header.tsx',
+        usedBy: 3,
+      });
+    }
+    // Two different lines of the header (the Pricing and the About link), one cause.
+    expect(new Set(findings.map((x) => x.sources?.[0]?.line)).size).toBe(2);
+    expect(new Set(findings.map(rootCauseKey))).toEqual(
+      new Set(['axe/color-contrast|component|src/components/Header.tsx#Header']),
+    );
+    const html = renderHtml(r);
+    expect(html.match(/<article class="rc /g)).toHaveLength(1);
+    expect(html).toContain('component Header, used by 3 routes');
+    // The merged card keeps both offending lines of the header visible.
+    expect(html).toContain('<code>src/components/Header.tsx:9</code>');
+    expect(html).toContain('<code>src/components/Header.tsx:10</code>');
+  });
+
+  it('a code file the parser cannot read never fails locating: only files that matter are named', async () => {
+    const root = repo();
+    // An unrelated broken sample is not reported; a broken route file is (it can hide one of Header's routes).
+    writeFileSync(join(root, 'src/components/Broken.tsx'), 'export const Broken = () => <div>{</div>;\n');
+    mkdirSync(join(root, 'src/app/contact'), { recursive: true });
+    writeFileSync(
+      join(root, 'src/app/contact/page.tsx'),
+      'export default function C() { return <main>{</main>; }\n',
+    );
+    const findings = [contrast('/', '/pricing', 'Pricing'), contrast('/about', '/about', 'About us')];
+    const r = run(findings);
+    expect(await locateFindings(r, root)).toBe(2);
+    expect(findings.map(rootCauseKey)).toEqual([
+      'axe/color-contrast|component|src/components/Header.tsx#Header',
+      'axe/color-contrast|component|src/components/Header.tsx#Header',
+    ]);
+    expect(r.limitations.filter((l) => l.includes('component graph'))).toEqual([
+      '1 code file(s) were left out of the component graph (broken or newer syntax, or code the parser could not walk), so findings in them are grouped per source line: src/app/contact/page.tsx.',
+    ]);
+  });
+
+  it('a finding in a page-only component keeps its per-page root cause', async () => {
+    const x = f('axe/color-contrast', '/pricing', {
+      evidence: [
+        {
+          type: 'element',
+          selector: 'table.pricing-table td',
+          snippet: '<td class="text-gray-400">Billed yearly</td>',
+          data: { fgColor: '#9ca3af', bgColor: '#ffffff', contrastRatio: 2.54 },
+        },
+      ],
+    });
+    await locateFindings(run([x]), repo());
+    expect(x.sources?.[0]).toMatchObject({ file: 'src/app/pricing/page.tsx', line: 5 });
+    expect(x.sources?.[0]?.component).toBeUndefined();
+    expect(rootCauseKey(x)).toBe('axe/color-contrast|src|src/app/pricing/page.tsx:5');
   });
 });

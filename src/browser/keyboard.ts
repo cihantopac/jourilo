@@ -2,6 +2,7 @@
 // whether focus is visible (WCAG 2.4.7), hidden behind sticky content (2.4.11) or trapped (2.1.2).
 import type { ElementHandle, Page } from 'playwright-core';
 import type { Rect } from '../core/types.js';
+import { asJourilo } from './own-activity.js';
 
 export interface FocusStop {
   index: number;
@@ -17,6 +18,16 @@ export interface FocusStop {
   obscured: boolean;
   /** Selector of the content covering the element, when obscured. */
   coverSelector?: string;
+  /**
+   * The bar doing the covering: the cover itself, or its nearest fixed or sticky ancestor. Its computed position, its
+   * top edge in the viewport and its height let a fixer size scroll-padding-top.
+   */
+  coverBarSelector?: string;
+  coverBarId?: string;
+  coverBarClasses?: string;
+  coverPosition?: string;
+  coverTop?: number;
+  coverHeight?: number;
   inModal: boolean;
   /**
    * The stop has no box to draw an indicator on (its rect, measured while focused, is at most 1 px wide or tall and
@@ -45,7 +56,7 @@ export interface KeyboardWalk {
 }
 
 // Plain JS: a CSS selector for an element (a unique id, or a short tag path with :nth-of-type).
-const SELECTOR_OF = `(e) => {
+export const SELECTOR_OF = `(e) => {
     if (e.id && document.querySelectorAll('#' + CSS.escape(e.id)).length === 1) return '#' + CSS.escape(e.id);
     const parts = []; let c = e;
     while (c && c.nodeType === 1 && c !== document.documentElement && parts.length < 6) {
@@ -115,6 +126,12 @@ const FOCUS_INFO = `(el) => {
     if (!hit || hit === el || el.contains(hit) || hit.contains(el)) { visiblePts++; continue; }
     if (isCover(hit)) cover = cover || hit;
   }
+  let bar = cover;
+  for (let a = cover; a && a.nodeType === 1; a = a.parentElement) {
+    const pos = getComputedStyle(a).position;
+    if (pos === 'fixed' || pos === 'sticky') { bar = a; break; }
+  }
+  const barRect = bar ? bar.getBoundingClientRect() : null;
   const noBox = (e) => { const b = e.getBoundingClientRect(); return b.width <= 1 || b.height <= 1; };
   const rootHost = el.getRootNode && el.getRootNode().host;
   // A stop with text or an accessible name is content a person can reach, so a hidden one is a real focus-visible
@@ -137,6 +154,12 @@ const FOCUS_INFO = `(el) => {
     rect: { x: Math.round(r.left + sx), y: Math.round(r.top + sy), width: Math.round(r.width), height: Math.round(r.height) },
     obscured: !selfHidden && inViewport > 0 && visiblePts === 0 && !!cover,
     coverSelector: cover ? sel(cover) : undefined,
+    coverBarSelector: bar ? sel(bar) : undefined,
+    coverBarId: bar && bar.id ? bar.id : undefined,
+    coverBarClasses: bar && typeof bar.className === 'string' && bar.className.trim() ? bar.className.trim().replace(/\\s+/g, ' ').slice(0, 120) : undefined,
+    coverPosition: bar ? getComputedStyle(bar).position : undefined,
+    coverTop: barRect ? Math.round(barRect.top) : undefined,
+    coverHeight: barRect ? Math.ceil(barRect.height) : undefined,
     inModal: !!el.closest('[aria-modal="true"], dialog[open], [role="dialog"], [role="alertdialog"]'),
     boxless,
   };
@@ -284,9 +307,9 @@ async function shotAround(page: Page, r: Rect): Promise<Buffer | null> {
     height: r.height + pad * 2,
   };
   if (r.width < 1 || r.height < 1 || clip.width * clip.height > 640 * 480) return null;
-  return page
-    .screenshot({ clip, fullPage: true, animations: 'disabled', caret: 'hide', type: 'png' })
-    .catch(() => null);
+  return asJourilo(page, () =>
+    page.screenshot({ clip, fullPage: true, animations: 'disabled', caret: 'hide', type: 'png' }),
+  ).catch(() => null);
 }
 
 export async function keyboardWalk(page: Page, maxTabs = 60): Promise<KeyboardWalk> {

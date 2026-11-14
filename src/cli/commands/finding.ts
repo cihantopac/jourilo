@@ -153,7 +153,7 @@ undismiss options:
     run.findings.push(f);
     run.summary = { ...run.summary, ...summarize(run.findings, run.summary.pages, run.summary.journeys) };
     ctx.ws.saveRun(run);
-    writeReports(dir, run, undefined, { history: ctx.ws.listRuns() });
+    writeReports(dir, run, undefined, { history: ctx.ws.listRuns({ trend: true }) });
     return {
       data: f,
       text: `Added ${f.provenance} finding ${f.fingerprint} to run ${run.id} (${join(dir, 'report.html')}).`,
@@ -168,7 +168,7 @@ function refreshRun(ctx: Context, runRef: string, change: (run: Run) => void): s
   if (run.dismissed && !run.dismissed.length) delete run.dismissed;
   run.summary = { ...run.summary, ...summarize(run.findings, run.summary.pages, run.summary.journeys) };
   ctx.ws.saveRun(run);
-  writeReports(dir, run, undefined, { history: ctx.ws.listRuns() });
+  writeReports(dir, run, undefined, { history: ctx.ws.listRuns({ trend: true }) });
   return run.id;
 }
 

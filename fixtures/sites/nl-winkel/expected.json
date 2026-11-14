@@ -1,0 +1,57 @@
+{
+  "description": "Dutch shop: conversion heuristics and form error feedback; the account page's specific buttons are controls.",
+  "mustFind": [
+    {
+      "rule": "conv/unclear-value-proposition",
+      "path": "/",
+      "why": "h1 'Welkom'"
+    },
+    {
+      "rule": "conv/vague-cta-label",
+      "path": "/",
+      "why": "primary CTA 'Verder'"
+    },
+    {
+      "rule": "conv/vague-cta-label",
+      "path": "/registratie",
+      "why": "submit 'Verzenden'"
+    },
+    {
+      "rule": "conv/pricing-period-unclear",
+      "path": "/prijzen",
+      "why": "price without a billing period"
+    },
+    {
+      "rule": "conv/signup-friction",
+      "path": "/registratie",
+      "why": "6 fields, password repeat, required phone"
+    },
+    {
+      "rule": "conv/no-trust-signals",
+      "path": "/registratie",
+      "why": "no reassurance next to signup"
+    },
+    {
+      "rule": "a11y/errors-not-associated",
+      "path": "/registratie",
+      "why": "'E-mailadres is verplicht.' not associated"
+    }
+  ],
+  "mustNotFind": [
+    {
+      "rule": "conv/vague-cta-label",
+      "path": "/account",
+      "why": "'Wijzigingen opslaan' and 'Account verwijderen' are specific actions"
+    },
+    {
+      "rule": "conv/pricing-period-unclear",
+      "path": "/prijzen-jaarlijks",
+      "why": "prices state their period in the local language"
+    },
+    {
+      "rule": "conv/no-trust-signals",
+      "path": "/registratie-veilig",
+      "why": "'Veilig betalen. Je gegevens zijn versleuteld.' is a security signal"
+    }
+  ]
+}

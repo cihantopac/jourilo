@@ -413,9 +413,9 @@ async function runCmd(ctx: Context) {
       ...(guarded.blocked.length || guarded.escaped.length ? { network: guarded } : {}),
     };
     const repo = str(ctx, 'repo') ?? (isDir ? resolve(baseArg) : undefined);
-    if (repo) locateFindings(run, repo);
+    if (repo) await locateFindings(run, repo);
     ctx.ws.saveRun(run);
-    const reports = writeReports(runDir, run, undefined, { history: ctx.ws.listRuns() });
+    const reports = writeReports(runDir, run, undefined, { history: ctx.ws.listRuns({ trend: true }) });
     const failed = journeys.filter((j) => j.status === 'failed').length;
     return {
       data: { runId: id, runDir, reports, journeys, findings },
@@ -500,7 +500,8 @@ Run options:
   --var key=value        Test data for {{key}} placeholders (also JOURILO_VAR_KEY env vars)
   --allow-submit         Allow form submission on non-local hosts (authorized test environments only)
   --allow-destructive    Allow irreversible/payment actions — local hosts with sandbox data only
-  --allow-origin ORIGIN  Let the page navigate to another origin you are authorized to test (e.g. a test IdP)
+  --allow-origin ORIGIN  Let the page, its popups and new tabs navigate to another origin you are authorized to test
+                         (e.g. a test IdP); any other origin is blocked in every tab
   --trace                Record a Playwright trace per journey (contains typed values; keep private);
                          refused with --extra-header, since a trace records header values
   --auth FILE            Playwright storage state for signed-in journeys

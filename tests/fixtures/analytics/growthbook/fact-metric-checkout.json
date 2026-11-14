@@ -1,0 +1,18 @@
+{
+  "_synthesized": "Shape of GET /api/v1/fact-metrics/:id (docs.growthbook.io/api/fact-metrics/operation/getFactMetric), a proportion fact metric. Not a live recording.",
+  "factMetric": {
+    "id": "fact__checkout",
+    "name": "Checkout",
+    "description": "",
+    "datasource": "ds_example",
+    "metricType": "proportion",
+    "inverse": false,
+    "numerator": {
+      "factTableId": "ftb_example",
+      "column": "$$distinctUsers",
+      "filters": []
+    },
+    "denominator": null,
+    "archived": false
+  }
+}

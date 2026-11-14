@@ -299,7 +299,16 @@
         "column": { "type": "integer" },
         "excerpt": { "type": "string" },
         "reason": { "type": "string" },
-        "confidence": { "$ref": "#/$defs/confidence" }
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "component": {
+          "type": "object",
+          "required": ["name", "file", "usedBy"],
+          "properties": {
+            "name": { "type": "string" },
+            "file": { "type": "string" },
+            "usedBy": { "type": "integer", "minimum": 2 }
+          }
+        }
       }
     },
     "finding": {
@@ -341,7 +350,8 @@
         "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
         "reproduction": { "type": "array", "items": { "type": "string" } },
         "sources": { "type": "array", "items": { "$ref": "#/$defs/sourceLocation" } },
-        "occurrences": { "type": "integer" }
+        "occurrences": { "type": "integer" },
+        "pages": { "type": "array", "items": { "type": "string" } }
       }
     },
     "dismissal": {
