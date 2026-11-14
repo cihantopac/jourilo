@@ -34,7 +34,8 @@ describe('fixture benchmark', () => {
       (f) => f.ruleId === 'jourilo/focus-visible' && f.url.endsWith('/pressed-tools'),
     );
     expect(focus?.evidence[0]?.snippet).toBe('<button class="tool" aria-pressed="true">Saw');
-  });
+    // About 20 pages with keyboard walks (menus, dialogs, disclosures): ~110 s on Linux CI, more on macOS runners.
+  }, 300_000);
   it('applies conversion, form and field-purpose heuristics to a Turkish site', async () => {
     const r = await benchFixture(join(import.meta.dirname, '../../fixtures/sites/tr-dukkan'), ws);
     expect(r.missed).toEqual([]);
