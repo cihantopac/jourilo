@@ -57217,7 +57217,7 @@ function cliMarkdown() {
 // src/cli/main.ts
 function usage() {
   const lines = [
-    `Jourilo ${VERSION} \u2014 product experience & conversion engineering studio`,
+    `Jourilo ${VERSION} \u2014 UX, accessibility and conversion auditor`,
     "",
     "Usage: jourilo <command> [options]   (jourilo <command> --help for details)",
     ""

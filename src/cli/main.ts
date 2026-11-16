@@ -5,7 +5,7 @@ import { COMMANDS, cliMarkdown, GROUPS } from './registry.js';
 
 function usage(): string {
   const lines = [
-    `Jourilo ${VERSION} — product experience & conversion engineering studio`,
+    `Jourilo ${VERSION} — UX, accessibility and conversion auditor`,
     '',
     'Usage: jourilo <command> [options]   (jourilo <command> --help for details)',
     '',
