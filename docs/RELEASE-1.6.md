@@ -19,12 +19,12 @@ A minor release that redesigns the report and rebuilds the README. What Jourilo 
 
 ### Evidence (2026-11-16, macOS 27, Node 22, Playwright 1.64.1)
 
-| Check                                                                           | Result |
-| ------------------------------------------------------------------------------- | ------ |
-| `npm run ci` (lint, typecheck, build, unit and browser tests, dist check)       | TBD    |
-| Fixture benchmark (`npm run bench`)                                             | TBD    |
-| `scripts/smoke-pack.mjs` (clean install from the packed tarball, every command) | TBD    |
-| `claude plugin validate` (marketplace and plugin, strict)                       | TBD    |
+| Check                                                                           | Result                                                                                                                                                  |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run ci` (lint, typecheck, build, unit and browser tests, dist check)       | 53 files, 853/854 green; one stale selector in a browser test fixed and re-run; lint, typecheck, dist check and 705 unit tests re-run on the final head |
+| Fixture benchmark (`npm run bench`)                                             | 91/91 found, 0 false positives, source location 10/10                                                                                                   |
+| `scripts/smoke-pack.mjs` (clean install from the packed tarball, every command) | passed, 31 files, 1579 kB                                                                                                                               |
+| `claude plugin validate` (marketplace and plugin, strict)                       | passed                                                                                                                                                  |
 
 The report was checked visually in light and dark at 1280 px and 390 px, in English and Turkish. No automated run
 shows WCAG conformance.
