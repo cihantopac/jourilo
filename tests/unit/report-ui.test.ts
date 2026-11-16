@@ -185,7 +185,7 @@ describe('report interface', () => {
     expect(html).toMatch(/data-theme="light"[\s\S]*data-theme="dark"[\s\S]*data-theme="system"/);
     expect(html).toContain('id="prompt"');
     expect(html).toContain('Create repair prompt');
-    expect(html).toContain('same cause on 2 pages');
+    expect(html).toContain('2 pages');
     expect(html).toMatch(/class="sel" data-ids="\w+ \w+"/);
     expect(html).toContain('<h1');
     expect(html).toContain('<main id="main"');
@@ -358,7 +358,7 @@ describe('report interface', () => {
     const tr = RULE_TEXT_TR['jourilo/focus-visible']!;
     // English stays the server text (the report works without JavaScript); the Turkish text sits next to it.
     expect(html).toContain(
-      `<span class="t"><span lang="en" data-rl="en">Keyboard focus is not visible</span><span lang="tr" data-rl="tr" hidden>${esc(tr.title)}</span></span>`,
+      `<span class="tt"><span lang="en" data-rl="en">Keyboard focus is not visible</span><span lang="tr" data-rl="tr" hidden>${esc(tr.title)}</span></span>`,
     );
     expect(html).toContain(`<span lang="tr" data-rl="tr" hidden>${esc(tr.impact)}</span>`);
     expect(html).toContain(`<span lang="tr" data-rl="tr" hidden>${esc(tr.recommendation)}</span>`);
@@ -379,11 +379,11 @@ describe('report interface', () => {
     delete RULE_TEXT_TR['jourilo/focus-visible'];
     try {
       const html = renderHtml(run([focusVisible(), f('ai/custom-check', '/b')]));
-      expect(html).toContain('<span class="t"><span lang="en">Keyboard focus is not visible</span></span>');
+      expect(html).toContain('<span class="tt"><span lang="en">Keyboard focus is not visible</span></span>');
       expect(html).toContain(
         '<dd><span lang="en">Keyboard users cannot see where they are on the page, so they cannot operate it reliably.</span></dd>',
       );
-      expect(html).toContain('<span class="t"><span lang="en">T ai/custom-check</span></span>');
+      expect(html).toContain('<span class="tt"><span lang="en">T ai/custom-check</span></span>');
       // Never an empty or hidden-only text: without a translation nothing in the markup is marked for the switch.
       const markup = html.slice(html.indexOf('<body>'), html.indexOf('<script type="application/json"'));
       expect(markup).not.toMatch(/ data-rl="/);
@@ -430,6 +430,89 @@ describe('report interface', () => {
     // A fixed text gets no English twin inside the Turkish copy.
     expect(html).toContain(
       `<span lang="tr" data-rl="tr" hidden>${esc(tr('jourilo/input-purpose').title)}</span>`,
+    );
+  });
+});
+
+describe('finding anatomy', () => {
+  const box = {
+    type: 'element' as const,
+    file: 'screenshots/p.jpg',
+    rect: { x: 10, y: 10, width: 40, height: 20 },
+  };
+  const article = (html: string, title: string) => {
+    const at = html.indexOf(`<span lang="en">${title}</span>`, html.indexOf('id="findings"'));
+    return html.slice(html.lastIndexOf('<article class="rc ', at), html.indexOf('</article>', at));
+  };
+
+  it('severity is a dot plus word', () => {
+    const html = renderHtml(run([f('axe/x', '/', { severity: 'critical' })]));
+    expect(html).not.toMatch(/class="[^"]*\bsev-critical\b/);
+    expect(html).not.toContain('--crit-soft');
+    expect(html).toContain('<span class="sev"><i class="dot dot-critical" aria-hidden="true"></i>');
+    expect(html).toContain('.dot-critical{');
+  });
+
+  it('details are folded', () => {
+    const std = { standard: 'WCAG 2.2', id: '1.1.1', title: 'Non-text Content' };
+    const html = renderHtml(run([f('axe/x', '/', { standards: [std], reproduction: ['Open the page.'] })]));
+    const a = article(html, 'T axe/x');
+    const more = a.slice(a.indexOf('<details class="more">'));
+    expect(a).toContain(
+      '<details class="more"><summary><span data-i18n="fd.details">Details</span></summary>',
+    );
+    expect(more).toContain('Non-text Content');
+    expect(more).toContain('Open the page.');
+    expect(more).toContain('data-i18n="fd.why"');
+    // The fix sentence stays outside the fold.
+    expect(a.indexOf('class="fix"')).toBeLessThan(a.indexOf('<details class="more">'));
+  });
+
+  it('shows up to three measured values as stat tiles, the visual first', () => {
+    const data = { right: 640, width: 640, viewport: 390, extra: 1, label: 'x' };
+    const a = article(renderHtml(run([f('axe/x', '/', { evidence: [{ ...box, data }] })])), 'T axe/x');
+    expect(a.match(/<li><span class="v">/g)).toHaveLength(3);
+    expect(a).toContain('<span class="v">390 px</span><span class="l">viewport</span>');
+    expect(a.indexOf('class="fig"')).toBeLessThan(a.indexOf('class="stats"'));
+    expect(a.indexOf('class="stats"')).toBeLessThan(a.indexOf('class="fix"'));
+    const metric = { name: 'LCP', viewport: 'desktop', value: 4330, unit: 'ms', rating: 'poor' };
+    const m = article(
+      renderHtml(run([f('perf/lcp', '/', { evidence: [{ type: 'metric', data: metric }] })])),
+      'T perf/lcp',
+    );
+    expect(m).toContain('<span class="v">4330 ms</span><span class="l">LCP</span>');
+  });
+
+  it('no empty stat row when evidence has no numbers', () => {
+    const a = article(
+      renderHtml(run([f('axe/x', '/', { evidence: [{ ...box, data: { messageKey: 'noLang' } }] })])),
+      'T axe/x',
+    );
+    expect(a).not.toContain('class="stats"');
+  });
+
+  it('no empty visual when a finding has no screenshot', () => {
+    const a = article(
+      renderHtml(run([f('axe/html-has-lang', '/', { evidence: [{ type: 'dom', selector: 'html' }] })])),
+      'T axe/html-has-lang',
+    );
+    expect(a).not.toContain('class="fig"');
+    expect(a).not.toContain('class="crop"');
+    expect(a).toContain('class="fix"');
+    expect(a).toContain('<details class="more">');
+  });
+
+  it('chips share one neutral style and the spread is one meta line', () => {
+    const shared = [{ type: 'element' as const, selector: '.footer a' }];
+    const html = renderHtml(
+      run([
+        f('axe/color-contrast', '/', { evidence: shared, occurrences: 10 }),
+        f('axe/color-contrast', '/b', { evidence: shared }),
+      ]),
+    );
+    expect(html).not.toMatch(/class="chip (path|st)-/);
+    expect(html).toMatch(
+      /<span class="where">[^<]*· <span data-i18n="rc\.samecause"[^>]*>2 pages<\/span> · <span data-i18n="rc\.occ"[^>]*>×10<\/span>/,
     );
   });
 });

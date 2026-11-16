@@ -75,9 +75,9 @@ const EN = {
 
   'rc.pages': '{n} page{n:s}',
   'rc.findings': '{n} finding{n:s}',
-  'rc.samecause': 'same cause on {n} pages',
+  'rc.samecause': '{n} pages',
   'rc.occ': '×{n}',
-  'rc.select': 'Select for the repair prompt',
+  'rc.select': 'Select',
   'rc.selectOne': 'Select this finding',
 
   'kind.defect': 'Defect',
@@ -124,8 +124,9 @@ const EN = {
   'st.stable': 'Stable',
 
   'fd.what': 'What happens',
-  'fd.why': 'Why it matters',
-  'fd.fix': 'Suggested fix',
+  'fd.why': 'Why',
+  'fd.fix': 'Fix',
+  'fd.details': 'Details',
   'fd.basis': 'Basis',
   'fd.standards': 'Standards',
   'fd.repro': 'Reproduce',
@@ -334,9 +335,9 @@ const TR: Record<MsgKey, string> = {
 
   'rc.pages': '{n} sayfa',
   'rc.findings': '{n} bulgu',
-  'rc.samecause': '{n} sayfada aynı neden',
+  'rc.samecause': '{n} sayfa',
   'rc.occ': '×{n}',
-  'rc.select': 'Onarım istemi için seç',
+  'rc.select': 'Seç',
   'rc.selectOne': 'Bu bulguyu seç',
 
   'kind.defect': 'Kusur',
@@ -383,8 +384,9 @@ const TR: Record<MsgKey, string> = {
   'st.stable': 'Kararlı',
 
   'fd.what': 'Ne oluyor',
-  'fd.why': 'Neden önemli',
-  'fd.fix': 'Önerilen düzeltme',
+  'fd.why': 'Neden',
+  'fd.fix': 'Düzeltme',
+  'fd.details': 'Ayrıntılar',
   'fd.basis': 'Dayanak',
   'fd.standards': 'Standartlar',
   'fd.repro': 'Yeniden üretme',

@@ -100,6 +100,8 @@ interface CropOpts {
   /** Fixed height/width ratio of the crop (cards); otherwise the height follows the element. */
   ratio?: number;
   base?: string;
+  /** Never upscale the crop beyond this factor of its CSS size (large finding visuals stay sharp). */
+  maxScale?: number;
 }
 
 /** The element's neighbourhood on its screenshot, zoomed to fit the container, with the element outlined. */
@@ -121,7 +123,8 @@ function cropAt(run: Run, vpName: string, e: Pick<Evidence, 'file' | 'rect'>, o:
   const y0 = Math.max(0, r.height + pad * 2 <= rh ? r.y + r.height / 2 - rh / 2 : r.y - pad);
   const pct = (n: number, of: number) => `${((n / of) * 100).toFixed(2)}%`;
   const box = `left:${pct(r.x - x0, rw)};top:${pct(r.y - y0, rh)};width:${pct(Math.max(3, r.width), rw)};height:${pct(Math.max(3, r.height), rh)}`;
-  return `<div class="crop" style="aspect-ratio:${Math.round(rw)}/${Math.round(rh)}"><img loading="lazy" alt="" src="${src}" style="width:${pct(vp.width, rw)};left:-${pct(x0, rw)};top:-${pct(y0, rh)}"><div class="box" style="${box}"></div></div>`;
+  const cap = o.maxScale ? `;max-width:${Math.round(rw * o.maxScale)}px` : '';
+  return `<div class="crop" style="aspect-ratio:${Math.round(rw)}/${Math.round(rh)}${cap}"><img loading="lazy" alt="" src="${src}" style="width:${pct(vp.width, rw)};left:-${pct(x0, rw)};top:-${pct(y0, rh)}"><div class="box" style="${box}"></div></div>`;
 }
 
 /** A page's screenshot, or its fold screenshot (`--evidence minimal` keeps only that for a one-screen page). */
@@ -214,28 +217,73 @@ function groupFindings(findings: Finding[]): Group[] {
     );
 }
 
+/** Severity as a small coloured dot and one word; the colour never appears anywhere else. */
+function sevHtml(sev: Severity): string {
+  return `<span class="sev"><i class="dot dot-${sev}" aria-hidden="true"></i>${T(`sev.${sev}` as MsgKey)}</span>`;
+}
+
+/** Fix path, category and comparison status: one neutral chip style, the text says what each is. */
 function chipsHtml(g: Group, status?: string): string {
   const f = g.lead;
   const parts = [
-    `<span class="chip sev sev-${f.severity}">${T(`sev.${f.severity}` as MsgKey)}</span>`,
-    `<span class="chip path-${g.path}"${attrs({ title: `path.${g.path}.hint` as MsgKey })}>${T(`path.${g.path}` as MsgKey)}</span>`,
+    `<span class="chip"${attrs({ title: `path.${g.path}.hint` as MsgKey })}>${T(`path.${g.path}` as MsgKey)}</span>`,
     `<span class="chip">${T(`cat.${f.category}` as MsgKey)}</span>`,
   ];
-  if (status) parts.push(`<span class="chip st-${esc(status)}">${T(`st.${status}` as MsgKey)}</span>`);
-  if (f.occurrences > 1) parts.push(`<span class="chip">${T('rc.occ', { n: f.occurrences })}</span>`);
-  if (g.pages.length > 1) parts.push(`<span class="chip">${T('rc.samecause', { n: g.pages.length })}</span>`);
+  if (status) parts.push(`<span class="chip">${T(`st.${status}` as MsgKey)}</span>`);
   return `<span class="chips">${parts.join('')}</span>`;
 }
 
+/** Where a root cause shows: page · viewport · journey, then how widely ("2 pages · ×10"). */
 function whereHtml(g: Group): string {
   const f = g.lead;
-  const more = g.pages.length > 1 ? ` · +${T('rc.pages', { n: g.pages.length - 1 })}` : '';
-  return `${esc(pathname(f.url))}${f.viewport ? ` · ${esc(f.viewport)}` : ''}${f.journey ? ` · ${esc(f.journey)}` : ''}${more}`;
+  const parts = [esc(pathname(f.url))];
+  if (f.viewport) parts.push(esc(f.viewport));
+  if (f.journey) parts.push(esc(f.journey));
+  if (g.pages.length > 1) parts.push(T('rc.samecause', { n: g.pages.length }));
+  if (f.occurrences > 1) parts.push(T('rc.occ', { n: f.occurrences }));
+  return parts.join(' · ');
 }
 
 function pick(g: Group, label: MsgKey = 'rc.select', visible = false): string {
   const ids = g.members.map((m) => esc(m.fingerprint)).join(' ');
   return `<label class="pick"><input type="checkbox" class="sel" data-ids="${ids}"><span class="${visible ? '' : 'sr'}">${T(label)}${visible ? '' : `: <span lang="en">${esc(g.lead.title)}</span>`}</span></label>`;
+}
+
+/** The finding's own picture: the first outlined element, else the first screenshot it carries; '' when none. */
+function evidenceVisual(run: Run, f: Finding, base?: string): string {
+  for (const e of f.evidence) {
+    const c = crop(run, f, e, { base, minW: 720, maxScale: 1.25 });
+    if (c) return c;
+  }
+  const file = f.evidence.find((e) => e.type === 'screenshot' && e.file)?.file;
+  const src = runFile(file, base);
+  return src === '#' ? '' : `<img class="shot" loading="lazy" ${attrs({ alt: 'fd.shot' })} src="${src}">`;
+}
+
+const PX_KEY = /(width|height|right|left|top|bottom|viewport|fontsize)$/i;
+const words = (k: string) =>
+  k
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .toLowerCase();
+const statNum = (n: number) => (Number.isInteger(n) ? String(n) : String(+n.toFixed(2)));
+
+/** Up to three measured values of the first evidence item as small tiles; '' when it carries no numbers. */
+function statsHtml(f: Finding): string {
+  const d = f.evidence.find((e) => e.data && Object.keys(e.data).length)?.data;
+  if (!d) return '';
+  const tiles: [string, string][] = [];
+  // A metric: its name labels its value, with its unit.
+  if (typeof d.name === 'string' && typeof d.value === 'number' && Number.isFinite(d.value))
+    tiles.push([d.name, `${statNum(d.value)}${typeof d.unit === 'string' ? ` ${d.unit}` : ''}`]);
+  for (const [k, v] of Object.entries(d)) {
+    if (tiles.length >= 3) break;
+    if (k === 'value' && tiles.length && typeof d.name === 'string') continue;
+    if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+    tiles.push([words(k), `${statNum(v)}${PX_KEY.test(k) ? ' px' : ''}`]);
+  }
+  if (!tiles.length) return '';
+  return `<ul class="stats" lang="en">${tiles.map(([l, v]) => `<li><span class="v">${esc(v)}</span><span class="l">${esc(l)}</span></li>`).join('')}</ul>`;
 }
 
 function groupHtml(run: Run, g: Group, status?: string, base?: string): string {
@@ -259,7 +307,7 @@ function groupHtml(run: Run, g: Group, status?: string, base?: string): string {
     ? `<h4>${T('fd.sources')}</h4><ul class="sources">${listed
         .map(
           (s) =>
-            `<li><code>${esc(s.file)}:${s.line}</code> <span class="chip">${T(`conf.${s.confidence}` as MsgKey)}</span> <span lang="en">${esc(s.reason)}</span>${s.excerpt ? `<pre>${esc(s.excerpt)}</pre>` : ''}</li>`,
+            `<li><code>${esc(s.file)}:${s.line}</code> <span class="muted">${T(`conf.${s.confidence}` as MsgKey)}</span> <span lang="en">${esc(s.reason)}</span>${s.excerpt ? `<pre>${esc(s.excerpt)}</pre>` : ''}</li>`,
         )
         .join('')}</ul>`
     : '';
@@ -268,7 +316,7 @@ function groupHtml(run: Run, g: Group, status?: string, base?: string): string {
       ? `<h4>${T('fd.instances')}</h4><ul class="instances">${g.members
           .map(
             (m) =>
-              `<li>${base ? '' : `<label class="pick"><input type="checkbox" class="sel" data-ids="${esc(m.fingerprint)}"><span class="sr">${T('rc.selectOne')}: <span lang="en">${esc(m.title)}</span> ${esc(pathname(m.url))}</span></label>`}<code>${esc(pathname(m.url))}</code> <span class="muted">${esc(m.viewport ?? '')}</span> <span class="chip sev sev-${m.severity}">${T(`sev.${m.severity}` as MsgKey)}</span> <span class="muted">${T('fd.id')} <code>${esc(m.fingerprint)}</code></span></li>`,
+              `<li>${base ? '' : `<label class="pick"><input type="checkbox" class="sel" data-ids="${esc(m.fingerprint)}"><span class="sr">${T('rc.selectOne')}: <span lang="en">${esc(m.title)}</span> ${esc(pathname(m.url))}</span></label>`}<code>${esc(pathname(m.url))}</code> <span class="muted">${esc(m.viewport ?? '')}</span> ${sevHtml(m.severity)} <span class="muted">${T('fd.id')} <code>${esc(m.fingerprint)}</code></span></li>`,
           )
           .join('')}</ul>`
       : '';
@@ -282,28 +330,33 @@ function groupHtml(run: Run, g: Group, status?: string, base?: string): string {
   const data = base
     ? ''
     : ` data-kind="${f.kind}" data-sev="${f.severity}" data-cat="${esc(f.category)}" data-path="${g.path}" data-pages="${esc(g.pages.join(' '))}" data-n="${g.members.length}"`;
-  return `<article class="rc sev-${f.severity} k-${f.kind}${status ? ` st-${esc(status)}` : ''}" id="${base ? 'fixed-' : ''}${g.id}"${data}>
+  const vis = evidenceVisual(run, f, base);
+  return `<article class="rc k-${f.kind}${status ? ` st-${esc(status)}` : ''}" id="${base ? 'fixed-' : ''}${g.id}"${data}>
 ${base ? '<span></span>' : pick(g)}
-<details><summary>${chipsHtml(g, status)}<span class="t">${ruleText(f, 'title')}</span><span class="where">${whereHtml(g)}</span></summary>
+<details><summary><span class="t">${sevHtml(f.severity)}<span class="tt">${ruleText(f, 'title')}</span>${status ? `<span class="chip">${T(`st.${status}` as MsgKey)}</span>` : ''}</span><span class="where">${whereHtml(g)}</span></summary>
 <div class="body">
+${vis ? `<figure class="fig">${vis}</figure>` : ''}${statsHtml(f)}
+<p class="fix"><b>${T('fd.fix')}</b> ${ruleText(f, 'recommendation')}</p>
+${chipsHtml(g)}
+<details class="more"><summary>${T('fd.details')}</summary>
 <p lang="en">${esc(f.description)}</p>
-<dl class="facts"><dt>${T('fd.why')}</dt><dd>${ruleText(f, 'impact')}</dd><dt>${T('fd.fix')}</dt><dd>${ruleText(f, 'recommendation')}</dd>
-<dt>${T('fd.basis')}</dt><dd><span class="chip">${T(`prov.${f.provenance}` as MsgKey)}</span> <span class="chip">${T(`conf.${f.confidence}` as MsgKey)}</span> ${T('fd.rule')} <code>${esc(f.ruleId)}</code> · ${T('fd.id')} <code>${esc(f.fingerprint)}</code></dd>
+<dl class="facts"><dt>${T('fd.why')}</dt><dd>${ruleText(f, 'impact')}</dd>
+<dt>${T('fd.basis')}</dt><dd>${T(`prov.${f.provenance}` as MsgKey)} · ${T(`conf.${f.confidence}` as MsgKey)}</dd>
 ${stds ? `<dt>${T('fd.standards')}</dt><dd><ul class="stds">${stds}</ul></dd>` : ''}
-<dt>${T('fd.repro')}</dt><dd><ol lang="en">${f.reproduction.map((r) => `<li>${esc(r)}</li>`).join('')}</ol></dd></dl>
-${sources}${affected}${instances}
+<dt>${T('fd.repro')}</dt><dd><ol lang="en">${f.reproduction.map((r) => `<li>${esc(r)}</li>`).join('')}</ol></dd>
+<dt>${T('fd.rule')}</dt><dd><code>${esc(f.ruleId)}</code> · ${T('fd.id')} <code>${esc(f.fingerprint)}</code></dd></dl>
+${sources}${instances}${affected}
 <h4>${T('fd.evidence')}</h4>${evidenceHtml(run, f, base)}
-</div></details></article>`;
+</details></div></details></article>`;
 }
 
 function cardHtml(run: Run, g: Group): string {
   const f = g.lead;
   const src = f.sources?.[0];
-  return `<article class="rc-card sev-${f.severity}"><div class="vis">${visualOf(run, f, { minW: 520, ratio: 0.5 })}</div>
-<div class="in">${chipsHtml(g)}<h3><a href="#${g.id}">${ruleText(f, 'title')}</a></h3>
-<div class="where">${whereHtml(g)}</div>
-${src ? `<div class="src">${T('fd.sources')}: <code>${esc(src.file)}:${src.line}</code></div>` : ''}
-${pick(g, 'rc.select', true)}</div></article>`;
+  const vis = visualOf(run, f, { minW: 520, ratio: 0.5 });
+  return `<article class="rc-card">${vis ? `<div class="vis">${vis}</div>` : ''}
+<div class="in">${sevHtml(f.severity)}<h3><a href="#${g.id}">${ruleText(f, 'title')}</a></h3>
+<div class="row"><span class="where">${whereHtml(g)}${src ? ` · <code>${esc(src.file)}:${src.line}</code>` : ''}</span>${pick(g, 'rc.select', true)}</div></div></article>`;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -621,7 +674,7 @@ function compareHtml(cmp: RunComparison): string {
         before && after
           ? `<div class="ba"><figure><figcaption>${T('cmp.before')}</figcaption>${before}</figure><figure class="after"><figcaption>${T('cmp.after')}</figcaption>${after}</figure></div>`
           : `<div class="vis">${visualOf(cmp.base, f, { base, minW: 520, ratio: 0.5 })}</div>`;
-      return `<article class="rc-card sev-${f.severity}">${vis}<div class="in"><span class="chips"><span class="chip st-fixed">${T('st.fixed')}</span><span class="chip">${T(`cat.${f.category}` as MsgKey)}</span>${g.pages.length > 1 ? `<span class="chip">${T('rc.samecause', { n: g.pages.length })}</span>` : ''}</span><h3 lang="en">${esc(f.title)}</h3><div class="where">${whereHtml(g)} · <code>${esc(f.fingerprint)}</code></div></div></article>`;
+      return `<article class="rc-card">${vis}<div class="in"><span class="chips"><span class="chip">${T('st.fixed')}</span><span class="chip">${T(`cat.${f.category}` as MsgKey)}</span></span><h3 lang="en">${esc(f.title)}</h3><div class="where">${whereHtml(g)} · <code>${esc(f.fingerprint)}</code></div></div></article>`;
     });
   const reg = cmp.introduced.filter(
     (f) => f.kind === 'defect' && (f.severity === 'critical' || f.severity === 'serious'),
@@ -737,12 +790,6 @@ export function renderHtml(run: Run, cmp?: RunComparison, history: RunListing[] 
   const pages = [...new Set(findings.flatMap(pagesOf))];
   const top = defectGroups.slice(0, 6);
   const sevTotal = SEVS.reduce((n, k) => n + s.findings[k], 0) || 1;
-  const sevColor: Record<string, string> = {
-    critical: 'crit',
-    serious: 'ser',
-    moderate: 'mod',
-    minor: 'min',
-  };
 
   const kpi = (label: MsgKey, num: string, sub: string, cls = '', extra = '') =>
     `<div class="kpi ${cls}"><span class="lbl">${T(label)}</span><span class="num">${num}</span><span class="sub">${sub}</span>${extra}</div>`;
@@ -760,7 +807,7 @@ export function renderHtml(run: Run, cmp?: RunComparison, history: RunListing[] 
       String(defects),
       T('kpi.defects.sub', { c: s.findings.critical, s: s.findings.serious }),
       s.findings.critical ? 'alert' : '',
-      `<span class="sevbar" aria-hidden="true">${SEVS.map((k) => (s.findings[k] ? `<i style="width:${((s.findings[k] / sevTotal) * 100).toFixed(1)}%;background:var(--${sevColor[k]})"></i>` : '')).join('')}</span>`,
+      `<span class="sevbar" aria-hidden="true">${SEVS.map((k) => (s.findings[k] ? `<i style="width:${((s.findings[k] / sevTotal) * 100).toFixed(1)}%;background:var(--dot-${k})"></i>` : '')).join('')}</span>`,
     ),
     kpi('kpi.causes', String(defectGroups.length), T('kpi.causes.sub')),
     kpi('kpi.auto', String(autoGroups), T('kpi.auto.sub'), autoGroups ? 'ok' : ''),

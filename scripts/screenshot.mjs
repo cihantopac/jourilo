@@ -17,7 +17,7 @@ const page = await browser.newPage({
 });
 await page.goto(pathToFileURL(resolve(file)).toString());
 if (action === 'open') await page.click('#overview details');
-if (['findings', 'pages', 'journeys', 'compare'].includes(action)) await page.click(`[data-tab=${action}]`);
+if (['findings', 'pages', 'journeys', 'compare'].includes(action)) await page.click(`#tab-${action}`);
 if (action === 'findings') await page.click('#findings details:not([hidden])');
 await page.waitForTimeout(300);
 await page.screenshot({ path: out });
