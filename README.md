@@ -41,10 +41,11 @@ journey breaks, you see exactly where.
 ## Evidence
 
 Each finding shows the element on its screenshot, the measured values and one fix; standards, reproduction steps and
-source lines are one click away. The report is a single offline file, in English or Turkish, light or dark
-([on a phone](https://raw.githubusercontent.com/cihantopac/jourilo/v1.6.0/docs/assets/report-mobile.png)).
+source lines are one click away. The report is a single offline file, in English or Turkish, light or dark.
 
 <img src="https://raw.githubusercontent.com/cihantopac/jourilo/v1.6.0/docs/assets/report-finding.png" alt="One finding opened: the page scrolls sideways at 390 px, with the overflowing element outlined on the mobile screenshot, the measured widths (640 px against a 390 px viewport), a one-line fix and the remaining detail folded under Details">
+
+<img src="https://raw.githubusercontent.com/cihantopac/jourilo/v1.6.0/docs/assets/report-mobile.png" alt="The report on two phones: English in the light theme and Turkish in the dark theme">
 
 ## Fix & prove
 
