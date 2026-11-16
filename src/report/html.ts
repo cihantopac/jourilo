@@ -597,7 +597,7 @@ function journeysHtml(run: Run): string {
       return `<section class="journey ${j.status}" id="${journeyAnchor(j)}" aria-labelledby="${journeyAnchor(j)}-h">
 <div class="journey-h"><h3 id="${journeyAnchor(j)}-h" lang="en">${esc(j.name)}</h3><span class="meta"><span class="chip">${T(`st.${j.status}` as MsgKey)}</span>${j.stability ? `<span class="chip">${T(`st.${j.stability}` as MsgKey)}</span>` : ''} ${esc(j.viewport)} · ${(j.durationMs / 1000).toFixed(1)} s</span></div>
 ${j.attempts ? `<p class="muted">${T('j.attempts', { n: j.attempts.length, list: j.attempts.map((a) => a.status).join(', ') })}${j.stability === 'flaky' ? ` ${T('j.flakyNote')}` : ''}</p>` : ''}
-<ol class="timeline" tabindex="0"${attrs({ 'aria-label': 'j.timeline' })}>${j.steps
+<ol class="timeline"${attrs({ 'aria-label': 'j.timeline' })}>${j.steps
         .map((s, i) => {
           const src = runFile(s.screenshot);
           return `<li class="${s.status}"><div class="rail"><span class="dot" aria-hidden="true"></span>${T('j.step', { n: i + 1 })}</div>

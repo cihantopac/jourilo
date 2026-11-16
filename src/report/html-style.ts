@@ -235,8 +235,9 @@ li.ev{border-radius:12px;padding:10px;overflow:hidden;display:grid;gap:6px;align
 .journey{background:var(--sheet);border:1px solid var(--line);border-radius:16px;padding:18px 20px;margin:16px 0;box-shadow:var(--shadow)}
 .journey-h{display:flex;justify-content:space-between;align-items:center;gap:8px 12px;flex-wrap:wrap}
 .journey-h h3{font-size:19px}
-.timeline{list-style:none;margin:14px 0 4px;padding:4px 2px 12px;display:flex;gap:0;overflow-x:auto;scroll-snap-type:x proximity}
-.timeline li{flex:0 0 220px;scroll-snap-align:start;display:grid;grid-template-rows:auto auto 1fr;gap:6px;padding-right:14px;position:relative}
+/* Steps wrap onto new rows; nothing is clipped or scrolled sideways, and the goal always shows in full. */
+.timeline{list-style:none;margin:14px 0 4px;padding:4px 0 8px;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr));gap:18px 14px}
+.timeline li{display:grid;grid-template-rows:auto auto 1fr;gap:6px;position:relative;min-width:0;align-content:start}
 .timeline .rail{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--muted)}
 .timeline .rail::after{content:"";flex:1;height:2px;background:var(--line-2)}
 .timeline li:last-child .rail::after{background:transparent}
@@ -252,7 +253,8 @@ li.ev{border-radius:12px;padding:10px;overflow:hidden;display:grid;gap:6px;align
 .timeline .desc .muted{font-size:12px}
 .timeline .here{color:var(--ink);font-weight:700;font-size:12px}
 .timeline pre{font-size:11.5px;max-height:120px;overflow:auto}
-.timeline li.goal{flex:0 0 260px}
+.timeline li.goal{grid-column:span 2}
+.goalbox{overflow-wrap:anywhere}
 .goalbox{border-radius:10px;padding:10px 12px;background:var(--sheet-2)}
 .criteria{list-style:none;padding:0;margin:4px 0 0;display:grid;gap:4px;font-size:14px}
 .criteria li{display:flex;gap:8px;align-items:baseline}
@@ -331,6 +333,8 @@ footer.foot svg{height:18px;width:auto;vertical-align:-3px;margin-right:6px;colo
   .kpi{padding:12px 14px 11px}
   .kpi .num{font-size:28px}
   .journey{padding:14px 14px}
+  .timeline{grid-template-columns:repeat(auto-fill,minmax(min(100%,130px),1fr))}
+  .timeline li.goal{grid-column:1/-1}
   .actionbar{left:12px;right:12px;transform:none;border-radius:16px;justify-content:space-between}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
