@@ -4,6 +4,31 @@ All notable changes are documented here. The project follows [Semantic Versionin
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-16
+
+A report redesign and a rebuilt README. No change to what Jourilo finds. Run data and `RUN_SCHEMA_VERSION` (1) are
+unchanged, old runs render in the new report, and there is no new dependency. See
+[docs/RELEASE-1.6.md](docs/RELEASE-1.6.md).
+
+### Changed
+
+- **Report visual system.** A calm 60/30/10 palette (paper, ink, brass), one type scale, fewer borders and softer
+  shadows. Brass is used for interaction only. Severity is a dot plus its word, not a tinted chip or border; fix-path,
+  category, status and occurrence chips share one neutral style.
+- **Findings.** An open finding shows the evidence visual, up to three stat tiles from its numbers and one fix line.
+  Everything else (description, why, basis, standards, reproduction, rule, likely sources, instances, pages, full
+  evidence) is folded under Details.
+- **Overview.** A quiet hero (the "served at" address is split from the audited target), ink KPI numbers with a dot
+  legend instead of tinted alert tiles, and limitations, dismissed findings, history and context folded by default.
+- **Tabs.** Journeys, Pages and Compare use the same type scale, chips and severity dots as the overview.
+- **Journeys.** Steps wrap, so the goal card is never clipped.
+- **Labels.** Shorter English and Turkish labels ("Why", "Fix", "Select", "N pages").
+- **README** rebuilt around the new report: centred wordmark, one value line, badges, four short sections, new 2x
+  screenshots (overview in light and dark, an open finding, a journey, the repair prompt, before/after, phones) and a
+  new social preview. Image URLs are pinned to v1.6.0.
+- `scripts/screenshot.mjs` gains `SCALE`, `LANG_UI`, `CLIP`, `PAD` and `HIDE` options and the `finding=<title>` and
+  `prompt` actions.
+
 ## [1.5.0] - 2026-11-14
 
 Closes the deferred minors of 1.3.0 and 1.4.0 and field item F43 (see [docs/RELEASE-1.5.md](docs/RELEASE-1.5.md) for what
