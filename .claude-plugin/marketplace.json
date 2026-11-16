@@ -4,7 +4,7 @@
     "name": "Cihan Topaç",
     "url": "https://github.com/cihantopac"
   },
-  "description": "Jourilo — open-source product experience & conversion engineering studio for Claude Code.",
+  "description": "Jourilo — open-source UX, accessibility and conversion auditor for Claude Code.",
   "plugins": [
     {
       "name": "jourilo",

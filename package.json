@@ -1,7 +1,7 @@
 {
   "name": "jourilo",
   "version": "1.6.0",
-  "description": "AI-powered product experience & conversion engineering studio: real-browser journeys, UX, accessibility, performance and conversion audits with evidence, root causes and verified fixes.",
+  "description": "Open-source UX, accessibility and conversion auditor. Walks your product in a real browser, shows the evidence and proves every fix. CLI + Claude Code plugin.",
   "license": "Apache-2.0",
   "type": "module",
   "author": "Cihan Topaç (https://github.com/cihantopac)",
