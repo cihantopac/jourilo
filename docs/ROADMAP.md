@@ -138,9 +138,19 @@ The deferred minors of 1.3.0 and 1.4.0 and F43 ([RELEASE-1.5.md](RELEASE-1.5.md)
 - **Capture:** contrast sampling time budget.
 - **F43:** warning when the workspace is inside `--repo`.
 
-## Next (after 1.5.0)
+## Done in 1.6.0
 
-Not done in 1.5.0, each with its reason in [RELEASE-1.5.md](RELEASE-1.5.md).
+A report redesign and a new README ([RELEASE-1.6.md](RELEASE-1.6.md)); run data is unchanged:
+
+- Calm paper/ink/brass report, severity as a dot plus a word, findings that open to a visual, up to three stat tiles
+  and one fix line, with the rest under Details.
+- A quiet overview with ink KPI numbers; limitations, dismissed findings, history and context folded; consistent
+  Journeys, Pages and Compare tabs; journey steps that wrap.
+- README rebuilt with new screenshots and social preview; more `scripts/screenshot.mjs` options.
+
+## Next
+
+Open since 1.5.0, each with its reason in [RELEASE-1.5.md](RELEASE-1.5.md).
 
 - **Discovery:** count children of a pathless layout route toward `usedBy` (route-model change).
 - **Experiments:** variants of an Amplitude flag (needs the Experiment management API or a `--variants` option).
