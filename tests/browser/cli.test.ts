@@ -609,7 +609,7 @@ describe('cli redirect loop', () => {
         const page = await browser.newPage({ locale: 'en-US' });
         await page.goto(pathToFileURL(join(out.runDir, 'report.html')).href);
         await page.click('#tab-findings');
-        const title = page.locator('.rc summary .t').first();
+        const title = page.locator('.rc summary .tt').first();
         expect(await title.locator('[lang="en"]:visible').textContent()).toBe(
           'Page redirects to itself in a loop',
         );
