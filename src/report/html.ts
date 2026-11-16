@@ -362,6 +362,16 @@ function cardHtml(run: Run, g: Group): string {
 // ---------------------------------------------------------------------------------------------------------------
 // Sections
 
+/** A quiet figure: the number in ink, a short label, an optional muted line. No tint, no alert colour. */
+function kpiHtml(label: MsgKey, num: string, sub = ''): string {
+  return `<div class="kpi"><span class="num">${num}</span><span class="lbl">${T(label)}</span>${sub ? `<span class="sub">${sub}</span>` : ''}</div>`;
+}
+
+/** A section folded by default: a title, an optional muted count, then its content. */
+function foldHtml(title: string, count: number | undefined, body: string, id?: string): string {
+  return `<details class="fold"><summary${id ? ` id="${id}"` : ''}><span class="ft">${title}</span>${count === undefined ? '' : `<span class="fc">${count}</span>`}</summary><div class="fold-in">${body}</div></details>`;
+}
+
 function journeyAnchor(j: JourneyResult): string {
   return `j-${slug(j.id)}-${slug(j.viewport)}`;
 }
@@ -386,9 +396,9 @@ function blockedHtml(run: Run, groups: Group[]): string {
       ).values(),
     ];
     return `<article class="bj">${src !== '#' ? `<figure><img loading="lazy" alt="" src="${src}"><figcaption>${T(stop ? 'j.stoppedHere' : 'j.lastStep')}</figcaption></figure>` : ''}
-<div class="in"><span class="chips"><span class="chip st-${j.status}">${T(`st.${j.status}` as MsgKey)}</span>${runs.map((r) => `<span class="chip">${esc(r.viewport)}</span>`).join('')}</span>
+<div class="in"><span class="meta"><span class="chip">${T(`st.${j.status}` as MsgKey)}</span> ${runs.map((r) => esc(r.viewport)).join(' · ')}${stop ? ` · ${T('blocked.at', { n: stop.index + 1, t: j.steps.length })}` : ''}</span>
 <h3 lang="en">${esc(j.name)}</h3>
-${stop ? `<p class="muted" style="margin:0">${T('blocked.at', { n: stop.index + 1, t: j.steps.length })}</p><div class="err" lang="en">${esc(stop.description)}${stop.error ? ` — ${esc(stop.error)}` : ''}</div>` : ''}
+${stop ? `<div class="err" lang="en">${esc(stop.description)}${stop.error ? ` — ${esc(stop.error)}` : ''}</div>` : ''}
 ${unmet.length ? `<ul class="criteria" lang="en">${unmet.map((c) => `<li><span class="mark no" aria-hidden="true">✕</span><span><span class="sr">not met: </span>${esc(c.description)}${c.detail ? ` <span class="muted">${esc(c.detail)}</span>` : ''}</span></li>`).join('')}</ul>` : ''}
 <div class="row"><a href="#${journeyAnchor(j)}">${T('blocked.open')}</a>${ids.length ? `<label class="pick"><input type="checkbox" class="sel" data-ids="${[...new Set(ids)].join(' ')}"><span>${T('rc.select')}</span></label>` : ''}</div></div></article>`;
   });
@@ -434,37 +444,43 @@ ${n.blocked.length ? `<p class="muted">${T('net.blocked')}</p><div class="tablew
 }
 
 function limitsHtml(run: Run): string {
-  const first = run.limitations.slice(0, 3);
-  const rest = run.limitations.slice(3);
-  return `<section class="block" aria-labelledby="h-limits"><div class="limits"><h2 id="h-limits" style="font-size:20px">${T('limits.title')}</h2>
-<ul lang="en">${first.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
-<details class="more"><summary>${T('limits.more')}</summary>
-${rest.length ? `<ul lang="en">${rest.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
-<h3 style="margin-top:14px">${T('limits.manual')}</h3><p class="muted">${T('limits.manual.hint')}</p><ul lang="en">${MANUAL_REVIEW.map((m) => `<li>${esc(m)}</li>`).join('')}</ul>
-${networkHtml(run)}</details></div></section>`;
+  const list = run.limitations.length
+    ? `<ul lang="en">${run.limitations.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>`
+    : '';
+  return foldHtml(
+    T('limits.title'),
+    run.limitations.length,
+    `${list}<h4>${T('limits.manual')}</h4><p class="muted">${T('limits.manual.hint')}</p><ul lang="en">${MANUAL_REVIEW.map((m) => `<li>${esc(m)}</li>`).join('')}</ul>
+${networkHtml(run)}`,
+    'h-limits',
+  );
 }
 
 function dismissedHtml(run: Run): string {
   const list = run.dismissed ?? [];
   if (!list.length) return '';
-  return `<section class="block" aria-labelledby="h-dismissed"><details class="fold"><summary id="h-dismissed">${T('dismissed.title', { n: list.length })}</summary>
-<p class="muted">${T('dismissed.hint')}</p>
-<ul>${list
-    .map((f) => {
-      const d = f.dismissal;
-      const who = d.by === 'agent' ? 'dismissed.by.agent' : 'dismissed.by.user';
-      return `<li><span lang="en">${esc(f.title)}</span> <code>${esc(pathname(f.url))}</code> <span class="muted">${T('fd.id')} <code>${esc(f.fingerprint)}</code></span><br>${T('dismissed.reason')}: <span lang="en">${esc(d.reason)}</span><br><span class="muted">${T(who, { date: d.at.slice(0, 10) })}</span></li>`;
-    })
-    .join('')}</ul></details></section>`;
+  return foldHtml(
+    T('dismissed.title'),
+    list.length,
+    `<p class="muted">${T('dismissed.hint')}</p>
+<ul class="plain">${list
+      .map((f) => {
+        const d = f.dismissal;
+        const who = d.by === 'agent' ? 'dismissed.by.agent' : 'dismissed.by.user';
+        return `<li><span lang="en">${esc(f.title)}</span> <code>${esc(pathname(f.url))}</code> <span class="muted">${T('fd.id')} <code>${esc(f.fingerprint)}</code></span><br>${T('dismissed.reason')}: <span lang="en">${esc(d.reason)}</span><br><span class="muted">${T(who, { date: d.at.slice(0, 10) })}</span></li>`;
+      })
+      .join('')}</ul>`,
+    'h-dismissed',
+  );
 }
 
 function contextHtml(run: Run): string {
   const c = run.context;
   if (!c || (!c.brand && !c.search)) return '';
-  const parts = [`<details class="fold"><summary>${T('context.title')}</summary>`];
+  const parts: string[] = [];
   if (c.brand)
     parts.push(
-      `<p><b>${T('context.brand')}</b> (${esc(c.brand.source)}, <code>${esc(c.brand.file)}</code>): ${esc(c.brand.name)} · ${c.brand.colors.length} color tokens · fonts ${esc(c.brand.fonts.join(', ') || '—')}${c.brand.locked ? ' · <span class="chip">locked</span> recommendations keep brand tokens unchanged' : ''}</p>`,
+      `<p><b>${T('context.brand')}</b> (${esc(c.brand.source)}, <code>${esc(c.brand.file)}</code>): ${esc(c.brand.name)} · ${c.brand.colors.length} color tokens · fonts ${esc(c.brand.fonts.join(', ') || '—')}${c.brand.locked ? ' · locked: recommendations keep brand tokens unchanged' : ''}</p>`,
     );
   if (c.search) {
     const paths = new Set(run.pages.map((p) => pathname(p.url)));
@@ -478,13 +494,12 @@ function contextHtml(run: Run): string {
           .slice(0, 15)
           .map(
             (f) =>
-              `<li><span class="chip">${esc(f.severity)}</span> ${esc(f.title)} — <code>${esc(pathname(f.url ?? ''))}</code></li>`,
+              `<li><span class="muted">${esc(f.severity)}</span> ${esc(f.title)} — <code>${esc(pathname(f.url ?? ''))}</code></li>`,
           )
           .join('')}</ul>`,
       );
   }
-  parts.push('</details>');
-  return parts.join('');
+  return foldHtml(T('context.title'), undefined, parts.join(''));
 }
 
 function historyHtml(run: Run, history: RunListing[]): string {
@@ -508,14 +523,18 @@ function historyHtml(run: Run, history: RunListing[]): string {
   ];
   const total = (d: Run['summary']['findings']) => d.critical + d.serious + d.moderate + d.minor;
   const max = Math.max(1, ...rows.map((r) => total(r.defects)));
-  return `<details class="fold"><summary>${T('history.title')}</summary><div class="tablewrap" tabindex="0" role="region"${attrs({ 'aria-label': 'history.title' })}><table class="history"><thead><tr><th>${T('th.run')}</th><th>${T('th.date')}</th>${SEVS.map((s) => `<th>${T(`sev.${s}` as MsgKey)}</th>`).join('')}<th>${T('th.defects')}</th></tr></thead><tbody>${rows
-    .map((r, i) => {
-      const t = total(r.defects);
-      const prev = i ? total(rows[i - 1]!.defects) : t;
-      const trend = t < prev ? 'good' : t > prev ? 'poor' : '';
-      return `<tr${'current' in r ? ' class="current"' : ''}><td><code>${esc(r.id)}</code>${'current' in r ? ` ${T('history.this')}` : ''}</td><td>${esc(new Date(r.startedAt).toISOString().slice(0, 16).replace('T', ' '))}</td><td>${r.defects.critical}</td><td>${r.defects.serious}</td><td>${r.defects.moderate}</td><td>${r.defects.minor}</td><td class="${trend}"><span class="bar" style="width:${Math.round((t / max) * 120)}px"></span> ${t}</td></tr>`;
-    })
-    .join('')}</tbody></table></div><p class="muted">${T('history.hint')}</p>${trendBlock}</details>`;
+  return foldHtml(
+    T('history.title'),
+    rows.length,
+    `<div class="tablewrap" tabindex="0" role="region"${attrs({ 'aria-label': 'history.title' })}><table class="history"><thead><tr><th>${T('th.run')}</th><th>${T('th.date')}</th>${SEVS.map((s) => `<th>${T(`sev.${s}` as MsgKey)}</th>`).join('')}<th>${T('th.defects')}</th></tr></thead><tbody>${rows
+      .map((r, i) => {
+        const t = total(r.defects);
+        const prev = i ? total(rows[i - 1]!.defects) : t;
+        const trend = t < prev ? 'good' : t > prev ? 'poor' : '';
+        return `<tr${'current' in r ? ' class="current"' : ''}><td><code>${esc(r.id)}</code>${'current' in r ? ` ${T('history.this')}` : ''}</td><td>${esc(new Date(r.startedAt).toISOString().slice(0, 16).replace('T', ' '))}</td><td>${r.defects.critical}</td><td>${r.defects.serious}</td><td>${r.defects.moderate}</td><td>${r.defects.minor}</td><td class="${trend}"><span class="bar" style="width:${Math.round((t / max) * 120)}px"></span> ${t}</td></tr>`;
+      })
+      .join('')}</tbody></table></div><p class="muted">${T('history.hint')}</p>${trendBlock}`,
+  );
 }
 
 const numText = (n: number | null, digits = 0): string => (n === null ? '–' : String(+n.toFixed(digits)));
@@ -576,14 +595,14 @@ function journeysHtml(run: Run): string {
     .map((j) => {
       const stopIdx = j.steps.findIndex((s) => s.status === 'failed' || s.status === 'blocked');
       return `<section class="journey ${j.status}" id="${journeyAnchor(j)}" aria-labelledby="${journeyAnchor(j)}-h">
-<div class="journey-h"><h3 id="${journeyAnchor(j)}-h" lang="en">${esc(j.name)}</h3><span class="chips"><span class="chip st-${j.status}">${T(`st.${j.status}` as MsgKey)}</span>${j.stability ? `<span class="chip st-${j.stability}">${T(`st.${j.stability}` as MsgKey)}</span>` : ''}<span class="chip">${esc(j.viewport)}</span><span class="chip">${(j.durationMs / 1000).toFixed(1)} s</span></span></div>
+<div class="journey-h"><h3 id="${journeyAnchor(j)}-h" lang="en">${esc(j.name)}</h3><span class="meta"><span class="chip">${T(`st.${j.status}` as MsgKey)}</span>${j.stability ? `<span class="chip">${T(`st.${j.stability}` as MsgKey)}</span>` : ''} ${esc(j.viewport)} · ${(j.durationMs / 1000).toFixed(1)} s</span></div>
 ${j.attempts ? `<p class="muted">${T('j.attempts', { n: j.attempts.length, list: j.attempts.map((a) => a.status).join(', ') })}${j.stability === 'flaky' ? ` ${T('j.flakyNote')}` : ''}</p>` : ''}
 <ol class="timeline" tabindex="0"${attrs({ 'aria-label': 'j.timeline' })}>${j.steps
         .map((s, i) => {
           const src = runFile(s.screenshot);
           return `<li class="${s.status}"><div class="rail"><span class="dot" aria-hidden="true"></span>${T('j.step', { n: i + 1 })}</div>
 ${src !== '#' ? `<a class="shot" href="${src}" target="_blank" rel="noopener"${attrs({ 'aria-label': 'shot.open' })}><img loading="lazy" alt="" src="${src}"></a>` : `<div class="noshot">${T('j.noShot')}</div>`}
-<div class="desc"><span class="chips"><span class="chip st-${s.status}">${T(`st.${s.status}` as MsgKey)}</span><span class="muted">${s.durationMs} ms</span></span>${i === stopIdx ? `<div class="here">${T('j.stoppedHere')}</div>` : ''}<div lang="en">${esc(s.description)}</div>${s.error ? `<pre>${esc(s.error)}</pre>` : ''}</div></li>`;
+<div class="desc"><span class="muted">${T(`st.${s.status}` as MsgKey)} · ${s.durationMs} ms</span>${i === stopIdx ? `<div class="here">${T('j.stoppedHere')}</div>` : ''}<div lang="en">${esc(s.description)}</div>${s.error ? `<pre>${esc(s.error)}</pre>` : ''}</div></li>`;
         })
         .join('')}${
         j.successCriteria.length
@@ -636,8 +655,6 @@ ${metricCell(p, 'LCP')}${metricCell(p, 'CLS')}${metricCell(p, 'TBT')}${metricCel
 }
 
 function compareHtml(cmp: RunComparison): string {
-  const kpi = (label: MsgKey, n: number, cls: string) =>
-    `<div class="kpi ${cls}"><span class="lbl">${T(label)}</span><span class="num">${n}</span></div>`;
   const base = cmp.base.id;
   const fixedPaths = new Set(cmp.fixed.map((f) => pathname(f.url)));
   const pairs = cmp.head.pages
@@ -674,15 +691,15 @@ function compareHtml(cmp: RunComparison): string {
         before && after
           ? `<div class="ba"><figure><figcaption>${T('cmp.before')}</figcaption>${before}</figure><figure class="after"><figcaption>${T('cmp.after')}</figcaption>${after}</figure></div>`
           : `<div class="vis">${visualOf(cmp.base, f, { base, minW: 520, ratio: 0.5 })}</div>`;
-      return `<article class="rc-card">${vis}<div class="in"><span class="chips"><span class="chip">${T('st.fixed')}</span><span class="chip">${T(`cat.${f.category}` as MsgKey)}</span></span><h3 lang="en">${esc(f.title)}</h3><div class="where">${whereHtml(g)} · <code>${esc(f.fingerprint)}</code></div></div></article>`;
+      return `<article class="rc-card">${vis}<div class="in">${sevHtml(f.severity)}<h3>${ruleText(f, 'title')}</h3><div class="where">${whereHtml(g)} · ${T(`cat.${f.category}` as MsgKey)} · <code>${esc(f.fingerprint)}</code></div></div></article>`;
     });
   const reg = cmp.introduced.filter(
     (f) => f.kind === 'defect' && (f.severity === 'critical' || f.severity === 'serious'),
   ).length;
   return `<h2 class="sr">${T('tab.compare')}</h2>
-<div class="kpis">${kpi('cmp.fixed', cmp.fixed.length, cmp.fixed.length ? 'ok' : '')}${kpi('cmp.new', cmp.introduced.length, reg ? 'alert' : '')}${kpi('cmp.persisting', cmp.persisting.length, '')}${kpi('cmp.changed', cmp.changed.length, '')}</div>
-${cmp.dismissed.length ? `<p class="muted" style="margin:6px 0">${T('cmp.dismissed', { n: cmp.dismissed.length })}</p>` : ''}
-<p class="${reg ? 'poor' : 'muted'}" style="margin:6px 0"><strong>${reg ? T('cmp.regressed', { n: reg }) : T('cmp.ok')}</strong> ${T('cmp.baseline', { b: base, bd: cmp.base.startedAt.slice(0, 16).replace('T', ' '), h: cmp.head.id, hd: cmp.head.startedAt.slice(0, 16).replace('T', ' ') })}</p>
+<div class="kpis">${kpiHtml('cmp.fixed', `<span class="${cmp.fixed.length ? 'good' : ''}">${cmp.fixed.length}</span>`)}${kpiHtml('cmp.new', `<span class="${reg ? 'poor' : ''}">${cmp.introduced.length}</span>`)}${kpiHtml('cmp.persisting', String(cmp.persisting.length))}${kpiHtml('cmp.changed', String(cmp.changed.length))}</div>
+${cmp.dismissed.length ? `<p class="cmp-line muted">${T('cmp.dismissed', { n: cmp.dismissed.length })}</p>` : ''}
+<p class="cmp-line"><strong>${reg ? T('cmp.regressed', { n: reg }) : T('cmp.ok')}</strong> <span class="muted">${T('cmp.baseline', { b: base, bd: cmp.base.startedAt.slice(0, 16).replace('T', ' '), h: cmp.head.id, hd: cmp.head.startedAt.slice(0, 16).replace('T', ' ') })}</span></p>
 ${fixedCards.length ? `<section class="block"><div class="block-h"><h2>${T('cmp.fixed')}</h2></div><div class="cards">${fixedCards.join('')}</div></section>` : ''}
 ${
   pairs.length
@@ -789,31 +806,38 @@ export function renderHtml(run: Run, cmp?: RunComparison, history: RunListing[] 
   const cats = [...new Set(findings.map((f) => f.category))].sort();
   const pages = [...new Set(findings.flatMap(pagesOf))];
   const top = defectGroups.slice(0, 6);
-  const sevTotal = SEVS.reduce((n, k) => n + s.findings[k], 0) || 1;
-
-  const kpi = (label: MsgKey, num: string, sub: string, cls = '', extra = '') =>
-    `<div class="kpi ${cls}"><span class="lbl">${T(label)}</span><span class="num">${num}</span><span class="sub">${sub}</span>${extra}</div>`;
+  // Quiet tiles: an ink number and a short label; the defect tile's sub line is the severity dot legend.
+  const legend = SEVS.filter((k) => s.findings[k])
+    .map(
+      (k) =>
+        `<span class="lg"><i class="dot dot-${k}" aria-hidden="true"></i>${s.findings[k]} ${T(`sev.${k}` as MsgKey)}</span>`,
+    )
+    .join('');
   const kpis = [
     run.journeys.length
-      ? kpi(
+      ? kpiHtml(
           'kpi.journeys',
           `${journeysDone}/${run.journeys.length}`,
-          T('kpi.journeys.sub', { b: journeysBlocked }),
-          journeysBlocked ? 'alert' : 'ok',
+          journeysBlocked ? T('kpi.journeys.sub', { b: journeysBlocked }) : '',
         )
-      : kpi('kpi.journeys', '—', T('kpi.journeys.none')),
-    kpi(
-      'kpi.defects',
-      String(defects),
-      T('kpi.defects.sub', { c: s.findings.critical, s: s.findings.serious }),
-      s.findings.critical ? 'alert' : '',
-      `<span class="sevbar" aria-hidden="true">${SEVS.map((k) => (s.findings[k] ? `<i style="width:${((s.findings[k] / sevTotal) * 100).toFixed(1)}%;background:var(--dot-${k})"></i>` : '')).join('')}</span>`,
-    ),
-    kpi('kpi.causes', String(defectGroups.length), T('kpi.causes.sub')),
-    kpi('kpi.auto', String(autoGroups), T('kpi.auto.sub'), autoGroups ? 'ok' : ''),
-    kpi('kpi.review', String(s.byKind['needs-review']), T('kpi.review.sub')),
-    kpi('kpi.hyp', String(s.byKind.hypothesis), T('kpi.hyp.sub')),
+      : kpiHtml('kpi.journeys', '—', T('kpi.journeys.none')),
+    kpiHtml('kpi.defects', String(defects), legend ? `<span class="legend">${legend}</span>` : ''),
+    kpiHtml('kpi.causes', String(defectGroups.length), T('kpi.causes.sub')),
+    kpiHtml('kpi.auto', String(autoGroups), T('kpi.auto.sub')),
+    kpiHtml('kpi.review', String(s.byKind['needs-review']), T('kpi.review.sub')),
+    kpiHtml('kpi.hyp', String(s.byKind.hypothesis), T('kpi.hyp.sub')),
   ].join('');
+  // "dir (served at http://…)" reads as a path and a muted URL line; the run's target itself is unchanged.
+  const served = /^(.+) \(served at (\S+)\)$/.exec(run.target);
+  const meta = [
+    ...(uniquePages
+      ? [T('scope.pages', { n: uniquePages }), T('scope.captures', { n: run.pages.length })]
+      : []),
+    ...run.viewports.map((v) => `${esc(v.name)} ${v.width}×${v.height}`),
+    ...(run.journeys.length ? [T('scope.journeys', { n: run.journeys.length })] : []),
+    `${esc(run.browser.name)} ${esc(run.browser.version)}`,
+    `Jourilo ${esc(run.tool.version)}`,
+  ];
 
   const lede = `${defects ? T('lede.found', { d: defects, r: defectGroups.length }) : T('lede.clean')}${run.journeys.length ? ` ${journeysBlocked ? T('lede.blocked', { b: journeysBlocked, j: run.journeys.length }) : T('lede.journeysOk', { j: run.journeys.length })}` : ''}`;
 
@@ -855,19 +879,17 @@ ${cmp ? `<button type="button" role="tab" id="tab-compare" aria-controls="compar
 <main id="main" class="wrap" tabindex="-1">
 <section id="overview" class="panel" role="tabpanel" aria-labelledby="tab-overview">
 <div class="hero"><p class="eyebrow"><span class="diamond" aria-hidden="true"></span>${T(!run.pages.length && run.journeys.length ? 'mode.journeys' : (`mode.${run.mode}` as MsgKey))} · <time datetime="${esc(run.startedAt)}" data-date="${esc(run.startedAt)}">${esc(new Date(run.startedAt).toUTCString())}</time></p>
-<h1 class="serif">${esc(run.target)}</h1>
+<h1 class="serif">${esc(served ? served[1] : run.target)}</h1>
+${served ? `<p class="served">${T('hero.served')} <code>${esc(served[2])}</code></p>` : ''}
 <p class="lede">${lede}</p>
-<p class="scope">${uniquePages ? `<span>${T('scope.pages', { n: uniquePages })}, ${T('scope.captures', { n: run.pages.length })}</span>` : ''}<span>${T('scope.viewports', { n: run.viewports.length })} · ${run.viewports.map((v) => `${esc(v.name)} ${v.width}×${v.height}`).join(', ')}</span>${run.journeys.length ? `<span>${T('scope.journeys', { n: run.journeys.length })}</span>` : ''}<span>${esc(run.browser.name)} ${esc(run.browser.version)}</span><span>Jourilo ${esc(run.tool.version)}</span></p></div>
+<p class="scope">${meta.map((m) => `<span>${m}</span>`).join('<span class="sep" aria-hidden="true">·</span>')}</p></div>
 <div class="kpis">${kpis}</div>
-<p class="noscore"><span class="diamond" aria-hidden="true"></span>${T('noscore')}</p>
+<p class="noscore">${T('noscore')}</p>
 ${blockedHtml(run, groups)}
 <section class="block" aria-labelledby="h-fixfirst"><div class="block-h"><div><h2 id="h-fixfirst">${T('fixfirst.title')}</h2><p>${T('fixfirst.hint')}</p></div>${groups.length ? `<a class="btn" href="#findings">${T('fixfirst.all')} →</a>` : ''}</div>
 ${top.length ? `<div class="cards">${top.map((g) => cardHtml(run, g)).join('')}</div>` : `<p class="empty">${T('fixfirst.none')}</p>`}</section>
 ${lanesHtml(groups, run)}
-${limitsHtml(run)}
-${dismissedHtml(run)}
-${historyHtml(run, history)}
-${contextHtml(run)}
+<section class="block folds"${attrs({ 'aria-label': 'more.label' })}>${limitsHtml(run)}${dismissedHtml(run)}${historyHtml(run, history)}${contextHtml(run)}</section>
 </section>
 <section id="findings" class="panel" role="tabpanel" aria-labelledby="tab-findings">
 <h2 class="sr">${T('tab.findings')}</h2>

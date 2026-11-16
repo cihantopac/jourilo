@@ -254,7 +254,9 @@ describe('dismissed findings in the report', () => {
       },
     ];
     const html = renderHtml(run([], { dismissed }));
-    expect(html).toContain('Dismissed as not a problem (1)');
+    expect(html).toMatch(
+      /id="h-dismissed"><span class="ft"><span data-i18n="dismissed.title">Dismissed<\/span><\/span><span class="fc">1<\/span>/,
+    );
     expect(html).toContain('Decorative &lt;b&gt;image&lt;/b&gt;');
     expect(html).toContain('2026-11-03');
     const section = html.slice(
@@ -264,7 +266,7 @@ describe('dismissed findings in the report', () => {
     expect(section).toContain('<details');
     expect(section).not.toContain('type="checkbox"');
     expect(section).not.toContain('<button');
-    expect(I18N.tr['dismissed.title']).toBe('Sorun değil olarak kapatılanlar ({n})');
+    expect(I18N.tr['dismissed.title']).toBe('Kapatılanlar');
     expect(renderHtml(run([]))).not.toContain('h-dismissed');
     const md = renderMarkdown(run([], { dismissed }));
     expect(md).toContain('## Dismissed');

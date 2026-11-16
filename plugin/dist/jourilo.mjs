@@ -49462,42 +49462,41 @@ var EN = {
   "mode.journeys": "Journey run",
   "scope.pages": "{n} page{n:s}",
   "scope.captures": "{n} capture{n:s}",
-  "scope.viewports": "{n} viewport{n:s}",
   "scope.journeys": "{n} journey{n:s}",
+  "hero.served": "served at",
   "lede.found": "Jourilo used this product in a real browser and found {d} verified defect{d:s} with {r} root cause{r:s}.",
   "lede.clean": "Jourilo used this product in a real browser. Automated checks found no defects; a person still has to review what they cannot judge.",
   "lede.blocked": "{b} of {j} journeys did not reach their goal.",
   "lede.journeysOk": "All {j} journeys reached their goal.",
-  "kpi.journeys": "Journeys completed",
-  "kpi.journeys.none": "none run in this audit",
+  "kpi.journeys": "Journeys passed",
+  "kpi.journeys.none": "none run",
   "kpi.journeys.sub": "{b} blocked",
   "kpi.defects": "Verified defects",
-  "kpi.defects.sub": "{c} critical \xB7 {s} serious",
   "kpi.causes": "Root causes",
   "kpi.causes.sub": "distinct fixes",
   "kpi.auto": "Automatic fixes",
-  "kpi.auto.sub": "previewed before applying",
+  "kpi.auto.sub": "previewed first",
   "kpi.review": "Manual review",
   "kpi.review.sub": "need a person",
-  "kpi.hyp": "Conversion hypotheses",
-  "kpi.hyp.sub": "test before acting",
-  noscore: "No overall UX score, on purpose: one number hides what matters. Each result says how it was established.",
+  "kpi.hyp": "Hypotheses",
+  "kpi.hyp.sub": "test first",
+  noscore: "No overall UX score, by design.",
   "blocked.title": "Blocked journeys",
-  "blocked.hint": "People could not finish these tasks in the browser.",
+  "blocked.hint": "Tasks people could not finish.",
   "blocked.at": "Stopped at step {n} of {t}",
   "blocked.unmet": "Not met",
-  "blocked.open": "Open the timeline",
+  "blocked.open": "Open timeline",
   "fixfirst.title": "Fix first",
-  "fixfirst.hint": "The highest-impact verified defects, one card per root cause.",
+  "fixfirst.hint": "Highest impact, one card per cause.",
   "fixfirst.none": "No defects detected by automated checks. Manual review is still required (see limitations).",
   "fixfirst.all": "All findings",
-  "lanes.title": "Three kinds of result, kept apart",
+  "lanes.title": "Result types",
   "sec.defect": "Verified defects",
-  "sec.defect.hint": "Measured or observed in the browser, reproducible. Fix these.",
+  "sec.defect.hint": "Measured in the browser. Fix these.",
   "sec.needs-review": "Needs manual review",
-  "sec.needs-review.hint": "Automated checks could not decide. A person has to judge them.",
+  "sec.needs-review.hint": "Checks could not decide. A person judges.",
   "sec.hypothesis": "Conversion hypotheses",
-  "sec.hypothesis.hint": "Untested ideas. Plan an experiment or investigate before claiming any effect.",
+  "sec.hypothesis.hint": "Untested ideas. Test before acting.",
   "sec.empty": "None in this run.",
   "rc.pages": "{n} page{n:s}",
   "rc.findings": "{n} finding{n:s}",
@@ -49563,12 +49562,11 @@ var EN = {
   "fd.shot": "Screenshot evidence",
   "shot.open": "Open the screenshot at full size",
   "fd.id": "id",
-  "limits.title": "Limitations of this run",
-  "limits.more": "All limitations, manual WCAG checks and network safety",
+  "limits.title": "Limitations",
   "limits.manual": "Still needs a person",
   "limits.manual.hint": "Automated checks cannot judge these WCAG 2.2 criteria; no run, including this one, shows conformance.",
-  "dismissed.title": "Dismissed as not a problem ({n})",
-  "dismissed.hint": "Kept out of the counts above and out of later runs. Each stays here with the reason it was dismissed; jourilo finding undismiss <id> brings one back.",
+  "dismissed.title": "Dismissed",
+  "dismissed.hint": "Left out of the counts and later runs; jourilo finding undismiss <id> brings one back.",
   "dismissed.reason": "Reason",
   "dismissed.by.user": "Dismissed by a person on {date}",
   "dismissed.by.agent": "Dismissed by an agent on {date}",
@@ -49579,9 +49577,10 @@ var EN = {
   "th.host": "Host",
   "th.port": "Port",
   "th.reason": "Reason",
-  "history.title": "History for this target",
-  "history.hint": "Runs with the same target in this workspace. Different page sets or viewports make counts not directly comparable; use jourilo verify for like-for-like comparisons.",
+  "history.title": "History",
+  "history.hint": "Runs of this target in this workspace. For like-for-like, use jourilo verify.",
   "history.this": "(this run)",
+  "more.label": "More about this run",
   "trend.title": "Trend per page and viewport",
   "trend.hint": "Defects are counted per capture (one page at one viewport), so runs audited with different --pages stay comparable. A finding with no viewport counts at every viewport of its page, and a finding seen on several pages with the same evidence counts on each of them. Values run from the oldest run to this one.",
   "trend.skipped": "{n} partial or empty run(s) left out: their numbers are not comparable.",
@@ -49590,7 +49589,7 @@ var EN = {
   "trend.noData": "no data",
   "th.trendDefects": "Defects per capture",
   "th.trendSerious": "Critical and serious",
-  "context.title": "Context from other tools",
+  "context.title": "Context",
   "context.brand": "Brand",
   "context.search": "Search",
   "f.type": "Result",
@@ -49615,8 +49614,8 @@ var EN = {
   "j.stoppedHere": "Stopped here",
   "j.noShot": "No screenshot",
   "pages.noShot": "No screenshot kept",
-  "pages.loadIdle": "Captured after: load, network idle (yes)",
-  "pages.loadBusy": "Captured after: load, network idle (no)",
+  "pages.loadIdle": "Loaded \xB7 network idle",
+  "pages.loadBusy": "Loaded \xB7 network busy",
   "pages.found": "found",
   "pages.notFound": "not found",
   "j.lastStep": "Last step",
@@ -49689,42 +49688,41 @@ var TR = {
   "mode.journeys": "Yolculuk \xE7al\u0131\u015Ft\u0131rmas\u0131",
   "scope.pages": "{n} sayfa",
   "scope.captures": "{n} yakalama",
-  "scope.viewports": "{n} g\xF6r\xFCn\xFCm alan\u0131",
   "scope.journeys": "{n} yolculuk",
+  "hero.served": "sunuldu\u011Fu adres",
   "lede.found": "Jourilo bu \xFCr\xFCn\xFC ger\xE7ek bir taray\u0131c\u0131da kulland\u0131 ve {r} k\xF6k nedene dayanan {d} do\u011Frulanm\u0131\u015F kusur buldu.",
   "lede.clean": "Jourilo bu \xFCr\xFCn\xFC ger\xE7ek bir taray\u0131c\u0131da kulland\u0131. Otomatik kontroller kusur bulmad\u0131; de\u011Ferlendiremedikleri konular\u0131 yine de bir insan\u0131n incelemesi gerekir.",
   "lede.blocked": "{j} yolculuktan {b} tanesi hedefine ula\u015Famad\u0131.",
   "lede.journeysOk": "{j} yolculu\u011Fun t\xFCm\xFC hedefine ula\u015Ft\u0131.",
-  "kpi.journeys": "Tamamlanan yolculuklar",
-  "kpi.journeys.none": "bu denetimde \xE7al\u0131\u015Ft\u0131r\u0131lmad\u0131",
+  "kpi.journeys": "Ge\xE7en yolculuklar",
+  "kpi.journeys.none": "\xE7al\u0131\u015Ft\u0131r\u0131lmad\u0131",
   "kpi.journeys.sub": "{b} engellendi",
   "kpi.defects": "Do\u011Frulanm\u0131\u015F kusurlar",
-  "kpi.defects.sub": "{c} kritik \xB7 {s} ciddi",
   "kpi.causes": "K\xF6k nedenler",
   "kpi.causes.sub": "ayr\u0131 d\xFCzeltme",
   "kpi.auto": "Otomatik d\xFCzeltmeler",
-  "kpi.auto.sub": "uygulamadan \xF6nce \xF6nizlenir",
+  "kpi.auto.sub": "\xF6nce \xF6nizlenir",
   "kpi.review": "Manuel inceleme",
-  "kpi.review.sub": "bir insan gerektirir",
-  "kpi.hyp": "D\xF6n\xFC\u015F\xFCm hipotezleri",
-  "kpi.hyp.sub": "uygulamadan \xF6nce test edin",
-  noscore: "Bilerek genel bir UX puan\u0131 yok: tek bir say\u0131 \xF6nemli olan\u0131 gizler. Her sonu\xE7 nas\u0131l belirlendi\u011Fini g\xF6sterir.",
+  "kpi.review.sub": "insan gerekir",
+  "kpi.hyp": "Hipotezler",
+  "kpi.hyp.sub": "\xF6nce test edin",
+  noscore: "Bilerek genel UX puan\u0131 yok.",
   "blocked.title": "Engellenen yolculuklar",
-  "blocked.hint": "Kullan\u0131c\u0131lar bu g\xF6revleri taray\u0131c\u0131da tamamlayamad\u0131.",
+  "blocked.hint": "Tamamlanamayan g\xF6revler.",
   "blocked.at": "{t} ad\u0131m\u0131n {n}. ad\u0131m\u0131nda durdu",
   "blocked.unmet": "Kar\u015F\u0131lanmad\u0131",
   "blocked.open": "Zaman \xE7izelgesini a\xE7",
   "fixfirst.title": "\xD6nce bunlar\u0131 d\xFCzeltin",
-  "fixfirst.hint": "Etkisi en y\xFCksek do\u011Frulanm\u0131\u015F kusurlar; her k\xF6k neden i\xE7in bir kart.",
+  "fixfirst.hint": "En etkili kusurlar, neden ba\u015F\u0131na bir kart.",
   "fixfirst.none": "Otomatik kontroller kusur bulmad\u0131. Manuel inceleme yine de gereklidir (s\u0131n\u0131rlara bak\u0131n).",
   "fixfirst.all": "T\xFCm bulgular",
-  "lanes.title": "Birbirinden ayr\u0131 \xFC\xE7 sonu\xE7 t\xFCr\xFC",
+  "lanes.title": "Sonu\xE7 t\xFCrleri",
   "sec.defect": "Do\u011Frulanm\u0131\u015F kusurlar",
-  "sec.defect.hint": "Taray\u0131c\u0131da \xF6l\xE7\xFCld\xFC veya g\xF6zlendi, yeniden \xFCretilebilir. Bunlar\u0131 d\xFCzeltin.",
+  "sec.defect.hint": "Taray\u0131c\u0131da \xF6l\xE7\xFCld\xFC. Bunlar\u0131 d\xFCzeltin.",
   "sec.needs-review": "Manuel inceleme gerekiyor",
-  "sec.needs-review.hint": "Otomatik kontroller karar veremedi. Bir insan\u0131n de\u011Ferlendirmesi gerekir.",
+  "sec.needs-review.hint": "Kontroller karar veremedi. Bir insan de\u011Ferlendirir.",
   "sec.hypothesis": "D\xF6n\xFC\u015F\xFCm hipotezleri",
-  "sec.hypothesis.hint": "Test edilmemi\u015F fikirler. Bir etki iddia etmeden \xF6nce deney planlay\u0131n veya ara\u015Ft\u0131r\u0131n.",
+  "sec.hypothesis.hint": "Test edilmemi\u015F fikirler. \xD6nce test edin.",
   "sec.empty": "Bu \xE7al\u0131\u015Fmada yok.",
   "rc.pages": "{n} sayfa",
   "rc.findings": "{n} bulgu",
@@ -49790,12 +49788,11 @@ var TR = {
   "fd.shot": "Ekran g\xF6r\xFCnt\xFCs\xFC kan\u0131t\u0131",
   "shot.open": "Ekran g\xF6r\xFCnt\xFCs\xFCn\xFC tam boyutta a\xE7",
   "fd.id": "kimlik",
-  "limits.title": "Bu \xE7al\u0131\u015Fman\u0131n s\u0131n\u0131rlar\u0131",
-  "limits.more": "T\xFCm s\u0131n\u0131rlar, manuel WCAG kontrolleri ve a\u011F g\xFCvenli\u011Fi",
+  "limits.title": "S\u0131n\u0131rlar",
   "limits.manual": "H\xE2l\xE2 bir insan gerektirenler",
   "limits.manual.hint": "Otomatik kontroller bu WCAG 2.2 \xF6l\xE7\xFCtlerini de\u011Ferlendiremez; bu dahil hi\xE7bir \xE7al\u0131\u015Fma uygunluk g\xF6stermez.",
-  "dismissed.title": "Sorun de\u011Fil olarak kapat\u0131lanlar ({n})",
-  "dismissed.hint": "Yukar\u0131daki say\u0131lara ve sonraki \xE7al\u0131\u015Fmalara dahil edilmez. Her biri kapat\u0131lma gerek\xE7esiyle burada kal\u0131r; jourilo finding undismiss <kimlik> komutu birini geri getirir.",
+  "dismissed.title": "Kapat\u0131lanlar",
+  "dismissed.hint": "Say\u0131lara ve sonraki \xE7al\u0131\u015Fmalara dahil edilmez; jourilo finding undismiss <kimlik> birini geri getirir.",
   "dismissed.reason": "Gerek\xE7e",
   "dismissed.by.user": "{date} tarihinde bir ki\u015Fi taraf\u0131ndan kapat\u0131ld\u0131",
   "dismissed.by.agent": "{date} tarihinde bir ajan taraf\u0131ndan kapat\u0131ld\u0131",
@@ -49806,9 +49803,10 @@ var TR = {
   "th.host": "Sunucu",
   "th.port": "Port",
   "th.reason": "Neden",
-  "history.title": "Bu hedefin ge\xE7mi\u015Fi",
-  "history.hint": "Bu \xE7al\u0131\u015Fma alan\u0131nda ayn\u0131 hedefe ait \xE7al\u0131\u015Fmalar. Farkl\u0131 sayfa k\xFCmeleri veya g\xF6r\xFCn\xFCm alanlar\u0131 say\u0131lar\u0131 do\u011Frudan kar\u015F\u0131la\u015Ft\u0131r\u0131lamaz k\u0131lar; birebir kar\u015F\u0131la\u015Ft\u0131rma i\xE7in jourilo verify kullan\u0131n.",
+  "history.title": "Ge\xE7mi\u015F",
+  "history.hint": "Bu \xE7al\u0131\u015Fma alan\u0131nda bu hedefin \xE7al\u0131\u015Fmalar\u0131. Birebir kar\u015F\u0131la\u015Ft\u0131rma i\xE7in jourilo verify kullan\u0131n.",
   "history.this": "(bu \xE7al\u0131\u015Fma)",
+  "more.label": "Bu \xE7al\u0131\u015Fma hakk\u0131nda daha fazlas\u0131",
   "trend.title": "Sayfa ve g\xF6r\xFCn\xFCm alan\u0131 ba\u015F\u0131na e\u011Filim",
   "trend.hint": "Kusurlar yakalama ba\u015F\u0131na (bir sayfa, bir g\xF6r\xFCn\xFCm alan\u0131) say\u0131l\u0131r; bu y\xFCzden farkl\u0131 --pages ile yap\u0131lan \xE7al\u0131\u015Fmalar kar\u015F\u0131la\u015Ft\u0131r\u0131labilir kal\u0131r. G\xF6r\xFCn\xFCm alan\u0131 olmayan bir bulgu, sayfas\u0131n\u0131n her g\xF6r\xFCn\xFCm alan\u0131nda say\u0131l\u0131r; ayn\u0131 kan\u0131tla birden \xE7ok sayfada g\xF6r\xFClen bir bulgu da bu sayfalar\u0131n her birinde say\u0131l\u0131r. De\u011Ferler en eski \xE7al\u0131\u015Fmadan bu \xE7al\u0131\u015Fmaya do\u011Fru gider.",
   "trend.skipped": "{n} yar\u0131m veya bo\u015F \xE7al\u0131\u015Fma d\u0131\u015Far\u0131da b\u0131rak\u0131ld\u0131: say\u0131lar\u0131 kar\u015F\u0131la\u015Ft\u0131r\u0131lamaz.",
@@ -49817,7 +49815,7 @@ var TR = {
   "trend.noData": "veri yok",
   "th.trendDefects": "Yakalama ba\u015F\u0131na kusur",
   "th.trendSerious": "Kritik ve ciddi",
-  "context.title": "Di\u011Fer ara\xE7lardan ba\u011Flam",
+  "context.title": "Ba\u011Flam",
   "context.brand": "Marka",
   "context.search": "Arama",
   "f.type": "Sonu\xE7",
@@ -49842,8 +49840,8 @@ var TR = {
   "j.stoppedHere": "Burada durdu",
   "j.noShot": "Ekran g\xF6r\xFCnt\xFCs\xFC yok",
   "pages.noShot": "Ekran g\xF6r\xFCnt\xFCs\xFC saklanmad\u0131",
-  "pages.loadIdle": "\u015Eundan sonra yakaland\u0131: y\xFCkleme, a\u011F bo\u015Fta (evet)",
-  "pages.loadBusy": "\u015Eundan sonra yakaland\u0131: y\xFCkleme, a\u011F bo\u015Fta (hay\u0131r)",
+  "pages.loadIdle": "Y\xFCklendi \xB7 a\u011F bo\u015Fta",
+  "pages.loadBusy": "Y\xFCklendi \xB7 a\u011F me\u015Fgul",
   "pages.found": "bulundu",
   "pages.notFound": "bulunamad\u0131",
   "j.lastStep": "Son ad\u0131m",
@@ -50103,24 +50101,26 @@ button,select,input,textarea{font:inherit;color:inherit}
 .tabs .count{font-size:12px;color:var(--muted);margin-left:4px;font-weight:400}
 
 /* hero */
-.hero{padding:34px 0 8px;display:grid;gap:10px}
-.eyebrow{font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--brass);font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.hero h1{font-size:clamp(28px,4.4vw,44px);letter-spacing:-.02em;overflow-wrap:anywhere}
-.lede{font-size:17px;max-width:72ch;color:var(--ink-2);margin:0}
-.scope{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13.5px;color:var(--muted);margin:0}
-.scope span{display:inline-flex;align-items:center;gap:8px}
+.hero{padding:36px 0 4px;display:grid;gap:8px}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0}
+.hero h1{font-size:clamp(24px,3vw,32px);line-height:1.2;letter-spacing:-.01em;overflow-wrap:anywhere;max-width:40ch}
+.served{margin:-4px 0 0;font-size:13.5px;color:var(--muted);overflow-wrap:anywhere}
+.served code{font-size:12.5px}
+.lede{font-size:16px;max-width:68ch;color:var(--ink-2);margin:4px 0 0}
+.scope{display:flex;flex-wrap:wrap;gap:2px 8px;font-size:13px;color:var(--muted);margin:0}
+.scope .sep{color:var(--line-2)}
 
-/* KPIs */
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:22px 0 6px}
-.kpi{background:var(--sheet);border:1px solid var(--line);border-radius:12px;padding:12px 14px 11px;display:grid;gap:2px;box-shadow:var(--shadow)}
-.kpi .lbl{font-size:12.5px;color:var(--muted);font-weight:600}
-.kpi .num{font-size:32px;line-height:1.1;font-variant-numeric:tabular-nums}
+/* KPIs: an ink number, a short label, one muted line; no tint, no border, no alert colour */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:26px 0 0}
+.kpi{background:var(--sheet);border-radius:14px;padding:14px 16px 13px;display:grid;gap:2px;align-content:start}
+.kpi .num{font-size:34px;line-height:1.05;font-variant-numeric:tabular-nums;color:var(--ink)}
+.kpi .lbl{font-size:13px;color:var(--ink-2);font-weight:600;margin-top:4px}
 .kpi .sub{font-size:12.5px;color:var(--muted)}
-.kpi.alert .num{color:var(--poor)}
-.kpi.ok .num{color:var(--good)}
-.sevbar{display:flex;height:5px;border-radius:3px;overflow:hidden;background:var(--line);margin-top:4px}
-.sevbar i{display:block}
-.noscore{font-size:13px;color:var(--muted);margin:8px 0 0;display:flex;gap:10px;align-items:center}
+.kpi .num .good{color:var(--good)}.kpi .num .poor{color:var(--poor)}
+.legend{display:flex;flex-wrap:wrap;gap:0 8px;font-size:12px}
+.legend .lg{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.legend .lg span{text-transform:lowercase}
+.noscore{font-size:12.5px;color:var(--muted);margin:10px 0 0}
 
 /* sections */
 .panel{padding-bottom:40px}
@@ -50128,17 +50128,18 @@ button,select,input,textarea{font:inherit;color:inherit}
 .block-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
 .block-h p{margin:4px 0 0;color:var(--muted);font-size:14px}
 
-/* blocked journeys */
-.blocked{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
-.bj{background:var(--sheet);border:1px solid var(--line);border-top:3px solid var(--poor);border-radius:12px;overflow:hidden;display:grid;grid-template-rows:auto 1fr;box-shadow:var(--shadow)}
-.bj figure{margin:0;position:relative;background:var(--sheet-2);border-bottom:1px solid var(--line)}
-.bj figure img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;object-position:top}
-.bj figure figcaption{position:absolute;left:10px;top:10px;background:var(--poor);color:var(--sheet);font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
-.bj .in{padding:12px 14px 14px;display:grid;gap:6px;align-content:start}
-.bj h3{font-size:17px}
-.bj .err{font-size:13px;color:var(--ink-2);background:var(--sheet-2);border-left:3px solid var(--poor);padding:6px 10px;border-radius:0 6px 6px 0;overflow-wrap:anywhere}
+/* blocked journeys: the same card as "Fix first" */
+.blocked{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.bj{background:var(--sheet);border:1px solid var(--line);border-radius:16px;overflow:hidden;display:grid;grid-template-rows:auto 1fr;box-shadow:var(--shadow)}
+.bj figure{margin:0;position:relative;background:var(--sheet-2)}
+.bj figure img{display:block;width:100%;aspect-ratio:2/1;object-fit:cover;object-position:top}
+.bj figure figcaption{position:absolute;left:10px;top:10px;background:var(--sheet);color:var(--ink);font-size:11.5px;font-weight:600;padding:1px 9px;border-radius:999px;box-shadow:0 0 0 1px var(--line)}
+.bj .in{padding:16px 18px;display:grid;gap:6px;align-content:start}
+.bj h3{font-size:18px;line-height:1.3}
+.bj .err{font-size:13px;color:var(--ink-2);background:var(--sheet-2);padding:6px 10px;border-radius:8px;overflow-wrap:anywhere}
 .bj .criteria{font-size:13.5px}
 .bj .row{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:4px}
+.meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:13px;color:var(--muted)}
 
 /* root-cause cards */
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
@@ -50149,7 +50150,8 @@ button,select,input,textarea{font:inherit;color:inherit}
 .rc-card .ba figure{margin:0;background:var(--sheet-2);position:relative}
 .rc-card .ba figcaption{position:absolute;left:8px;top:8px;z-index:1;font-size:11px;font-weight:600;letter-spacing:.04em;background:var(--sheet);color:var(--ink);padding:1px 8px;border-radius:999px}
 .rc-card .ba .crop{border:0;border-radius:0}
-.rc-card .ba figure.after .box{outline-color:var(--good);box-shadow:0 0 0 4px rgba(20,113,58,.22)}
+.rc-card .ba figure.after .box{outline-color:var(--ink-2);box-shadow:none}
+.rc-card .ba figure.after figcaption{color:var(--good)}
 .cover{display:block;width:100%;height:100%;object-fit:cover;object-position:top}
 .rc-card .in{padding:16px 18px 16px;display:grid;gap:6px;align-content:start}
 .rc-card h3{font-size:18px;line-height:1.3;margin-bottom:4px}
@@ -50170,24 +50172,34 @@ button,select,input,textarea{font:inherit;color:inherit}
 
 /* lanes */
 .lanes{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
-.lane{background:var(--sheet);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:grid;gap:6px;align-content:start}
-.lane.k-needs-review{border-style:dashed;border-color:var(--line-2)}
-.lane.k-hypothesis{background:var(--brass-soft);border-color:transparent}
+.lane{background:var(--sheet);border-radius:16px;padding:16px 18px;display:grid;gap:6px;align-content:start}
 .lane .head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
 .lane .head .num{font-family:Newsreader,Georgia,serif;font-size:28px;line-height:1}
 .lane p{margin:0;font-size:13.5px;color:var(--muted)}
-.lane ul{margin:4px 0 0;padding:0;list-style:none;font-size:14px}
+.lane ul{margin:6px 0 0;padding:0;list-style:none;font-size:14px;display:grid;gap:2px}
 .lane li{display:flex;gap:9px;align-items:baseline}
-.lane li::before{content:"";width:6px;height:6px;background:var(--brass-mark);transform:rotate(45deg);flex:none;position:relative;top:-2px}
-.lane li a{display:inline-block;padding:3px 0;min-height:24px}
+.lane li::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--line-2);flex:none;position:relative;top:-2px}
+.lane li a{display:inline-block;padding:3px 0;min-height:24px;color:var(--ink);text-decoration:none}
+.lane li a:hover{color:var(--brass);text-decoration:underline}
 .lane li .n{color:var(--muted);font-size:12.5px;white-space:nowrap}
 
-/* limitations */
-.limits{background:var(--sheet);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
-.limits ul{margin:6px 0 0;padding-left:18px;font-size:14px}
-.limits li{margin:4px 0}
-details.more>summary,details.fold>summary{cursor:pointer;color:var(--brass);font-weight:600;font-size:14px;padding:4px 0;list-style-position:outside}
-details.fold{background:var(--sheet);border:1px solid var(--line);border-radius:12px;padding:10px 16px;margin-top:12px}
+/* folded sections: limitations, dismissed, history, context */
+details.more>summary{cursor:pointer;color:var(--brass);font-weight:600;font-size:14px;padding:4px 0}
+.folds{border-top:1px solid var(--line)}
+details.fold{border-bottom:1px solid var(--line)}
+details.fold>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:16px 4px;min-height:44px}
+details.fold>summary::-webkit-details-marker{display:none}
+details.fold>summary .ft{font-family:Newsreader,"Iowan Old Style",Georgia,serif;font-size:19px;font-weight:500;color:var(--ink)}
+details.fold>summary .fc{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+details.fold>summary::after{content:"";margin-left:auto;width:7px;height:7px;border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);transform:rotate(45deg);position:relative;top:-2px;transition:transform .15s}
+details.fold[open]>summary::after{transform:rotate(-135deg);top:2px}
+details.fold>summary:hover .ft{color:var(--brass)}
+.fold-in{padding:0 4px 20px;font-size:14px;display:grid;gap:8px;min-width:0}
+.fold-in p{margin:0}
+.fold-in ul{margin:0;padding-left:18px}
+.fold-in li{margin:3px 0}
+.fold-in ul.plain{list-style:none;padding:0;display:grid;gap:10px}
+.fold-in h3,.fold-in h4{margin:12px 0 0}
 
 /* findings */
 .toolbar{position:sticky;top:var(--mast-h,96px);z-index:10;background:var(--paper);padding:14px 0 10px;border-bottom:1px solid var(--line);display:grid;gap:8px}
@@ -50257,56 +50269,56 @@ li.ev{border-radius:12px;padding:10px;overflow:hidden;display:grid;gap:6px;align
 .empty{padding:18px;text-align:center;color:var(--muted);border:1px dashed var(--line-2);border-radius:12px;margin-top:16px}
 
 /* journeys */
-.journey{background:var(--sheet);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:16px 0;box-shadow:var(--shadow)}
-.journey.failed,.journey.blocked{border-top:3px solid var(--poor)}
-.journey.passed{border-top:3px solid var(--good)}
-.journey-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.journey{background:var(--sheet);border:1px solid var(--line);border-radius:16px;padding:18px 20px;margin:16px 0;box-shadow:var(--shadow)}
+.journey-h{display:flex;justify-content:space-between;align-items:center;gap:8px 12px;flex-wrap:wrap}
+.journey-h h3{font-size:19px}
 .timeline{list-style:none;margin:14px 0 4px;padding:4px 2px 12px;display:flex;gap:0;overflow-x:auto;scroll-snap-type:x proximity}
 .timeline li{flex:0 0 220px;scroll-snap-align:start;display:grid;grid-template-rows:auto auto 1fr;gap:6px;padding-right:14px;position:relative}
 .timeline .rail{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--muted)}
 .timeline .rail::after{content:"";flex:1;height:2px;background:var(--line-2)}
 .timeline li:last-child .rail::after{background:transparent}
-.timeline .dot{width:12px;height:12px;transform:rotate(45deg);background:var(--good);flex:none;margin:0 2px}
-.timeline li.failed .dot,.timeline li.blocked .dot{background:var(--poor)}
+.timeline .dot{width:9px;height:9px;border-radius:50%;background:var(--ink-2);flex:none;margin:0 2px}
+.timeline li.failed .dot,.timeline li.blocked .dot,.timeline li.goal.failed .dot{background:none;box-shadow:inset 0 0 0 2px var(--ink)}
 .timeline li.skipped .dot{background:var(--line-2)}
 .timeline li.skipped{opacity:.55}
 .timeline .shot{display:block;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--sheet-2)}
 .timeline .shot img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;object-position:top}
 .timeline .noshot{aspect-ratio:16/10;display:grid;place-items:center;font-size:12px;color:var(--muted);border:1px dashed var(--line-2);border-radius:8px}
-.timeline li.failed .shot,.timeline li.blocked .shot{border:2px solid var(--poor)}
-.timeline .desc{font-size:13px;overflow-wrap:anywhere}
-.timeline .here{color:var(--poor);font-weight:700;font-size:12px}
+.timeline li.failed .shot,.timeline li.blocked .shot{box-shadow:0 0 0 2px var(--ink)}
+.timeline .desc{font-size:13px;overflow-wrap:anywhere;display:grid;gap:2px}
+.timeline .desc .muted{font-size:12px}
+.timeline .here{color:var(--ink);font-weight:700;font-size:12px}
 .timeline pre{font-size:11.5px;max-height:120px;overflow:auto}
 .timeline li.goal{flex:0 0 260px}
-.goalbox{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--sheet-2)}
-.timeline li.goal.failed .goalbox{border:2px solid var(--poor)}
-.timeline li.goal.passed .goalbox{border-color:var(--good)}
+.goalbox{border-radius:10px;padding:10px 12px;background:var(--sheet-2)}
 .criteria{list-style:none;padding:0;margin:4px 0 0;display:grid;gap:4px;font-size:14px}
 .criteria li{display:flex;gap:8px;align-items:baseline}
-.mark{font-weight:700}.mark.ok{color:var(--good)}.mark.no{color:var(--poor)}
+.mark{font-weight:700;color:var(--muted)}.mark.no{color:var(--ink)}
 
 /* tables */
 .tablewrap{overflow-x:auto;background:var(--sheet);border:1px solid var(--line);border-radius:12px}
 table{border-collapse:collapse;width:100%}
 th,td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;font-size:13.5px}
-th{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;background:var(--sheet-2)}
+th{font-size:12.5px;color:var(--muted);font-weight:600;background:var(--sheet)}
 tr:last-child td{border-bottom:0}
+.pages td .muted{font-size:12.5px}
 td.good{color:var(--good)}td.poor{color:var(--poor);font-weight:600}td.needs-improvement{color:var(--ni)}
 .mini{width:104px;max-height:74px;object-fit:cover;object-position:top;border:1px solid var(--line);border-radius:6px;display:block}
-.history .bar{display:inline-block;height:8px;background:var(--brass-mark);border-radius:4px;vertical-align:middle;margin-right:6px}
+.history .bar{display:inline-block;height:6px;background:var(--line-2);border-radius:3px;vertical-align:middle;margin-right:6px}
 .history tr.current td{font-weight:600}
-.trend .spark{vertical-align:middle;color:var(--brass-mark);margin-right:6px}
+.trend .spark{vertical-align:middle;color:var(--muted);margin-right:6px}
 
 /* compare */
 .pairs{display:grid;gap:16px}
-.pair{background:var(--sheet);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.pair{background:var(--sheet);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
 .pair h3{font-size:15px;font-family:inherit;font-weight:600;margin-bottom:8px;overflow-wrap:anywhere}
 .pair .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .pair figure{margin:0;display:grid;gap:4px}
-.pair figcaption{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.pair figcaption{font-size:12px;font-weight:600;color:var(--ink-2)}
 .pair figure.after figcaption{color:var(--good)}
-.pair img{width:100%;aspect-ratio:4/3;object-fit:cover;object-position:top;border:1px solid var(--line);border-radius:8px;display:block}
+.pair img{width:100%;aspect-ratio:16/10;object-fit:cover;object-position:top;border:1px solid var(--line);border-radius:8px;display:block}
 .verdict{font-weight:600}
+.cmp-line{margin:12px 0 0;font-size:14px}
 .verdict.improved{color:var(--good)}.verdict.regressed{color:var(--poor)}
 
 /* action bar + dialog */
@@ -50352,6 +50364,10 @@ footer.foot svg{height:18px;width:auto;vertical-align:-3px;margin-right:6px;colo
   .filters select{max-width:100%}
   .filters label{flex:1 1 140px}
   .cards,.blocked{grid-template-columns:1fr}
+  .kpis{grid-template-columns:1fr 1fr;gap:8px;margin-top:20px}
+  .kpi{padding:12px 14px 11px}
+  .kpi .num{font-size:28px}
+  .journey{padding:14px 14px}
   .actionbar{left:12px;right:12px;transform:none;border-radius:16px;justify-content:space-between}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
@@ -51466,6 +51482,12 @@ function cardHtml(run, g) {
 <div class="in">${sevHtml(f.severity)}<h3><a href="#${g.id}">${ruleText(f, "title")}</a></h3>
 <div class="row"><span class="where">${whereHtml(g)}${src ? ` \xB7 <code>${esc(src.file)}:${src.line}</code>` : ""}</span>${pick(g, "rc.select", true)}</div></div></article>`;
 }
+function kpiHtml(label, num2, sub = "") {
+  return `<div class="kpi"><span class="num">${num2}</span><span class="lbl">${T(label)}</span>${sub ? `<span class="sub">${sub}</span>` : ""}</div>`;
+}
+function foldHtml(title, count, body, id) {
+  return `<details class="fold"><summary${id ? ` id="${id}"` : ""}><span class="ft">${title}</span>${count === void 0 ? "" : `<span class="fc">${count}</span>`}</summary><div class="fold-in">${body}</div></details>`;
+}
 function journeyAnchor(j) {
   return `j-${slug2(j.id)}-${slug2(j.viewport)}`;
 }
@@ -51485,9 +51507,9 @@ function blockedHtml(run, groups) {
       ).values()
     ];
     return `<article class="bj">${src !== "#" ? `<figure><img loading="lazy" alt="" src="${src}"><figcaption>${T(stop ? "j.stoppedHere" : "j.lastStep")}</figcaption></figure>` : ""}
-<div class="in"><span class="chips"><span class="chip st-${j.status}">${T(`st.${j.status}`)}</span>${runs2.map((r) => `<span class="chip">${esc(r.viewport)}</span>`).join("")}</span>
+<div class="in"><span class="meta"><span class="chip">${T(`st.${j.status}`)}</span> ${runs2.map((r) => esc(r.viewport)).join(" \xB7 ")}${stop ? ` \xB7 ${T("blocked.at", { n: stop.index + 1, t: j.steps.length })}` : ""}</span>
 <h3 lang="en">${esc(j.name)}</h3>
-${stop ? `<p class="muted" style="margin:0">${T("blocked.at", { n: stop.index + 1, t: j.steps.length })}</p><div class="err" lang="en">${esc(stop.description)}${stop.error ? ` \u2014 ${esc(stop.error)}` : ""}</div>` : ""}
+${stop ? `<div class="err" lang="en">${esc(stop.description)}${stop.error ? ` \u2014 ${esc(stop.error)}` : ""}</div>` : ""}
 ${unmet.length ? `<ul class="criteria" lang="en">${unmet.map((c) => `<li><span class="mark no" aria-hidden="true">\u2715</span><span><span class="sr">not met: </span>${esc(c.description)}${c.detail ? ` <span class="muted">${esc(c.detail)}</span>` : ""}</span></li>`).join("")}</ul>` : ""}
 <div class="row"><a href="#${journeyAnchor(j)}">${T("blocked.open")}</a>${ids.length ? `<label class="pick"><input type="checkbox" class="sel" data-ids="${[...new Set(ids)].join(" ")}"><span>${T("rc.select")}</span></label>` : ""}</div></div></article>`;
   });
@@ -51520,33 +51542,37 @@ ${n.escaped.length ? `<p class="poor"><strong>${T("net.escaped", { n: n.escaped.
 ${n.blocked.length ? `<p class="muted">${T("net.blocked")}</p><div class="tablewrap"><table><thead><tr><th>${T("th.host")}</th><th>${T("th.port")}</th><th>${T("th.reason")}</th></tr></thead><tbody>${n.blocked.map((b) => `<tr><td><code>${esc(b.host)}</code></td><td>${b.port}</td><td>${esc(b.reason)}</td></tr>`).join("")}</tbody></table></div>` : ""}`;
 }
 function limitsHtml(run) {
-  const first = run.limitations.slice(0, 3);
-  const rest = run.limitations.slice(3);
-  return `<section class="block" aria-labelledby="h-limits"><div class="limits"><h2 id="h-limits" style="font-size:20px">${T("limits.title")}</h2>
-<ul lang="en">${first.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
-<details class="more"><summary>${T("limits.more")}</summary>
-${rest.length ? `<ul lang="en">${rest.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>` : ""}
-<h3 style="margin-top:14px">${T("limits.manual")}</h3><p class="muted">${T("limits.manual.hint")}</p><ul lang="en">${MANUAL_REVIEW.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>
-${networkHtml(run)}</details></div></section>`;
+  const list2 = run.limitations.length ? `<ul lang="en">${run.limitations.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>` : "";
+  return foldHtml(
+    T("limits.title"),
+    run.limitations.length,
+    `${list2}<h4>${T("limits.manual")}</h4><p class="muted">${T("limits.manual.hint")}</p><ul lang="en">${MANUAL_REVIEW.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>
+${networkHtml(run)}`,
+    "h-limits"
+  );
 }
 function dismissedHtml(run) {
   const list2 = run.dismissed ?? [];
   if (!list2.length) return "";
-  return `<section class="block" aria-labelledby="h-dismissed"><details class="fold"><summary id="h-dismissed">${T("dismissed.title", { n: list2.length })}</summary>
-<p class="muted">${T("dismissed.hint")}</p>
-<ul>${list2.map((f) => {
-    const d = f.dismissal;
-    const who = d.by === "agent" ? "dismissed.by.agent" : "dismissed.by.user";
-    return `<li><span lang="en">${esc(f.title)}</span> <code>${esc(pathname(f.url))}</code> <span class="muted">${T("fd.id")} <code>${esc(f.fingerprint)}</code></span><br>${T("dismissed.reason")}: <span lang="en">${esc(d.reason)}</span><br><span class="muted">${T(who, { date: d.at.slice(0, 10) })}</span></li>`;
-  }).join("")}</ul></details></section>`;
+  return foldHtml(
+    T("dismissed.title"),
+    list2.length,
+    `<p class="muted">${T("dismissed.hint")}</p>
+<ul class="plain">${list2.map((f) => {
+      const d = f.dismissal;
+      const who = d.by === "agent" ? "dismissed.by.agent" : "dismissed.by.user";
+      return `<li><span lang="en">${esc(f.title)}</span> <code>${esc(pathname(f.url))}</code> <span class="muted">${T("fd.id")} <code>${esc(f.fingerprint)}</code></span><br>${T("dismissed.reason")}: <span lang="en">${esc(d.reason)}</span><br><span class="muted">${T(who, { date: d.at.slice(0, 10) })}</span></li>`;
+    }).join("")}</ul>`,
+    "h-dismissed"
+  );
 }
 function contextHtml(run) {
   const c = run.context;
   if (!c || !c.brand && !c.search) return "";
-  const parts = [`<details class="fold"><summary>${T("context.title")}</summary>`];
+  const parts = [];
   if (c.brand)
     parts.push(
-      `<p><b>${T("context.brand")}</b> (${esc(c.brand.source)}, <code>${esc(c.brand.file)}</code>): ${esc(c.brand.name)} \xB7 ${c.brand.colors.length} color tokens \xB7 fonts ${esc(c.brand.fonts.join(", ") || "\u2014")}${c.brand.locked ? ' \xB7 <span class="chip">locked</span> recommendations keep brand tokens unchanged' : ""}</p>`
+      `<p><b>${T("context.brand")}</b> (${esc(c.brand.source)}, <code>${esc(c.brand.file)}</code>): ${esc(c.brand.name)} \xB7 ${c.brand.colors.length} color tokens \xB7 fonts ${esc(c.brand.fonts.join(", ") || "\u2014")}${c.brand.locked ? " \xB7 locked: recommendations keep brand tokens unchanged" : ""}</p>`
     );
   if (c.search) {
     const paths = new Set(run.pages.map((p) => pathname(p.url)));
@@ -51557,12 +51583,11 @@ function contextHtml(run) {
     if (related.length)
       parts.push(
         `<ul lang="en">${related.slice(0, 15).map(
-          (f) => `<li><span class="chip">${esc(f.severity)}</span> ${esc(f.title)} \u2014 <code>${esc(pathname(f.url ?? ""))}</code></li>`
+          (f) => `<li><span class="muted">${esc(f.severity)}</span> ${esc(f.title)} \u2014 <code>${esc(pathname(f.url ?? ""))}</code></li>`
         ).join("")}</ul>`
       );
   }
-  parts.push("</details>");
-  return parts.join("");
+  return foldHtml(T("context.title"), void 0, parts.join(""));
 }
 function historyHtml(run, history) {
   const same = history.filter((h) => h.target === run.target && h.id !== run.id && h.pages > 0).slice(-9);
@@ -51585,12 +51610,16 @@ function historyHtml(run, history) {
   ];
   const total = (d) => d.critical + d.serious + d.moderate + d.minor;
   const max = Math.max(1, ...rows.map((r) => total(r.defects)));
-  return `<details class="fold"><summary>${T("history.title")}</summary><div class="tablewrap" tabindex="0" role="region"${attrs({ "aria-label": "history.title" })}><table class="history"><thead><tr><th>${T("th.run")}</th><th>${T("th.date")}</th>${SEVS.map((s) => `<th>${T(`sev.${s}`)}</th>`).join("")}<th>${T("th.defects")}</th></tr></thead><tbody>${rows.map((r, i) => {
-    const t = total(r.defects);
-    const prev = i ? total(rows[i - 1].defects) : t;
-    const trend = t < prev ? "good" : t > prev ? "poor" : "";
-    return `<tr${"current" in r ? ' class="current"' : ""}><td><code>${esc(r.id)}</code>${"current" in r ? ` ${T("history.this")}` : ""}</td><td>${esc(new Date(r.startedAt).toISOString().slice(0, 16).replace("T", " "))}</td><td>${r.defects.critical}</td><td>${r.defects.serious}</td><td>${r.defects.moderate}</td><td>${r.defects.minor}</td><td class="${trend}"><span class="bar" style="width:${Math.round(t / max * 120)}px"></span> ${t}</td></tr>`;
-  }).join("")}</tbody></table></div><p class="muted">${T("history.hint")}</p>${trendBlock}</details>`;
+  return foldHtml(
+    T("history.title"),
+    rows.length,
+    `<div class="tablewrap" tabindex="0" role="region"${attrs({ "aria-label": "history.title" })}><table class="history"><thead><tr><th>${T("th.run")}</th><th>${T("th.date")}</th>${SEVS.map((s) => `<th>${T(`sev.${s}`)}</th>`).join("")}<th>${T("th.defects")}</th></tr></thead><tbody>${rows.map((r, i) => {
+      const t = total(r.defects);
+      const prev = i ? total(rows[i - 1].defects) : t;
+      const trend = t < prev ? "good" : t > prev ? "poor" : "";
+      return `<tr${"current" in r ? ' class="current"' : ""}><td><code>${esc(r.id)}</code>${"current" in r ? ` ${T("history.this")}` : ""}</td><td>${esc(new Date(r.startedAt).toISOString().slice(0, 16).replace("T", " "))}</td><td>${r.defects.critical}</td><td>${r.defects.serious}</td><td>${r.defects.moderate}</td><td>${r.defects.minor}</td><td class="${trend}"><span class="bar" style="width:${Math.round(t / max * 120)}px"></span> ${t}</td></tr>`;
+    }).join("")}</tbody></table></div><p class="muted">${T("history.hint")}</p>${trendBlock}`
+  );
 }
 var numText = (n, digits = 0) => n === null ? "\u2013" : String(+n.toFixed(digits));
 function sparkline(values) {
@@ -51637,13 +51666,13 @@ function journeysHtml(run) {
   return run.journeys.map((j) => {
     const stopIdx = j.steps.findIndex((s) => s.status === "failed" || s.status === "blocked");
     return `<section class="journey ${j.status}" id="${journeyAnchor(j)}" aria-labelledby="${journeyAnchor(j)}-h">
-<div class="journey-h"><h3 id="${journeyAnchor(j)}-h" lang="en">${esc(j.name)}</h3><span class="chips"><span class="chip st-${j.status}">${T(`st.${j.status}`)}</span>${j.stability ? `<span class="chip st-${j.stability}">${T(`st.${j.stability}`)}</span>` : ""}<span class="chip">${esc(j.viewport)}</span><span class="chip">${(j.durationMs / 1e3).toFixed(1)} s</span></span></div>
+<div class="journey-h"><h3 id="${journeyAnchor(j)}-h" lang="en">${esc(j.name)}</h3><span class="meta"><span class="chip">${T(`st.${j.status}`)}</span>${j.stability ? `<span class="chip">${T(`st.${j.stability}`)}</span>` : ""} ${esc(j.viewport)} \xB7 ${(j.durationMs / 1e3).toFixed(1)} s</span></div>
 ${j.attempts ? `<p class="muted">${T("j.attempts", { n: j.attempts.length, list: j.attempts.map((a) => a.status).join(", ") })}${j.stability === "flaky" ? ` ${T("j.flakyNote")}` : ""}</p>` : ""}
 <ol class="timeline" tabindex="0"${attrs({ "aria-label": "j.timeline" })}>${j.steps.map((s, i) => {
       const src = runFile(s.screenshot);
       return `<li class="${s.status}"><div class="rail"><span class="dot" aria-hidden="true"></span>${T("j.step", { n: i + 1 })}</div>
 ${src !== "#" ? `<a class="shot" href="${src}" target="_blank" rel="noopener"${attrs({ "aria-label": "shot.open" })}><img loading="lazy" alt="" src="${src}"></a>` : `<div class="noshot">${T("j.noShot")}</div>`}
-<div class="desc"><span class="chips"><span class="chip st-${s.status}">${T(`st.${s.status}`)}</span><span class="muted">${s.durationMs} ms</span></span>${i === stopIdx ? `<div class="here">${T("j.stoppedHere")}</div>` : ""}<div lang="en">${esc(s.description)}</div>${s.error ? `<pre>${esc(s.error)}</pre>` : ""}</div></li>`;
+<div class="desc"><span class="muted">${T(`st.${s.status}`)} \xB7 ${s.durationMs} ms</span>${i === stopIdx ? `<div class="here">${T("j.stoppedHere")}</div>` : ""}<div lang="en">${esc(s.description)}</div>${s.error ? `<pre>${esc(s.error)}</pre>` : ""}</div></li>`;
     }).join("")}${j.successCriteria.length ? `<li class="goal ${j.successCriteria.every((c) => c.met) ? "passed" : "failed"}"><div class="rail"><span class="dot" aria-hidden="true"></span>${T("j.goal")}</div><div class="goalbox"><h4 style="margin-top:0">${T("j.criteria")}</h4><ul class="criteria" lang="en">${j.successCriteria.map((c) => `<li><span class="mark ${c.met ? "ok" : "no"}" aria-hidden="true">${c.met ? "\u2713" : "\u2715"}</span><span><span class="sr">${c.met ? "met" : "not met"}: </span>${esc(c.description)}${c.detail ? ` <span class="muted">${esc(c.detail)}</span>` : ""}</span></li>`).join("")}</ul></div></li>` : ""}</ol>
 ${j.blockedRequests?.length ? `<details class="more"><summary>${T("j.stopped", { n: j.blockedRequests.length })}</summary><ul>${j.blockedRequests.map((b) => `<li><code>${esc(b.method)} ${esc(b.url)}</code> \u2014 ${esc(b.reason)}</li>`).join("")}</ul></details>` : ""}
 ${j.trace ? `<p class="muted">${T("j.trace")} <code>${esc(j.trace)}</code></p>` : ""}</section>`;
@@ -51670,7 +51699,6 @@ ${metricCell(p, "LCP")}${metricCell(p, "CLS")}${metricCell(p, "TBT")}${metricCel
 <p class="muted">${T("pages.note", { t: run.settings.throttle ? I18N.en["pages.throttled"] : I18N.en["pages.unthrottled"] })}</p>${run.budgets?.length ? `<ul class="muted" lang="en">${run.budgets.map((b) => `<li>${esc(budgetLine(b))}</li>`).join("")}</ul>` : ""}`;
 }
 function compareHtml(cmp) {
-  const kpi = (label, n, cls) => `<div class="kpi ${cls}"><span class="lbl">${T(label)}</span><span class="num">${n}</span></div>`;
   const base2 = cmp.base.id;
   const fixedPaths = new Set(cmp.fixed.map((f) => pathname(f.url)));
   const pairs = cmp.head.pages.map((hp) => ({
@@ -51692,15 +51720,15 @@ function compareHtml(cmp) {
     const before = e ? cropAt(cmp.base, vpName, e, { base: base2, minW: 300, ratio: 1 }) : "";
     const after = e && now?.screenshot ? cropAt(cmp.head, vpName, { file: now.screenshot, rect: e.rect }, { minW: 300, ratio: 1 }) : "";
     const vis = before && after ? `<div class="ba"><figure><figcaption>${T("cmp.before")}</figcaption>${before}</figure><figure class="after"><figcaption>${T("cmp.after")}</figcaption>${after}</figure></div>` : `<div class="vis">${visualOf(cmp.base, f, { base: base2, minW: 520, ratio: 0.5 })}</div>`;
-    return `<article class="rc-card">${vis}<div class="in"><span class="chips"><span class="chip">${T("st.fixed")}</span><span class="chip">${T(`cat.${f.category}`)}</span></span><h3 lang="en">${esc(f.title)}</h3><div class="where">${whereHtml(g)} \xB7 <code>${esc(f.fingerprint)}</code></div></div></article>`;
+    return `<article class="rc-card">${vis}<div class="in">${sevHtml(f.severity)}<h3>${ruleText(f, "title")}</h3><div class="where">${whereHtml(g)} \xB7 ${T(`cat.${f.category}`)} \xB7 <code>${esc(f.fingerprint)}</code></div></div></article>`;
   });
   const reg = cmp.introduced.filter(
     (f) => f.kind === "defect" && (f.severity === "critical" || f.severity === "serious")
   ).length;
   return `<h2 class="sr">${T("tab.compare")}</h2>
-<div class="kpis">${kpi("cmp.fixed", cmp.fixed.length, cmp.fixed.length ? "ok" : "")}${kpi("cmp.new", cmp.introduced.length, reg ? "alert" : "")}${kpi("cmp.persisting", cmp.persisting.length, "")}${kpi("cmp.changed", cmp.changed.length, "")}</div>
-${cmp.dismissed.length ? `<p class="muted" style="margin:6px 0">${T("cmp.dismissed", { n: cmp.dismissed.length })}</p>` : ""}
-<p class="${reg ? "poor" : "muted"}" style="margin:6px 0"><strong>${reg ? T("cmp.regressed", { n: reg }) : T("cmp.ok")}</strong> ${T("cmp.baseline", { b: base2, bd: cmp.base.startedAt.slice(0, 16).replace("T", " "), h: cmp.head.id, hd: cmp.head.startedAt.slice(0, 16).replace("T", " ") })}</p>
+<div class="kpis">${kpiHtml("cmp.fixed", `<span class="${cmp.fixed.length ? "good" : ""}">${cmp.fixed.length}</span>`)}${kpiHtml("cmp.new", `<span class="${reg ? "poor" : ""}">${cmp.introduced.length}</span>`)}${kpiHtml("cmp.persisting", String(cmp.persisting.length))}${kpiHtml("cmp.changed", String(cmp.changed.length))}</div>
+${cmp.dismissed.length ? `<p class="cmp-line muted">${T("cmp.dismissed", { n: cmp.dismissed.length })}</p>` : ""}
+<p class="cmp-line"><strong>${reg ? T("cmp.regressed", { n: reg }) : T("cmp.ok")}</strong> <span class="muted">${T("cmp.baseline", { b: base2, bd: cmp.base.startedAt.slice(0, 16).replace("T", " "), h: cmp.head.id, hd: cmp.head.startedAt.slice(0, 16).replace("T", " ") })}</span></p>
 ${fixedCards.length ? `<section class="block"><div class="block-h"><h2>${T("cmp.fixed")}</h2></div><div class="cards">${fixedCards.join("")}</div></section>` : ""}
 ${pairs.length ? `<section class="block"><div class="block-h"><h2>${T("cmp.visual")}</h2></div><div class="pairs">${pairs.map(
     ({ hp, bp }) => `<div class="pair"><h3>${esc(pathname(hp.url))} \xB7 ${esc(hp.viewport)}</h3><div class="two"><figure><figcaption>${T("cmp.before")}</figcaption><a href="${runFile(shotOf(bp), base2)}" target="_blank" rel="noopener"${attrs({ "aria-label": "shot.open" })}><img loading="lazy" alt="" src="${runFile(shotOf(bp), base2)}"></a></figure><figure class="after"><figcaption>${T("cmp.after")}</figcaption><a href="${runFile(shotOf(hp))}" target="_blank" rel="noopener"${attrs({ "aria-label": "shot.open" })}><img loading="lazy" alt="" src="${runFile(shotOf(hp))}"></a></figure></div></div>`
@@ -51778,27 +51806,29 @@ function renderHtml(run, cmp, history = []) {
   const cats = [...new Set(findings.map((f) => f.category))].sort();
   const pages = [...new Set(findings.flatMap(pagesOf))];
   const top = defectGroups.slice(0, 6);
-  const sevTotal = SEVS.reduce((n, k) => n + s.findings[k], 0) || 1;
-  const kpi = (label, num2, sub, cls = "", extra = "") => `<div class="kpi ${cls}"><span class="lbl">${T(label)}</span><span class="num">${num2}</span><span class="sub">${sub}</span>${extra}</div>`;
+  const legend = SEVS.filter((k) => s.findings[k]).map(
+    (k) => `<span class="lg"><i class="dot dot-${k}" aria-hidden="true"></i>${s.findings[k]} ${T(`sev.${k}`)}</span>`
+  ).join("");
   const kpis = [
-    run.journeys.length ? kpi(
+    run.journeys.length ? kpiHtml(
       "kpi.journeys",
       `${journeysDone}/${run.journeys.length}`,
-      T("kpi.journeys.sub", { b: journeysBlocked }),
-      journeysBlocked ? "alert" : "ok"
-    ) : kpi("kpi.journeys", "\u2014", T("kpi.journeys.none")),
-    kpi(
-      "kpi.defects",
-      String(defects),
-      T("kpi.defects.sub", { c: s.findings.critical, s: s.findings.serious }),
-      s.findings.critical ? "alert" : "",
-      `<span class="sevbar" aria-hidden="true">${SEVS.map((k) => s.findings[k] ? `<i style="width:${(s.findings[k] / sevTotal * 100).toFixed(1)}%;background:var(--dot-${k})"></i>` : "").join("")}</span>`
-    ),
-    kpi("kpi.causes", String(defectGroups.length), T("kpi.causes.sub")),
-    kpi("kpi.auto", String(autoGroups), T("kpi.auto.sub"), autoGroups ? "ok" : ""),
-    kpi("kpi.review", String(s.byKind["needs-review"]), T("kpi.review.sub")),
-    kpi("kpi.hyp", String(s.byKind.hypothesis), T("kpi.hyp.sub"))
+      journeysBlocked ? T("kpi.journeys.sub", { b: journeysBlocked }) : ""
+    ) : kpiHtml("kpi.journeys", "\u2014", T("kpi.journeys.none")),
+    kpiHtml("kpi.defects", String(defects), legend ? `<span class="legend">${legend}</span>` : ""),
+    kpiHtml("kpi.causes", String(defectGroups.length), T("kpi.causes.sub")),
+    kpiHtml("kpi.auto", String(autoGroups), T("kpi.auto.sub")),
+    kpiHtml("kpi.review", String(s.byKind["needs-review"]), T("kpi.review.sub")),
+    kpiHtml("kpi.hyp", String(s.byKind.hypothesis), T("kpi.hyp.sub"))
   ].join("");
+  const served = /^(.+) \(served at (\S+)\)$/.exec(run.target);
+  const meta = [
+    ...uniquePages ? [T("scope.pages", { n: uniquePages }), T("scope.captures", { n: run.pages.length })] : [],
+    ...run.viewports.map((v) => `${esc(v.name)} ${v.width}\xD7${v.height}`),
+    ...run.journeys.length ? [T("scope.journeys", { n: run.journeys.length })] : [],
+    `${esc(run.browser.name)} ${esc(run.browser.version)}`,
+    `Jourilo ${esc(run.tool.version)}`
+  ];
   const lede = `${defects ? T("lede.found", { d: defects, r: defectGroups.length }) : T("lede.clean")}${run.journeys.length ? ` ${journeysBlocked ? T("lede.blocked", { b: journeysBlocked, j: run.journeys.length }) : T("lede.journeysOk", { j: run.journeys.length })}` : ""}`;
   const sel = (f, label, options) => `<label>${T(label)}<select data-f="${f}">${opt("", "f.all")}${options}</select></label>`;
   const opt = (value, key) => `<option value="${esc(value)}" data-i18n="${key}">${esc(I18N.en[key])}</option>`;
@@ -51835,19 +51865,17 @@ ${cmp ? `<button type="button" role="tab" id="tab-compare" aria-controls="compar
 <main id="main" class="wrap" tabindex="-1">
 <section id="overview" class="panel" role="tabpanel" aria-labelledby="tab-overview">
 <div class="hero"><p class="eyebrow"><span class="diamond" aria-hidden="true"></span>${T(!run.pages.length && run.journeys.length ? "mode.journeys" : `mode.${run.mode}`)} \xB7 <time datetime="${esc(run.startedAt)}" data-date="${esc(run.startedAt)}">${esc(new Date(run.startedAt).toUTCString())}</time></p>
-<h1 class="serif">${esc(run.target)}</h1>
+<h1 class="serif">${esc(served ? served[1] : run.target)}</h1>
+${served ? `<p class="served">${T("hero.served")} <code>${esc(served[2])}</code></p>` : ""}
 <p class="lede">${lede}</p>
-<p class="scope">${uniquePages ? `<span>${T("scope.pages", { n: uniquePages })}, ${T("scope.captures", { n: run.pages.length })}</span>` : ""}<span>${T("scope.viewports", { n: run.viewports.length })} \xB7 ${run.viewports.map((v) => `${esc(v.name)} ${v.width}\xD7${v.height}`).join(", ")}</span>${run.journeys.length ? `<span>${T("scope.journeys", { n: run.journeys.length })}</span>` : ""}<span>${esc(run.browser.name)} ${esc(run.browser.version)}</span><span>Jourilo ${esc(run.tool.version)}</span></p></div>
+<p class="scope">${meta.map((m) => `<span>${m}</span>`).join('<span class="sep" aria-hidden="true">\xB7</span>')}</p></div>
 <div class="kpis">${kpis}</div>
-<p class="noscore"><span class="diamond" aria-hidden="true"></span>${T("noscore")}</p>
+<p class="noscore">${T("noscore")}</p>
 ${blockedHtml(run, groups)}
 <section class="block" aria-labelledby="h-fixfirst"><div class="block-h"><div><h2 id="h-fixfirst">${T("fixfirst.title")}</h2><p>${T("fixfirst.hint")}</p></div>${groups.length ? `<a class="btn" href="#findings">${T("fixfirst.all")} \u2192</a>` : ""}</div>
 ${top.length ? `<div class="cards">${top.map((g) => cardHtml(run, g)).join("")}</div>` : `<p class="empty">${T("fixfirst.none")}</p>`}</section>
 ${lanesHtml(groups, run)}
-${limitsHtml(run)}
-${dismissedHtml(run)}
-${historyHtml(run, history)}
-${contextHtml(run)}
+<section class="block folds"${attrs({ "aria-label": "more.label" })}>${limitsHtml(run)}${dismissedHtml(run)}${historyHtml(run, history)}${contextHtml(run)}</section>
 </section>
 <section id="findings" class="panel" role="tabpanel" aria-labelledby="tab-findings">
 <h2 class="sr">${T("tab.findings")}</h2>

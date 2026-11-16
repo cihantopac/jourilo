@@ -516,3 +516,89 @@ describe('finding anatomy', () => {
     );
   });
 });
+
+describe('quiet overview and folded context', () => {
+  const overview = (html: string) => html.slice(html.indexOf('id="overview"'), html.indexOf('id="findings"'));
+
+  it('KPI numbers are ink and the severity bar is a dot legend', () => {
+    const html = renderHtml(
+      run([f('axe/a', '/', { severity: 'critical' }), f('axe/b', '/', { severity: 'serious' })], {
+        summary: {
+          pages: 1,
+          journeys: 0,
+          findings: { critical: 1, serious: 1, moderate: 0, minor: 0, info: 0 },
+          byCategory: {},
+          byKind: { defect: 2, hypothesis: 0, 'needs-review': 0 },
+        },
+      }),
+    );
+    const o = overview(html);
+    expect(o).not.toContain('sevbar');
+    expect(o).not.toMatch(/class="kpi (alert|ok)/);
+    expect(o).toMatch(
+      /<span class="lg"><i class="dot dot-critical" aria-hidden="true"><\/i>1 <span data-i18n="sev.critical">/,
+    );
+    expect(o).toMatch(
+      /<span class="lg"><i class="dot dot-serious" aria-hidden="true"><\/i>1 <span data-i18n="sev.serious">/,
+    );
+    expect(o).not.toContain('dot-moderate');
+    expect(html).not.toMatch(/\.kpi\.(alert|ok)/);
+  });
+
+  it('a served directory target reads as a path and a muted URL line', () => {
+    const html = renderHtml(run([], { target: 'fixtures/sites/acme (served at http://127.0.0.1:4000)' }));
+    expect(html).toContain('<h1 class="serif">fixtures/sites/acme</h1>');
+    expect(html).toMatch(
+      /<p class="served"><span data-i18n="hero.served">served at<\/span> <code>http:\/\/127\.0\.0\.1:4000<\/code><\/p>/,
+    );
+    expect(html).toContain('<title>Jourilo · fixtures/sites/acme (served at http://127.0.0.1:4000)</title>');
+    expect(renderHtml(run([]))).not.toContain('class="served"');
+  });
+
+  it('the scope is one meta line with one separator', () => {
+    const o = overview(renderHtml(run([])));
+    const scope = o.slice(o.indexOf('<p class="scope">'), o.indexOf('</p>', o.indexOf('<p class="scope">')));
+    expect(scope).not.toMatch(/, |&nbsp;/);
+    expect(scope).toContain('<span class="sep" aria-hidden="true">·</span>');
+  });
+
+  it('limitations, dismissed, history and context are folded by default', () => {
+    const o = overview(renderHtml(run([], { limitations: ['One', 'Two', 'Three', 'Four'] })));
+    const folds = o.slice(o.indexOf('class="block folds"'));
+    expect(folds).toContain('<details class="fold"><summary id="h-limits">');
+    expect(folds).not.toMatch(/<details class="fold" open/);
+    expect(folds.indexOf('<li>One</li>')).toBeGreaterThan(folds.indexOf('<details class="fold">'));
+  });
+
+  it('KPI subs stay at three words or fewer in EN and TR', () => {
+    for (const lang of ['en', 'tr'] as const)
+      for (const k of [
+        'kpi.journeys.none',
+        'kpi.causes.sub',
+        'kpi.auto.sub',
+        'kpi.review.sub',
+        'kpi.hyp.sub',
+      ] as const)
+        expect(I18N[lang][k].split(/\s+/).length, `${lang} ${k}`).toBeLessThanOrEqual(3);
+  });
+
+  it('journeys and compare use neutral chips and no status borders', () => {
+    const html = renderHtml(
+      run([], {
+        journeys: [
+          {
+            id: 'j',
+            name: 'J',
+            viewport: 'desktop',
+            status: 'failed',
+            steps: [],
+            successCriteria: [{ description: 'Done', met: false }],
+            durationMs: 10,
+          },
+        ],
+      }),
+    );
+    expect(html).not.toMatch(/class="chip st-/);
+    expect(html).not.toMatch(/border(-top)?:[^;}]*var\(--(poor|good)\)/);
+  });
+});
